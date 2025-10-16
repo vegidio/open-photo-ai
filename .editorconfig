@@ -1,0 +1,20 @@
+root = true
+
+[*]
+charset = utf-8
+indent_size = 4
+indent_style = space
+insert_final_newline = false
+max_line_length = 120
+trim_trailing_whitespace = true
+
+# IntelliJ
+ij_kotlin_name_count_to_use_star_import = 999
+ij_kotlin_packages_to_use_import_on_demand = unset
+ij_visual_guides = none
+
+[*.go]
+indent_style = tab
+
+[*.yml]
+indent_size = 2
