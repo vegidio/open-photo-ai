@@ -7,6 +7,7 @@ require (
 	github.com/samber/lo v1.51.0
 	github.com/vegidio/go-sak v0.0.0-20251016155844-694b400df37e
 	github.com/yalue/onnxruntime_go v1.21.0
+	golang.org/x/image v0.32.0
 )
 
 require (
@@ -23,10 +24,10 @@ require (
 	go.opentelemetry.io/otel v1.37.0 // indirect
 	go.opentelemetry.io/otel/metric v1.37.0 // indirect
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
-	golang.org/x/mod v0.25.0 // indirect
+	golang.org/x/mod v0.28.0 // indirect
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )

@@ -7,10 +7,11 @@ import (
 )
 
 type Upscale struct {
-	id      string
-	name    string
-	session *ort.DynamicAdvancedSession
-	appName string
+	id        string
+	name      string
+	operation OpUpscale
+	session   *ort.DynamicAdvancedSession
+	appName   string
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
@@ -38,15 +39,25 @@ func (m *Upscale) IsLoaded() bool {
 	return m.session != nil
 }
 
-func (m *Upscale) Load() error {
+func (m *Upscale) Load(operation types.Operation) error {
 	var err error
-	m.session, err = utils.CreateSession(
-		m.appName,
-		"real-esrgan_4x_standard.onnx",
-		"upscale/1.0.0",
-		nil,
-	)
+	var modelName string
+	m.operation = operation.(OpUpscale)
 
+	switch m.operation.mode {
+	case "cartoon":
+		modelName = "real-esrgan_4x_cartoon.onnx"
+	case "medium":
+		modelName = "real-esrgan_4x_medium.onnx"
+	case "high":
+		if m.operation.scale == 2 {
+			modelName = "real-esrgan_2x_high.onnx"
+		} else {
+			modelName = "real-esrgan_4x_high.onnx"
+		}
+	}
+
+	m.session, err = utils.CreateSession(m.appName, modelName, "upscale/1.0.0", nil)
 	if err != nil {
 		return err
 	}
@@ -54,9 +65,7 @@ func (m *Upscale) Load() error {
 	return nil
 }
 
-func (m *Upscale) Run(operation types.Operation, input types.InputData) (*types.OuputData, error) {
-	//op := operation.(*OpUpscale)
-
+func (m *Upscale) Run(input types.InputData) (*types.OutputData, error) {
 	// Create the input tensor
 	data, h, w := imageToNCHW(input.Pixels)
 	inShape := ort.NewShape(1, 3, int64(h), int64(w))
@@ -66,9 +75,8 @@ func (m *Upscale) Run(operation types.Operation, input types.InputData) (*types.
 	}
 	defer inTensor.Destroy()
 
-	// Create the output tensor with 4x upscaling
-	scale := 4
-	outShape := ort.NewShape(1, 3, int64(h*scale), int64(w*scale))
+	// Create the output tensor with x upscaling
+	outShape := ort.NewShape(1, 3, int64(h*m.operation.scale), int64(w*m.operation.scale))
 	outTensor, err := ort.NewEmptyTensor[float32](outShape)
 	if err != nil {
 		return nil, err
@@ -84,7 +92,7 @@ func (m *Upscale) Run(operation types.Operation, input types.InputData) (*types.
 		return nil, err
 	}
 
-	return &types.OuputData{
+	return &types.OutputData{
 		Pixels: img,
 	}, nil
 }

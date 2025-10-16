@@ -5,7 +5,7 @@ type Model interface {
 	Name() string
 	IsLoaded() bool
 
-	Load() error
-	Run(operation Operation, input InputData) (output *OuputData, err error)
+	Load(operation Operation) error
+	Run(input InputData) (output *OutputData, err error)
 	Unload()
 }

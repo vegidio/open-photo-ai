@@ -25,7 +25,7 @@ func CreateSession(appName, modelName, tag string, onDownload func()) (*ort.Dyna
 		}
 	}
 
-	modelPath := filepath.Join(configDir, appName, modelName)
+	modelPath := filepath.Join(configDir, appName, "models", modelName)
 	session, err := ort.NewDynamicAdvancedSession(modelPath, []string{"input"}, []string{"output"}, nil)
 	if err != nil {
 		return nil, err
