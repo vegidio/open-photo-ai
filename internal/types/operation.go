@@ -1,5 +1,5 @@
 package types
 
 type Operation interface {
-	IsOperation()
+	Id() string
 }
