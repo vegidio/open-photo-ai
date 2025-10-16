@@ -2,10 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	"image/png"
-	"os"
 
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/internal/models/upscale"
@@ -22,21 +18,26 @@ func main() {
 
 	defer opai.Destroy()
 
-	inputFile, _ := os.Open("/Users/vegidio/Desktop/test2.jpg")
-	img, _, _ := image.Decode(inputFile)
-	defer inputFile.Close()
-
-	inputData := types.InputData{
-		Pixels: img,
-	}
-
-	outputData, err := opai.Process(inputData, upscale.Operation())
+	inputData, err := opai.LoadInputData("/Users/vegidio/Desktop/test2.jpg")
 	if err != nil {
-		fmt.Printf("Failed to process the image: %v\n", err)
+		fmt.Printf("Failed to load the input image: %v\n", err)
 		return
 	}
 
-	outputFile, _ := os.Create("/Users/vegidio/Desktop/test2_upscaled.png")
-	defer outputFile.Close()
-	png.Encode(outputFile, outputData.Pixels)
+	outputData, err := opai.Process(inputData, upscale.Op(4, "high"))
+	if err != nil {
+		fmt.Printf("Failed to upscale the image: %v\n", err)
+		return
+	}
+
+	err = opai.SaveOutputData(&types.OutputData{
+		FilePath: "/Users/vegidio/Desktop/test2_upscaled_4x.png",
+		Format:   "png",
+		Pixels:   outputData.Pixels,
+	})
+
+	if err != nil {
+		fmt.Printf("Failed to save the output image: %v\n", err)
+		return
+	}
 }

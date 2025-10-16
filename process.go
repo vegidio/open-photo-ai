@@ -7,8 +7,8 @@ import (
 	"github.com/vegidio/open-photo-ai/internal/types"
 )
 
-func Process(input types.InputData, operations ...types.Operation) (*types.OuputData, error) {
-	var output *types.OuputData
+func Process(input *types.InputData, operations ...types.Operation) (*types.OutputData, error) {
+	var output *types.OutputData
 
 	for _, op := range operations {
 		model, err := selectModel(op)
@@ -17,10 +17,13 @@ func Process(input types.InputData, operations ...types.Operation) (*types.Ouput
 		}
 
 		if !model.IsLoaded() {
-			model.Load()
+			err = model.Load(op)
+			if err != nil {
+				return nil, err
+			}
 		}
 
-		output, err = model.Run(op, input)
+		output, err = model.Run(*input)
 		if err != nil {
 			return nil, err
 		}

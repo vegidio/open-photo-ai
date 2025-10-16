@@ -20,7 +20,7 @@ import (
 )
 
 func ShouldDownloadModel(appName, modelName, tag string) (string, bool) {
-	configDir, err := fs.MkUserConfigDir(appName)
+	configDir, err := fs.MkUserConfigDir(appName, "models")
 	if err != nil {
 		log.Fatalf("error getting user config directory: %v\n", err)
 	}
@@ -45,7 +45,7 @@ func ShouldDownloadModel(appName, modelName, tag string) (string, bool) {
 }
 
 func DownloadModel(url, appName, modelName string) error {
-	file, err := fs.MkUserConfigFile(appName, modelName)
+	file, err := fs.MkUserConfigFile(appName, "models", modelName)
 	if err != nil {
 		return err
 	}
