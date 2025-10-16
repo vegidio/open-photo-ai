@@ -9,6 +9,8 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
+var AppName = "open-photo-ai"
+
 // Initialize sets up the model runtime by ensuring all required dependencies are available.
 //
 // This function performs a two-step initialization process:
@@ -30,16 +32,18 @@ import (
 //	    log.Fatal("Failed to initialize:", err)
 //	}
 //	defer openphotoai.Destroy() // Clean up resources
-func Initialize(name string) error {
+func Initialize(appName string) error {
+	AppName = appName
+
 	// Install the ONNX runtime if it's not already installed
-	if yes := shouldInstallRuntime(name); yes {
-		if err := installRuntime(name); err != nil {
+	if yes := shouldInstallRuntime(appName); yes {
+		if err := installRuntime(appName); err != nil {
 			return err
 		}
 	}
 
 	// Initialize the ONNX runtime
-	if err := startRuntime(name); err != nil {
+	if err := startRuntime(appName); err != nil {
 		return err
 	}
 
