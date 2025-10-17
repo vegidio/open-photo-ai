@@ -1,6 +1,7 @@
 package openphotoai
 
 import (
+	"fmt"
 	"image"
 	_ "image/gif"
 	"image/jpeg"
@@ -10,6 +11,7 @@ import (
 	"os"
 
 	_ "golang.org/x/image/bmp"
+	"golang.org/x/image/tiff"
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
 
@@ -34,7 +36,11 @@ func LoadInputData(path string) (*types.InputData, error) {
 	}, nil
 }
 
-func SaveOutputData(data *types.OutputData) error {
+func SaveOutputData(data *types.OutputData, quality int) error {
+	if quality < 0 || quality > 100 {
+		return fmt.Errorf("invalid quality: %d, must be between 0 and 100", quality)
+	}
+
 	outputFile, err := os.Create(data.FilePath)
 	if err != nil {
 		return err
@@ -42,10 +48,12 @@ func SaveOutputData(data *types.OutputData) error {
 	defer outputFile.Close()
 
 	switch data.Format {
-	case "png":
+	case types.FormatJpeg:
+		err = jpeg.Encode(outputFile, data.Pixels, &jpeg.Options{Quality: quality})
+	case types.FormatPng:
 		err = png.Encode(outputFile, data.Pixels)
-	case "jpg":
-		err = jpeg.Encode(outputFile, data.Pixels, nil)
+	case types.FormatTiff:
+		err = tiff.Encode(outputFile, data.Pixels, &tiff.Options{Compression: tiff.Deflate})
 	}
 
 	if err != nil {

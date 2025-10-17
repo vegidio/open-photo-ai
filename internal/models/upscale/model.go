@@ -1,9 +1,13 @@
 package upscale
 
 import (
+	"fmt"
+
 	"github.com/vegidio/open-photo-ai/internal/types"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	ort "github.com/yalue/onnxruntime_go"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type Upscale struct {
@@ -17,55 +21,48 @@ type Upscale struct {
 // Compile-time assertion to ensure it conforms to the Model interface.
 var _ types.Model = (*Upscale)(nil)
 
-func New(appName string) *Upscale {
-	return &Upscale{
-		id:      "upscale",
-		name:    "Upscale",
-		appName: appName,
-	}
-}
-
-// region - Model methods
-
-func (m *Upscale) Id() string {
-	return m.id
-}
-
-func (m *Upscale) Name() string {
-	return m.name
-}
-
-func (m *Upscale) IsLoaded() bool {
-	return m.session != nil
-}
-
-func (m *Upscale) Load(operation types.Operation) error {
-	var err error
+func New(appName string, operation types.Operation) (*Upscale, error) {
 	var modelName string
-	m.operation = operation.(OpUpscale)
+	op := operation.(OpUpscale)
+	name := fmt.Sprintf("Upscale %dx (%s)", op.scale, cases.Title(language.English).String(string(op.mode)))
 
-	switch m.operation.mode {
-	case "cartoon":
+	switch op.mode {
+	case ModeCartoon:
 		modelName = "real-esrgan_4x_cartoon.onnx"
-	case "medium":
+	case ModeMedium:
 		modelName = "real-esrgan_4x_medium.onnx"
-	case "high":
-		if m.operation.scale == 2 {
+	case ModeHigh:
+		if op.scale == 2 {
 			modelName = "real-esrgan_2x_high.onnx"
 		} else {
 			modelName = "real-esrgan_4x_high.onnx"
 		}
 	}
 
-	m.session, err = utils.CreateSession(m.appName, modelName, "upscale/1.0.0", nil)
+	session, err := utils.CreateSession(appName, modelName, "upscale/1.0.0", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &Upscale{
+		name:      name,
+		operation: op,
+		session:   session,
+		appName:   appName,
+	}, nil
 }
 
-func (m *Upscale) Run(input types.InputData) (*types.OutputData, error) {
+// region - Model methods
+
+func (m *Upscale) Id() string {
+	return m.operation.Id()
+}
+
+func (m *Upscale) Name() string {
+	return m.name
+}
+
+func (m *Upscale) Run(input *types.InputData) (*types.OutputData, error) {
 	// Create the input tensor
 	data, h, w := imageToNCHW(input.Pixels)
 	inShape := ort.NewShape(1, 3, int64(h), int64(w))
@@ -97,7 +94,7 @@ func (m *Upscale) Run(input types.InputData) (*types.OutputData, error) {
 	}, nil
 }
 
-func (m *Upscale) Unload() {
+func (m *Upscale) Destroy() {
 	m.session.Destroy()
 }
 
