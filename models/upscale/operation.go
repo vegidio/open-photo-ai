@@ -12,6 +12,11 @@ type OpUpscale struct {
 	mode  Mode
 }
 
+func (o OpUpscale) Destroy() {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (o OpUpscale) Id() string {
 	return o.id
 }
