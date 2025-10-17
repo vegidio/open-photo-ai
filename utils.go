@@ -10,12 +10,11 @@ import (
 	_ "image/png"
 	"os"
 
+	"github.com/vegidio/open-photo-ai/types"
 	_ "golang.org/x/image/bmp"
 	"golang.org/x/image/tiff"
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
-
-	"github.com/vegidio/open-photo-ai/internal/types"
 )
 
 func LoadInputData(path string) (*types.InputData, error) {

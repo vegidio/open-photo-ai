@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	opai "github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/internal/models/upscale"
-	"github.com/vegidio/open-photo-ai/internal/types"
+	"github.com/vegidio/open-photo-ai/models/upscale"
+	"github.com/vegidio/open-photo-ai/types"
 )
 
 const AppName = "open-photo-ai"
@@ -15,10 +15,9 @@ func main() {
 		fmt.Printf("Failed to initialize the model runtime: %v\n", err)
 		return
 	}
-
 	defer opai.Destroy()
 
-	inputData, err := opai.LoadInputData("/Users/vegidio/Desktop/test2.jpg")
+	inputData, err := opai.LoadInputData("/Users/vegidio/Desktop/test1.jpg")
 	if err != nil {
 		fmt.Printf("Failed to load the input image: %v\n", err)
 		return
@@ -31,9 +30,9 @@ func main() {
 	}
 
 	err = opai.SaveOutputData(&types.OutputData{
-		FilePath: "/Users/vegidio/Desktop/test2_upscaled_4x.png",
+		FilePath: "/Users/vegidio/Desktop/test1_upscaled_4x.jpg",
 		Pixels:   outputData.Pixels,
-		Format:   types.FormatPng,
+		Format:   types.FormatJpeg,
 	}, 90)
 
 	if err != nil {
