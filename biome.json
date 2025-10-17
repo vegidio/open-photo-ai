@@ -1,0 +1,59 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
+    "vcs": {
+        "enabled": false,
+        "clientKind": "git",
+        "useIgnoreFile": false
+    },
+    "files": {
+        "ignoreUnknown": false,
+        "includes": ["gui/frontend/**", "!gui/frontend/dist", "!gui/frontend/wailsjs"]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 120
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "complexity": {
+                "noForEach": "off"
+            },
+            "correctness": {
+                "noUnusedImports": "warn",
+                "useUniqueElementIds": "off"
+            },
+            "recommended": true
+        }
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single"
+        }
+    },
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "source": {
+                "organizeImports": {
+                    "level": "on",
+                    "options": {
+                        "groups": [
+                            ["react", "react/**"],
+                            ["@mui/material"],
+                            ["@mui/icons-material"],
+                            ":PACKAGE:",
+                            {
+                                "type": true
+                            },
+                            ":PATH:",
+                            ":SIDE_EFFECT:"
+                        ]
+                    }
+                }
+            }
+        }
+    }
+}
