@@ -1,79 +1,54 @@
 <script lang="ts">
-  import logo from './assets/images/logo-universal.png'
-  import {Greet} from '../wailsjs/go/main/App.js'
+  import './app.css';
+  import { Events } from "@wailsio/runtime";
+  import {GreetService} from "../bindings/gui";
 
-  let resultText: string = "Please enter your name below 👇"
-  let name: string
+  let name: string = $state('');
+  let result: string = $state('Please enter your name below 👇');
+  let time: string = $state('Listening for Time event...');
 
-  function greet(): void {
-    Greet(name).then(result => resultText = result)
-  }
+  const doGreet = () => {
+    let localName = name;
+
+    if (!localName) {
+      localName = 'anonymous';
+    }
+
+    GreetService.Greet(localName).then((resultValue: string) => {
+      result = resultValue;
+    }).catch((err: any) => {
+      console.log(err);
+    });
+  };
+
+  Events.On('time', (timeValue: any) => {
+    time = timeValue.data;
+  });
 </script>
 
-<main>
-  <img alt="Wails logo" id="logo" src="{logo}">
-  <div class="result" id="result">{resultText}</div>
-  <div class="input-box" id="input">
-    <input autocomplete="off" bind:value={name} class="input" id="name" type="text"/>
-    <button class="btn" on:click={greet}>Greet</button>
+<div class="container">
+  <div>
+    <span data-wml-openURL="https://wails.io">
+      <img src="/wails.png" class="logo" alt="Wails logo"/>
+    </span>
+    <span data-wml-openURL="https://svelte.dev">
+      <img src="/svelte.svg" class="logo svelte" alt="Svelte logo"/>
+    </span>
   </div>
-</main>
+  <h1>Wails + Svelte</h1>
+  <div class="result">{result}</div>
+  <div class="card">
+    <div class="input-box">
+      <input class="input" bind:value={name} type="text" autocomplete="off"/>
+      <button class="btn" onclick={doGreet}>Greet</button>
+    </div>
+  </div>
+  <div class="footer">
+    <div><p>Click on the Wails logo to learn more</p></div>
+    <div><p>{time}</p></div>
+  </div>
+</div>
 
 <style>
-
-  #logo {
-    display: block;
-    width: 50%;
-    height: 50%;
-    margin: auto;
-    padding: 10% 0 0;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: 100% 100%;
-    background-origin: content-box;
-  }
-
-  .result {
-    height: 20px;
-    line-height: 20px;
-    margin: 1.5rem auto;
-  }
-
-  .input-box .btn {
-    width: 60px;
-    height: 30px;
-    line-height: 30px;
-    border-radius: 3px;
-    border: none;
-    margin: 0 0 0 20px;
-    padding: 0 8px;
-    cursor: pointer;
-  }
-
-  .input-box .btn:hover {
-    background-image: linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%);
-    color: #333333;
-  }
-
-  .input-box .input {
-    border: none;
-    border-radius: 3px;
-    outline: none;
-    height: 30px;
-    line-height: 30px;
-    padding: 0 10px;
-    background-color: rgba(240, 240, 240, 1);
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .input-box .input:hover {
-    border: none;
-    background-color: rgba(255, 255, 255, 1);
-  }
-
-  .input-box .input:focus {
-    border: none;
-    background-color: rgba(255, 255, 255, 1);
-  }
-
+  /* Put your standard CSS here */
 </style>
