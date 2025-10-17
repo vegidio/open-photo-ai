@@ -3,8 +3,8 @@ package upscale
 import (
 	"fmt"
 
-	"github.com/vegidio/open-photo-ai/internal/types"
 	"github.com/vegidio/open-photo-ai/internal/utils"
+	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"

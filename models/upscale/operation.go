@@ -3,7 +3,7 @@ package upscale
 import (
 	"fmt"
 
-	"github.com/vegidio/open-photo-ai/internal/types"
+	"github.com/vegidio/open-photo-ai/types"
 )
 
 type OpUpscale struct {

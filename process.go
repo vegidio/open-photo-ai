@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/vegidio/open-photo-ai/internal/models/upscale"
-	"github.com/vegidio/open-photo-ai/internal/types"
+	"github.com/vegidio/open-photo-ai/models/upscale"
+	"github.com/vegidio/open-photo-ai/types"
 )
 
 func Process(input *types.InputData, operations ...types.Operation) (*types.OutputData, error) {
