@@ -23,7 +23,7 @@ func main() {
 		return
 	}
 
-	outputData, err := opai.Process(inputData, upscale.Op(4, "high"))
+	outputData, err := opai.Execute(inputData, upscale.Op(4, "high"))
 	if err != nil {
 		fmt.Printf("Failed to upscale the image: %v\n", err)
 		return
