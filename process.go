@@ -2,6 +2,7 @@ package openphotoai
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vegidio/open-photo-ai/internal/models/upscale"
 	"github.com/vegidio/open-photo-ai/internal/types"
@@ -16,14 +17,7 @@ func Process(input *types.InputData, operations ...types.Operation) (*types.Outp
 			return nil, err
 		}
 
-		if !model.IsLoaded() {
-			err = model.Load(op)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		output, err = model.Run(*input)
+		output, err = model.Run(input)
 		if err != nil {
 			return nil, err
 		}
@@ -42,12 +36,17 @@ func Process(input *types.InputData, operations ...types.Operation) (*types.Outp
 // region - Private functions
 
 func selectModel(operation types.Operation) (types.Model, error) {
-	switch operation.Id() {
-	case "upscale":
-		return upscale.New(AppName), nil
+	var model types.Model
+	var err error
+
+	switch {
+	case strings.HasPrefix(operation.Id(), "upscale"):
+		model, err = upscale.New(AppName, operation)
+	default:
+		err = fmt.Errorf("no model found for operation: %s", operation.Id())
 	}
 
-	return nil, fmt.Errorf("no model found for operation: %s", operation.Id())
+	return model, err
 }
 
 // endregion

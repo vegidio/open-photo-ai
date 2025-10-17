@@ -32,9 +32,9 @@ func main() {
 
 	err = opai.SaveOutputData(&types.OutputData{
 		FilePath: "/Users/vegidio/Desktop/test2_upscaled_4x.png",
-		Format:   "png",
 		Pixels:   outputData.Pixels,
-	})
+		Format:   types.FormatPng,
+	}, 90)
 
 	if err != nil {
 		fmt.Printf("Failed to save the output image: %v\n", err)
