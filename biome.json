@@ -18,6 +18,9 @@
     "linter": {
         "enabled": true,
         "rules": {
+            "a11y": {
+                "useAltText": "off"
+            },
             "complexity": {
                 "noForEach": "off"
             },
