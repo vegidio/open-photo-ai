@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	_ "embed"
+	"gui/services"
 	"log"
 	"time"
 
@@ -32,6 +33,7 @@ func main() {
 		Description: "A demo of using raw HTML & CSS",
 		Services: []application.Service{
 			application.NewService(&GreetService{}),
+			application.NewService(&services.DialogService{}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -56,7 +58,6 @@ func main() {
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 		},
-		//BackgroundColour: application.NewRGB(27, 38, 54),
 		URL: "/",
 	})
 

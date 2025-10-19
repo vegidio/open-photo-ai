@@ -7,10 +7,10 @@ export const Home = () => {
         <div className="flex h-screen flex-col">
             <Navbar />
 
-            <main className="flex flex-1 flex-row">
+            <main className="flex flex-1 min-h-0 flex-row">
                 <Preview className="flex-1" />
 
-                <Sidebar className="w-64" />
+                <Sidebar className="w-64 h-full" />
             </main>
         </div>
     );

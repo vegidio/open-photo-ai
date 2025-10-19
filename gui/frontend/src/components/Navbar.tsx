@@ -6,7 +6,7 @@ type NavbarProps = {
 
 export const Navbar = ({ className = '' }: NavbarProps) => {
     return (
-        <Navigation fluid={true} className={`dark:bg-[#212121] ${className}`}>
+        <Navigation fluid={true} className={`bg-[#212121] ${className}`}>
             <NavbarBrand>
                 <span className="self-center whitespace-nowrap text-lg font-semibold dark:text-[#b0b0b0]">
                     Open Photo AI
