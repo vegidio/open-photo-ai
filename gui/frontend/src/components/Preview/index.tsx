@@ -1,4 +1,4 @@
-import { PreviewEmpty } from './PreviewEmpty.tsx';
+import { PreviewEmpty } from './PreviewEmpty';
 
 interface PreviewProps {
     className?: string;
