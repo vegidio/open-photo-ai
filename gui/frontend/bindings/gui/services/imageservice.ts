@@ -5,11 +5,8 @@
 // @ts-ignore: Unused imports
 import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
-export function OpenFileDialog(): $CancellablePromise<string[]> {
-    return $Call.ByID(3411436064).then(($result: any) => {
-        return $$createType0($result);
+export function GetImageBytes(filePath: string): $CancellablePromise<string> {
+    return $Call.ByID(2948151651, filePath).then(($result: any) => {
+        return $Create.ByteSlice($result);
     });
 }
-
-// Private type creation functions
-const $$createType0 = $Create.Array($Create.Any);

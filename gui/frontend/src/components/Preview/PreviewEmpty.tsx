@@ -1,10 +1,18 @@
 import { Button } from 'flowbite-react';
 import { MdFolderOpen } from 'react-icons/md';
 import { DialogService } from '../../../bindings/gui/services';
+import { useFileStore } from '../../stores/files.ts';
 
 export const PreviewEmpty = () => {
-    const onBrowseClick = () => {
-        DialogService.OpenFileDialog();
+    const addFilePaths = useFileStore((state) => state.addFilePaths);
+
+    const onBrowseClick = async () => {
+        try {
+            const paths = await DialogService.OpenFileDialog();
+            addFilePaths(paths);
+        } catch (e) {
+            console.error(e);
+        }
     };
 
     return (
