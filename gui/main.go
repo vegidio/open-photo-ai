@@ -3,17 +3,17 @@ package main
 import (
 	"embed"
 	_ "embed"
+	"fmt"
 	"gui/services"
 	"log"
+	"log/slog"
 	"time"
 
+	opai "github.com/vegidio/open-photo-ai"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Wails uses Go's `embed` package to embed the frontend files into the binary.
-// Any files in the frontend/dist folder will be embedded into the binary and
-// made available to the frontend.
-// See https://pkg.go.dev/embed for more information.
+const AppName = "open-photo-ai"
 
 //go:embed all:frontend/dist
 var assets embed.FS
@@ -22,6 +22,16 @@ var assets embed.FS
 // and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
 // logs any error that might occur.
 func main() {
+	// Initialize the model runtime
+	if err := opai.Initialize(AppName); err != nil {
+		fmt.Printf("Failed to initialize the model runtime: %v\n", err)
+		return
+	}
+	defer opai.Destroy()
+
+	// Services
+	imageService := services.NewImageService(AppName)
+	defer imageService.Destroy()
 
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
@@ -34,7 +44,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(&GreetService{}),
 			application.NewService(&services.DialogService{}),
-			application.NewService(&services.ImageService{}),
+			application.NewService(imageService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -42,6 +52,7 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
+		LogLevel: slog.LevelError,
 	})
 
 	// Create a new window with the necessary options.

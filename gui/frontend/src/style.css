@@ -1,4 +1,1 @@
-/** biome-ignore-all lint/suspicious/noUnknownAtRules: Tailwind */
 @import "tailwindcss";
-@plugin "flowbite-react/plugin/tailwindcss";
-@source "../.flowbite-react/class-list.json";

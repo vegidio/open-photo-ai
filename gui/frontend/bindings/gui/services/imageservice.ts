@@ -5,8 +5,18 @@
 // @ts-ignore: Unused imports
 import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
-export function GetImageBytes(filePath: string): $CancellablePromise<string> {
-    return $Call.ByID(2948151651, filePath).then(($result: any) => {
+export function Destroy(): $CancellablePromise<void> {
+    return $Call.ByID(3681465753);
+}
+
+export function GetImage(filePath: string): $CancellablePromise<string> {
+    return $Call.ByID(2406933080, filePath).then(($result: any) => {
+        return $Create.ByteSlice($result);
+    });
+}
+
+export function ProcessImage(filePath: string): $CancellablePromise<string> {
+    return $Call.ByID(3391347795, filePath).then(($result: any) => {
         return $Create.ByteSlice($result);
     });
 }
