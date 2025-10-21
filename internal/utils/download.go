@@ -72,7 +72,7 @@ func DownloadModel(url, appName, modelName string) error {
 // region - Private functions
 
 func getLatestModel(appName, modelName, tag string) (string, string, error) {
-	cachePath, err := fs.MkUserConfigDir(appName, "cache")
+	cachePath, err := fs.MkUserConfigDir(appName, "cache", "models")
 	if err != nil {
 		return "", "", err
 	}

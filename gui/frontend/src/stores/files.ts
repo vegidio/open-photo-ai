@@ -3,7 +3,7 @@ import { create } from 'zustand/react';
 
 type FileStore = {
     filePaths: string[];
-    selectedFileIndex: number;
+    selectedIndex: number;
 
     addFilePaths: (filePaths: string[]) => void;
     removeFilePath: (filePath: string) => void;
@@ -13,7 +13,7 @@ type FileStore = {
 export const useFileStore = create(
     immer<FileStore>((set, get) => ({
         filePaths: [],
-        selectedFileIndex: 0,
+        selectedIndex: 0,
 
         addFilePaths: (filePaths: string[]) => {
             set((state) => {

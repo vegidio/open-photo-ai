@@ -1,4 +1,4 @@
-import { Button } from 'flowbite-react';
+import { Button, Typography } from '@mui/material';
 import { MdFolderOpen } from 'react-icons/md';
 import { DialogService } from '../../../bindings/gui/services';
 import { useFileStore } from '../../stores/files.ts';
@@ -20,16 +20,16 @@ export const PreviewEmpty = () => {
             <MdFolderOpen className="size-20 bg-[#171717] text-[#009aff]" />
 
             <div className="flex bg-[#171717] flex-col text-center gap-3 mb-4">
-                <p className="text-center text-[#f2f2f2]">
+                <Typography>
                     Drag and drop images or
                     <br />
                     folder to start editing
-                </p>
+                </Typography>
 
-                <p className="text-[#979797]">OR</p>
+                <Typography className="text-[#979797]">OR</Typography>
             </div>
 
-            <Button className="bg-[#009aff] hover:bg-[#007eff] text-[#f2f2f2]" onClick={onBrowseClick}>
+            <Button variant="contained" onClick={onBrowseClick}>
                 Browse images
             </Button>
         </div>
