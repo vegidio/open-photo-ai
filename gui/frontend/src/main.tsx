@@ -6,7 +6,7 @@ import '@fontsource/roboto/700.css';
 import { createTheme, StyledEngineProvider, ThemeProvider, useMediaQuery } from '@mui/material';
 import GlobalStyles from '@mui/material/GlobalStyles';
 import ReactDOM from 'react-dom/client';
-import { Home } from './Home.tsx';
+import { App } from './App.tsx';
 import './style.css';
 
 const lightTheme = createTheme({
@@ -28,7 +28,7 @@ const Main = () => {
         <ThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
             <StyledEngineProvider enableCssLayer>
                 <GlobalStyles styles="@layer theme, base, mui, components, utilities;" />
-                <Home />
+                <App />
             </StyledEngineProvider>
         </ThemeProvider>
     );

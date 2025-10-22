@@ -14,8 +14,9 @@ import (
 )
 
 type ImageService struct {
-	appName string
-	memo    *memo.Memoizer
+	appName   string
+	memCache  *memo.Memoizer
+	diskCache *memo.Memoizer
 }
 
 func NewImageService(appName string) *ImageService {
@@ -23,23 +24,38 @@ func NewImageService(appName string) *ImageService {
 }
 
 func (i *ImageService) GetImage(filePath string) ([]byte, error) {
-	inputData, err := opai.LoadInputData(filePath)
-	if err != nil {
-		return nil, err
+	if i.memCache == nil {
+		var err error
+		opts := memo.CacheOpts{MaxEntries: 100, MaxCapacity: 1024 * 1024 * 100}
+		i.memCache, err = memo.NewMemoryOnly(opts)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return imageToBytes(inputData.Pixels)
+	ctx := context.Background()
+	key := memo.KeyFrom(filePath)
+	ttl := time.Hour * 24
+
+	return memo.Do(i.memCache, ctx, key, ttl, func(ctx context.Context) ([]byte, error) {
+		inputData, err := opai.LoadInputData(filePath)
+		if err != nil {
+			return nil, err
+		}
+
+		return imageToBytes(inputData.Pixels)
+	})
 }
 
 func (i *ImageService) ProcessImage(filePath string) ([]byte, error) {
-	if i.memo == nil {
+	if i.diskCache == nil {
 		cachePath, err := fs.MkUserConfigDir(i.appName, "cache", "images")
 		if err != nil {
 			return nil, err
 		}
 
 		opts := memo.CacheOpts{MaxEntries: 100, MaxCapacity: 1024 * 1024 * 500}
-		i.memo, err = memo.NewDiskOnly(cachePath, opts)
+		i.diskCache, err = memo.NewDiskOnly(cachePath, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -50,7 +66,7 @@ func (i *ImageService) ProcessImage(filePath string) ([]byte, error) {
 	key := memo.KeyFrom(filePath, operation.Id())
 	ttl := time.Hour * 24
 
-	return memo.Do(i.memo, ctx, key, ttl, func(ctx context.Context) ([]byte, error) {
+	return memo.Do(i.diskCache, ctx, key, ttl, func(ctx context.Context) ([]byte, error) {
 		inputData, err := opai.LoadInputData(filePath)
 		if err != nil {
 			return nil, err
@@ -68,8 +84,12 @@ func (i *ImageService) ProcessImage(filePath string) ([]byte, error) {
 // region - Private methods
 
 func (i *ImageService) Destroy() {
-	if i.memo != nil {
-		i.memo.Close()
+	if i.memCache != nil {
+		i.memCache.Close()
+	}
+
+	if i.diskCache != nil {
+		i.diskCache.Close()
 	}
 }
 
