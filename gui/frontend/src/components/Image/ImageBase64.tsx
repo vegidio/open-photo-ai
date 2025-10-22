@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
+import type { TailwindProps } from '@/utils';
 
-type ImageBase64Props = {
+type ImageBase64Props = TailwindProps & {
     base64: string;
-    className?: string;
 };
 
 export const ImageBase64 = ({ base64, className = '' }: ImageBase64Props) => {
@@ -30,5 +30,5 @@ export const ImageBase64 = ({ base64, className = '' }: ImageBase64Props) => {
         };
     }, [base64]);
 
-    return <>{imageUrl && <img alt="Preview" src={imageUrl} className={`${className}`} />}</>;
+    return <>{imageUrl && <img alt='Preview' src={imageUrl} className={`${className}`} />}</>;
 };

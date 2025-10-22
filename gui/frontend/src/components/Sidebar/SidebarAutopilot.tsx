@@ -1,13 +1,10 @@
 import { Switch, Typography } from '@mui/material';
+import type { TailwindProps } from '@/utils';
 import { useControlStore } from '@/stores';
 
-type SidebarAutopilotProps = {
-    className?: string;
-};
-
-export const SidebarAutopilot = ({ className = '' }: SidebarAutopilotProps) => {
+export const SidebarAutopilot = ({ className = '' }: TailwindProps) => {
     const autopilot = useControlStore((state) => state.autopilot);
-    const setAutopilot = useControlStore((state) => state.setAutopilot);
+    const toggle = useControlStore((state) => state.toggle);
 
     return (
         <div className={`flex justify-between items-center ${className}`}>
@@ -25,7 +22,7 @@ export const SidebarAutopilot = ({ className = '' }: SidebarAutopilotProps) => {
                         className: autopilot ? '!bg-[#79e800]' : '',
                     },
                 }}
-                onClick={() => setAutopilot(!autopilot)}
+                onClick={toggle}
             />
         </div>
     );

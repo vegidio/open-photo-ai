@@ -6,10 +6,6 @@ import { useControlStore, useFileStore } from '@/stores';
 export const PreviewImageSideBySide = () => {
     const filePaths = useFileStore((state) => state.filePaths);
     const selectedIndex = useFileStore((state) => state.selectedIndex);
-    const originalImage = useFileStore((state) => state.originalImage);
-    const enhancedImage = useFileStore((state) => state.enhancedImage);
-    const setOriginalImage = useFileStore((state) => state.setOriginalImage);
-    const setEnhancedImage = useFileStore((state) => state.setEnhancedImage);
     const autopilot = useControlStore((state) => state.autopilot);
 
     const [base64Image, setBase64Image] = useState<string>();
@@ -26,7 +22,7 @@ export const PreviewImageSideBySide = () => {
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: Autopilot should run only once
     useEffect(() => {
-        if (autopilot) processImage();
+        // if (autopilot) processImage();
     }, [processImage]);
 
     return (

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
+import type { TailwindProps } from '@/utils';
 import { GetImage } from '../../../bindings/gui/services/imageservice.ts';
 import { ImageBase64 } from './ImageBase64';
 
-type ImagePathProps = {
+type ImagePathProps = TailwindProps & {
     path: string;
-    className?: string;
 };
 
 export const ImagePath = ({ path, className = '' }: ImagePathProps) => {
