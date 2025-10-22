@@ -9,8 +9,25 @@ export function Destroy(): $CancellablePromise<void> {
     return $Call.ByID(3681465753);
 }
 
-export function GetImage(filePath: string): $CancellablePromise<string> {
-    return $Call.ByID(2406933080, filePath).then(($result: any) => {
+/**
+ * GetImage loads an image from the specified file path and optionally resizes it.
+ * The method uses an in-memory cache to store processed images for faster later access.
+ * 
+ * # Parameters:
+ *   - filePath: The path to the image file to load
+ *   - size: The target size for the longest dimension of the image. If size is 0, the image is returned at its original
+ *     dimensions. If size > 0, the image is resized proportionally so that its longest dimension (width or height)
+ *     equals the specified size, using Lanczos resampling for high quality.
+ * 
+ * # Returns:
+ *   - []byte: The image data encoded as PNG bytes (lossless)
+ *   - error: An error if the image cannot be loaded, processed, or encoded
+ * 
+ * The method initializes a memory cache on first use with a capacity of 100 MB and a maximum of 100 entries. Cached
+ * images have a TTL of 24 hours or until the app is closed.
+ */
+export function GetImage(filePath: string, size: number): $CancellablePromise<string> {
+    return $Call.ByID(2406933080, filePath, size).then(($result: any) => {
         return $Create.ByteSlice($result);
     });
 }
