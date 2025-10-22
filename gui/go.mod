@@ -3,6 +3,7 @@ module gui
 go 1.25.3
 
 require (
+	github.com/disintegration/imaging v1.6.2
 	github.com/vegidio/go-sak v0.0.0-20251016155844-694b400df37e
 	github.com/vegidio/open-photo-ai v0.0.0-20251019170003-e68864806e9e
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.36

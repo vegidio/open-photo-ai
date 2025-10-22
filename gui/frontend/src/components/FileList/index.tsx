@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
-import { Button, Skeleton, SwipeableDrawer } from '@mui/material';
-import type { TailwindProps } from '@/utils';
+import { SwipeableDrawer } from '@mui/material';
+import { FileListBody } from '@/components/FileList/FileListBody.tsx';
+import { FileListHeader } from '@/components/FileList/FileListHeader.tsx';
 import { useFileListStore } from '@/stores';
 
 const drawerBleeding = 48;
@@ -37,32 +38,9 @@ export const FileList = ({ containerRef }: FileListProps) => {
                 },
             }}
         >
-            <DrawerHeader className='w-full' />
+            <FileListHeader drawerBleeding={drawerBleeding} className='w-full' />
 
-            <DrawerBody />
+            <FileListBody drawerHeight={drawerHeight} />
         </SwipeableDrawer>
-    );
-};
-
-const DrawerHeader = ({ className = '' }: TailwindProps) => {
-    const toggle = useFileListStore((state) => state.toggle);
-
-    return (
-        <div
-            style={{ height: drawerBleeding, top: -drawerBleeding }}
-            className={`flex items-center absolute visible pointer-events-auto bg-[#272727] ${className}`}
-        >
-            <Button type='button' onClick={toggle}>
-                Toggle
-            </Button>
-        </div>
-    );
-};
-
-const DrawerBody = () => {
-    return (
-        <div style={{ height: drawerHeight }}>
-            <Skeleton variant='rectangular' height='100%' />
-        </div>
     );
 };

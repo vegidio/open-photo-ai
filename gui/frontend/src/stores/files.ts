@@ -7,6 +7,7 @@ type FileStore = {
     originalImage?: string;
     enhancedImage?: string;
 
+    setSelectedIndex: (index: number) => void;
     addFilePaths: (filePaths: string[]) => void;
     removeFilePath: (filePath: string) => void;
     clear: () => void;
@@ -20,6 +21,12 @@ export const useFileStore = create(
         selectedIndex: 0,
         originalImage: undefined,
         enhancedImage: undefined,
+
+        setSelectedIndex: (index: number) => {
+            set((state) => {
+                state.selectedIndex = index;
+            });
+        },
 
         addFilePaths: (filePaths: string[]) => {
             set((state) => {
