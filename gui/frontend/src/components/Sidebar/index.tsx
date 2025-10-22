@@ -1,17 +1,10 @@
-import { useTheme } from '@mui/material/styles';
+import type { TailwindProps } from '@/utils';
 import { SidebarAutopilot } from './SidebarAutopilot.tsx';
 import { SidebarExport } from './SidebarExport.tsx';
 
-type SidebarProps = {
-    className?: string;
-};
-
-export const Sidebar = ({ className }: SidebarProps) => {
-    const theme = useTheme();
-    const primaryColor = theme.palette.primary.main;
-
+export const Sidebar = ({ className }: TailwindProps) => {
     return (
-        <div className={`flex flex-col pt-4 gap-4 bg-[${primaryColor}] ${className}`}>
+        <div className={`flex flex-col pt-4 gap-4 bg-[#272727] ${className}`}>
             <SidebarAutopilot className='mx-4' />
 
             <div className='h-full' />

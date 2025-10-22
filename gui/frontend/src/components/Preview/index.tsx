@@ -1,12 +1,9 @@
+import type { TailwindProps } from '@/utils';
 import { PreviewEmpty } from './PreviewEmpty';
 import { PreviewImageSideBySide } from './PreviewImageSideBySide.tsx';
 import { useFileStore } from '@/stores';
 
-interface PreviewProps {
-    className?: string;
-}
-
-export const Preview = ({ className = '' }: PreviewProps) => {
+export const Preview = ({ className = '' }: TailwindProps) => {
     const filePaths = useFileStore((state) => state.filePaths);
 
     return (

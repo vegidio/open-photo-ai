@@ -1,8 +1,6 @@
-type SidebarExportProps = {
-    className?: string;
-};
+import type { TailwindProps } from '@/utils';
 
-export const SidebarExport = ({ className = '' }: SidebarExportProps) => {
+export const SidebarExport = ({ className = '' }: TailwindProps) => {
     return (
         <div>
             <button type='button' className={`${className} bg-[#009aff] hover:bg-[#007eff] text-[#f2f2f2] w-full h-12`}>

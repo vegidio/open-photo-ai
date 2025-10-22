@@ -15,7 +15,7 @@ type FileStore = {
 };
 
 export const useFileStore = create(
-    immer<FileStore>((set, get) => ({
+    immer<FileStore>((set, _) => ({
         filePaths: [],
         selectedIndex: 0,
         originalImage: undefined,
