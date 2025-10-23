@@ -12,8 +12,8 @@ type FileStore = {
     addFiles: (files: DialogFile[]) => void;
     removeFile: (hash: string) => void;
     clear: () => void;
-    setOriginalImage: (image: string) => void;
-    setEnhancedImage: (image: string) => void;
+    setOriginalImage: (image: string | undefined) => void;
+    setEnhancedImage: (image: string | undefined) => void;
 };
 
 export const useFileStore = create(
@@ -50,13 +50,13 @@ export const useFileStore = create(
             });
         },
 
-        setOriginalImage: (image: string) => {
+        setOriginalImage: (image: string | undefined) => {
             set((state) => {
                 state.originalImage = image;
             });
         },
 
-        setEnhancedImage: (image: string) => {
+        setEnhancedImage: (image: string | undefined) => {
             set((state) => {
                 state.enhancedImage = image;
             });

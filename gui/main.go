@@ -30,7 +30,10 @@ func main() {
 	defer opai.Destroy()
 
 	// Services
-	imageService := services.NewImageService(AppName)
+	imageService, err := services.NewImageService(AppName)
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer imageService.Destroy()
 
 	// Create a new Wails application by providing the necessary options.
@@ -84,7 +87,7 @@ func main() {
 	}()
 
 	// Run the application. This blocks until the application has been exited.
-	err := app.Run()
+	err = app.Run()
 
 	// If an error occurred while running the application, log it and exit.
 	if err != nil {

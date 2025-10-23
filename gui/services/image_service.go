@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -17,12 +18,22 @@ import (
 )
 
 type ImageService struct {
-	appName   string
 	diskCache *memo.Memoizer
 }
 
-func NewImageService(appName string) *ImageService {
-	return &ImageService{appName: appName}
+func NewImageService(appName string) (*ImageService, error) {
+	cachePath, err := fs.MkUserConfigDir(appName, "cache", "images")
+	if err != nil {
+		return nil, err
+	}
+
+	opts := memo.CacheOpts{MaxEntries: 100, MaxCapacity: 1024 * 1024 * 500}
+	diskCache, err := memo.NewDiskOnly(cachePath, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ImageService{diskCache}, nil
 }
 
 // GetImage loads an image from the specified file path and optionally resizes it.
@@ -55,37 +66,38 @@ func (i *ImageService) GetImage(filePath string, size int) ([]byte, error) {
 }
 
 func (i *ImageService) ProcessImage(filePath string) ([]byte, error) {
-	if i.diskCache == nil {
-		cachePath, err := fs.MkUserConfigDir(i.appName, "cache", "images")
-		if err != nil {
-			return nil, err
-		}
+	fmt.Println("Start image processing", filePath)
 
-		opts := memo.CacheOpts{MaxEntries: 100, MaxCapacity: 1024 * 1024 * 500}
-		i.diskCache, err = memo.NewDiskOnly(cachePath, opts)
-		if err != nil {
-			return nil, err
-		}
+	inputData, err := opai.LoadInputData(filePath)
+	if err != nil {
+		return nil, err
 	}
 
 	operation := upscale.Op(4, "high")
+	outputData, err := opai.Execute(inputData, operation)
+	if err != nil {
+		return nil, err
+	}
+
+	pngBytes, err := imageToBytes(outputData.Pixels, types.FormatPng)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the image as lossless PNG to be reused later
 	ctx := context.Background()
 	key := memo.KeyFrom(filePath, operation.Id())
 	ttl := time.Hour * 24
 
-	return memo.Do(i.diskCache, ctx, key, ttl, func(ctx context.Context) ([]byte, error) {
-		inputData, err := opai.LoadInputData(filePath)
-		if err != nil {
-			return nil, err
-		}
+	err = i.diskCache.Store.Set(ctx, key, pngBytes, ttl)
+	if err != nil {
+		return nil, err
+	}
 
-		outputData, err := opai.Execute(inputData, operation)
-		if err != nil {
-			return nil, err
-		}
+	fmt.Println("End image processing", filePath)
 
-		return imageToBytes(outputData.Pixels, types.FormatPng)
-	})
+	// Return a version of the image as JPG for presentation purposes
+	return imageToBytes(outputData.Pixels, types.FormatJpeg)
 }
 
 // region - Private methods
