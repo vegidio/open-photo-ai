@@ -10,7 +10,7 @@ type ControlStore = {
 
 export const useControlStore = create(
     immer<ControlStore>((set, _) => ({
-        autopilot: true,
+        autopilot: false,
 
         setAutopilot: (enable: boolean) => {
             set((state) => {
