@@ -7,6 +7,8 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -65,16 +67,16 @@ func (i *ImageService) GetImage(filePath string, size int) ([]byte, error) {
 	return imageToBytes(inputData.Pixels, types.FormatJpeg)
 }
 
-func (i *ImageService) ProcessImage(filePath string) ([]byte, error) {
-	fmt.Println("Start image processing", filePath)
+func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, error) {
+	fmt.Println("start", filePath)
 
 	inputData, err := opai.LoadInputData(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	operation := upscale.Op(4, "high")
-	outputData, err := opai.Execute(inputData, operation)
+	operations := idsToOperations(opIds)
+	outputData, err := opai.Execute(inputData, operations...)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +88,7 @@ func (i *ImageService) ProcessImage(filePath string) ([]byte, error) {
 
 	// Cache the image as lossless PNG to be reused later
 	ctx := context.Background()
-	key := memo.KeyFrom(filePath, operation.Id())
+	key := memo.KeyFrom(filePath, operations[0].Id())
 	ttl := time.Hour * 24
 
 	err = i.diskCache.Store.Set(ctx, key, pngBytes, ttl)
@@ -94,7 +96,7 @@ func (i *ImageService) ProcessImage(filePath string) ([]byte, error) {
 		return nil, err
 	}
 
-	fmt.Println("End image processing", filePath)
+	fmt.Println("end")
 
 	// Return a version of the image as JPG for presentation purposes
 	return imageToBytes(outputData.Pixels, types.FormatJpeg)
@@ -111,6 +113,26 @@ func (i *ImageService) Destroy() {
 // endregion
 
 // region - Private functions
+
+func idsToOperations(opIds []string) []types.Operation {
+	operations := make([]types.Operation, 0)
+
+	for _, opId := range opIds {
+		values := strings.Split(opId, "_")
+		name := values[0]
+
+		switch name {
+		case "upscale":
+			scale, _ := strconv.Atoi(values[1])
+			mode := upscale.Mode(values[2])
+
+			fmt.Println(name, scale, mode)
+			operations = append(operations, upscale.Op(scale, mode))
+		}
+	}
+
+	return operations
+}
 
 func imageToBytes(img image.Image, format types.ImageFormat) ([]byte, error) {
 	var buf bytes.Buffer

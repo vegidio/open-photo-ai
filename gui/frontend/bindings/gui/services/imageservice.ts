@@ -28,8 +28,8 @@ export function GetImage(filePath: string, size: number): $CancellablePromise<st
     });
 }
 
-export function ProcessImage(filePath: string): $CancellablePromise<string> {
-    return $Call.ByID(3391347795, filePath).then(($result: any) => {
+export function ProcessImage(filePath: string, ...opIds: string[]): $CancellablePromise<string> {
+    return $Call.ByID(3391347795, filePath, opIds).then(($result: any) => {
         return $Create.ByteSlice($result);
     });
 }
