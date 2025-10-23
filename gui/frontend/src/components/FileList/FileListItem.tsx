@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import type { DialogFile } from '../../../bindings/gui/types';
-import { ImagePath } from '@/components/Image';
+import { getFileImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
     index: number;
@@ -9,13 +10,24 @@ type FileListItemProps = {
 };
 
 export const FileListItem = ({ index, file, selected = false, onClick }: FileListItemProps) => {
+    const [imageUrl, setImageUrl] = useState<string>();
+
+    useEffect(() => {
+        async function loadImage() {
+            const imageUrl = await getFileImage(file, 100);
+            setImageUrl(imageUrl);
+        }
+
+        loadImage();
+    }, [file]);
+
     return (
         <button
             onClick={onClick}
             type='button'
             className={`h-full aspect-square rounded ${selected ? 'outline-3 outline-blue-500' : ''}`}
         >
-            <ImagePath file={file} size={100} className='w-full h-full object-cover rounded' />
+            <img alt='Preview' src={imageUrl} className='w-full h-full object-cover rounded' />
         </button>
     );
 };

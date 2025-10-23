@@ -16,7 +16,7 @@ export const FileListBody = memo(({ drawerHeight }: FileListBodyProps) => {
     };
 
     return (
-        <div style={{ height: drawerHeight }} className='flex flex-row p-3 gap-4 overflow-x-auto scrollbar-thin'>
+        <div style={{ height: drawerHeight }} className='flex flex-row px-4 py-3 gap-4 overflow-x-auto scrollbar-thin'>
             {files.map((file, index) => (
                 <FileListItem
                     key={`img-${index}`}
