@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { ProcessImage } from '../../../bindings/gui/services/imageservice.ts';
 import { PreviewEmpty } from './PreviewEmpty';
 import { PreviewImageSideBySide } from './PreviewImageSideBySide.tsx';
 import { useControlStore, useFileStore } from '@/stores';
-import { getBase64Image, getFileImage } from '@/utils/image.ts';
+import { getEnhancedImage, getImage } from '@/utils/image.ts';
 
 export const Preview = ({ className = '' }: TailwindProps) => {
     const files = useFileStore((state) => state.files);
@@ -14,15 +13,13 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     const selectedFile = files.length > 0 ? files[selectedIndex] : undefined;
     const autopilot = useControlStore((state) => state.autopilot);
 
-    console.log('selectedFile', selectedFile);
-
     // autopilot is intentionally not included in the dependency array because we don't want to re-render the preview if
     // the user switches on/off the autopilot. Only clicking on a different image should trigger a re-render.
     // biome-ignore lint/correctness/useExhaustiveDependencies: N/A autopilot
     useEffect(() => {
         async function loadPreview() {
             if (selectedFile) {
-                const originalImage = await getFileImage(selectedFile, 0);
+                const originalImage = await getImage(selectedFile, 0);
 
                 // We set both images to the original image for now, later we will determine if we need to display the
                 // enhanced image or not based on the autopilot state.
@@ -30,8 +27,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                 setEnhancedImage(originalImage);
 
                 if (autopilot) {
-                    const base64 = await ProcessImage(selectedFile.Path);
-                    const enhancedImage = await getBase64Image(base64);
+                    const enhancedImage = await getEnhancedImage(selectedFile, 'upscale_4_high');
                     setEnhancedImage(enhancedImage);
                 }
             } else {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { DialogFile } from '../../../bindings/gui/types';
-import { getFileImage } from '@/utils/image.ts';
+import { getImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
     index: number;
@@ -14,7 +14,7 @@ export const FileListItem = ({ index, file, selected = false, onClick }: FileLis
 
     useEffect(() => {
         async function loadImage() {
-            const imageUrl = await getFileImage(file, 100);
+            const imageUrl = await getImage(file, 100);
             setImageUrl(imageUrl);
         }
 
