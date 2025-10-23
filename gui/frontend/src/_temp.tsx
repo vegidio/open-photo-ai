@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Events, WML } from '@wailsio/runtime';
-import { GreetService } from '../bindings/gui';
 
 function Temp() {
     const [name, setName] = useState<string>('');
@@ -12,13 +11,6 @@ function Temp() {
         if (!localName) {
             localName = 'anonymous';
         }
-        GreetService.Greet(localName)
-            .then((resultValue: string) => {
-                setResult(resultValue);
-            })
-            .catch((err: any) => {
-                console.log(err);
-            });
     };
 
     useEffect(() => {
@@ -30,32 +22,29 @@ function Temp() {
     }, []);
 
     return (
-        <div className="container">
+        <div className='container'>
             <div>
-                <a data-wml-openURL="https://wails.io">
-                    <img src="/wails.png" className="logo" alt="Wails logo" />
+                <a data-wml-openURL='https://wails.io'>
+                    <img src='/wails.png' className='logo' alt='Wails logo' />
                 </a>
-                <a data-wml-openURL="https://reactjs.org">
-                    <img src="/react.svg" className="logo react" alt="React logo" />
+                <a data-wml-openURL='https://reactjs.org'>
+                    <img src='/react.svg' className='logo react' alt='React logo' />
                 </a>
             </div>
             <h1>Wails + React</h1>
-            <div className="result">{result}</div>
-            <div className="card">
-                <div className="input-box">
+            <div className='result'>{result}</div>
+            <div className='card'>
+                <div className='input-box'>
                     <input
-                        className="input"
+                        className='input'
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        type="text"
-                        autoComplete="off"
+                        type='text'
+                        autoComplete='off'
                     />
-                    <button className="btn" onClick={doGreet}>
-                        Greet
-                    </button>
                 </div>
             </div>
-            <div className="footer">
+            <div className='footer'>
                 <div>
                     <p>Click on the Wails logo to learn more</p>
                 </div>

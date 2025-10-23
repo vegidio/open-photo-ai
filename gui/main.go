@@ -45,7 +45,6 @@ func main() {
 		Name:        "Open Photo AI",
 		Description: "A demo of using raw HTML & CSS",
 		Services: []application.Service{
-			application.NewService(&GreetService{}),
 			application.NewService(&services.DialogService{}),
 			application.NewService(imageService),
 		},
