@@ -5,11 +5,16 @@
 // @ts-ignore: Unused imports
 import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
-export function OpenFileDialog(): $CancellablePromise<string[]> {
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as types$0 from "../types/models.js";
+
+export function OpenFileDialog(): $CancellablePromise<types$0.DialogFile[]> {
     return $Call.ByID(3411436064).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType1($result);
     });
 }
 
 // Private type creation functions
-const $$createType0 = $Create.Array($Create.Any);
+const $$createType0 = types$0.DialogFile.createFrom;
+const $$createType1 = $Create.Array($$createType0);

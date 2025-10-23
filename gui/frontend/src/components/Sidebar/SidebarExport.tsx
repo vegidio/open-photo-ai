@@ -1,4 +1,4 @@
-import type { TailwindProps } from '@/utils';
+import type { TailwindProps } from '@/utils/TailwindProps.ts';
 
 export const SidebarExport = ({ className = '' }: TailwindProps) => {
     return (

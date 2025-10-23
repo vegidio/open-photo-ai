@@ -22,6 +22,7 @@
         "react-dom": "18.2.0",
         "react-icons": "5.5.0",
         "tailwindcss": "4.1.14",
+        "xxhash-wasm": "1.1.0",
         "zustand": "5.0.8"
     },
     "devDependencies": {

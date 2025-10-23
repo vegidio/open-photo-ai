@@ -5,7 +5,7 @@ go 1.25.3
 require (
 	github.com/google/go-github/v74 v74.0.0
 	github.com/samber/lo v1.51.0
-	github.com/vegidio/go-sak v0.0.0-20251016155844-694b400df37e
+	github.com/vegidio/go-sak v0.0.0-20251022194515-c637b1842188
 	github.com/yalue/onnxruntime_go v1.21.0
 	golang.org/x/image v0.32.0
 	golang.org/x/text v0.30.0

@@ -7,7 +7,8 @@ type FileListBodyProps = {
 };
 
 export const FileListBody = memo(({ drawerHeight }: FileListBodyProps) => {
-    const filePaths = useFileStore((state) => state.filePaths);
+    const files = useFileStore((state) => state.files);
+    const selectedIndex = useFileStore((state) => state.selectedIndex);
     const setSelectedIndex = useFileStore((state) => state.setSelectedIndex);
 
     const onImageClicked = (index: number) => {
@@ -15,10 +16,15 @@ export const FileListBody = memo(({ drawerHeight }: FileListBodyProps) => {
     };
 
     return (
-        <div style={{ height: drawerHeight }} className='flex flex-row p-4 gap-4 overflow-x-auto scrollbar-thin'>
-            {filePaths.map((path, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: N/A
-                <FileListItem key={`img-${index}`} index={index} path={path} onClick={() => onImageClicked(index)} />
+        <div style={{ height: drawerHeight }} className='flex flex-row p-3 gap-4 overflow-x-auto scrollbar-thin'>
+            {files.map((file, index) => (
+                <FileListItem
+                    key={`img-${index}`}
+                    index={index}
+                    file={file}
+                    selected={index === selectedIndex}
+                    onClick={() => onImageClicked(index)}
+                />
             ))}
         </div>
     );

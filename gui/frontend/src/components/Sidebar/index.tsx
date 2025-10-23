@@ -1,4 +1,4 @@
-import type { TailwindProps } from '@/utils';
+import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { SidebarAutopilot } from './SidebarAutopilot.tsx';
 import { SidebarExport } from './SidebarExport.tsx';
 

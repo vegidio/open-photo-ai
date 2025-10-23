@@ -1,5 +1,5 @@
 import { Button } from '@mui/material';
-import type { TailwindProps } from '@/utils';
+import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { useFileListStore } from '@/stores';
 
 type FileListHeaderProps = TailwindProps & {

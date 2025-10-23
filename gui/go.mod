@@ -4,7 +4,8 @@ go 1.25.3
 
 require (
 	github.com/disintegration/imaging v1.6.2
-	github.com/vegidio/go-sak v0.0.0-20251016155844-694b400df37e
+	github.com/samber/lo v1.51.0
+	github.com/vegidio/go-sak v0.0.0-20251022212858-c8a8bc0dfff2
 	github.com/vegidio/open-photo-ai v0.0.0-20251019170003-e68864806e9e
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.36
 )
@@ -39,6 +40,7 @@ require (
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/leaanthony/go-ansi-parser v1.6.1 // indirect
 	github.com/leaanthony/u v1.1.1 // indirect
 	github.com/lmittmann/tint v1.0.7 // indirect
@@ -48,13 +50,13 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/samber/lo v1.51.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/yalue/onnxruntime_go v1.21.0 // indirect
+	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/otel v1.37.0 // indirect
 	go.opentelemetry.io/otel/metric v1.37.0 // indirect

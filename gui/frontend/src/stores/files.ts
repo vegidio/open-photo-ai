@@ -1,15 +1,16 @@
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
+import type { DialogFile } from '../../bindings/gui/types';
 
 type FileStore = {
-    filePaths: string[];
+    files: DialogFile[];
     selectedIndex: number;
     originalImage?: string;
     enhancedImage?: string;
 
     setSelectedIndex: (index: number) => void;
-    addFilePaths: (filePaths: string[]) => void;
-    removeFilePath: (filePath: string) => void;
+    addFiles: (files: DialogFile[]) => void;
+    removeFile: (hash: string) => void;
     clear: () => void;
     setOriginalImage: (image: string) => void;
     setEnhancedImage: (image: string) => void;
@@ -17,7 +18,7 @@ type FileStore = {
 
 export const useFileStore = create(
     immer<FileStore>((set, _) => ({
-        filePaths: [],
+        files: [],
         selectedIndex: 0,
         originalImage: undefined,
         enhancedImage: undefined,
@@ -28,22 +29,24 @@ export const useFileStore = create(
             });
         },
 
-        addFilePaths: (filePaths: string[]) => {
+        addFiles: (files: DialogFile[]) => {
             set((state) => {
-                const uniqueNewPaths = filePaths.filter((path) => !state.filePaths.includes(path));
-                state.filePaths = [...state.filePaths, ...uniqueNewPaths];
+                const uniqueFiles = files.filter(
+                    (file) => !state.files.some((existingFile) => existingFile.Hash === file.Hash),
+                );
+                state.files = [...state.files, ...uniqueFiles];
             });
         },
 
-        removeFilePath: (filePath: string) => {
+        removeFile: (hash: string) => {
             set((state) => {
-                state.filePaths = state.filePaths.filter((path) => path !== filePath);
+                state.files = state.files.filter((file) => file.Hash !== hash);
             });
         },
 
         clear: () => {
             set((state) => {
-                state.filePaths = [];
+                state.files = [];
             });
         },
 
