@@ -28,6 +28,9 @@
                 "noUnusedImports": "warn",
                 "useUniqueElementIds": "off"
             },
+            "suspicious": {
+                "noArrayIndexKey": "off"
+            },
             "recommended": true
         }
     },

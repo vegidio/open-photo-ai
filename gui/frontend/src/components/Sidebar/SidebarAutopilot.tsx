@@ -1,5 +1,5 @@
 import { Switch, Typography } from '@mui/material';
-import type { TailwindProps } from '@/utils';
+import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { useControlStore } from '@/stores';
 
 export const SidebarAutopilot = ({ className = '' }: TailwindProps) => {

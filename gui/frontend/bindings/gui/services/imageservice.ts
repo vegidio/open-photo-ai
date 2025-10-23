@@ -11,7 +11,6 @@ export function Destroy(): $CancellablePromise<void> {
 
 /**
  * GetImage loads an image from the specified file path and optionally resizes it.
- * The method uses an in-memory cache to store processed images for faster later access.
  * 
  * # Parameters:
  *   - filePath: The path to the image file to load
@@ -22,9 +21,6 @@ export function Destroy(): $CancellablePromise<void> {
  * # Returns:
  *   - []byte: The image data encoded as PNG bytes (lossless)
  *   - error: An error if the image cannot be loaded, processed, or encoded
- * 
- * The method initializes a memory cache on first use with a capacity of 100 MB and a maximum of 100 entries. Cached
- * images have a TTL of 24 hours or until the app is closed.
  */
 export function GetImage(filePath: string, size: number): $CancellablePromise<string> {
     return $Call.ByID(2406933080, filePath, size).then(($result: any) => {

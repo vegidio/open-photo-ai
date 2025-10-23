@@ -41,6 +41,9 @@ importers:
       tailwindcss:
         specifier: 4.1.14
         version: 4.1.14
+      xxhash-wasm:
+        specifier: 1.1.0
+        version: 1.1.0
       zustand:
         specifier: 5.0.8
         version: 5.0.8(@types/react@19.2.2)(immer@10.1.3)(react@18.2.0)
@@ -1213,6 +1216,9 @@ packages:
       yaml:
         optional: true
 
+  xxhash-wasm@1.1.0:
+    resolution: {integrity: sha512-147y/6YNh+tlp6nd/2pWq38i9h6mz/EuQ6njIrmW8D1BS5nCqs0P6DG+m6zTGnNz5I+uhZ0SHxBs9BsPrwcKDA==}
+
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
@@ -2235,6 +2241,8 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.6.1
       lightningcss: 1.30.1
+
+  xxhash-wasm@1.1.0: {}
 
   yallist@3.1.1: {}
 

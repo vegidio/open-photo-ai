@@ -4,12 +4,12 @@ import { DialogService } from '../../../bindings/gui/services';
 import { useFileStore } from '@/stores';
 
 export const PreviewEmpty = () => {
-    const addFilePaths = useFileStore((state) => state.addFilePaths);
+    const addFiles = useFileStore((state) => state.addFiles);
 
     const onBrowseClick = async () => {
         try {
-            const paths = await DialogService.OpenFileDialog();
-            addFilePaths(paths);
+            const files = await DialogService.OpenFileDialog();
+            addFiles(files);
         } catch (e) {
             console.error(e);
         }
