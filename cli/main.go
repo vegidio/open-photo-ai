@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/upscale"
@@ -23,11 +24,16 @@ func main() {
 		return
 	}
 
-	outputData, err := opai.Execute(inputData, upscale.Op(4, "high"))
+	start := time.Now()
+	outputData, err := opai.Execute(inputData, upscale.Op(4, upscale.ModeGeneral, types.PrecisionFp16))
+	elapsed := time.Since(start)
+
 	if err != nil {
 		fmt.Printf("Failed to upscale the image: %v\n", err)
 		return
 	}
+
+	fmt.Printf("Execution time: %s\n", elapsed)
 
 	err = opai.SaveOutputData(&types.OutputData{
 		FilePath: "/Users/vegidio/Desktop/test1_upscaled_4x.jpg",

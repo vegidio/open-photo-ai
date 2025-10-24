@@ -109,6 +109,9 @@ func startRuntime(name string) error {
 		return err
 	}
 
+	// Disable ONNX runtime logging
+	ort.SetEnvironmentLogLevel(ort.LoggingLevelFatal)
+
 	return nil
 }
 

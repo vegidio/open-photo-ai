@@ -36,7 +36,7 @@ func Execute(input *types.InputData, operations ...types.Operation) (*types.Outp
 			return nil, err
 		}
 
-		output, err = model.Run(input)
+		output, err = model.Run(input, op.Precision())
 		if err != nil {
 			return nil, err
 		}

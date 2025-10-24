@@ -30,9 +30,7 @@ func imageToNCHW(img image.Image) ([]float32, int, int) {
 	return data, h, w
 }
 
-func tensorToRGBA(t *ort.Tensor[float32]) (*image.RGBA, error) {
-	data := t.GetData()   // flat []float32
-	shape := t.GetShape() // []int64, e.g. [1, 3, H, W]
+func tensorToRGBA(data []float32, shape ort.Shape) (*image.RGBA, error) {
 	if len(shape) != 4 || shape[1] != 3 {
 		return nil, fmt.Errorf("unexpected tensor shape: %v", shape)
 	}
