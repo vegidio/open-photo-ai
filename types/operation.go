@@ -6,4 +6,6 @@ package types
 type Operation interface {
 	// Id returns a unique identifier for the operation type
 	Id() string
+
+	Precision() Precision
 }

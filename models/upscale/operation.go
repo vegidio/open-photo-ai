@@ -7,23 +7,29 @@ import (
 )
 
 type OpUpscale struct {
-	id    string
-	scale int
-	mode  Mode
+	id        string
+	precision types.Precision
+	scale     int
+	mode      Mode
 }
 
 func (o OpUpscale) Id() string {
 	return o.id
 }
 
+func (o OpUpscale) Precision() types.Precision {
+	return o.precision
+}
+
 // Compile-time assertion to ensure it conforms to the Op interface.
 var _ types.Operation = (*OpUpscale)(nil)
 
-func Op(scale int, mode Mode) OpUpscale {
+func Op(scale int, mode Mode, precision types.Precision) OpUpscale {
 	return OpUpscale{
-		id:    fmt.Sprintf("upscale_%dx_%s", scale, mode),
-		scale: scale,
-		mode:  mode,
+		id:        fmt.Sprintf("upscale_%dx_%s_%s", scale, mode, precision),
+		scale:     scale,
+		mode:      mode,
+		precision: precision,
 	}
 }
 
@@ -32,7 +38,6 @@ type Mode string
 
 // Constants for supported image formats.
 const (
+	ModeGeneral Mode = "general"
 	ModeCartoon Mode = "cartoon"
-	ModeMedium  Mode = "medium"
-	ModeHigh    Mode = "high"
 )

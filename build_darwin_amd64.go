@@ -2,6 +2,6 @@ package openphotoai
 
 import _ "embed"
 
-//go:embed libs/darwin_amd64/libonnxruntime.dylib
+//go:embed libs/darwin_amd64/libonnxruntime-1.22.0.dylib
 var onnxRuntimeBinary []byte
 var onnxRuntimeName = "libonnxruntime.dylib"

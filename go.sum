@@ -38,6 +38,8 @@ github.com/vegidio/go-sak v0.0.0-20251016155844-694b400df37e h1:OuvCGebUYLDkIkW8
 github.com/vegidio/go-sak v0.0.0-20251016155844-694b400df37e/go.mod h1:8cqYZpHC0ayuQ1qWwo23H3ODTOZ9X7ByrFdIA+ONdcQ=
 github.com/vegidio/go-sak v0.0.0-20251022194515-c637b1842188 h1:fj5HRWgb4Ifl15SNVe1Ce34tpeRMrHVDlW1mbvWyO20=
 github.com/vegidio/go-sak v0.0.0-20251022194515-c637b1842188/go.mod h1:8cqYZpHC0ayuQ1qWwo23H3ODTOZ9X7ByrFdIA+ONdcQ=
+github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
+github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
 github.com/yalue/onnxruntime_go v1.21.0 h1:DdtvfY7OP5gR8mwPDqAOAQckf+KcI30hPNJL8hQaYWI=
 github.com/yalue/onnxruntime_go v1.21.0/go.mod h1:b4X26A8pekNb1ACJ58wAXgNKeUCGEAQ9dmACut9Sm/4=
 go.opentelemetry.io/auto/sdk v1.1.0 h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=
