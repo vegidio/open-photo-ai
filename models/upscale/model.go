@@ -54,17 +54,17 @@ func (m *Upscale) Name() string {
 	return m.name
 }
 
-func (m *Upscale) Run(input *types.InputData, precision types.Precision) (*types.OutputData, error) {
+func (m *Upscale) Run(input *types.InputData) (*types.OutputData, error) {
 	// Create the input tensor
 	data, h, w := imageToNCHW(input.Pixels)
-	inTensor, err := createTensor(data, h, w, precision)
+	inTensor, err := createTensor(data, h, w, m.operation.precision)
 	if err != nil {
 		return nil, err
 	}
 	defer inTensor[0].Destroy()
 
 	// Create the output tensor with x upscaling
-	outTensor, err := createEmptyTensor(h*m.operation.scale, w*m.operation.scale, precision)
+	outTensor, err := createEmptyTensor(h*m.operation.scale, w*m.operation.scale, m.operation.precision)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (m *Upscale) Run(input *types.InputData, precision types.Precision) (*types
 		return nil, err
 	}
 
-	rawData, shape, err := valueToTensorData(outTensor, precision)
+	rawData, shape, err := valueToTensorData(outTensor, m.operation.precision)
 	if err != nil {
 		return nil, err
 	}

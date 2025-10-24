@@ -44,6 +44,8 @@ func CreateSession(appName, modelName, tag string, onDownload func()) (*ort.Dyna
 		return nil, err
 	}
 
+	defer options.Destroy()
+
 	modelPath := filepath.Join(configDir, appName, "models", modelName)
 	session, err := ort.NewDynamicAdvancedSession(modelPath, []string{"input"}, []string{"output"}, options)
 	if err != nil {
