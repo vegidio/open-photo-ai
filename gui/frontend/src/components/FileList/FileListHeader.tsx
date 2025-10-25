@@ -1,6 +1,8 @@
+import { Divider } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { FileListButton } from '@/components/FileList/FileListButton.tsx';
-import { FileListZoom } from '@/components/FileList/FileListZoom.tsx';
+import { FileListButton } from './FileListButton.tsx';
+import { FileListZoom } from './FileListZoom.tsx';
+import { FileListAddImages } from '@/components/FileList/FileListAddImages.tsx';
 
 type FileListHeaderProps = TailwindProps & {
     drawerBleeding: number;
@@ -10,9 +12,15 @@ export const FileListHeader = ({ drawerBleeding, className = '' }: FileListHeade
     return (
         <div
             style={{ height: drawerBleeding, top: -drawerBleeding }}
-            className={`flex items-center absolute visible pointer-events-auto pl-2 pr-4 bg-[#272727] ${className}`}
+            className={`flex items-center absolute visible pointer-events-auto pl-2 pr-4 gap-2 bg-[#272727] ${className}`}
         >
             <FileListButton />
+
+            <Divider orientation='vertical' variant='middle' flexItem />
+
+            <FileListAddImages />
+
+            <Divider orientation='vertical' variant='middle' flexItem />
 
             <div className='flex-1' />
 
