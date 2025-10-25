@@ -13,15 +13,15 @@ type FileListProps = {
 
 export const FileList = ({ containerRef }: FileListProps) => {
     const open = useFileListStore((state) => state.open);
+    const setOpen = useFileListStore((state) => state.setOpen);
 
     return (
         <SwipeableDrawer
             id='file_list'
             anchor='bottom'
             open={open}
-            onClose={() => {}}
+            onClose={() => setOpen(false)}
             onOpen={() => {}}
-            hideBackdrop={true}
             disableSwipeToOpen={true}
             keepMounted
             ModalProps={{
@@ -35,6 +35,9 @@ export const FileList = ({ containerRef }: FileListProps) => {
                         overflow: 'visible',
                         position: 'absolute',
                     },
+                },
+                backdrop: {
+                    invisible: true,
                 },
             }}
         >

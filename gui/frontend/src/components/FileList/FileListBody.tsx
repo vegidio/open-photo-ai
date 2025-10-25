@@ -1,12 +1,11 @@
-import { memo } from 'react';
-import { FileListItem } from '@/components/FileList/FileListItem.tsx';
+import { FileListItem } from './FileListItem.tsx';
 import { useFileStore } from '@/stores';
 
 type FileListBodyProps = {
     drawerHeight: number;
 };
 
-export const FileListBody = memo(({ drawerHeight }: FileListBodyProps) => {
+export const FileListBody = ({ drawerHeight }: FileListBodyProps) => {
     const files = useFileStore((state) => state.files);
     const selectedIndex = useFileStore((state) => state.selectedIndex);
     const setSelectedIndex = useFileStore((state) => state.setSelectedIndex);
@@ -20,7 +19,6 @@ export const FileListBody = memo(({ drawerHeight }: FileListBodyProps) => {
             {files.map((file, index) => (
                 <FileListItem
                     key={`img-${index}`}
-                    index={index}
                     file={file}
                     selected={index === selectedIndex}
                     onClick={() => onImageClicked(index)}
@@ -28,4 +26,4 @@ export const FileListBody = memo(({ drawerHeight }: FileListBodyProps) => {
             ))}
         </div>
     );
-});
+};
