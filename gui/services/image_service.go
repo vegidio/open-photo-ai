@@ -68,8 +68,6 @@ func (i *ImageService) GetImage(filePath string, size int) ([]byte, error) {
 }
 
 func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, error) {
-	fmt.Println("start", filePath)
-
 	inputData, err := opai.LoadInputData(filePath)
 	if err != nil {
 		return nil, err
@@ -96,8 +94,6 @@ func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, e
 		return nil, err
 	}
 
-	fmt.Println("end")
-
 	// Return a version of the image as JPG for presentation purposes
 	return imageToBytes(outputData.Pixels, types.FormatJpeg)
 }
@@ -123,11 +119,12 @@ func idsToOperations(opIds []string) []types.Operation {
 
 		switch name {
 		case "upscale":
-			scale, _ := strconv.Atoi(values[1])
-			mode := upscale.Mode(values[2])
+			mode := upscale.Mode(values[1])
+			scale, _ := strconv.Atoi(values[2])
+			precision := types.Precision(values[3])
 
 			fmt.Println(name, scale, mode)
-			operations = append(operations, upscale.Op(scale, mode))
+			operations = append(operations, upscale.Op(mode, scale, precision))
 		}
 	}
 

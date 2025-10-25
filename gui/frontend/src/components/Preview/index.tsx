@@ -27,7 +27,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                 setEnhancedImage(originalImage);
 
                 if (autopilot) {
-                    const enhancedImage = await getEnhancedImage(selectedFile, 'upscale_4_high');
+                    const enhancedImage = await getEnhancedImage(selectedFile, 'upscale_general_4_fp32');
                     setEnhancedImage(enhancedImage);
                 }
             } else {
