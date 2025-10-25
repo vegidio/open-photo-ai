@@ -5,7 +5,7 @@ go 1.25.3
 require (
 	github.com/google/go-github/v74 v74.0.0
 	github.com/samber/lo v1.51.0
-	github.com/vegidio/go-sak v0.0.0-20251022194515-c637b1842188
+	github.com/vegidio/go-sak v0.0.0-20251022212858-c8a8bc0dfff2
 	github.com/yalue/onnxruntime_go v1.21.0
 	golang.org/x/image v0.32.0
 	golang.org/x/text v0.30.0
@@ -21,7 +21,8 @@ require (
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
-	github.com/x448/float16 v0.8.4 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
+	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/otel v1.37.0 // indirect
 	go.opentelemetry.io/otel/metric v1.37.0 // indirect

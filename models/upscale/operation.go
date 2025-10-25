@@ -8,9 +8,9 @@ import (
 
 type OpUpscale struct {
 	id        string
-	precision types.Precision
-	scale     int
 	mode      Mode
+	scale     int
+	precision types.Precision
 }
 
 func (o OpUpscale) Id() string {
@@ -24,11 +24,11 @@ func (o OpUpscale) Precision() types.Precision {
 // Compile-time assertion to ensure it conforms to the Op interface.
 var _ types.Operation = (*OpUpscale)(nil)
 
-func Op(scale int, mode Mode, precision types.Precision) OpUpscale {
+func Op(mode Mode, scale int, precision types.Precision) OpUpscale {
 	return OpUpscale{
-		id:        fmt.Sprintf("upscale_%dx_%s_%s", scale, mode, precision),
-		scale:     scale,
+		id:        fmt.Sprintf("upscale_%s_%dx_%s", mode, scale, precision),
 		mode:      mode,
+		scale:     scale,
 		precision: precision,
 	}
 }

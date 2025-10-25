@@ -43,7 +43,6 @@ func CreateSession(appName, modelName, tag string, onDownload func()) (*ort.Dyna
 	if err != nil {
 		return nil, err
 	}
-
 	defer options.Destroy()
 
 	modelPath := filepath.Join(configDir, appName, "models", modelName)
@@ -86,7 +85,7 @@ func getCoreMLEP(options *ort.SessionOptions) error {
 	return options.AppendExecutionProviderCoreMLV2(map[string]string{
 		"ModelFormat":              "MLProgram",
 		"MLComputeUnits":           "ALL",
-		"RequireStaticInputShapes": "0",
+		"RequireStaticInputShapes": "1",
 		"EnableOnSubgraphs":        "0",
 	})
 }
