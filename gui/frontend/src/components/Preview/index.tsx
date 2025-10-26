@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { LinearProgress, Typography } from '@mui/material';
+import { Events } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { PreviewEmpty } from './PreviewEmpty';
 import { PreviewImageSideBySide } from './PreviewImageSideBySide.tsx';
-import { useControlStore, useFileListStore, useFileStore } from '@/stores';
+import { useControlStore, useFileListStore, useFileStore, useImageStore } from '@/stores';
 import { getEnhancedImage, getImage } from '@/utils/image.ts';
 
 export const Preview = ({ className = '' }: TailwindProps) => {
@@ -12,8 +14,12 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         state.files.length > 0 ? state.files[state.selectedIndex] : undefined,
     );
     const setOpen = useFileListStore((state) => state.setOpen);
-    const setOriginalImage = useFileStore((state) => state.setOriginalImage);
-    const setEnhancedImage = useFileStore((state) => state.setEnhancedImage);
+
+    // ImageStore
+    const running = useImageStore((state) => state.running);
+    const setIsRunning = useImageStore((state) => state.setIsRunning);
+    const setOriginalImage = useImageStore((state) => state.setOriginalImage);
+    const setEnhancedImage = useImageStore((state) => state.setEnhancedImage);
 
     // ControlStore
     const autopilot = useControlStore((state) => state.autopilot);
@@ -32,8 +38,10 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                 setEnhancedImage(originalImage);
 
                 if (autopilot) {
+                    setIsRunning(true);
                     const enhancedImage = await getEnhancedImage(selectedFile, 'upscale_general_4_fp32');
                     setEnhancedImage(enhancedImage);
+                    setIsRunning(false);
                 }
             } else {
                 setOriginalImage(undefined);
@@ -42,7 +50,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         }
 
         loadPreview();
-    }, [setEnhancedImage, setOriginalImage, selectedFile]);
+    }, [setEnhancedImage, setOriginalImage, selectedFile, setIsRunning]);
 
     // useEffect(() => {
     //     if (filesLength > 1) setOpen(true);
@@ -53,7 +61,30 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             id='preview'
             className={`flex items-center justify-center bg-[#171717] [background-image:radial-gradient(#383838_1px,transparent_1px)] [background-size:3rem_3rem] ${className}`}
         >
+            {running && <ProgressUpdate />}
+
             {filesLength === 0 ? <PreviewEmpty /> : <PreviewImageSideBySide />}
+        </div>
+    );
+};
+
+const ProgressUpdate = () => {
+    const [progress, setProgress] = useState(0);
+
+    useEffect(() => {
+        Events.On('app:progress', (event) => {
+            setProgress(event.data * 100);
+        });
+
+        return () => Events.Off('app:progress');
+    }, []);
+
+    return (
+        <div className='absolute flex top-4 right-4 w-28 h-7 items-center justify-center shadow-xl'>
+            <LinearProgress variant='determinate' value={progress} className='size-full rounded-[5px]' />
+            <Typography variant='subtitle2' className='absolute text-gray-700'>
+                Enhancing...
+            </Typography>
         </div>
     );
 };

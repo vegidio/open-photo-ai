@@ -1,8 +1,8 @@
-import { useFileStore } from '@/stores';
+import { useImageStore } from '@/stores';
 
 export const PreviewImageSideBySide = () => {
-    const originalImage = useFileStore((state) => state.originalImage);
-    const enhancedImage = useFileStore((state) => state.enhancedImage);
+    const originalImage = useImageStore((state) => state.originalImage);
+    const enhancedImage = useImageStore((state) => state.enhancedImage);
     const secondImage = enhancedImage ?? originalImage;
 
     return (

@@ -3,7 +3,6 @@ package services
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -17,13 +16,15 @@ import (
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type ImageService struct {
 	diskCache *memo.Memoizer
+	app       *application.App
 }
 
-func NewImageService(appName string) (*ImageService, error) {
+func NewImageService(appName string, app *application.App) (*ImageService, error) {
 	cachePath, err := fs.MkUserConfigDir(appName, "cache", "images")
 	if err != nil {
 		return nil, err
@@ -35,7 +36,7 @@ func NewImageService(appName string) (*ImageService, error) {
 		return nil, err
 	}
 
-	return &ImageService{diskCache}, nil
+	return &ImageService{diskCache: diskCache, app: app}, nil
 }
 
 // GetImage loads an image from the specified file path and optionally resizes it.
@@ -74,7 +75,10 @@ func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, e
 	}
 
 	operations := idsToOperations(opIds)
-	outputData, err := opai.Execute(inputData, operations...)
+	outputData, err := opai.Execute(inputData, func(progress float32) {
+		i.app.Event.Emit("app:progress", progress)
+	}, operations...)
+
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +126,6 @@ func idsToOperations(opIds []string) []types.Operation {
 			mode := upscale.Mode(values[1])
 			scale, _ := strconv.Atoi(values[2])
 			precision := types.Precision(values[3])
-
-			fmt.Println(name, scale, mode)
 			operations = append(operations, upscale.Op(mode, scale, precision))
 		}
 	}
@@ -140,7 +142,8 @@ func imageToBytes(img image.Image, format types.ImageFormat) ([]byte, error) {
 			return nil, err
 		}
 	case types.FormatPng:
-		if err := png.Encode(&buf, img); err != nil {
+		encoder := &png.Encoder{CompressionLevel: png.NoCompression}
+		if err := encoder.Encode(&buf, img); err != nil {
 			return nil, err
 		}
 	default:

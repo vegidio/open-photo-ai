@@ -5,23 +5,17 @@ import type { DialogFile } from '../../bindings/gui/types';
 type FileStore = {
     files: DialogFile[];
     selectedIndex: number;
-    originalImage?: string;
-    enhancedImage?: string;
 
     setSelectedIndex: (index: number) => void;
     addFiles: (files: DialogFile[]) => void;
     removeFile: (hash: string) => void;
     clear: () => void;
-    setOriginalImage: (image: string | undefined) => void;
-    setEnhancedImage: (image: string | undefined) => void;
 };
 
 export const useFileStore = create(
     immer<FileStore>((set, _) => ({
         files: [],
         selectedIndex: 0,
-        originalImage: undefined,
-        enhancedImage: undefined,
 
         setSelectedIndex: (index: number) => {
             set((state) => {
@@ -58,18 +52,6 @@ export const useFileStore = create(
             set((state) => {
                 state.files = [];
                 state.selectedIndex = 0;
-            });
-        },
-
-        setOriginalImage: (image: string | undefined) => {
-            set((state) => {
-                state.originalImage = image;
-            });
-        },
-
-        setEnhancedImage: (image: string | undefined) => {
-            set((state) => {
-                state.enhancedImage = image;
             });
         },
     })),
