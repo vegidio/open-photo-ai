@@ -22,24 +22,29 @@ type Upscale struct {
 }
 
 const (
-	tileSize = 256 // Fixed size for all tiles (static shape for ONNX)
-	tilePad  = 10  // Padding to avoid seam artifacts
+	modelTag = "upscale/1.0.0" // The place where the models are stored
+	tileSize = 256             // Fixed size for all tiles (static shape for ONNX)
+	tilePad  = 10              // Padding to avoid seam artifacts
 )
 
 // Compile-time assertion to ensure it conforms to the Model interface.
 var _ types.Model = (*Upscale)(nil)
 
 func New(appName string, operation types.Operation) (*Upscale, error) {
-	var modelName string
 	op := operation.(OpUpscale)
+	modelName := op.Id() + ".onnx"
 	name := fmt.Sprintf("Upscale %dx (%s, %s)",
 		op.scale,
 		cases.Title(language.English).String(string(op.mode)),
 		cases.Upper(language.English).String(string(op.precision)),
 	)
 
-	modelName = op.Id() + ".onnx"
-	session, err := utils.CreateSession(appName, modelName, "upscale/1.0.0", nil)
+	// Download the model, if needed
+	if err := utils.PrepareModel(appName, modelName, modelTag, nil); err != nil {
+		return nil, err
+	}
+
+	session, err := utils.CreateSession(appName, modelName)
 	if err != nil {
 		return nil, err
 	}

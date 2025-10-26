@@ -19,6 +19,21 @@ import (
 	"github.com/vegidio/go-sak/memo"
 )
 
+func PrepareModel(appName, modelName, tag string, onDownload func()) error {
+	if url, yes := ShouldDownloadModel(appName, modelName, tag); yes {
+		// Notify the user that the model will be downloaded
+		if onDownload != nil {
+			onDownload()
+		}
+
+		if err := DownloadModel(url, appName, modelName); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func ShouldDownloadModel(appName, modelName, tag string) (string, bool) {
 	configDir, err := fs.MkUserConfigDir(appName, "models")
 	if err != nil {

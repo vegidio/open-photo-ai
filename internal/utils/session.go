@@ -10,33 +10,17 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-func CreateSession(appName, modelName, tag string, onDownload func()) (*ort.DynamicAdvancedSession, error) {
+func CreateSession(appName, modelName string) (*ort.DynamicAdvancedSession, error) {
 	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return nil, err
-	}
-
-	// Download the model if it's not already present
-	if url, yes := ShouldDownloadModel(appName, modelName, tag); yes {
-		// Notify the user that the model will be downloaded
-		if onDownload != nil {
-			onDownload()
-		}
-
-		if err = DownloadModel(url, appName, modelName); err != nil {
-			return nil, err
-		}
-	}
-
 	cachePath := filepath.Join(configDir, appName, "models")
 	var options *ort.SessionOptions
 
 	// Check the computer's OS
 	switch runtime.GOOS {
 	case "windows":
-		break
+		options, err = createWindowsOptions(cachePath, types.ExecutionProviderBest)
 	case "linux":
-		break
+		options, err = createLinuxOptions(cachePath, types.ExecutionProviderBest)
 	case "darwin":
 		options, err = createMacOptions(cachePath, types.ExecutionProviderBest)
 	}
@@ -55,6 +39,69 @@ func CreateSession(appName, modelName, tag string, onDownload func()) (*ort.Dyna
 	return session, nil
 }
 
+// region - OS specific options
+
+func createWindowsOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
+	options, err := ort.NewSessionOptions()
+	if err != nil {
+		return nil, err
+	}
+
+	options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll)
+	options.SetExecutionMode(ort.ExecutionModeParallel)
+
+	switch ep {
+	case types.ExecutionProviderCPU:
+		return options, nil
+	case types.ExecutionProviderTensorRT:
+		_ = getTensorRTEP(cachePath, options)
+	case types.ExecutionProviderCUDA:
+		_ = getCudaEP(cachePath, options)
+	case types.ExecutionProviderDirectML:
+		_ = getDirectMLEP(cachePath, options)
+	case types.ExecutionProviderOpenVINO:
+		_ = getOpenVINOEP(cachePath, options)
+	case types.ExecutionProviderBest:
+		_ = getTensorRTEP(cachePath, options)
+		_ = getCudaEP(cachePath, options)
+		_ = getDirectMLEP(cachePath, options)
+		_ = getOpenVINOEP(cachePath, options)
+	default:
+		return nil, fmt.Errorf("unsupported execution provider: %x", ep)
+	}
+
+	return options, nil
+}
+
+func createLinuxOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
+	options, err := ort.NewSessionOptions()
+	if err != nil {
+		return nil, err
+	}
+
+	options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll)
+	options.SetExecutionMode(ort.ExecutionModeParallel)
+
+	switch ep {
+	case types.ExecutionProviderCPU:
+		return options, nil
+	case types.ExecutionProviderTensorRT:
+		_ = getTensorRTEP(cachePath, options)
+	case types.ExecutionProviderCUDA:
+		_ = getCudaEP(cachePath, options)
+	case types.ExecutionProviderOpenVINO:
+		_ = getOpenVINOEP(cachePath, options)
+	case types.ExecutionProviderBest:
+		_ = getTensorRTEP(cachePath, options)
+		_ = getCudaEP(cachePath, options)
+		_ = getOpenVINOEP(cachePath, options)
+	default:
+		return nil, fmt.Errorf("unsupported execution provider: %x", ep)
+	}
+
+	return options, nil
+}
+
 func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
 	options, err := ort.NewSessionOptions()
 	if err != nil {
@@ -63,7 +110,6 @@ func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sessio
 
 	options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll)
 	options.SetExecutionMode(ort.ExecutionModeParallel)
-	options.SetIntraOpNumThreads(runtime.NumCPU())
 
 	switch ep {
 	case types.ExecutionProviderCPU:
@@ -82,22 +128,4 @@ func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sessio
 	return options, nil
 }
 
-func getCoreMLEP(cachePath string, options *ort.SessionOptions) error {
-	return options.AppendExecutionProviderCoreMLV2(map[string]string{
-		"ModelFormat":              "MLProgram",
-		"MLComputeUnits":           "ALL",
-		"RequireStaticInputShapes": "1",
-		"EnableOnSubgraphs":        "0",
-		"ModelCacheDirectory":      cachePath,
-	})
-}
-
-func getOpenVINOEP(cachePath string, options *ort.SessionOptions) error {
-	return options.AppendExecutionProviderOpenVINO(map[string]string{
-		"device_type":    "AUTO",
-		"precision":      "FP32",
-		"num_of_threads": fmt.Sprintf("%d", runtime.NumCPU()),
-		"num_streams":    "2",
-		"cache_dir":      cachePath,
-	})
-}
+// endregion

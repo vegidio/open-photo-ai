@@ -1,0 +1,36 @@
+version: '3'
+
+tasks:
+  clean:
+    desc: Clean the build directory
+    cmds:
+      - rm -rf {{.ROOT_DIR}}/build/*
+
+  # Perftest build tasks
+  perf:
+    desc: Build the performance test binary
+    dir: cmd/perf
+    requires:
+      vars: [ os, arch ]
+    vars:
+      FILE: "{{if eq .os `windows`}}perftest.exe{{else}}perftest{{end}}"
+    env:
+      CGO_ENABLED: 1
+      GOOS: "{{.os}}"
+      GOARCH: "{{.arch}}"
+    cmds:
+      - |
+        go build -o "{{.ROOT_DIR}}/build/{{.FILE}}"
+        {{if .isPackage}}7z a -tzip -mx=9 "{{.ROOT_DIR}}/build/perftest_{{.os}}_{{.arch}}.zip" "{{.ROOT_DIR}}/build/{{.FILE}}"{{end}}
+
+  package:
+    desc: Build and pack in .zip files
+    requires:
+      vars: [ oses, archs ]
+    cmds:
+      - |
+        for os in {{.oses}}; do
+          for arch in {{.archs}}; do
+            task perf os=$os arch=$arch isPackage=true
+          done
+        done

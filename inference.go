@@ -31,19 +31,22 @@ var registry = make(map[string]types.Model)
 func Execute(input *types.InputData, onProgress func(float32), operations ...types.Operation) (*types.OutputData, error) {
 	var output *types.OutputData
 
+	// Make a copy of the input data so the original input is not modified
+	inputCopy := &types.InputData{Pixels: input.Pixels}
+
 	for _, op := range operations {
 		model, err := selectModel(op)
 		if err != nil {
 			return nil, err
 		}
 
-		output, err = model.Run(input, onProgress)
+		output, err = model.Run(inputCopy, onProgress)
 		if err != nil {
 			return nil, err
 		}
 
 		// Update the input pixels so that the next operation can use them
-		input.Pixels = output.Pixels
+		inputCopy.Pixels = output.Pixels
 	}
 
 	if output == nil {

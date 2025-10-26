@@ -2,7 +2,7 @@ module cli
 
 go 1.25.3
 
-require github.com/vegidio/open-photo-ai v0.0.0-20251017074759-0805b61e7fd0
+require github.com/vegidio/open-photo-ai v0.0.0-20251026122419-2499c66c69de
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -17,7 +17,7 @@ require (
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/samber/lo v1.51.0 // indirect
-	github.com/vegidio/go-sak v0.0.0-20251022212858-c8a8bc0dfff2 // indirect
+	github.com/vegidio/go-sak v0.0.0-20251026140040-11bb5b93f72a // indirect
 	github.com/yalue/onnxruntime_go v1.21.0 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect

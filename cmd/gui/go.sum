@@ -129,8 +129,8 @@ github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXf
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/vegidio/go-sak v0.0.0-20251022212858-c8a8bc0dfff2 h1:JQFrwaw6wwCwpmydaZ+O4vuJgViXZoxs8naEjCCw2Dc=
-github.com/vegidio/go-sak v0.0.0-20251022212858-c8a8bc0dfff2/go.mod h1:HqYyObkVIeIupGiEQuSzb1yNqXKPLKQF/CzBlLXOSec=
+github.com/vegidio/go-sak v0.0.0-20251026140040-11bb5b93f72a h1:99CKo/5MdZKkmIZpiDrHjtrUZ//P9tcAk6FOqxXGu9g=
+github.com/vegidio/go-sak v0.0.0-20251026140040-11bb5b93f72a/go.mod h1:HqYyObkVIeIupGiEQuSzb1yNqXKPLKQF/CzBlLXOSec=
 github.com/vegidio/open-photo-ai v0.0.0-20251019170003-e68864806e9e h1:q4blf4zKTqUH3+qhPXXUuy64sGtuOm0S667cuzAl2VA=
 github.com/vegidio/open-photo-ai v0.0.0-20251019170003-e68864806e9e/go.mod h1:6iqPJc6uC9JvLFPxE88l8zcD84e9PUOendlEUxYhZng=
 github.com/wailsapp/go-webview2 v1.0.22 h1:YT61F5lj+GGaat5OB96Aa3b4QA+mybD0Ggq6NZijQ58=
