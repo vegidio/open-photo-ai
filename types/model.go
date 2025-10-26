@@ -13,7 +13,7 @@ type Model interface {
 	Name() string
 
 	// Run processes the input image data and returns the processed output
-	Run(input *InputData) (output *OutputData, err error)
+	Run(input *InputData, onProgress func(float32)) (output *OutputData, err error)
 
 	// Destroy cleans up resources and releases memory used by the model
 	Destroy()

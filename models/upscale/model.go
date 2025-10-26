@@ -62,7 +62,7 @@ func (m *Upscale) Name() string {
 	return m.name
 }
 
-func (m *Upscale) Run(input *types.InputData) (*types.OutputData, error) {
+func (m *Upscale) Run(input *types.InputData, onProgress func(float32)) (*types.OutputData, error) {
 	width := input.Pixels.Bounds().Dx()
 	height := input.Pixels.Bounds().Dy()
 
@@ -77,6 +77,8 @@ func (m *Upscale) Run(input *types.InputData) (*types.OutputData, error) {
 	// Calculate the number of tiles needed
 	tilesX := int(math.Ceil(float64(width) / float64(stepSize)))
 	tilesY := int(math.Ceil(float64(height) / float64(stepSize)))
+	currentTile := float32(0)
+	totalTiles := float32(tilesX * tilesY)
 
 	for tileY := 0; tileY < tilesY; tileY++ {
 		for tileX := 0; tileX < tilesX; tileX++ {
@@ -133,6 +135,12 @@ func (m *Upscale) Run(input *types.InputData) (*types.OutputData, error) {
 			dstRect := image.Rect(dstX1, dstY1, dstX2, dstY2)
 
 			draw.Draw(output, dstRect, upscaledTile, srcRect.Min, draw.Src)
+
+			// Update progress
+			currentTile++
+			if onProgress != nil {
+				onProgress(currentTile / totalTiles)
+			}
 		}
 	}
 

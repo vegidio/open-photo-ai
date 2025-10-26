@@ -18,6 +18,7 @@ var registry = make(map[string]types.Model)
 //
 // # Parameters:
 //   - input: The input image data to be processed
+//   - onProgress: A callback function that is called with the progress of the current operation (0-1)
 //   - operations: A variable number of operations to apply sequentially
 //
 // # Returns:
@@ -27,7 +28,7 @@ var registry = make(map[string]types.Model)
 // Example:
 //
 //	output, err := Execute(inputData, upscaleOp, denoiseOp)
-func Execute(input *types.InputData, operations ...types.Operation) (*types.OutputData, error) {
+func Execute(input *types.InputData, onProgress func(float32), operations ...types.Operation) (*types.OutputData, error) {
 	var output *types.OutputData
 
 	for _, op := range operations {
@@ -36,7 +37,7 @@ func Execute(input *types.InputData, operations ...types.Operation) (*types.Outp
 			return nil, err
 		}
 
-		output, err = model.Run(input)
+		output, err = model.Run(input, onProgress)
 		if err != nil {
 			return nil, err
 		}

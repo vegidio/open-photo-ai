@@ -28,6 +28,7 @@ func CreateSession(appName, modelName, tag string, onDownload func()) (*ort.Dyna
 		}
 	}
 
+	cachePath := filepath.Join(configDir, appName, "models")
 	var options *ort.SessionOptions
 
 	// Check the computer's OS
@@ -37,7 +38,7 @@ func CreateSession(appName, modelName, tag string, onDownload func()) (*ort.Dyna
 	case "linux":
 		break
 	case "darwin":
-		options, err = createMacOptions(types.ExecutionProviderBest)
+		options, err = createMacOptions(cachePath, types.ExecutionProviderBest)
 	}
 
 	if err != nil {
@@ -54,7 +55,7 @@ func CreateSession(appName, modelName, tag string, onDownload func()) (*ort.Dyna
 	return session, nil
 }
 
-func createMacOptions(ep types.ExecutionProvider) (*ort.SessionOptions, error) {
+func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
 	options, err := ort.NewSessionOptions()
 	if err != nil {
 		return nil, err
@@ -68,12 +69,12 @@ func createMacOptions(ep types.ExecutionProvider) (*ort.SessionOptions, error) {
 	case types.ExecutionProviderCPU:
 		return options, nil
 	case types.ExecutionProviderCoreML:
-		_ = getCoreMLEP(options)
+		_ = getCoreMLEP(cachePath, options)
 	case types.ExecutionProviderOpenVINO:
-		_ = getOpenVINOEP(options)
+		_ = getOpenVINOEP(cachePath, options)
 	case types.ExecutionProviderBest:
-		_ = getCoreMLEP(options)
-		_ = getOpenVINOEP(options)
+		_ = getCoreMLEP(cachePath, options)
+		_ = getOpenVINOEP(cachePath, options)
 	default:
 		return nil, fmt.Errorf("unsupported execution provider: %x", ep)
 	}
@@ -81,20 +82,22 @@ func createMacOptions(ep types.ExecutionProvider) (*ort.SessionOptions, error) {
 	return options, nil
 }
 
-func getCoreMLEP(options *ort.SessionOptions) error {
+func getCoreMLEP(cachePath string, options *ort.SessionOptions) error {
 	return options.AppendExecutionProviderCoreMLV2(map[string]string{
 		"ModelFormat":              "MLProgram",
 		"MLComputeUnits":           "ALL",
 		"RequireStaticInputShapes": "1",
 		"EnableOnSubgraphs":        "0",
+		"ModelCacheDirectory":      cachePath,
 	})
 }
 
-func getOpenVINOEP(options *ort.SessionOptions) error {
+func getOpenVINOEP(cachePath string, options *ort.SessionOptions) error {
 	return options.AppendExecutionProviderOpenVINO(map[string]string{
 		"device_type":    "AUTO",
 		"precision":      "FP32",
 		"num_of_threads": fmt.Sprintf("%d", runtime.NumCPU()),
 		"num_streams":    "2",
+		"cache_dir":      cachePath,
 	})
 }
