@@ -66,6 +66,10 @@ func DownloadModel(url, appName, modelName string) error {
 	}
 	defer file.Close()
 
+	return DownloadFile(url, file)
+}
+
+func DownloadFile(url string, dstFile *os.File) error {
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -76,7 +80,7 @@ func DownloadModel(url, appName, modelName string) error {
 		return fmt.Errorf("bad status: %s", resp.Status)
 	}
 
-	_, err = io.Copy(file, resp.Body)
+	_, err = io.Copy(dstFile, resp.Body)
 	if err != nil {
 		return err
 	}

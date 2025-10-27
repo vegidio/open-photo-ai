@@ -1,13 +1,18 @@
 package openphotoai
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/vegidio/go-sak/fs"
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	ort "github.com/yalue/onnxruntime_go"
 )
+
+const tag = "runtime/1.22.0"
 
 var appName = "open-photo-ai"
 
@@ -27,11 +32,11 @@ var appName = "open-photo-ai"
 //
 // # Example:
 //
-//	err := openphotoai.Initialize("myapp")
+//	err := opai.Initialize("myapp")
 //	if err != nil {
 //	    log.Fatal("Failed to initialize:", err)
 //	}
-//	defer openphotoai.Destroy() // Clean up resources
+//	defer opai.Destroy() // Clean up resources
 func Initialize(name string) error {
 	appName = name
 
@@ -59,10 +64,10 @@ func Initialize(name string) error {
 //
 // # Example:
 //
-//	if err := openphotoai.Initialize("myapp"); err != nil {
+//	if err := opai.Initialize("myapp"); err != nil {
 //	    log.Fatal("Initialization failed:", err)
 //	}
-//	defer openphotoai.Destroy() // Ensure cleanup on exit
+//	defer opai.Destroy() // Ensure cleanup on exit
 func Destroy() {
 	CleanRegistry()
 	ort.DestroyEnvironment()
@@ -82,13 +87,23 @@ func shouldInstallRuntime(name string) bool {
 }
 
 func installRuntime(name string) error {
-	file, err := fs.MkUserConfigFile(name, onnxRuntimeName)
+	zipFile, err := fs.MkUserConfigFile(name, "onnxruntime-1.22.0.zip")
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer zipFile.Close()
 
-	_, err = file.Write(onnxRuntimeBinary)
+	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
+		tag, runtime.GOOS, runtime.GOARCH)
+
+	err = utils.DownloadFile(url, zipFile)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(zipFile.Name())
+
+	targetDir := filepath.Dir(zipFile.Name())
+	err = fs.Unzip(zipFile.Name(), targetDir)
 	if err != nil {
 		return err
 	}
