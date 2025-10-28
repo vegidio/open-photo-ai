@@ -112,13 +112,18 @@ func installRuntime(name string) error {
 }
 
 func startRuntime(name string) error {
-	configDir, err := os.UserConfigDir()
+	configDir, err := fs.MkUserConfigDir(name)
 	if err != nil {
 		return err
 	}
 
-	runtimePath := filepath.Join(configDir, name, onnxRuntimeName)
+	// Add the application's config directory to the system PATH
+	cudaPath := filepath.Join(configDir, "libs", "cuda")
+	cudnnPath := filepath.Join(configDir, "libs", "cudnn")
+	newPath := os.Getenv("PATH") + string(os.PathListSeparator) + cudaPath + string(os.PathListSeparator) + cudnnPath
+	os.Setenv("PATH", newPath)
 
+	runtimePath := filepath.Join(configDir, onnxRuntimeName)
 	ort.SetSharedLibraryPath(runtimePath)
 	if err = ort.InitializeEnvironment(); err != nil {
 		return err

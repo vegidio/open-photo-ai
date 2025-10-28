@@ -20,7 +20,7 @@ func getTensorRTEP(cachePath string, options *ort.SessionOptions) error {
 		"trt_fp16_enable":                "0",
 		"trt_int8_enable":                "0",
 		"trt_engine_hw_compatible":       "1",
-		"trt_cuda_graph_enable":          "1",
+		"trt_cuda_graph_enable":          "0",
 		"trt_builder_optimization_level": "5",
 		"trt_engine_cache_enable":        "1",
 		"trt_engine_cache_path":          cachePath,
@@ -41,7 +41,7 @@ func getCudaEP(_ string, options *ort.SessionOptions) error {
 		"do_copy_in_default_stream":    "1",
 		"cudnn_conv_algo_search":       "EXHAUSTIVE",
 		"cudnn_conv_use_max_workspace": "1",
-		"enable_cuda_graph":            "1",
+		"enable_cuda_graph":            "0",
 		"gpu_mem_limit":                "0",
 	})
 

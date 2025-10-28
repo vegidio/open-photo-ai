@@ -30,6 +30,10 @@ func CreateSession(appName, modelName string) (*ort.DynamicAdvancedSession, erro
 	}
 	defer options.Destroy()
 
+	// Extra session options
+	options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll)
+	options.SetExecutionMode(ort.ExecutionModeParallel)
+
 	modelPath := filepath.Join(configDir, appName, "models", modelName)
 	session, err := ort.NewDynamicAdvancedSession(modelPath, []string{"input"}, []string{"output"}, options)
 	if err != nil {
@@ -46,9 +50,6 @@ func createWindowsOptions(cachePath string, ep types.ExecutionProvider) (*ort.Se
 	if err != nil {
 		return nil, err
 	}
-
-	options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll)
-	options.SetExecutionMode(ort.ExecutionModeParallel)
 
 	switch ep {
 	case types.ExecutionProviderCPU:
@@ -79,9 +80,6 @@ func createLinuxOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sess
 		return nil, err
 	}
 
-	options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll)
-	options.SetExecutionMode(ort.ExecutionModeParallel)
-
 	switch ep {
 	case types.ExecutionProviderCPU:
 		return options, nil
@@ -107,9 +105,6 @@ func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sessio
 	if err != nil {
 		return nil, err
 	}
-
-	options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll)
-	options.SetExecutionMode(ort.ExecutionModeParallel)
 
 	switch ep {
 	case types.ExecutionProviderCPU:
