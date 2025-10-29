@@ -13,7 +13,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/memo"
-	opai "github.com/vegidio/open-photo-ai"
+	"github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/wailsapp/wails/v3/pkg/application"

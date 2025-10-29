@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	opai "github.com/vegidio/open-photo-ai"
+	"github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -13,7 +13,7 @@ const AppName = "open-photo-ai"
 
 func main() {
 	if err := opai.Initialize(AppName); err != nil {
-		fmt.Printf("Failed to initialize the model runtime: %v\n", err)
+		fmt.Printf("Failed to initialize the AI runtime: %v\n", err)
 		return
 	}
 	defer opai.Destroy()

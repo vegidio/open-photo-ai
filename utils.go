@@ -1,4 +1,4 @@
-package openphotoai
+package opai
 
 import (
 	"fmt"

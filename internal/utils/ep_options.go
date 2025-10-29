@@ -14,6 +14,8 @@ func getTensorRTEP(cachePath string, options *ort.SessionOptions) error {
 	}
 	defer trtOptions.Destroy()
 
+	// TODO: Review 'trt_cuda_graph_enable' in the future; it can drastically increase the performance, but it often
+	//  causes crashes when re-using the same session.
 	trtOptions.Update(map[string]string{
 		"device_id":                      "0",
 		"trt_max_workspace_size":         "4294967296",
@@ -36,6 +38,8 @@ func getCudaEP(_ string, options *ort.SessionOptions) error {
 	}
 	defer cudaOptions.Destroy()
 
+	// TODO: Review 'enable_cuda_graph' in the future; it can drastically increase the performance, but it often
+	//  causes crashes when re-using the same session.
 	cudaOptions.Update(map[string]string{
 		"device_id":                    "0",
 		"do_copy_in_default_stream":    "1",

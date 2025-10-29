@@ -32,7 +32,7 @@ var _ types.Model = (*Upscale)(nil)
 
 func New(appName string, operation types.Operation) (*Upscale, error) {
 	op := operation.(OpUpscale)
-	modelName := op.Id() + ".onnx"
+	modelFile := op.Id() + ".onnx"
 	name := fmt.Sprintf("Upscale %dx (%s, %s)",
 		op.scale,
 		cases.Title(language.English).String(string(op.mode)),
@@ -40,11 +40,12 @@ func New(appName string, operation types.Operation) (*Upscale, error) {
 	)
 
 	// Download the model, if needed
-	if err := utils.PrepareModel(appName, modelName, modelTag, nil); err != nil {
+	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/%s", modelTag, modelFile)
+	if err := utils.PrepareDependency(appName, url, "models", modelFile, nil); err != nil {
 		return nil, err
 	}
 
-	session, err := utils.CreateSession(appName, modelName)
+	session, err := utils.CreateSession(appName, modelFile)
 	if err != nil {
 		return nil, err
 	}

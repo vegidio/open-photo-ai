@@ -1,8 +1,7 @@
-package openphotoai
+package opai
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,14 +11,17 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-const tag = "runtime/1.22.0"
+const (
+	onnxRuntimeZip = "onnxruntime-1.22.0.zip"
+	onnxRuntimeTag = "runtime/1.22.0"
+)
 
 var appName = "open-photo-ai"
 
 // Initialize sets up the model runtime by ensuring all required dependencies are available.
 //
 // This function performs a two-step initialization process:
-//  1. Installs the ONNX runtime library if not already present in the user's config directory
+//  1. Installs the ONNX runtime if not already present in the user's config directory
 //  2. Initializes the ONNX runtime
 //
 // The name parameter specifies the application name used to create a dedicated config directory under the user's
@@ -39,20 +41,15 @@ var appName = "open-photo-ai"
 //	defer opai.Destroy() // Clean up resources
 func Initialize(name string) error {
 	appName = name
+	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
+		onnxRuntimeTag, runtime.GOOS, runtime.GOARCH)
 
-	// Install the ONNX runtime if it's not already installed
-	if yes := shouldInstallRuntime(appName); yes {
-		if err := installRuntime(appName); err != nil {
-			return err
-		}
-	}
-
-	// Initialize the ONNX runtime
-	if err := startRuntime(appName); err != nil {
+	if err := utils.PrepareDependency(appName, url, "", onnxRuntimeZip, nil); err != nil {
 		return err
 	}
 
-	return nil
+	// Initialize the ONNX runtime
+	return startRuntime(appName)
 }
 
 // Destroy cleans up resources used by the model runtime.
@@ -75,42 +72,6 @@ func Destroy() {
 
 // region - Private functions
 
-func shouldInstallRuntime(name string) bool {
-	configDir, err := fs.MkUserConfigDir(name)
-	if err != nil {
-		log.Fatalf("error getting user config directory: %v\n", err)
-	}
-
-	runtimePath := filepath.Join(configDir, onnxRuntimeName)
-	_, err = os.Stat(runtimePath)
-	return os.IsNotExist(err)
-}
-
-func installRuntime(name string) error {
-	zipFile, err := fs.MkUserConfigFile(name, "onnxruntime-1.22.0.zip")
-	if err != nil {
-		return err
-	}
-	defer zipFile.Close()
-
-	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
-		tag, runtime.GOOS, runtime.GOARCH)
-
-	err = utils.DownloadFile(url, zipFile)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(zipFile.Name())
-
-	targetDir := filepath.Dir(zipFile.Name())
-	err = fs.Unzip(zipFile.Name(), targetDir)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func startRuntime(name string) error {
 	configDir, err := fs.MkUserConfigDir(name)
 	if err != nil {
@@ -130,7 +91,7 @@ func startRuntime(name string) error {
 	}
 
 	// Disable ONNX runtime logging
-	ort.SetEnvironmentLogLevel(ort.LoggingLevelFatal)
+	//ort.SetEnvironmentLogLevel(ort.LoggingLevelFatal)
 
 	return nil
 }
