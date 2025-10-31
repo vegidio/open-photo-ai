@@ -57,6 +57,21 @@ func InstallCudnn() error {
 	return nil
 }
 
+func setNvidiaPaths() error {
+	configDir, err := fs.MkUserConfigDir("open-photo-ai", "libs")
+	if err != nil {
+		return err
+	}
+
+	// Add the application's config directory to the system PATH
+	cudaPath := filepath.Join(configDir, "libs", "cuda")
+	cudnnPath := filepath.Join(configDir, "libs", "cudnn")
+	newPath := os.Getenv("PATH") + string(os.PathListSeparator) + cudaPath + string(os.PathListSeparator) + cudnnPath
+	os.Setenv("PATH", newPath)
+
+	return nil
+}
+
 func downloadLibs(appName, product string, assets []Asset) error {
 	configDir, err := fs.MkUserConfigDir(appName, "libs", product)
 	if err != nil {

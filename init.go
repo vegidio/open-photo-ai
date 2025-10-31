@@ -2,7 +2,6 @@ package opai
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 
@@ -78,12 +77,6 @@ func startRuntime(name string) error {
 		return err
 	}
 
-	// Add the application's config directory to the system PATH
-	cudaPath := filepath.Join(configDir, "libs", "cuda")
-	cudnnPath := filepath.Join(configDir, "libs", "cudnn")
-	newPath := os.Getenv("PATH") + string(os.PathListSeparator) + cudaPath + string(os.PathListSeparator) + cudnnPath
-	os.Setenv("PATH", newPath)
-
 	runtimePath := filepath.Join(configDir, onnxRuntimeName)
 	ort.SetSharedLibraryPath(runtimePath)
 	if err = ort.InitializeEnvironment(); err != nil {
@@ -91,7 +84,7 @@ func startRuntime(name string) error {
 	}
 
 	// Disable ONNX runtime logging
-	//ort.SetEnvironmentLogLevel(ort.LoggingLevelFatal)
+	ort.SetEnvironmentLogLevel(ort.LoggingLevelFatal)
 
 	return nil
 }
