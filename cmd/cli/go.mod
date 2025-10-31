@@ -16,8 +16,11 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
+	github.com/otiai10/copy v1.14.1 // indirect
+	github.com/otiai10/mint v1.6.3 // indirect
 	github.com/samber/lo v1.51.0 // indirect
-	github.com/vegidio/go-sak v0.0.0-20251026140040-11bb5b93f72a // indirect
+	github.com/ulikunitz/xz v0.5.15 // indirect
+	github.com/vegidio/go-sak v0.0.0-20251031201428-217ae3c43125 // indirect
 	github.com/yalue/onnxruntime_go v1.21.0 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
