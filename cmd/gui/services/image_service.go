@@ -49,11 +49,13 @@ func NewImageService(appName string, app *application.App) (*ImageService, error
 //
 // # Returns:
 //   - []byte: The image data encoded as PNG bytes (lossless)
+//   - int: The width of the image
+//   - int: The height of the image
 //   - error: An error if the image cannot be loaded, processed, or encoded
-func (i *ImageService) GetImage(filePath string, size int) ([]byte, error) {
+func (i *ImageService) GetImage(filePath string, size int) ([]byte, int, int, error) {
 	inputData, err := opai.LoadInputData(filePath)
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
 
 	if size > 0 {
@@ -65,13 +67,19 @@ func (i *ImageService) GetImage(filePath string, size int) ([]byte, error) {
 		}
 	}
 
-	return imageToBytes(inputData.Pixels, types.FormatJpeg)
+	data, err := imageToBytes(inputData.Pixels, types.FormatJpeg)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	bounds := inputData.Pixels.Bounds()
+	return data, bounds.Dx(), bounds.Dy(), nil
 }
 
-func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, error) {
+func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, int, int, error) {
 	inputData, err := opai.LoadInputData(filePath)
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
 
 	operations := idsToOperations(opIds)
@@ -80,12 +88,12 @@ func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, e
 	}, operations...)
 
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
 
 	pngBytes, err := imageToBytes(outputData.Pixels, types.FormatPng)
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
 
 	// Cache the image as lossless PNG to be reused later
@@ -95,11 +103,17 @@ func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, e
 
 	err = i.diskCache.Store.Set(ctx, key, pngBytes, ttl)
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
+	}
+
+	data, err := imageToBytes(outputData.Pixels, types.FormatJpeg)
+	if err != nil {
+		return nil, 0, 0, err
 	}
 
 	// Return a version of the image as JPG for presentation purposes
-	return imageToBytes(outputData.Pixels, types.FormatJpeg)
+	bounds := outputData.Pixels.Bounds()
+	return data, bounds.Dx(), bounds.Dy(), nil
 }
 
 // region - Private methods

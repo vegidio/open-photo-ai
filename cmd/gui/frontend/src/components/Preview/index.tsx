@@ -53,7 +53,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     }, [setEnhancedImage, setOriginalImage, selectedFile, setIsRunning]);
 
     // useEffect(() => {
-    //     if (filesLength > 1) setOpen(true);
+    //     if (filesLength > 0) setOpen(true);
     // }, [filesLength, setOpen]);
 
     return (
@@ -62,7 +62,6 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             className={`flex items-center justify-center bg-[#171717] [background-image:radial-gradient(#383838_1px,transparent_1px)] [background-size:3rem_3rem] ${className}`}
         >
             {running && <ProgressUpdate />}
-
             {filesLength === 0 ? <PreviewEmpty /> : <PreviewImageSideBySide />}
         </div>
     );

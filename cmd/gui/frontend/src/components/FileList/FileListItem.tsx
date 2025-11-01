@@ -14,12 +14,12 @@ type FileListItemProps = {
 };
 
 export const FileListItem = ({ file, selected = false, onClick }: FileListItemProps) => {
-    const [imageUrl, setImageUrl] = useState<string>();
+    const [image, setImage] = useState<string>();
 
     useEffect(() => {
         async function loadImage() {
-            const imageUrl = await getImage(file, 100);
-            setImageUrl(imageUrl);
+            const imageData = await getImage(file, 100);
+            setImage(imageData.url);
         }
 
         loadImage();
@@ -34,7 +34,7 @@ export const FileListItem = ({ file, selected = false, onClick }: FileListItemPr
             className={`h-full aspect-square rounded ${selected ? 'outline-3 outline-blue-500' : ''}`}
         >
             <div className='relative w-full h-full'>
-                <img alt='Preview' src={imageUrl} className='w-full h-full object-cover rounded' />
+                <img alt='Preview' src={image} className='w-full h-full object-cover rounded' />
 
                 <BottomBar file={file} selected={selected} className='absolute bottom-0 left-0 right-0 h-5 rounded-b' />
             </div>
@@ -94,16 +94,16 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
     const updateDrawer = () => {
         onMenuClose();
         if (useFileStore.getState().files.length === 0) setOpen(false);
-    }
+    };
 
     const onCloseImage = () => {
         removeFile(file.Hash);
-        updateDrawer()
+        updateDrawer();
     };
 
     const onCloseAllImages = () => {
         clear();
-        updateDrawer()
+        updateDrawer();
     };
 
     return (

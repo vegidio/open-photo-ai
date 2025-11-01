@@ -20,16 +20,20 @@ export function Destroy(): $CancellablePromise<void> {
  * 
  * # Returns:
  *   - []byte: The image data encoded as PNG bytes (lossless)
+ *   - int: The width of the image
+ *   - int: The height of the image
  *   - error: An error if the image cannot be loaded, processed, or encoded
  */
-export function GetImage(filePath: string, size: number): $CancellablePromise<string> {
+export function GetImage(filePath: string, size: number): $CancellablePromise<[string, number, number]> {
     return $Call.ByID(2406933080, filePath, size).then(($result: any) => {
-        return $Create.ByteSlice($result);
+        $result[0] = $Create.ByteSlice($result[0]);
+        return $result;
     });
 }
 
-export function ProcessImage(filePath: string, ...opIds: string[]): $CancellablePromise<string> {
+export function ProcessImage(filePath: string, ...opIds: string[]): $CancellablePromise<[string, number, number]> {
     return $Call.ByID(3391347795, filePath, opIds).then(($result: any) => {
-        return $Create.ByteSlice($result);
+        $result[0] = $Create.ByteSlice($result[0]);
+        return $result;
     });
 }

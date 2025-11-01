@@ -1,14 +1,15 @@
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
+import type { ImageData } from '@/utils/image.ts';
 
 type ImageStore = {
     running: boolean;
-    originalImage?: string;
-    enhancedImage?: string;
+    originalImage?: ImageData;
+    enhancedImage?: ImageData;
 
     setIsRunning: (running: boolean) => void;
-    setOriginalImage: (image: string | undefined) => void;
-    setEnhancedImage: (image: string | undefined) => void;
+    setOriginalImage: (image: ImageData | undefined) => void;
+    setEnhancedImage: (image: ImageData | undefined) => void;
 };
 
 export const useImageStore = create(
@@ -23,13 +24,13 @@ export const useImageStore = create(
             });
         },
 
-        setOriginalImage: (image: string | undefined) => {
+        setOriginalImage: (image: ImageData | undefined) => {
             set((state) => {
                 state.originalImage = image;
             });
         },
 
-        setEnhancedImage: (image: string | undefined) => {
+        setEnhancedImage: (image: ImageData | undefined) => {
             set((state) => {
                 state.enhancedImage = image;
             });
