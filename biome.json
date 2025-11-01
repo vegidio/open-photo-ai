@@ -7,7 +7,13 @@
     },
     "files": {
         "ignoreUnknown": false,
-        "includes": ["gui/frontend/**", "!gui/frontend/**/*.html", "!gui/frontend/dist", "!gui/frontend/wailsjs"]
+        "includes": [
+            "cmd/gui/frontend/**",
+            "!cmd/gui/frontend/**/*.html",
+            "!cmd/gui/frontend/bindings",
+            "!cmd/gui/frontend/dist",
+            "!cmd/gui/frontend/wailsjs"
+        ]
     },
     "formatter": {
         "enabled": true,

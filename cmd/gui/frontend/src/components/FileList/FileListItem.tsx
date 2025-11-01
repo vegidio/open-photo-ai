@@ -89,17 +89,21 @@ type OptionsMenuProps = {
 const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) => {
     const removeFile = useFileStore((state) => state.removeFile);
     const clear = useFileStore((state) => state.clear);
-    const toggle = useFileListStore((state) => state.toggle);
+    const setOpen = useFileListStore((state) => state.setOpen);
+
+    const updateDrawer = () => {
+        onMenuClose();
+        if (useFileStore.getState().files.length === 0) setOpen(false);
+    }
 
     const onCloseImage = () => {
         removeFile(file.Hash);
-        onMenuClose();
+        updateDrawer()
     };
 
     const onCloseAllImages = () => {
         clear();
-        onMenuClose();
-        toggle();
+        updateDrawer()
     };
 
     return (
