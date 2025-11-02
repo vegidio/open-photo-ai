@@ -1,3 +1,4 @@
+import { ZoomImage } from '@/components/ZoomImage';
 import { useImageStore } from '@/stores';
 
 export const PreviewImageSideBySide = () => {
@@ -5,18 +6,9 @@ export const PreviewImageSideBySide = () => {
     const enhancedImage = useImageStore((state) => state.enhancedImage ?? state.originalImage);
 
     return (
-        <div className='flex flex-row h-full w-full p-1 gap-1'>
-            <div className='flex-1 flex items-center justify-center'>
-                {originalImage && (
-                    <img alt='Preview' src={originalImage.url} className='w-full h-full object-contain' />
-                )}
-            </div>
-
-            <div className='flex-1 flex items-center justify-center'>
-                {enhancedImage && (
-                    <img alt='Preview' src={enhancedImage.url} className='w-full h-full object-contain' />
-                )}
-            </div>
+        <div id='preview_body' className='flex flex-row h-full w-full p-1 gap-1'>
+            {originalImage && <ZoomImage key='original' image={originalImage} />}
+            {enhancedImage && <ZoomImage key='enhanced' image={enhancedImage} />}
         </div>
     );
 };
