@@ -1,11 +1,21 @@
+import { Divider } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { SidebarAutopilot } from './SidebarAutopilot.tsx';
 import { SidebarExport } from './SidebarExport.tsx';
+import { AddEnhancement } from '@/components/Enhancement/AddEnhancement.tsx';
+import { SidebarEnhancements } from '@/components/Sidebar/SidebarEnhancements.tsx';
 
 export const Sidebar = ({ className }: TailwindProps) => {
     return (
-        <div className={`flex flex-col pt-4 gap-4 bg-[#272727] ${className}`}>
-            <SidebarAutopilot className='mx-4' />
+        <div className={`flex flex-col gap-4 bg-[#272727] ${className}`}>
+            <div className='flex flex-col bg-black p-6 gap-5'>
+                <SidebarAutopilot />
+                <AddEnhancement />
+            </div>
+
+            <SidebarEnhancements />
+
+            <Divider variant='middle' />
 
             <div className='h-full' />
 

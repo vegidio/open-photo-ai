@@ -107,7 +107,19 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
     };
 
     return (
-        <Menu anchorEl={anchorEl} open={open} onClose={onMenuClose}>
+        <Menu
+            anchorEl={anchorEl}
+            open={open}
+            onClose={onMenuClose}
+            anchorOrigin={{
+                vertical: 'center',
+                horizontal: 'center',
+            }}
+            transformOrigin={{
+                vertical: 'bottom',
+                horizontal: 'left',
+            }}
+        >
             <MenuItem onClick={onCloseImage}>Close image</MenuItem>
             <MenuItem onClick={onCloseAllImages}>Close all images</MenuItem>
             <Divider />
