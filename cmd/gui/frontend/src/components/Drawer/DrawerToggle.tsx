@@ -1,10 +1,10 @@
 import { IconButton } from '@mui/material';
 import { GoFoldDown, GoFoldUp } from 'react-icons/go';
-import { useFileListStore } from '@/stores';
+import { useDrawerStore } from '@/stores';
 
-export const FileListButton = () => {
-    const open = useFileListStore((state) => state.open);
-    const toggle = useFileListStore((state) => state.toggle);
+export const DrawerToggle = () => {
+    const open = useDrawerStore((state) => state.open);
+    const toggle = useDrawerStore((state) => state.toggle);
 
     return (
         <IconButton type='button' disableRipple onClick={toggle}>

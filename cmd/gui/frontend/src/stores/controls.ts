@@ -1,6 +1,10 @@
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
-import type { Operation } from '@/components/Enhancement';
+
+export type Operation = {
+    id: string;
+    options: Record<string, string>;
+};
 
 type ControlStore = {
     autopilot: boolean;

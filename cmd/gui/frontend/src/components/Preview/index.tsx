@@ -4,7 +4,7 @@ import { Events } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { PreviewEmpty } from './PreviewEmpty';
 import { PreviewImageSideBySide } from './PreviewImageSideBySide.tsx';
-import { useControlStore, useFileListStore, useFileStore, useImageStore } from '@/stores';
+import { useControlStore, useDrawerStore, useFileStore, useImageStore } from '@/stores';
 import { getEnhancedImage, getImage } from '@/utils/image.ts';
 
 export const Preview = ({ className = '' }: TailwindProps) => {
@@ -13,7 +13,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     const selectedFile = useFileStore((state) =>
         state.files.length > 0 ? state.files[state.selectedIndex] : undefined,
     );
-    const setOpen = useFileListStore((state) => state.setOpen);
+    const setOpen = useDrawerStore((state) => state.setOpen);
 
     // ImageStore
     const running = useImageStore((state) => state.running);

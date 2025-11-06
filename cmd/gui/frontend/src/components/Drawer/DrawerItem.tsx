@@ -1,10 +1,10 @@
 import { type MouseEvent, useEffect, useState } from 'react';
-import { Divider, IconButton, Menu, MenuItem, Typography } from '@mui/material';
+import { Divider, IconButton, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import path from 'path-browserify';
 import { IoIosMore } from 'react-icons/io';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import type { DialogFile } from '../../../bindings/gui/types';
-import { useFileListStore, useFileStore } from '@/stores';
+import { useDrawerStore, useFileStore } from '@/stores';
 import { getImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
@@ -13,7 +13,7 @@ type FileListItemProps = {
     onClick?: () => void;
 };
 
-export const FileListItem = ({ file, selected = false, onClick }: FileListItemProps) => {
+export const DrawerItem = ({ file, selected = false, onClick }: FileListItemProps) => {
     const [image, setImage] = useState<string>();
 
     useEffect(() => {
@@ -89,7 +89,7 @@ type OptionsMenuProps = {
 const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) => {
     const removeFile = useFileStore((state) => state.removeFile);
     const clear = useFileStore((state) => state.clear);
-    const setOpen = useFileListStore((state) => state.setOpen);
+    const setOpen = useDrawerStore((state) => state.setOpen);
 
     const updateDrawer = () => {
         onMenuClose();
@@ -106,6 +106,13 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
         updateDrawer();
     };
 
+    const options = [
+        { name: 'Close image', action: onCloseImage },
+        { name: 'Close all image', action: onCloseAllImages },
+        { name: undefined },
+        { name: 'Show in Finder', action: () => {} },
+    ];
+
     return (
         <Menu
             anchorEl={anchorEl}
@@ -120,10 +127,15 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
                 horizontal: 'left',
             }}
         >
-            <MenuItem onClick={onCloseImage}>Close image</MenuItem>
-            <MenuItem onClick={onCloseAllImages}>Close all images</MenuItem>
-            <Divider />
-            <MenuItem onClick={onMenuClose}>Show in Finder</MenuItem>
+            {options.map((option) =>
+                option.name ? (
+                    <MenuItem key={option.name} onClick={option.action}>
+                        <ListItemText slotProps={{ primary: { className: 'text-[13px]' } }}>{option.name}</ListItemText>
+                    </MenuItem>
+                ) : (
+                    <Divider key='divider' />
+                ),
+            )}
         </Menu>
     );
 };

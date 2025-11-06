@@ -1,7 +1,7 @@
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 
-type FileListStore = {
+type DrawerStore = {
     open: boolean;
     zoom: number;
 
@@ -10,8 +10,8 @@ type FileListStore = {
     setZoom: (zoom: number) => void;
 };
 
-export const useFileListStore = create(
-    immer<FileListStore>((set, _) => ({
+export const useDrawerStore = create(
+    immer<DrawerStore>((set, _) => ({
         open: false,
         zoom: 1,
 

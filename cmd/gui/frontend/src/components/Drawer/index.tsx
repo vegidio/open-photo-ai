@@ -1,8 +1,8 @@
 import type { RefObject } from 'react';
 import { SwipeableDrawer } from '@mui/material';
-import { FileListBody } from '@/components/FileList/FileListBody.tsx';
-import { FileListHeader } from '@/components/FileList/FileListHeader.tsx';
-import { useFileListStore } from '@/stores';
+import { DrawerBody } from '@/components/Drawer/DrawerBody.tsx';
+import { DrawerHeader } from '@/components/Drawer/DrawerHeader.tsx';
+import { useDrawerStore } from '@/stores/drawer.ts';
 
 const drawerBleeding = 48;
 const drawerHeight = 128;
@@ -11,9 +11,9 @@ type FileListProps = {
     containerRef: RefObject<HTMLDivElement | null>;
 };
 
-export const FileList = ({ containerRef }: FileListProps) => {
-    const open = useFileListStore((state) => state.open);
-    const setOpen = useFileListStore((state) => state.setOpen);
+export const Drawer = ({ containerRef }: FileListProps) => {
+    const open = useDrawerStore((state) => state.open);
+    const setOpen = useDrawerStore((state) => state.setOpen);
 
     return (
         <SwipeableDrawer
@@ -41,9 +41,9 @@ export const FileList = ({ containerRef }: FileListProps) => {
                 },
             }}
         >
-            <FileListHeader drawerBleeding={drawerBleeding} className='w-full' />
+            <DrawerHeader drawerBleeding={drawerBleeding} className='w-full' />
 
-            <FileListBody drawerHeight={drawerHeight} />
+            <DrawerBody drawerHeight={drawerHeight} />
         </SwipeableDrawer>
     );
 };

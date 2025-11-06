@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { Drawer } from './components/Drawer';
 import { Navbar } from './components/Navbar';
 import { Preview } from './components/Preview';
 import { Sidebar } from './components/Sidebar';
-import { FileList } from '@/components/FileList';
 
 export const App = () => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -22,7 +22,7 @@ export const App = () => {
                 <div id='preview_filelist' ref={containerRef} className='flex-1 relative overflow-hidden'>
                     <Preview className='h-[calc(100%-48px)]' />
 
-                    {isContainerReady && <FileList containerRef={containerRef} />}
+                    {isContainerReady && <Drawer containerRef={containerRef} />}
                 </div>
 
                 <Sidebar className='w-64 h-full' />

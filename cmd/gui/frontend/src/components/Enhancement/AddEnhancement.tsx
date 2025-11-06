@@ -1,6 +1,8 @@
 import { type MouseEvent, useState } from 'react';
-import { Button, Menu, MenuItem } from '@mui/material';
+import { Button, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
 import { FiPlus } from 'react-icons/fi';
+import { MdOpenInFull, MdOutlineFaceRetouchingNatural } from 'react-icons/md';
+import type { Operation } from '@/stores';
 
 export const AddEnhancement = () => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -37,16 +39,21 @@ type EnhancementsMenuProps = {
 };
 
 const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps) => {
-    const updateDrawer = () => {
+    const options = [
+        {
+            icon: <MdOutlineFaceRetouchingNatural />,
+            name: 'Face Recovery',
+            op: { id: 'face', options: { precision: 'fp32' } } as Operation,
+        },
+        {
+            icon: <MdOpenInFull />,
+            name: 'Upscale',
+            op: { id: 'upscale', options: { mode: 'general', scale: '4', precision: 'fp32' } } as Operation,
+        },
+    ];
+
+    const onAddEnhancement = (op: Operation) => {
         onMenuClose();
-    };
-
-    const onCloseImage = () => {
-        updateDrawer();
-    };
-
-    const onCloseAllImages = () => {
-        updateDrawer();
     };
 
     return (
@@ -62,9 +69,20 @@ const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps
                 vertical: 'top',
                 horizontal: 'right',
             }}
+            slotProps={{
+                paper: {
+                    style: {
+                        marginLeft: '-2.5rem',
+                    },
+                },
+            }}
         >
-            <MenuItem onClick={onCloseImage}>Face Recovery</MenuItem>
-            <MenuItem onClick={onCloseAllImages}>Upscale</MenuItem>
+            {options.map((option) => (
+                <MenuItem key={option.name} className='min-h-12' onClick={() => onAddEnhancement(option.op)}>
+                    <ListItemIcon className='min-w-9 [&>svg]:size-5'>{option.icon}</ListItemIcon>
+                    <ListItemText slotProps={{ primary: { className: 'text-[13px]' } }}>{option.name}</ListItemText>
+                </MenuItem>
+            ))}
         </Menu>
     );
 };

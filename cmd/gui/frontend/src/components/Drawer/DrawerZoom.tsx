@@ -3,7 +3,7 @@ import { MdZoomIn, MdZoomOut } from 'react-icons/md';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { useImageStore } from '@/stores';
 
-export const FileListZoom = ({ className }: TailwindProps) => {
+export const DrawerZoom = ({ className }: TailwindProps) => {
     const imageState = useImageStore((state) => state.imageState);
     const setImageState = useImageStore((state) => state.setImageState);
 

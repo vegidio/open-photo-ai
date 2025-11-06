@@ -1,11 +1,7 @@
 import type { ReactNode } from 'react';
 import { IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import { MdClose, MdOpenInFull, MdOutlineFaceRetouchingNatural } from 'react-icons/md';
-
-export type Operation = {
-    id: string;
-    options: Record<string, string>;
-};
+import type { Operation } from '@/stores';
 
 type EnhancementProps = {
     op: Operation;
@@ -24,7 +20,7 @@ export const Enhancement = ({ op }: EnhancementProps) => {
             }
         >
             <ListItemButton className='min-h-12'>
-                <ListItemIcon className='min-w-8 [&>svg]:size-5'>{icon}</ListItemIcon>
+                <ListItemIcon className='min-w-9 [&>svg]:size-5'>{icon}</ListItemIcon>
                 <ListItemText
                     primary={name}
                     secondary={config}
