@@ -8,7 +8,8 @@
         "build:dev": "tsc && vite build --minify false --mode development",
         "build": "tsc && vite build --mode production",
         "preview": "vite preview",
-        "lint": "biome lint"
+        "lint": "biome lint",
+        "typecheck": "tsc --noEmit"
     },
     "dependencies": {
         "@emotion/react": "11.14.0",

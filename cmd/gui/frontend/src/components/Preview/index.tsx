@@ -4,7 +4,7 @@ import { Events } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { PreviewEmpty } from './PreviewEmpty';
 import { PreviewImageSideBySide } from './PreviewImageSideBySide.tsx';
-import { useControlStore, useDrawerStore, useFileStore, useImageStore } from '@/stores';
+import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
 import { getEnhancedImage, getImage } from '@/utils/image.ts';
 
 export const Preview = ({ className = '' }: TailwindProps) => {
@@ -21,12 +21,9 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     const setOriginalImage = useImageStore((state) => state.setOriginalImage);
     const setEnhancedImage = useImageStore((state) => state.setEnhancedImage);
 
-    // ControlStore
-    const autopilot = useControlStore((state) => state.autopilot);
+    // EnhancementStore
+    const operations = useEnhancementStore((state) => state.operations);
 
-    // autopilot is intentionally not included in the dependency array because we don't want to re-render the preview if
-    // the user switches on/off the autopilot. Only clicking on a different image should trigger a re-render.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: N/A autopilot
     useEffect(() => {
         async function loadPreview() {
             if (selectedFile) {
@@ -37,10 +34,13 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                 setOriginalImage(originalImage);
                 setEnhancedImage(originalImage);
 
-                if (autopilot) {
+                if (operations.length > 0) {
                     setIsRunning(true);
-                    const enhancedImage = await getEnhancedImage(selectedFile, 'upscale_general_4_fp32');
+
+                    const opIds = operations.map((op) => op.id);
+                    const enhancedImage = await getEnhancedImage(selectedFile, ...opIds);
                     setEnhancedImage(enhancedImage);
+
                     setIsRunning(false);
                 }
             } else {
@@ -50,7 +50,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         }
 
         loadPreview();
-    }, [setEnhancedImage, setOriginalImage, selectedFile, setIsRunning]);
+    }, [setEnhancedImage, setOriginalImage, selectedFile, setIsRunning, operations]);
 
     // useEffect(() => {
     //     if (filesLength > 0) setOpen(true);

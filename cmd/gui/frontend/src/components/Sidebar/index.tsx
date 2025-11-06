@@ -13,9 +13,7 @@ export const Sidebar = ({ className }: TailwindProps) => {
                 <AddEnhancement />
             </div>
 
-            <SidebarEnhancements />
-
-            <Divider variant='middle' />
+            <SidebarEnhancements className='py-0 mr-0.5' />
 
             <div className='h-full' />
 

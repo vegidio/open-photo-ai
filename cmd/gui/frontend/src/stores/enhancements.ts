@@ -1,12 +1,8 @@
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
+import type { Operation } from '@/operations';
 
-export type Operation = {
-    id: string;
-    options: Record<string, string>;
-};
-
-type ControlStore = {
+type EnhancementStore = {
     autopilot: boolean;
     operations: Operation[];
 
@@ -16,8 +12,8 @@ type ControlStore = {
     removeOperation: (id: string) => void;
 };
 
-export const useControlStore = create(
-    immer<ControlStore>((set, _) => ({
+export const useEnhancementStore = create(
+    immer<EnhancementStore>((set, _) => ({
         autopilot: false,
         operations: [],
 

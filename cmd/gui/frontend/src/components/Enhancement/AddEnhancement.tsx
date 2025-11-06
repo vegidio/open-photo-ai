@@ -2,7 +2,8 @@ import { type MouseEvent, useState } from 'react';
 import { Button, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
 import { FiPlus } from 'react-icons/fi';
 import { MdOpenInFull, MdOutlineFaceRetouchingNatural } from 'react-icons/md';
-import type { Operation } from '@/stores';
+import { FaceRecovery, type Operation, Upscale } from '@/operations';
+import { useEnhancementStore } from '@/stores';
 
 export const AddEnhancement = () => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -39,20 +40,23 @@ type EnhancementsMenuProps = {
 };
 
 const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps) => {
+    const addOperation = useEnhancementStore((state) => state.addOperation);
+
     const options = [
         {
             icon: <MdOutlineFaceRetouchingNatural />,
             name: 'Face Recovery',
-            op: { id: 'face', options: { precision: 'fp32' } } as Operation,
+            op: new FaceRecovery('fp32'),
         },
         {
             icon: <MdOpenInFull />,
             name: 'Upscale',
-            op: { id: 'upscale', options: { mode: 'general', scale: '4', precision: 'fp32' } } as Operation,
+            op: new Upscale('general', 4, 'fp32'),
         },
     ];
 
     const onAddEnhancement = (op: Operation) => {
+        addOperation(op);
         onMenuClose();
     };
 

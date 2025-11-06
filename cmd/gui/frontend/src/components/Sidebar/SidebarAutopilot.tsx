@@ -1,10 +1,10 @@
 import { Switch, Typography } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { useControlStore } from '@/stores';
+import { useEnhancementStore } from '@/stores';
 
 export const SidebarAutopilot = ({ className = '' }: TailwindProps) => {
-    const autopilot = useControlStore((state) => state.autopilot);
-    const toggle = useControlStore((state) => state.toggle);
+    const autopilot = useEnhancementStore((state) => state.autopilot);
+    const toggle = useEnhancementStore((state) => state.toggle);
 
     return (
         <div className={`flex justify-between items-center ${className}`}>

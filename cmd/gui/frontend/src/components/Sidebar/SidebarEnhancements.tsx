@@ -1,13 +1,19 @@
-import { List } from '@mui/material';
+import { Divider, List } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Enhancement } from '@/components/Enhancement';
+import { useEnhancementStore } from '@/stores';
 
 export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
+    const operations = useEnhancementStore((state) => state.operations);
+
     return (
         <List className={`${className}`} dense>
-            <Enhancement op={{ id: 'face', options: { precision: 'fp32' } }} />
-
-            <Enhancement op={{ id: 'upscale', options: { mode: 'general', scale: '4', precision: 'fp32' } }} />
+            {operations.map((op) => (
+                <div key={op.id}>
+                    <Enhancement op={op} />
+                    <Divider variant='middle' className='border-[#363636]' />
+                </div>
+            ))}
         </List>
     );
 };
