@@ -4,17 +4,20 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/vegidio/open-photo-ai/models/facedetection"
+	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
 // Registry where all loaded models are stored
-var registry = make(map[string]types.Model)
+var registry = make(map[string]interface{})
 
-// Execute processes an image through a sequence of operations.
+// Process processes an image through a sequence of image operations.
 //
-// The function selects the appropriate AI model for each operation and runs its inference on the current image data. If
-// multiple operations are provided, they are applied in the order specified.
+// The function selects the appropriate AI model for each operation and runs its inference on the image. If multiple
+// operations are provided, they are applied in the order specified. The output is the final processed image after all
+// operations are applied.
 //
 // # Parameters:
 //   - input: The input image data to be processed
@@ -22,17 +25,17 @@ var registry = make(map[string]types.Model)
 //   - operations: A variable number of operations to apply sequentially
 //
 // # Returns:
-//   - *types.OutputData: The final processed image data after all operations
+//   - *types.OutputImage: The final processed image data after all operations
 //   - error: An error if model selection fails, any operation fails, or no operations are provided
 //
-// Example:
+// # Example:
 //
-//	output, err := Execute(inputData, upscaleOp, denoiseOp)
-func Execute(input *types.InputData, onProgress func(float32), operations ...types.Operation) (*types.OutputData, error) {
-	var output *types.OutputData
+//	output, err := Process(inputImage, faceRecoveryOp, upscaleOp)
+func Process(input *types.InputImage, onProgress func(float32), operations ...types.Operation) (*types.OutputImage, error) {
+	var output *types.OutputImage
 
 	// Make a copy of the input data so the original input is not modified
-	inputCopy := &types.InputData{Pixels: input.Pixels}
+	inputCopy := &types.InputImage{Pixels: input.Pixels}
 
 	for _, op := range operations {
 		model, err := selectModel(op)
@@ -40,7 +43,12 @@ func Execute(input *types.InputData, onProgress func(float32), operations ...typ
 			return nil, err
 		}
 
-		output, err = model.Run(inputCopy, onProgress)
+		imageModel, ok := model.(types.Model[*types.OutputImage])
+		if !ok {
+			return nil, fmt.Errorf("operation type not supported: %s", op.Id())
+		}
+
+		output, err = imageModel.Run(inputCopy, onProgress)
 		if err != nil {
 			return nil, err
 		}
@@ -56,6 +64,40 @@ func Execute(input *types.InputData, onProgress func(float32), operations ...typ
 	return output, nil
 }
 
+// Execute executes a single image operation and returns the result as a generic data type.
+//
+// The function selects the appropriate AI model for the operation and runs its inference on the image. The output is
+// not an image, but the information data returned by the model.
+//
+// # Parameters:
+//   - input: The input image data to be processed
+//   - onProgress: A callback function that is called with the progress of the current operation (0-1)
+//   - operation: The operation to apply to the image
+//
+// # Returns:
+//   - T: The result of the operation with the specified generic type
+//   - error: An error if model selection fails, the operation fails, or the operation type is not supported
+//
+// # Example:
+//
+//	faces, err := Execute[[]types.Face](inputImage, progressCallback, faceDetectionOp)
+func Execute[T any](input *types.InputImage, onProgress func(float32), operation types.Operation) (T, error) {
+	// nil value for type T
+	var genericNil T
+
+	model, err := selectModel(operation)
+	if err != nil {
+		return genericNil, err
+	}
+
+	dataModel, ok := model.(types.Model[T])
+	if !ok {
+		return genericNil, fmt.Errorf("operation type not supported: %s", operation.Id())
+	}
+
+	return dataModel.Run(input, onProgress)
+}
+
 // CleanRegistry releases all resources held by registered models. It iterates through all models in the registry and
 // calls their Destroy method to clean up memory and other resources.
 //
@@ -63,14 +105,16 @@ func Execute(input *types.InputData, onProgress func(float32), operations ...typ
 // to prevent resource leaks.
 func CleanRegistry() {
 	for _, model := range registry {
-		model.Destroy()
+		if destroyable, ok := model.(types.Destroyable); ok {
+			destroyable.Destroy()
+		}
 	}
 }
 
 // region - Private functions
 
-func selectModel(operation types.Operation) (types.Model, error) {
-	var model types.Model
+func selectModel(operation types.Operation) (interface{}, error) {
+	var model interface{}
 	var err error
 
 	model, exists := registry[operation.Id()]
@@ -79,6 +123,10 @@ func selectModel(operation types.Operation) (types.Model, error) {
 	}
 
 	switch {
+	case strings.HasPrefix(operation.Id(), "face-detection"):
+		model, err = facedetection.New(appName, operation)
+	case strings.HasPrefix(operation.Id(), "face-recovery"):
+		model, err = facerecovery.New(appName, operation)
 	case strings.HasPrefix(operation.Id(), "upscale"):
 		model, err = upscale.New(appName, operation)
 	default:

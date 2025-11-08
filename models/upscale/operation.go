@@ -36,7 +36,7 @@ func Op(mode Mode, scale int, precision types.Precision) OpUpscale {
 // Mode is the type of upscale operation.
 type Mode string
 
-// Constants for supported image formats.
+// Constants for the upscale modes.
 const (
 	ModeGeneral Mode = "general"
 	ModeCartoon Mode = "cartoon"

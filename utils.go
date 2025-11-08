@@ -17,19 +17,19 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-// LoadInputData loads an image file from the specified path and returns it as InputData.
+// LoadInputImage loads an image file from the specified path and returns it as InputImage.
 // It supports multiple image formats including JPEG, PNG, GIF, BMP, TIFF, and WebP.
 //
-// The function opens the file, decodes the image data, and constructs an InputData
+// The function opens the file, decodes the image data, and constructs an InputImage
 // structure containing both the file path and the decoded pixel data.
 //
 // # Parameters:
 //   - path: The file system path to the image file to be loaded
 //
 // # Returns:
-//   - *types.InputData: A pointer to the InputData structure containing the file path and decoded image
+//   - *types.InputImage: A pointer to the InputImage structure containing the file path and decoded image
 //   - error: An error if the file cannot be opened or the image cannot be decoded
-func LoadInputData(path string) (*types.InputData, error) {
+func LoadInputImage(path string) (*types.InputImage, error) {
 	inputFile, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -41,14 +41,14 @@ func LoadInputData(path string) (*types.InputData, error) {
 		return nil, err
 	}
 
-	return &types.InputData{
+	return &types.InputImage{
 		FilePath: path,
 		Pixels:   img,
 	}, nil
 }
 
-// SaveOutputData saves the image data to a file in the specified format.
-// The output format is determined by the Format field in the OutputData structure.
+// SaveOutputImage saves the image data to a file in the specified format.
+// The output format is determined by the Format field in the OutputImage structure.
 // Supported formats include JPEG, PNG, and TIFF.
 //
 // For JPEG format, the quality parameter controls the compression level.
@@ -56,12 +56,12 @@ func LoadInputData(path string) (*types.InputData, error) {
 // For TIFF format, the quality parameter is ignored and Deflate compression is used.
 //
 // # Parameters:
-//   - data: A pointer to OutputData containing the file path, pixel data, and desired format
+//   - data: A pointer to OutputImage containing the file path, pixel data, and desired format
 //   - quality: The quality level for JPEG encoding (0-100, where 100 is the highest quality)
 //
 // # Returns:
 //   - error: An error if the quality is out of range, the file cannot be created, or encoding fails
-func SaveOutputData(data *types.OutputData, quality int) error {
+func SaveOutputImage(data *types.OutputImage, quality int) error {
 	if quality < 0 || quality > 100 {
 		return fmt.Errorf("invalid quality: %d, must be between 0 and 100", quality)
 	}

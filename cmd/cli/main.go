@@ -18,7 +18,7 @@ func main() {
 	}
 	defer opai.Destroy()
 
-	inputData, err := opai.LoadInputData("/Users/vegidio/Desktop/test1.jpg")
+	inputData, err := opai.LoadInputImage("/Users/vegidio/Desktop/test1.jpg")
 	if err != nil {
 		fmt.Printf("Failed to load the input image: %v\n", err)
 		return
@@ -27,7 +27,7 @@ func main() {
 	op := upscale.Op(upscale.ModeGeneral, 4, types.PrecisionFp32)
 
 	now := time.Now()
-	outputData, err := opai.Execute(inputData, func(progress float32) {
+	outputData, err := opai.Process(inputData, func(progress float32) {
 		fmt.Printf("Progress: %.1f%%\n", progress*100)
 	}, op)
 
@@ -38,7 +38,7 @@ func main() {
 	since := time.Since(now)
 	fmt.Println("Time elapsed: ", since)
 
-	err = opai.SaveOutputData(&types.OutputData{
+	err = opai.SaveOutputImage(&types.OutputImage{
 		FilePath: fmt.Sprintf("/Users/vegidio/Desktop/test1_%s.jpg", op.Id()),
 		Pixels:   outputData.Pixels,
 		Format:   types.FormatJpeg,

@@ -28,7 +28,7 @@ const (
 )
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model = (*Upscale)(nil)
+var _ types.Model[*types.OutputImage] = (*Upscale)(nil)
 
 func New(appName string, operation types.Operation) (*Upscale, error) {
 	op := operation.(OpUpscale)
@@ -45,7 +45,7 @@ func New(appName string, operation types.Operation) (*Upscale, error) {
 		return nil, err
 	}
 
-	session, err := utils.CreateSession(appName, modelFile)
+	session, err := utils.CreateSession(appName, modelFile, []string{"input"}, []string{"output"})
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (m *Upscale) Name() string {
 	return m.name
 }
 
-func (m *Upscale) Run(input *types.InputData, onProgress func(float32)) (*types.OutputData, error) {
+func (m *Upscale) Run(input *types.InputImage, onProgress func(float32)) (*types.OutputImage, error) {
 	width := input.Pixels.Bounds().Dx()
 	height := input.Pixels.Bounds().Dy()
 
@@ -150,7 +150,7 @@ func (m *Upscale) Run(input *types.InputData, onProgress func(float32)) (*types.
 		}
 	}
 
-	return &types.OutputData{
+	return &types.OutputImage{
 		Pixels: output,
 	}, nil
 }
@@ -165,7 +165,7 @@ func (m *Upscale) Destroy() {
 
 func (m *Upscale) upscaleTile(tile image.Image) (*image.RGBA, error) {
 	// Create the input tensor
-	data, h, w := imageToNCHW(tile)
+	data, h, w := utils.ImageToNCHW(tile)
 	inShape := ort.NewShape(1, 3, int64(h), int64(w))
 	inTensor, err := ort.NewTensor[float32](inShape, data)
 	if err != nil {
@@ -187,7 +187,7 @@ func (m *Upscale) upscaleTile(tile image.Image) (*image.RGBA, error) {
 	}
 
 	// Convert the output tensor to RGBA
-	return tensorToRGBA(outTensor)
+	return utils.TensorToRGBA(outTensor)
 }
 
 // endregion

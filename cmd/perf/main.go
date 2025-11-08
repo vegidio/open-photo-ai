@@ -35,7 +35,7 @@ func main() {
 		log.Fatalf("Error writing temp file: %v\n", err)
 	}
 
-	inputData, err := opai.LoadInputData(tempFile.Name())
+	inputData, err := opai.LoadInputImage(tempFile.Name())
 	if err != nil {
 		log.Fatalf("Failed to load the input image: %v\n", err)
 	}
@@ -43,12 +43,12 @@ func main() {
 	startUpscaleTest(inputData)
 }
 
-func startUpscaleTest(inputData *types.InputData) {
+func startUpscaleTest(inputData *types.InputImage) {
 	// Warm-up; the first run is not included in the measurements because it's a cold-start
 	log.Printf("UPSCALE: Warming up!\n")
 
 	op := upscale.Op(upscale.ModeGeneral, 4, types.PrecisionFp32)
-	_, err := opai.Execute(inputData, nil, op)
+	_, err := opai.Process(inputData, nil, op)
 	if err != nil {
 		log.Fatalf("Failed to upscale the image: %v\n", err)
 	}
@@ -58,7 +58,7 @@ func startUpscaleTest(inputData *types.InputData) {
 	for i := 0; i < 5; i++ {
 		log.Printf("Running test %d...\n", i+1)
 
-		_, err = opai.Execute(inputData, nil, op)
+		_, err = opai.Process(inputData, nil, op)
 		if err != nil {
 			log.Fatalf("Failed to upscale the image: %v\n", err)
 		}

@@ -10,7 +10,7 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-func CreateSession(appName, modelFile string) (*ort.DynamicAdvancedSession, error) {
+func CreateSession(appName, modelFile string, inputs, outputs []string) (*ort.DynamicAdvancedSession, error) {
 	configDir, err := os.UserConfigDir()
 	cachePath := filepath.Join(configDir, appName, "models")
 	var options *ort.SessionOptions
@@ -35,7 +35,7 @@ func CreateSession(appName, modelFile string) (*ort.DynamicAdvancedSession, erro
 	options.SetExecutionMode(ort.ExecutionModeParallel)
 
 	modelPath := filepath.Join(configDir, appName, "models", modelFile)
-	session, err := ort.NewDynamicAdvancedSession(modelPath, []string{"input"}, []string{"output"}, options)
+	session, err := ort.NewDynamicAdvancedSession(modelPath, inputs, outputs, options)
 	if err != nil {
 		return nil, err
 	}
