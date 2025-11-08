@@ -4,14 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
-
-// Registry where all loaded models are stored
-var registry = make(map[string]interface{})
 
 // Process processes an image through a sequence of image operations.
 //
@@ -104,7 +102,7 @@ func Execute[T any](input *types.InputImage, onProgress func(float32), operation
 // This function should be called when the application is shutting down or when all model instances are no longer needed
 // to prevent resource leaks.
 func CleanRegistry() {
-	for _, model := range registry {
+	for _, model := range internal.Registry {
 		if destroyable, ok := model.(types.Destroyable); ok {
 			destroyable.Destroy()
 		}
@@ -117,7 +115,7 @@ func selectModel(operation types.Operation) (interface{}, error) {
 	var model interface{}
 	var err error
 
-	model, exists := registry[operation.Id()]
+	model, exists := internal.Registry[operation.Id()]
 	if exists {
 		return model, nil
 	}
@@ -134,7 +132,7 @@ func selectModel(operation types.Operation) (interface{}, error) {
 	}
 
 	if model != nil {
-		registry[operation.Id()] = model
+		internal.Registry[operation.Id()] = model
 	}
 
 	return model, err
