@@ -5,7 +5,11 @@ import { MdOpenInFull, MdOutlineFaceRetouchingNatural } from 'react-icons/md';
 import { FaceRecovery, type Operation, Upscale } from '@/operations';
 import { useEnhancementStore } from '@/stores';
 
-export const AddEnhancement = () => {
+type AddEnhancementProps = {
+    disabled?: boolean;
+};
+
+export const AddEnhancement = ({ disabled = false }: AddEnhancementProps) => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const open = Boolean(anchorEl);
 
@@ -21,6 +25,7 @@ export const AddEnhancement = () => {
         <>
             <Button
                 variant='outlined'
+                disabled={disabled}
                 className='normal-case text-white font-normal'
                 startIcon={<FiPlus className='size-6 stroke-1' />}
                 onClick={onMenuOpen}
@@ -39,21 +44,21 @@ type EnhancementsMenuProps = {
     onMenuClose: () => void;
 };
 
+const options = [
+    {
+        icon: <MdOutlineFaceRetouchingNatural />,
+        name: 'Face Recovery',
+        op: new FaceRecovery('realistic', 'fp32'),
+    },
+    {
+        icon: <MdOpenInFull />,
+        name: 'Upscale',
+        op: new Upscale('general', 4, 'fp32'),
+    },
+];
+
 const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps) => {
     const addOperation = useEnhancementStore((state) => state.addOperation);
-
-    const options = [
-        {
-            icon: <MdOutlineFaceRetouchingNatural />,
-            name: 'Face Recovery',
-            op: new FaceRecovery('fp32'),
-        },
-        {
-            icon: <MdOpenInFull />,
-            name: 'Upscale',
-            op: new Upscale('general', 4, 'fp32'),
-        },
-    ];
 
     const onAddEnhancement = (op: Operation) => {
         addOperation(op);

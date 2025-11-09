@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LinearProgress, Typography } from '@mui/material';
 import { Events } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
@@ -68,21 +68,33 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 };
 
 const ProgressUpdate = () => {
-    const [progress, setProgress] = useState(0);
+    const [progress, setProgress] = useState({ name: 'Enhancing', value: 0 });
+
+    const getOperationName = useCallback((id: string) => {
+        switch (id) {
+            case 'upscale':
+                return 'Upscale';
+            case 'face-recovery':
+                return 'Face Recovery';
+            default:
+                return 'Enhancing';
+        }
+    }, []);
 
     useEffect(() => {
         Events.On('app:progress', (event) => {
-            setProgress(event.data * 100);
+            const [id, value] = event.data as [string, number];
+            setProgress({ name: getOperationName(id), value: value * 100 });
         });
 
         return () => Events.Off('app:progress');
-    }, []);
+    }, [getOperationName]);
 
     return (
-        <div className='absolute flex top-4 right-4 w-28 h-7 items-center justify-center shadow-xl'>
-            <LinearProgress variant='determinate' value={progress} className='size-full rounded-[5px]' />
+        <div className='absolute flex top-4 right-4 w-32 h-7 items-center justify-center shadow-xl'>
+            <LinearProgress variant='determinate' value={progress.value} className='size-full rounded-[5px]' />
             <Typography variant='subtitle2' className='absolute text-gray-700'>
-                Enhancing...
+                {progress.name}
             </Typography>
         </div>
     );

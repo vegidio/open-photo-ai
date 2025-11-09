@@ -14,6 +14,7 @@ import (
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/memo"
 	"github.com/vegidio/open-photo-ai"
+	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -53,7 +54,7 @@ func NewImageService(appName string, app *application.App) (*ImageService, error
 //   - int: The height of the image
 //   - error: An error if the image cannot be loaded, processed, or encoded
 func (i *ImageService) GetImage(filePath string, size int) ([]byte, int, int, error) {
-	inputData, err := opai.LoadInputData(filePath)
+	inputData, err := opai.LoadInputImage(filePath)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -77,14 +78,14 @@ func (i *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 }
 
 func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, int, int, error) {
-	inputData, err := opai.LoadInputData(filePath)
+	inputImage, err := opai.LoadInputImage(filePath)
 	if err != nil {
 		return nil, 0, 0, err
 	}
 
 	operations := idsToOperations(opIds)
-	outputData, err := opai.Execute(inputData, func(progress float32) {
-		i.app.Event.Emit("app:progress", progress)
+	outputData, err := opai.Process(inputImage, func(name string, progress float32) {
+		i.app.Event.Emit("app:progress", name, progress)
 	}, operations...)
 
 	if err != nil {
@@ -136,6 +137,11 @@ func idsToOperations(opIds []string) []types.Operation {
 		name := values[0]
 
 		switch name {
+		case "face-recovery":
+			mode := facerecovery.Mode(values[1])
+			precision := types.Precision(values[2])
+			operations = append(operations, facerecovery.Op(mode, precision))
+
 		case "upscale":
 			mode := upscale.Mode(values[1])
 			scale, _ := strconv.Atoi(values[2])
