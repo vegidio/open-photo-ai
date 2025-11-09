@@ -76,7 +76,7 @@ func (m *FaceRecovery) Name() string {
 	return m.name
 }
 
-func (m *FaceRecovery) Run(input *types.InputImage, onProgress func(float32)) (*types.OutputImage, error) {
+func (m *FaceRecovery) Run(input *types.InputImage, onProgress types.ProgressCallback) (*types.OutputImage, error) {
 	// Create a copy of the original image for pasting restored faces
 	resultImg := image.NewRGBA(input.Pixels.Bounds())
 	draw.Draw(resultImg, resultImg.Bounds(), input.Pixels, image.Point{}, draw.Src)
@@ -87,9 +87,19 @@ func (m *FaceRecovery) Run(input *types.InputImage, onProgress func(float32)) (*
 		return nil, err
 	}
 
+	progress := float32(0.1)
+	if onProgress != nil {
+		onProgress("face-recovery", progress)
+	}
+
 	if len(faces) == 0 {
+		if onProgress != nil {
+			onProgress("face-recovery", 1.0)
+		}
 		return &types.OutputImage{Pixels: resultImg}, nil
 	}
+
+	step := 0.9 / float32(len(faces)*3)
 
 	// Pre-allocate tensor data buffer to reuse across all faces
 	tensorData := make([]float32, 3*tileSize*tileSize)
@@ -125,9 +135,19 @@ func (m *FaceRecovery) Run(input *types.InputImage, onProgress func(float32)) (*
 			return nil, tErr
 		}
 
+		if onProgress != nil {
+			progress += step
+			onProgress("face-recovery", progress)
+		}
+
 		iErr := m.session.Run([]ort.Value{inTensor}, []ort.Value{outTensor})
 		if iErr != nil {
 			return nil, iErr
+		}
+
+		if onProgress != nil {
+			progress += step
+			onProgress("face-recovery", progress)
 		}
 
 		// Convert tensor to image with denormalization from [-1, 1] to [0, 1]
@@ -145,6 +165,15 @@ func (m *FaceRecovery) Run(input *types.InputImage, onProgress func(float32)) (*
 
 		inTensor.Destroy()
 		outTensor.Destroy()
+
+		if onProgress != nil {
+			progress += step
+			onProgress("face-recovery", progress)
+		}
+	}
+
+	if onProgress != nil && progress < 1.0 {
+		onProgress("face-recovery", 1.0)
 	}
 
 	return &types.OutputImage{

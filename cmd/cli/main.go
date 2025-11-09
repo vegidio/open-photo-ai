@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vegidio/open-photo-ai"
+	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -24,12 +25,13 @@ func main() {
 		return
 	}
 
-	op := upscale.Op(upscale.ModeGeneral, 4, types.PrecisionFp32)
+	frOp := facerecovery.Op(facerecovery.ModeRealistic, types.PrecisionFp32)
+	upOp := upscale.Op(upscale.ModeGeneral, 4, types.PrecisionFp32)
 
 	now := time.Now()
-	outputData, err := opai.Process(inputData, func(progress float32) {
-		fmt.Printf("Progress: %.1f%%\n", progress*100)
-	}, op)
+	outputData, err := opai.Process(inputData, func(name string, progress float32) {
+		fmt.Printf("%s - Progress: %.1f%%\n", name, progress*100)
+	}, frOp, upOp)
 
 	if err != nil {
 		fmt.Printf("Failed to upscale the image: %v\n", err)
@@ -39,7 +41,7 @@ func main() {
 	fmt.Println("Time elapsed: ", since)
 
 	err = opai.SaveOutputImage(&types.OutputImage{
-		FilePath: fmt.Sprintf("/Users/vegidio/Desktop/test1_%s.jpg", op.Id()),
+		FilePath: "/Users/vegidio/Desktop/test1_better.jpg",
 		Pixels:   outputData.Pixels,
 		Format:   types.FormatJpeg,
 	}, 90)

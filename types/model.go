@@ -1,10 +1,5 @@
 package types
 
-type Destroyable interface {
-	// Destroy cleans up resources and releases memory used by the model
-	Destroy()
-}
-
 // Model defines the interface for AI models that process images.
 // It encapsulates specific AI models for image processing tasks such as upscaling, enhancement, or other
 // transformations.
@@ -21,5 +16,21 @@ type Model[T any] interface {
 	Name() string
 
 	// Run processes the input image data and returns the processed output
-	Run(input *InputImage, onProgress func(float32)) (T, error)
+	Run(input *InputImage, onProgress ProgressCallback) (T, error)
 }
+
+// Destroyable defines an interface for types that require explicit resource cleanup. Implementations must provide a
+// Destroy method to release allocated resources, memory, or handles when the instance is no longer needed.
+//
+// This interface is used as a workaround to embed cleanup functionality in generic interfaces like Model[T], where Go's
+// type system requires explicit interface embedding rather than direct method inclusion.
+type Destroyable interface {
+	// Destroy cleans up resources and releases memory used by the model
+	Destroy()
+}
+
+// ProgressCallback is a function type for reporting progress during model operations.
+//
+// The operation parameter describes the current processing step, and progress represents the completion percentage as a
+// value between 0.0 and 1.0.
+type ProgressCallback func(operation string, progress float32)

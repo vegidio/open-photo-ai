@@ -29,7 +29,11 @@ import (
 // # Example:
 //
 //	output, err := Process(inputImage, faceRecoveryOp, upscaleOp)
-func Process(input *types.InputImage, onProgress func(float32), operations ...types.Operation) (*types.OutputImage, error) {
+func Process(
+	input *types.InputImage,
+	onProgress types.ProgressCallback,
+	operations ...types.Operation,
+) (*types.OutputImage, error) {
 	var output *types.OutputImage
 
 	// Make a copy of the input data so the original input is not modified
@@ -79,7 +83,11 @@ func Process(input *types.InputImage, onProgress func(float32), operations ...ty
 // # Example:
 //
 //	faces, err := Execute[[]types.Face](inputImage, progressCallback, faceDetectionOp)
-func Execute[T any](input *types.InputImage, onProgress func(float32), operation types.Operation) (T, error) {
+func Execute[T any](
+	input *types.InputImage,
+	onProgress types.ProgressCallback,
+	operation types.Operation,
+) (T, error) {
 	// nil value for type T
 	var genericNil T
 

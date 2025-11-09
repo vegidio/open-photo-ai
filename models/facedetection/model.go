@@ -66,9 +66,13 @@ func (m *FaceDetection) Name() string {
 	return m.name
 }
 
-func (m *FaceDetection) Run(input *types.InputImage, onProgress func(float32)) ([]Face, error) {
+func (m *FaceDetection) Run(input *types.InputImage, onProgress types.ProgressCallback) ([]Face, error) {
 	// Prepare input image
 	canvas, scale, offsetX, offsetY := m.prepareInputImage(input)
+
+	if onProgress != nil {
+		onProgress("face-detection", 0.2)
+	}
 
 	// Run inference
 	locData, confData, landmarksData, locShape, confShape, landmarksShape, err := m.runInference(canvas)
@@ -76,11 +80,25 @@ func (m *FaceDetection) Run(input *types.InputImage, onProgress func(float32)) (
 		return nil, err
 	}
 
+	if onProgress != nil {
+		onProgress("face-detection", 0.6)
+	}
+
 	// Decode predictions
 	faces := m.decodePredictions(locData, confData, landmarksData, locShape, confShape, landmarksShape, scale, offsetX, offsetY)
 
+	if onProgress != nil {
+		onProgress("face-detection", 0.8)
+	}
+
 	// Apply Non-Maximum Suppression
-	return filterOverlappingFaces(faces, 0.4), nil
+	filtered := filterOverlappingFaces(faces, 0.4)
+
+	if onProgress != nil {
+		onProgress("face-detection", 1.0)
+	}
+
+	return filtered, nil
 }
 
 func (m *FaceDetection) Destroy() {

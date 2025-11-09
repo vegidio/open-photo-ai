@@ -68,7 +68,7 @@ func (m *Upscale) Name() string {
 	return m.name
 }
 
-func (m *Upscale) Run(input *types.InputImage, onProgress func(float32)) (*types.OutputImage, error) {
+func (m *Upscale) Run(input *types.InputImage, onProgress types.ProgressCallback) (*types.OutputImage, error) {
 	width := input.Pixels.Bounds().Dx()
 	height := input.Pixels.Bounds().Dy()
 
@@ -145,7 +145,7 @@ func (m *Upscale) Run(input *types.InputImage, onProgress func(float32)) (*types
 			// Update progress
 			currentTile++
 			if onProgress != nil {
-				onProgress(currentTile / totalTiles)
+				onProgress("upscale", currentTile/totalTiles)
 			}
 		}
 	}
