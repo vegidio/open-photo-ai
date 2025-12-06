@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/vegidio/open-photo-ai/internal"
-	"github.com/vegidio/open-photo-ai/models/facedetection"
-	"github.com/vegidio/open-photo-ai/models/facerecovery"
-	"github.com/vegidio/open-photo-ai/models/upscale"
+	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
+	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
+	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -129,14 +129,20 @@ func selectModel(operation types.Operation) (interface{}, error) {
 	}
 
 	switch {
-	case strings.HasPrefix(operation.Id(), "face-detection"):
-		model, err = facedetection.New(appName, operation)
-	case strings.HasPrefix(operation.Id(), "face-recovery"):
-		model, err = facerecovery.New(appName, operation)
-	case strings.HasPrefix(operation.Id(), "upscale"):
-		model, err = upscale.New(appName, operation)
+	// Face Detection
+	case strings.HasPrefix(operation.Id(), "fd_newyork"):
+		model, err = newyork.New(operation)
+
+	// Face Recovery
+	case strings.HasPrefix(operation.Id(), "fr_athens"):
+		model, err = athens.New(operation)
+
+	// Upscale
+	case strings.HasPrefix(operation.Id(), "up_kyoto"):
+		model, err = kyoto.New(operation)
+
 	default:
-		err = fmt.Errorf("no model found for operation: %s", operation.Id())
+		err = fmt.Errorf("no model found with ID: %s", operation.Id())
 	}
 
 	if model != nil {

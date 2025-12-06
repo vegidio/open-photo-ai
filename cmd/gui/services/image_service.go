@@ -14,8 +14,8 @@ import (
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/memo"
 	"github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/models/facerecovery"
-	"github.com/vegidio/open-photo-ai/models/upscale"
+	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
+	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -25,8 +25,8 @@ type ImageService struct {
 	app       *application.App
 }
 
-func NewImageService(appName string, app *application.App) (*ImageService, error) {
-	cachePath, err := fs.MkUserConfigDir(appName, "cache", "images")
+func NewImageService(app *application.App) (*ImageService, error) {
+	cachePath, err := fs.MkUserConfigDir("open-photo-ai", "cache", "images")
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, i
 	}
 
 	operations := idsToOperations(opIds)
-	outputData, err := opai.Process(inputImage, func(name string, progress float32) {
+	outputData, err := opai.Process(inputImage, func(name string, progress float64) {
 		i.app.Event.Emit("app:progress", name, progress)
 	}, operations...)
 
@@ -134,19 +134,20 @@ func idsToOperations(opIds []string) []types.Operation {
 
 	for _, opId := range opIds {
 		values := strings.Split(opId, "_")
-		name := values[0]
+		name := values[1]
 
 		switch name {
-		case "face-recovery":
-			mode := facerecovery.Mode(values[1])
+		// Face Recovery
+		case "athens":
 			precision := types.Precision(values[2])
-			operations = append(operations, facerecovery.Op(mode, precision))
+			operations = append(operations, athens.Op(precision))
 
-		case "upscale":
-			mode := upscale.Mode(values[1])
-			scale, _ := strconv.Atoi(values[2])
-			precision := types.Precision(values[3])
-			operations = append(operations, upscale.Op(mode, scale, precision))
+		// Upscale
+		case "kyoto":
+			mode := kyoto.Mode(values[2])
+			scale, _ := strconv.Atoi(values[3])
+			precision := types.Precision(values[4])
+			operations = append(operations, kyoto.Op(mode, scale, precision))
 		}
 	}
 

@@ -6,13 +6,14 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-func CreateSession(appName, modelFile string, inputs, outputs []string) (*ort.DynamicAdvancedSession, error) {
+func CreateSession(modelFile string, inputs, outputs []string) (*ort.DynamicAdvancedSession, error) {
 	configDir, err := os.UserConfigDir()
-	cachePath := filepath.Join(configDir, appName, "models")
+	cachePath := filepath.Join(configDir, internal.AppName, "models")
 	var options *ort.SessionOptions
 
 	// Check the computer's OS
@@ -34,7 +35,7 @@ func CreateSession(appName, modelFile string, inputs, outputs []string) (*ort.Dy
 	options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll)
 	options.SetExecutionMode(ort.ExecutionModeParallel)
 
-	modelPath := filepath.Join(configDir, appName, "models", modelFile)
+	modelPath := filepath.Join(configDir, internal.AppName, "models", modelFile)
 	session, err := ort.NewDynamicAdvancedSession(modelPath, inputs, outputs, options)
 	if err != nil {
 		return nil, err

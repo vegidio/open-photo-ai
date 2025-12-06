@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/vegidio/go-sak/fs"
+	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	ort "github.com/yalue/onnxruntime_go"
 )
@@ -14,8 +15,6 @@ const (
 	onnxRuntimeZip = "onnxruntime-1.22.0.zip"
 	onnxRuntimeTag = "runtime/1.22.0"
 )
-
-var appName = "open-photo-ai"
 
 // Initialize sets up the model runtime by ensuring all required dependencies are available.
 //
@@ -39,16 +38,17 @@ var appName = "open-photo-ai"
 //	}
 //	defer opai.Destroy() // Clean up resources
 func Initialize(name string) error {
-	appName = name
+	internal.AppName = name
+
 	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
 		onnxRuntimeTag, runtime.GOOS, runtime.GOARCH)
 
-	if err := utils.PrepareDependency(appName, url, "", onnxRuntimeZip, nil); err != nil {
+	if err := utils.PrepareDependency(url, "", onnxRuntimeZip, nil); err != nil {
 		return err
 	}
 
 	// Initialize the ONNX runtime
-	return startRuntime(appName)
+	return startRuntime()
 }
 
 // Destroy cleans up resources used by the model runtime.
@@ -71,8 +71,8 @@ func Destroy() {
 
 // region - Private functions
 
-func startRuntime(name string) error {
-	configDir, err := fs.MkUserConfigDir(name)
+func startRuntime() error {
+	configDir, err := fs.MkUserConfigDir(internal.AppName)
 	if err != nil {
 		return err
 	}

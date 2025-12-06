@@ -10,6 +10,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fetch"
 	"github.com/vegidio/go-sak/fs"
+	"github.com/vegidio/open-photo-ai/internal"
 )
 
 const (
@@ -32,7 +33,7 @@ func InstallCuda() error {
 	}
 
 	cuda.baseUrl = cubaBaseUrl
-	if err = downloadLibs("open-photo-ai", "cuda", cuda.Assets()); err != nil {
+	if err = downloadLibs("cuda", cuda.Assets()); err != nil {
 		return err
 	}
 
@@ -50,7 +51,7 @@ func InstallCudnn() error {
 	}
 
 	cudnn.baseUrl = cudnnBaseUrl
-	if err = downloadLibs("open-photo-ai", "cudnn", cudnn.Assets()); err != nil {
+	if err = downloadLibs("cudnn", cudnn.Assets()); err != nil {
 		return err
 	}
 
@@ -58,7 +59,7 @@ func InstallCudnn() error {
 }
 
 func setNvidiaPaths() error {
-	configDir, err := fs.MkUserConfigDir("open-photo-ai", "libs")
+	configDir, err := fs.MkUserConfigDir(internal.AppName, "libs")
 	if err != nil {
 		return err
 	}
@@ -72,8 +73,8 @@ func setNvidiaPaths() error {
 	return nil
 }
 
-func downloadLibs(appName, product string, assets []Asset) error {
-	configDir, err := fs.MkUserConfigDir(appName, "libs", product)
+func downloadLibs(product string, assets []Asset) error {
+	configDir, err := fs.MkUserConfigDir(internal.AppName, "libs", product)
 	if err != nil {
 		return err
 	}

@@ -1,83 +1,70 @@
 package utils
 
 import (
-	"fmt"
 	"image"
-	"image/draw"
-	"math"
-
-	ort "github.com/yalue/onnxruntime_go"
+	"image/color"
 )
 
-func ImageToNCHW(img image.Image) ([]float32, int, int) {
-	rgba := image.NewRGBA(img.Bounds())
-	draw.Draw(rgba, rgba.Bounds(), img, img.Bounds().Min, draw.Src)
-	h, w := rgba.Bounds().Dy(), rgba.Bounds().Dx()
-	data := make([]float32, 3*w*h)
+// ImageToCHW is a common implementation for converting an image to a tensor
+// useOffset: if true, uses bounds.Min offset; if false, assumes (0,0) origin
+// standardize: if true, normalizes to [-1, 1]; if false, normalizes to [0, 1]
+func ImageToCHW(img image.Image, useOffset, standardize bool) []float32 {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	tensor := make([]float32, 3*height*width)
 
-	// Direct access to pixel buffer and pre-calculate constants
-	pix := rgba.Pix
-	stride := rgba.Stride
-	planeSize := w * h
-	const invScale = 1.0 / 255.0
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			var r, g, b uint32
+			if useOffset {
+				r, g, b, _ = img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+			} else {
+				r, g, b, _ = img.At(x, y).RGBA()
+			}
 
-	for y := range h {
-		rowOffset := y * stride
-		baseIdx := y * w
-		for x := range w {
-			pixelIdx := rowOffset + (x << 2) // x * 4 using bit shift
-			idx := baseIdx + x
-
-			// Read once, use three times
-			r := float32(pix[pixelIdx]) * invScale
-			g := float32(pix[pixelIdx+1]) * invScale
-			b := float32(pix[pixelIdx+2]) * invScale
-
-			// Sequentially writes for better cache locality
-			data[idx] = r
-			data[planeSize+idx] = g
-			data[2*planeSize+idx] = b
+			idx := y*width + x
+			if standardize {
+				// Convert to RGB, normalize to [-1, 1]
+				tensor[0*height*width+idx] = (float32(r/257)/255.0 - 0.5) / 0.5
+				tensor[1*height*width+idx] = (float32(g/257)/255.0 - 0.5) / 0.5
+				tensor[2*height*width+idx] = (float32(b/257)/255.0 - 0.5) / 0.5
+			} else {
+				// Normalize to [0, 1]
+				tensor[0*height*width+idx] = float32(r) / 65535.0
+				tensor[1*height*width+idx] = float32(g) / 65535.0
+				tensor[2*height*width+idx] = float32(b) / 65535.0
+			}
 		}
 	}
 
-	return data, h, w
+	return tensor
 }
 
-func TensorToRGBA(t *ort.Tensor[float32]) (*image.RGBA, error) {
-	data := t.GetData()
-	shape := t.GetShape()
-	if len(shape) != 4 || shape[1] != 3 {
-		return nil, fmt.Errorf("unexpected tensor shape: %v", shape)
-	}
+// CHWToImage converts a tensor in CHW format back to an image
+// standardize: if true, denormalizes from [-1, 1]; if false, denormalizes from [0, 1]
+// Expects the format: [1, 3, H, W] in CHW format (RGB)
+func CHWToImage(data []float32, width, height int, standardize bool) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
 
-	h := int(shape[2])
-	w := int(shape[3])
-	planeSize := w * h
-	expected := 3 * planeSize
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			idx := y*width + x
+			var r, g, b float32
+			if standardize {
+				// Denormalize from [-1, 1] to [0, 255]
+				r = ClampFloat32((data[0*height*width+idx]*0.5 + 0.5) * 255.0)
+				g = ClampFloat32((data[1*height*width+idx]*0.5 + 0.5) * 255.0)
+				b = ClampFloat32((data[2*height*width+idx]*0.5 + 0.5) * 255.0)
+			} else {
+				// Denormalize from [0, 1] to [0, 255]
+				r = ClampFloat32(data[0*height*width+idx] * 255.0)
+				g = ClampFloat32(data[1*height*width+idx] * 255.0)
+				b = ClampFloat32(data[2*height*width+idx] * 255.0)
+			}
 
-	if len(data) < expected {
-		return nil, fmt.Errorf("tensor data too short: got %d, need %d", len(data), expected)
-	}
-
-	rgba := image.NewRGBA(image.Rect(0, 0, w, h))
-	rPlane := data[0*planeSize : 1*planeSize]
-	gPlane := data[1*planeSize : 2*planeSize]
-	bPlane := data[2*planeSize : 3*planeSize]
-
-	// Direct access to the pixel buffer for better performance
-	pix := rgba.Pix
-	for y := range h {
-		for x := range w {
-			i := y*w + x
-			pixelIdx := (y * rgba.Stride) + (x * 4)
-
-			// Clamp and convert to uint8 in one step
-			pix[pixelIdx+0] = uint8(math.Max(0, math.Min(255, float64(rPlane[i])*255+0.5))) // R
-			pix[pixelIdx+1] = uint8(math.Max(0, math.Min(255, float64(gPlane[i])*255+0.5))) // G
-			pix[pixelIdx+2] = uint8(math.Max(0, math.Min(255, float64(bPlane[i])*255+0.5))) // B
-			pix[pixelIdx+3] = 255                                                           // A
+			img.Set(x, y, color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255})
 		}
 	}
 
-	return rgba, nil
+	return img
 }

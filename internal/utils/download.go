@@ -8,10 +8,11 @@ import (
 	"path/filepath"
 
 	"github.com/vegidio/go-sak/fs"
+	"github.com/vegidio/open-photo-ai/internal"
 )
 
-func PrepareDependency(appName, url, destination, fileName string, onDownload func()) error {
-	if !shouldDownload(appName, destination, fileName) {
+func PrepareDependency(url, destination, fileName string, onDownload func()) error {
+	if !shouldDownload(destination, fileName) {
 		return nil
 	}
 
@@ -20,7 +21,7 @@ func PrepareDependency(appName, url, destination, fileName string, onDownload fu
 		onDownload()
 	}
 
-	file, err := fs.MkUserConfigFile(appName, destination, fileName)
+	file, err := fs.MkUserConfigFile(internal.AppName, destination, fileName)
 	if err != nil {
 		return err
 	}
@@ -49,8 +50,8 @@ func PrepareDependency(appName, url, destination, fileName string, onDownload fu
 
 // region - Private functions
 
-func shouldDownload(appName, destination, fileName string) bool {
-	configDir, err := fs.MkUserConfigDir(appName, destination)
+func shouldDownload(destination, fileName string) bool {
+	configDir, err := fs.MkUserConfigDir(internal.AppName, destination)
 	if err != nil {
 		return true
 	}

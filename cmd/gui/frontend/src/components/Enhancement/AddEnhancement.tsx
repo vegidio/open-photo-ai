@@ -2,7 +2,7 @@ import { type MouseEvent, useState } from 'react';
 import { Button, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
 import { FiPlus } from 'react-icons/fi';
 import { MdOpenInFull, MdOutlineFaceRetouchingNatural } from 'react-icons/md';
-import { FaceRecovery, type Operation, Upscale } from '@/operations';
+import { Athens, Kyoto, type Operation } from '@/operations';
 import { useEnhancementStore } from '@/stores';
 
 type AddEnhancementProps = {
@@ -48,12 +48,12 @@ const options = [
     {
         icon: <MdOutlineFaceRetouchingNatural />,
         name: 'Face Recovery',
-        op: new FaceRecovery('realistic', 'fp32'),
+        op: new Athens('fp32'),
     },
     {
         icon: <MdOpenInFull />,
         name: 'Upscale',
-        op: new Upscale('general', 4, 'fp32'),
+        op: new Kyoto('general', 4, 'fp32'),
     },
 ];
 

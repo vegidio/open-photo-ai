@@ -45,12 +45,12 @@ const opToEnhancement = (op: Operation): { name: string; config: string; icon: R
     let config = '';
 
     switch (true) {
-        case op.id.startsWith('face'): {
+        case op.id.startsWith('fr'): {
             config = `${op.options.precision === 'fp32' ? 'High' : 'Medium'} Quality`;
             return { name: 'Face Recovery', config, icon: <MdOutlineFaceRetouchingNatural /> };
         }
 
-        case op.id.startsWith('upscale'): {
+        case op.id.startsWith('up'): {
             config = op.options.mode === 'general' ? 'General' : 'Cartoon';
             config += `, ${op.options.scale}x`;
             config += `, ${op.options.precision === 'fp32' ? 'High' : 'Medium'} Quality`;

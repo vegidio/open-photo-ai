@@ -2,7 +2,11 @@ import { Switch, Typography } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { useEnhancementStore } from '@/stores';
 
-export const SidebarAutopilot = ({ className = '' }: TailwindProps) => {
+type SidebarAutopilotProps = TailwindProps & {
+    disable?: boolean;
+};
+
+export const SidebarAutopilot = ({ disable = false, className = '' }: SidebarAutopilotProps) => {
     const autopilot = useEnhancementStore((state) => state.autopilot);
     const toggle = useEnhancementStore((state) => state.toggle);
 

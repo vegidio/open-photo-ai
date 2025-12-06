@@ -56,7 +56,7 @@ func main() {
 	})
 
 	// Services
-	imageService, err := services.NewImageService(AppName, app)
+	imageService, err := services.NewImageService(app)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -33,4 +33,4 @@ type Destroyable interface {
 //
 // The operation parameter describes the current processing step, and progress represents the completion percentage as a
 // value between 0.0 and 1.0.
-type ProgressCallback func(operation string, progress float32)
+type ProgressCallback func(operation string, progress float64)
