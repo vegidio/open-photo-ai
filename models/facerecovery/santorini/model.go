@@ -1,4 +1,4 @@
-package athens
+package santorini
 
 import (
 	"fmt"
@@ -14,26 +14,25 @@ import (
 )
 
 const (
-	fidelity = 1.0
 	tileSize = 512
 )
 
-type Athens struct {
+type Santorini struct {
 	id        string
 	name      string
-	operation OpFrAthens
+	operation OpFrSantorini
 	session   *ort.DynamicAdvancedSession
 	fdModel   types.Model[[]facedetection.Face]
 }
 
-func New(operation types.Operation) (*Athens, error) {
+func New(operation types.Operation) (*Santorini, error) {
 	// Init the Face Detection model, which is a dependency of this model
 	fdModel, err := facerecovery.GetFdModel()
 	if err != nil {
 		return nil, err
 	}
 
-	op := operation.(OpFrAthens)
+	op := operation.(OpFrSantorini)
 	modelFile := op.Id() + ".onnx"
 	name := fmt.Sprintf("Face Recovery (%s)",
 		cases.Upper(language.English).String(string(op.precision)),
@@ -46,14 +45,14 @@ func New(operation types.Operation) (*Athens, error) {
 
 	session, err := utils.CreateSession(
 		modelFile,
-		[]string{"input", "weight"},
+		[]string{"input"},
 		[]string{"output"},
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Athens{
+	return &Santorini{
 		name:      name,
 		operation: op,
 		session:   session,
@@ -62,19 +61,19 @@ func New(operation types.Operation) (*Athens, error) {
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[*types.OutputImage] = (*Athens)(nil)
+var _ types.Model[*types.OutputImage] = (*Santorini)(nil)
 
 // region - Model methods
 
-func (m *Athens) Id() string {
+func (m *Santorini) Id() string {
 	return m.operation.Id()
 }
 
-func (m *Athens) Name() string {
+func (m *Santorini) Name() string {
 	return m.name
 }
 
-func (m *Athens) Run(input *types.InputImage, onProgress types.ProgressCallback) (*types.OutputImage, error) {
+func (m *Santorini) Run(input *types.InputImage, onProgress types.ProgressCallback) (*types.OutputImage, error) {
 	if onProgress != nil {
 		onProgress("fr", 0)
 	}
@@ -96,7 +95,7 @@ func (m *Athens) Run(input *types.InputImage, onProgress types.ProgressCallback)
 		}, nil
 	}
 
-	result, err := facerecovery.RestoreFaces(m.session, input.Pixels, faces, tileSize, fidelity, onProgress)
+	result, err := facerecovery.RestoreFaces(m.session, input.Pixels, faces, tileSize, -1, onProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +107,7 @@ func (m *Athens) Run(input *types.InputImage, onProgress types.ProgressCallback)
 	}, nil
 }
 
-func (m *Athens) Destroy() {
+func (m *Santorini) Destroy() {
 	m.session.Destroy()
 
 	if m.fdModel != nil {

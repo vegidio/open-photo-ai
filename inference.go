@@ -7,7 +7,9 @@ import (
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
+	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -136,8 +138,12 @@ func selectModel(operation types.Operation) (interface{}, error) {
 	// Face Recovery
 	case strings.HasPrefix(operation.Id(), "fr_athens"):
 		model, err = athens.New(operation)
+	case strings.HasPrefix(operation.Id(), "fr_santorini"):
+		model, err = santorini.New(operation)
 
 	// Upscale
+	case strings.HasPrefix(operation.Id(), "up_tokyo"):
+		model, err = tokyo.New(operation)
 	case strings.HasPrefix(operation.Id(), "up_kyoto"):
 		model, err = kyoto.New(operation)
 

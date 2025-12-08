@@ -5,8 +5,7 @@ import (
 	"time"
 
 	"github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
-	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -27,8 +26,9 @@ func main() {
 
 	ops := []types.Operation{
 		//newyork.Op(types.PrecisionFp32),
-		athens.Op(types.PrecisionFp32),
-		kyoto.Op(kyoto.ModeGeneral, 4, types.PrecisionFp32),
+		//athens.Op(types.PrecisionFp32),
+		santorini.Op(types.PrecisionFp32),
+		//kyoto.Op(kyoto.ModeGeneral, 4, types.PrecisionFp32),
 	}
 
 	now := time.Now()

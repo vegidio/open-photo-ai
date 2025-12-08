@@ -6,8 +6,28 @@ import (
 	"math"
 
 	"github.com/disintegration/imaging"
+	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
+	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
+	"github.com/vegidio/open-photo-ai/types"
 )
+
+func GetFdModel() (types.Model[[]facedetection.Face], error) {
+	var err error
+	fdOp := newyork.Op(types.PrecisionFp32)
+
+	model, exists := internal.Registry[fdOp.Id()]
+	if !exists {
+		model, err = newyork.New(fdOp)
+		if err != nil {
+			return nil, err
+		}
+
+		internal.Registry[fdOp.Id()] = model
+	}
+
+	return model.(types.Model[[]facedetection.Face]), nil
+}
 
 // alignFace aligns a face image using the provided landmarks and returns the aligned image and the affine
 // transformation matrix.

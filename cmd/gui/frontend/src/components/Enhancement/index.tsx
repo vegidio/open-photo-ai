@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import { MdClose, MdOpenInFull, MdOutlineFaceRetouchingNatural } from 'react-icons/md';
 import type { Operation } from '@/operations';
@@ -9,16 +9,21 @@ type EnhancementProps = {
 };
 
 export const Enhancement = ({ op }: EnhancementProps) => {
+    const [isHovered, setIsHovered] = useState(false);
     const removeOperation = useEnhancementStore((state) => state.removeOperation);
     const { name, config, icon } = opToEnhancement(op);
 
     return (
         <ListItem
             disablePadding
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             secondaryAction={
-                <IconButton edge='end' onClick={() => removeOperation(op.id)}>
-                    <MdClose />
-                </IconButton>
+                isHovered ? (
+                    <IconButton disableRipple edge='end' onClick={() => removeOperation(op.id)}>
+                        <MdClose />
+                    </IconButton>
+                ) : null
             }
         >
             <ListItemButton className='min-h-12'>
@@ -46,14 +51,14 @@ const opToEnhancement = (op: Operation): { name: string; config: string; icon: R
 
     switch (true) {
         case op.id.startsWith('fr'): {
-            config = `${op.options.precision === 'fp32' ? 'High' : 'Medium'} Quality`;
+            config = `${op.options.precision === 'fp32' ? 'High' : 'Std.'} Quality`;
             return { name: 'Face Recovery', config, icon: <MdOutlineFaceRetouchingNatural /> };
         }
 
         case op.id.startsWith('up'): {
             config = op.options.mode === 'general' ? 'General' : 'Cartoon';
             config += `, ${op.options.scale}x`;
-            config += `, ${op.options.precision === 'fp32' ? 'High' : 'Medium'} Quality`;
+            config += `, ${op.options.precision === 'fp32' ? 'High' : 'Std.'} Quality`;
             return { name: 'Upscale', config, icon: <MdOpenInFull /> };
         }
     }
