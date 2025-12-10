@@ -54,7 +54,7 @@ func NewImageService(app *application.App) (*ImageService, error) {
 //   - int: The height of the image
 //   - error: An error if the image cannot be loaded, processed, or encoded
 func (i *ImageService) GetImage(filePath string, size int) ([]byte, int, int, error) {
-	inputData, err := opai.LoadInputImage(filePath)
+	inputData, err := opai.LoadImage(filePath)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -78,7 +78,7 @@ func (i *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 }
 
 func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, int, int, error) {
-	inputImage, err := opai.LoadInputImage(filePath)
+	inputImage, err := opai.LoadImage(filePath)
 	if err != nil {
 		return nil, 0, 0, err
 	}

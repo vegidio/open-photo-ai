@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
+	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -18,7 +18,7 @@ func main() {
 
 	fileName := "test"
 
-	inputData, err := opai.LoadInputImage("/Users/vegidio/Desktop/" + fileName + ".jpg")
+	inputData, err := opai.LoadImage("/Users/vegidio/Desktop/" + fileName + ".jpg")
 	if err != nil {
 		fmt.Printf("Failed to load the input image: %v\n", err)
 		return
@@ -27,8 +27,9 @@ func main() {
 	ops := []types.Operation{
 		//newyork.Op(types.PrecisionFp32),
 		//athens.Op(types.PrecisionFp32),
-		santorini.Op(types.PrecisionFp32),
-		//kyoto.Op(kyoto.ModeGeneral, 4, types.PrecisionFp32),
+		//santorini.Op(types.PrecisionFp32),
+		kyoto.Op(kyoto.ModeGeneral, 4, types.PrecisionFp32),
+		//tokyo.Op(4, types.PrecisionFp32),
 	}
 
 	now := time.Now()
@@ -43,11 +44,10 @@ func main() {
 	since := time.Since(now)
 	fmt.Println("Time elapsed: ", since)
 
-	err = opai.SaveOutputImage(&types.OutputImage{
+	err = opai.SaveImage(&types.ImageData{
 		FilePath: "/Users/vegidio/Desktop/" + fileName + "_new.jpg",
 		Pixels:   outputData.Pixels,
-		Format:   types.FormatJpeg,
-	}, 90)
+	}, types.FormatJpeg, 90)
 
 	if err != nil {
 		fmt.Printf("Failed to save the output image: %v\n", err)

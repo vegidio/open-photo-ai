@@ -66,7 +66,7 @@ func (m *NewYork) Name() string {
 	return m.name
 }
 
-func (m *NewYork) Run(input *types.InputImage, onProgress types.ProgressCallback) ([]facedetection.Face, error) {
+func (m *NewYork) Run(input *types.ImageData, onProgress types.ProgressCallback) ([]facedetection.Face, error) {
 	if onProgress != nil {
 		onProgress("fd", 0)
 	}

@@ -25,21 +25,21 @@ import (
 //   - operations: A variable number of operations to apply sequentially
 //
 // # Returns:
-//   - *types.OutputImage: The final processed image data after all operations
+//   - *types.ImageData: The final processed image data after all operations
 //   - error: An error if model selection fails, any operation fails, or no operations are provided
 //
 // # Example:
 //
 //	output, err := Process(inputImage, faceRecoveryOp, upscaleOp)
 func Process(
-	input *types.InputImage,
+	input *types.ImageData,
 	onProgress types.ProgressCallback,
 	operations ...types.Operation,
-) (*types.OutputImage, error) {
-	var output *types.OutputImage
+) (*types.ImageData, error) {
+	var output *types.ImageData
 
 	// Make a copy of the input data so the original input is not modified
-	inputCopy := &types.InputImage{Pixels: input.Pixels}
+	inputCopy := &types.ImageData{Pixels: input.Pixels}
 
 	for _, op := range operations {
 		model, err := selectModel(op)
@@ -47,7 +47,7 @@ func Process(
 			return nil, err
 		}
 
-		imageModel, ok := model.(types.Model[*types.OutputImage])
+		imageModel, ok := model.(types.Model[*types.ImageData])
 		if !ok {
 			return nil, fmt.Errorf("operation type not supported: %s", op.Id())
 		}
@@ -86,7 +86,7 @@ func Process(
 //
 //	faces, err := Execute[[]types.Face](inputImage, progressCallback, faceDetectionOp)
 func Execute[T any](
-	input *types.InputImage,
+	input *types.ImageData,
 	onProgress types.ProgressCallback,
 	operation types.Operation,
 ) (T, error) {

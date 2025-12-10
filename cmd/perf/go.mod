@@ -2,7 +2,7 @@ module perf
 
 go 1.25.3
 
-require github.com/vegidio/go-sak v0.0.0-20251031201428-217ae3c43125
+require github.com/vegidio/go-sak v0.0.0-20251125122114-8b01823c4a11
 
 require (
 	github.com/otiai10/copy v1.14.1 // indirect

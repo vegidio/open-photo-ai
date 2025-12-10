@@ -9,6 +9,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as types$0 from "../types/models.js";
 
+export function OpenDirDialog(): $CancellablePromise<string> {
+    return $Call.ByID(690693041);
+}
+
 export function OpenFileDialog(): $CancellablePromise<types$0.DialogFile[]> {
     return $Call.ByID(3411436064).then(($result: any) => {
         return $$createType1($result);

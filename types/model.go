@@ -16,7 +16,7 @@ type Model[T any] interface {
 	Name() string
 
 	// Run processes the input image data and returns the processed output
-	Run(input *InputImage, onProgress ProgressCallback) (T, error)
+	Run(input *ImageData, onProgress ProgressCallback) (T, error)
 }
 
 // Destroyable defines an interface for types that require explicit resource cleanup. Implementations must provide a

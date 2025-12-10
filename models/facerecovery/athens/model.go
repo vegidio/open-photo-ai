@@ -62,7 +62,7 @@ func New(operation types.Operation) (*Athens, error) {
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[*types.OutputImage] = (*Athens)(nil)
+var _ types.Model[*types.ImageData] = (*Athens)(nil)
 
 // region - Model methods
 
@@ -74,7 +74,7 @@ func (m *Athens) Name() string {
 	return m.name
 }
 
-func (m *Athens) Run(input *types.InputImage, onProgress types.ProgressCallback) (*types.OutputImage, error) {
+func (m *Athens) Run(input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
 	if onProgress != nil {
 		onProgress("fr", 0)
 	}
@@ -89,10 +89,9 @@ func (m *Athens) Run(input *types.InputImage, onProgress types.ProgressCallback)
 	}
 
 	if len(faces) == 0 {
-		return &types.OutputImage{
+		return &types.ImageData{
 			FilePath: input.FilePath,
 			Pixels:   input.Pixels,
-			Format:   types.FormatJpeg,
 		}, nil
 	}
 
@@ -101,10 +100,9 @@ func (m *Athens) Run(input *types.InputImage, onProgress types.ProgressCallback)
 		return nil, err
 	}
 
-	return &types.OutputImage{
+	return &types.ImageData{
 		FilePath: input.FilePath,
 		Pixels:   result,
-		Format:   types.FormatJpeg,
 	}, nil
 }
 

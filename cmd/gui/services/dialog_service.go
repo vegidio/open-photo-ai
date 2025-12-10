@@ -23,9 +23,7 @@ func (d *DialogService) OpenFileDialog() ([]types.DialogFile, error) {
 		return nil, err
 	}
 
-	ch := lo.SliceToChannel(1, paths)
-
-	concurrentCh := async.ProcessChannel(ch, runtime.NumCPU(), func(path string) types.DialogFile {
+	concurrentCh := async.SliceToChannel(paths, runtime.NumCPU(), func(path string) types.DialogFile {
 		hash, _ := crypto.Xxh3File(path)
 		return types.DialogFile{
 			Path: path,
@@ -47,4 +45,19 @@ func (d *DialogService) OpenFileDialog() ([]types.DialogFile, error) {
 	})
 
 	return files, nil
+}
+
+func (d *DialogService) OpenDirDialog() (string, error) {
+	dialog := application.OpenFileDialog()
+	dialog.SetTitle("Select Directory")
+	dialog.CanChooseFiles(false)
+	dialog.CanChooseDirectories(true)
+	dialog.CanCreateDirectories(true)
+
+	path, err := dialog.PromptForSingleSelection()
+	if err != nil {
+		return "", err
+	}
+
+	return path, nil
 }

@@ -1,33 +1,27 @@
-import { Switch, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
+import { Toggle } from '@/components/Toggle.tsx';
 import { useEnhancementStore } from '@/stores';
 
 type SidebarAutopilotProps = TailwindProps & {
-    disable?: boolean;
+    disabled?: boolean;
 };
 
-export const SidebarAutopilot = ({ disable = false, className = '' }: SidebarAutopilotProps) => {
+export const SidebarAutopilot = ({ className = '' }: SidebarAutopilotProps) => {
     const autopilot = useEnhancementStore((state) => state.autopilot);
     const toggle = useEnhancementStore((state) => state.toggle);
 
     return (
-        <div className={`flex justify-between items-center ${className}`}>
-            <Typography variant='subtitle2' className='text-[#79e800]'>
-                Autopilot
-            </Typography>
-            <Switch
-                size='small'
-                checked={autopilot}
-                slotProps={{
-                    thumb: {
-                        className: autopilot ? '!bg-[#79e800]' : '',
-                    },
-                    track: {
-                        className: autopilot ? '!bg-[#79e800]' : '',
-                    },
-                }}
-                onClick={toggle}
-            />
-        </div>
+        <Toggle
+            label={
+                <Typography variant='subtitle2' className='text-[#79e800]'>
+                    Autopilot
+                </Typography>
+            }
+            initialValue={autopilot}
+            color='#79e800'
+            onChange={toggle}
+            className={className}
+        />
     );
 };

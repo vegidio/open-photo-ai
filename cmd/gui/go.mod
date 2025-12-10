@@ -5,7 +5,7 @@ go 1.25.3
 require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.51.0
-	github.com/vegidio/go-sak v0.0.0-20251031201428-217ae3c43125
+	github.com/vegidio/go-sak v0.0.0-20251125122114-8b01823c4a11
 	github.com/vegidio/open-photo-ai v0.0.0-20251206213843-29db0502fae9
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.36
 )

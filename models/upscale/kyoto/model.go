@@ -55,7 +55,7 @@ func New(operation types.Operation) (*Kyoto, error) {
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[*types.OutputImage] = (*Kyoto)(nil)
+var _ types.Model[*types.ImageData] = (*Kyoto)(nil)
 
 // region - Model methods
 
@@ -67,7 +67,7 @@ func (m *Kyoto) Name() string {
 	return m.name
 }
 
-func (m *Kyoto) Run(input *types.InputImage, onProgress types.ProgressCallback) (*types.OutputImage, error) {
+func (m *Kyoto) Run(input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
 	if onProgress != nil {
 		onProgress("up", 0)
 	}
@@ -77,10 +77,9 @@ func (m *Kyoto) Run(input *types.InputImage, onProgress types.ProgressCallback) 
 		return nil, err
 	}
 
-	return &types.OutputImage{
+	return &types.ImageData{
 		FilePath: input.FilePath,
 		Pixels:   result,
-		Format:   types.FormatJpeg,
 	}, nil
 }
 

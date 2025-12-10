@@ -84,7 +84,7 @@ func startRuntime() error {
 	}
 
 	// Disable ONNX runtime logging
-	ort.SetEnvironmentLogLevel(ort.LoggingLevelFatal)
+	//ort.SetEnvironmentLogLevel(ort.LoggingLevelFatal)
 
 	return nil
 }

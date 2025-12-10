@@ -61,7 +61,7 @@ func New(operation types.Operation) (*Santorini, error) {
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[*types.OutputImage] = (*Santorini)(nil)
+var _ types.Model[*types.ImageData] = (*Santorini)(nil)
 
 // region - Model methods
 
@@ -73,7 +73,7 @@ func (m *Santorini) Name() string {
 	return m.name
 }
 
-func (m *Santorini) Run(input *types.InputImage, onProgress types.ProgressCallback) (*types.OutputImage, error) {
+func (m *Santorini) Run(input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
 	if onProgress != nil {
 		onProgress("fr", 0)
 	}
@@ -88,10 +88,9 @@ func (m *Santorini) Run(input *types.InputImage, onProgress types.ProgressCallba
 	}
 
 	if len(faces) == 0 {
-		return &types.OutputImage{
+		return &types.ImageData{
 			FilePath: input.FilePath,
 			Pixels:   input.Pixels,
-			Format:   types.FormatJpeg,
 		}, nil
 	}
 
@@ -100,10 +99,9 @@ func (m *Santorini) Run(input *types.InputImage, onProgress types.ProgressCallba
 		return nil, err
 	}
 
-	return &types.OutputImage{
+	return &types.ImageData{
 		FilePath: input.FilePath,
 		Pixels:   result,
-		Format:   types.FormatJpeg,
 	}, nil
 }
 

@@ -7,7 +7,7 @@ import (
 
 	"github.com/vegidio/go-sak/fs"
 	opai "github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/models/upscale"
+	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -35,7 +35,7 @@ func main() {
 		log.Fatalf("Error writing temp file: %v\n", err)
 	}
 
-	inputData, err := opai.LoadInputImage(tempFile.Name())
+	inputData, err := opai.LoadImage(tempFile.Name())
 	if err != nil {
 		log.Fatalf("Failed to load the input image: %v\n", err)
 	}
@@ -43,11 +43,11 @@ func main() {
 	startUpscaleTest(inputData)
 }
 
-func startUpscaleTest(inputData *types.InputImage) {
+func startUpscaleTest(inputData *types.ImageData) {
 	// Warm-up; the first run is not included in the measurements because it's a cold-start
 	log.Printf("UPSCALE: Warming up!\n")
 
-	op := upscale.Op(upscale.ModeGeneral, 4, types.PrecisionFp32)
+	op := kyoto.Op(kyoto.ModeGeneral, 4, types.PrecisionFp32)
 	_, err := opai.Process(inputData, nil, op)
 	if err != nil {
 		log.Fatalf("Failed to upscale the image: %v\n", err)

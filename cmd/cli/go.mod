@@ -20,7 +20,7 @@ require (
 	github.com/otiai10/mint v1.6.3 // indirect
 	github.com/samber/lo v1.51.0 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
-	github.com/vegidio/go-sak v0.0.0-20251031201428-217ae3c43125 // indirect
+	github.com/vegidio/go-sak v0.0.0-20251125122114-8b01823c4a11 // indirect
 	github.com/yalue/onnxruntime_go v1.21.0 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
