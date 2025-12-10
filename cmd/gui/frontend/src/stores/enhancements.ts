@@ -1,21 +1,28 @@
+import { enableMapSet } from 'immer';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 import type { Operation } from '@/operations';
 
 type EnhancementStore = {
     autopilot: boolean;
-    operations: Operation[];
+    operations: Map<string, Operation[]>;
 
     setAutopilot: (enable: boolean) => void;
     toggle: () => void;
-    addOperation: (operation: Operation) => void;
-    removeOperation: (id: string) => void;
+    addOperation: (filePath: string, operation: Operation) => void;
+    removeOperation: (filePath: string, id: string) => void;
+
+    removeFile: (filePath: string) => void;
+    clearFiles: () => void;
 };
+
+// Enable MapSet support in Immer
+enableMapSet();
 
 export const useEnhancementStore = create(
     immer<EnhancementStore>((set, _) => ({
         autopilot: false,
-        operations: [],
+        operations: new Map<string, Operation[]>(),
 
         setAutopilot: (enable: boolean) => {
             set((state) => {
@@ -29,15 +36,32 @@ export const useEnhancementStore = create(
             });
         },
 
-        addOperation: (operation: Operation) => {
+        addOperation: (filePath: string, operation: Operation) => {
             set((state) => {
-                state.operations.push(operation);
+                const ops = state.operations.get(filePath) ?? [];
+                state.operations.set(filePath, [...ops, operation]);
             });
         },
 
-        removeOperation: (id: string) => {
+        removeOperation: (filePath: string, id: string) => {
             set((state) => {
-                state.operations = state.operations.filter((operation) => operation.id !== id);
+                const ops = state.operations.get(filePath) ?? [];
+                state.operations.set(
+                    filePath,
+                    ops.filter((op) => op.id !== id),
+                );
+            });
+        },
+
+        removeFile: (filePath: string) => {
+            set((state) => {
+                state.operations.delete(filePath);
+            });
+        },
+
+        clearFiles: () => {
+            set((state) => {
+                state.operations.clear();
             });
         },
     })),

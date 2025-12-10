@@ -4,7 +4,8 @@ import path from 'path-browserify';
 import { IoIosMore } from 'react-icons/io';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import type { DialogFile } from '../../../bindings/gui/types';
-import { useDrawerStore, useFileStore } from '@/stores';
+import { EnvironmentService } from '../../../bindings/gui/services';
+import { useDrawerStore, useEnhancementStore, useFileStore } from '@/stores';
 import { getImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
@@ -12,6 +13,8 @@ type FileListItemProps = {
     selected?: boolean;
     onClick?: () => void;
 };
+
+const os = await EnvironmentService.GetOS();
 
 export const DrawerItem = ({ file, selected = false, onClick }: FileListItemProps) => {
     const [image, setImage] = useState<string>();
@@ -91,6 +94,9 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
     const clear = useFileStore((state) => state.clear);
     const setOpen = useDrawerStore((state) => state.setOpen);
 
+    const enhancementRemoveFile = useEnhancementStore((state) => state.removeFile);
+    const enhancementClearFiles = useEnhancementStore((state) => state.clearFiles);
+
     const updateDrawer = () => {
         onMenuClose();
         if (useFileStore.getState().files.length === 0) setOpen(false);
@@ -98,19 +104,23 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
 
     const onCloseImage = () => {
         removeFile(file.Hash);
+        enhancementRemoveFile(file.Path);
         updateDrawer();
     };
 
     const onCloseAllImages = () => {
         clear();
+        enhancementClearFiles();
         updateDrawer();
     };
+
+    const fmName = os === 'darwin' ? 'Finder' : os === 'windows' ? 'Explorer' : 'File Manager';
 
     const options = [
         { name: 'Close image', action: onCloseImage },
         { name: 'Close all image', action: onCloseAllImages },
         { name: undefined },
-        { name: 'Show in Finder', action: () => {} },
+        { name: `Show in ${fmName}`, action: () => {} },
     ];
 
     return (

@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import { MdClose, MdOpenInFull, MdOutlineFaceRetouchingNatural } from 'react-icons/md';
 import type { Operation } from '@/operations';
-import { useEnhancementStore } from '@/stores';
+import { useEnhancementStore, useFileStore } from '@/stores';
 
 type EnhancementProps = {
     op: Operation;
@@ -10,6 +10,7 @@ type EnhancementProps = {
 
 export const Enhancement = ({ op }: EnhancementProps) => {
     const [isHovered, setIsHovered] = useState(false);
+    const filePath = useFileStore((state) => state.files[state.selectedIndex]?.Path);
     const removeOperation = useEnhancementStore((state) => state.removeOperation);
     const { name, config, icon } = opToEnhancement(op);
 
@@ -20,7 +21,7 @@ export const Enhancement = ({ op }: EnhancementProps) => {
             onMouseLeave={() => setIsHovered(false)}
             secondaryAction={
                 isHovered ? (
-                    <IconButton disableRipple edge='end' onClick={() => removeOperation(op.id)}>
+                    <IconButton disableRipple edge='end' onClick={() => removeOperation(filePath, op.id)}>
                         <MdClose />
                     </IconButton>
                 ) : null

@@ -3,7 +3,7 @@ import { Button, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/materia
 import { FiPlus } from 'react-icons/fi';
 import { MdOpenInFull, MdOutlineFaceRetouchingNatural } from 'react-icons/md';
 import { Athens, Kyoto, type Operation } from '@/operations';
-import { useEnhancementStore } from '@/stores';
+import { useEnhancementStore, useFileStore } from '@/stores';
 
 type AddEnhancementProps = {
     disabled?: boolean;
@@ -58,10 +58,11 @@ const options = [
 ];
 
 const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps) => {
+    const filePath = useFileStore((state) => state.files[state.selectedIndex]?.Path);
     const addOperation = useEnhancementStore((state) => state.addOperation);
 
     const onAddEnhancement = (op: Operation) => {
-        addOperation(op);
+        addOperation(filePath, op);
         onMenuClose();
     };
 

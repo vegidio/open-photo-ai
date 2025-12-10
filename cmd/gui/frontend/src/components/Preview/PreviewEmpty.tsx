@@ -31,7 +31,11 @@ export const PreviewEmpty = () => {
                 </Typography>
             </div>
 
-            <Button variant='contained' onClick={onBrowseClick}>
+            <Button
+                variant='contained'
+                className='bg-[#009aff] hover:bg-[#007eff] text-[#f2f2f2] normal-case font-normal'
+                onClick={onBrowseClick}
+            >
                 Browse images
             </Button>
         </div>

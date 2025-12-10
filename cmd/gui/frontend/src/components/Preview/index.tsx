@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LinearProgress, Typography } from '@mui/material';
 import { Events } from '@wailsio/runtime';
+import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { PreviewEmpty } from './PreviewEmpty';
 import { PreviewImageSideBySide } from './PreviewImageSideBySide.tsx';
 import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
 import { getEnhancedImage, getImage } from '@/utils/image.ts';
+
+const EMPTY_OPERATIONS: Operation[] = [];
 
 export const Preview = ({ className = '' }: TailwindProps) => {
     // FileListStore
@@ -22,7 +25,9 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     const setEnhancedImage = useImageStore((state) => state.setEnhancedImage);
 
     // EnhancementStore
-    const operations = useEnhancementStore((state) => state.operations);
+    const operations = useEnhancementStore(
+        (state) => state.operations.get(selectedFile?.Path ?? '') ?? EMPTY_OPERATIONS,
+    );
 
     useEffect(() => {
         async function loadPreview() {
@@ -50,7 +55,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         }
 
         loadPreview();
-    }, [setEnhancedImage, setOriginalImage, selectedFile, setIsRunning, operations]);
+    }, [selectedFile, setEnhancedImage, setIsRunning, setOriginalImage, operations]);
 
     // useEffect(() => {
     //     if (filesLength > 0) setOpen(true);
