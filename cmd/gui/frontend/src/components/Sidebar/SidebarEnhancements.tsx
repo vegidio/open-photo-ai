@@ -7,8 +7,8 @@ import { useEnhancementStore, useFileStore } from '@/stores';
 const EMPTY_OPERATIONS: Operation[] = [];
 
 export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
-    const filePath = useFileStore((state) => state.files[state.selectedIndex]?.Path);
-    const operations = useEnhancementStore((state) => state.operations.get(filePath) ?? EMPTY_OPERATIONS);
+    const file = useFileStore((state) => state.files[state.selectedIndex]);
+    const operations = useEnhancementStore((state) => state.enhancements.get(file) ?? EMPTY_OPERATIONS);
 
     return (
         <List className={`${className}`} dense>

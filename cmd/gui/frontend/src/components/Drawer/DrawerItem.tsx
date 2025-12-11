@@ -36,8 +36,8 @@ export const DrawerItem = ({ file, selected = false, onClick }: FileListItemProp
             onClick={onClick}
             className={`h-full aspect-square rounded ${selected ? 'outline-3 outline-blue-500' : ''}`}
         >
-            <div className='relative w-full h-full'>
-                <img alt='Preview' src={image} className='w-full h-full object-cover rounded' />
+            <div className='relative size-full'>
+                <img alt='Preview' src={image} className='size-full object-cover rounded' />
 
                 <BottomBar file={file} selected={selected} className='absolute bottom-0 left-0 right-0 h-5 rounded-b' />
             </div>
@@ -104,7 +104,7 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
 
     const onCloseImage = () => {
         removeFile(file.Hash);
-        enhancementRemoveFile(file.Path);
+        enhancementRemoveFile(file);
         updateDrawer();
     };
 

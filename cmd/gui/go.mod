@@ -6,8 +6,9 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.51.0
 	github.com/vegidio/go-sak v0.0.0-20251125122114-8b01823c4a11
-	github.com/vegidio/open-photo-ai v0.0.0-20251206213843-29db0502fae9
+	github.com/vegidio/open-photo-ai v0.0.0-20251210211056-3b825dc248bb
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.36
+	golang.org/x/image v0.32.0
 )
 
 require (
@@ -76,7 +77,6 @@ require (
 	go.opentelemetry.io/otel/metric v1.37.0 // indirect
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
 	golang.org/x/crypto v0.42.0 // indirect
-	golang.org/x/image v0.32.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect

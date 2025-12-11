@@ -58,11 +58,11 @@ const options = [
 ];
 
 const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps) => {
-    const filePath = useFileStore((state) => state.files[state.selectedIndex]?.Path);
-    const addOperation = useEnhancementStore((state) => state.addOperation);
+    const file = useFileStore((state) => state.files[state.selectedIndex]);
+    const addEnhancement = useEnhancementStore((state) => state.addEnhancement);
 
     const onAddEnhancement = (op: Operation) => {
-        addOperation(filePath, op);
+        addEnhancement(file, op);
         onMenuClose();
     };
 

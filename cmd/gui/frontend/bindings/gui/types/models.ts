@@ -8,6 +8,9 @@ import { Create as $Create } from "@wailsio/runtime";
 export class DialogFile {
     "Path": string;
     "Hash": string;
+    "Dimensions": number[];
+    "Extension": string;
+    "Size": number;
 
     /** Creates a new DialogFile instance. */
     constructor($$source: Partial<DialogFile> = {}) {
@@ -17,6 +20,15 @@ export class DialogFile {
         if (!("Hash" in $$source)) {
             this["Hash"] = "";
         }
+        if (!("Dimensions" in $$source)) {
+            this["Dimensions"] = [];
+        }
+        if (!("Extension" in $$source)) {
+            this["Extension"] = "";
+        }
+        if (!("Size" in $$source)) {
+            this["Size"] = 0;
+        }
 
         Object.assign(this, $$source);
     }
@@ -25,7 +37,14 @@ export class DialogFile {
      * Creates a new DialogFile instance from a string or object.
      */
     static createFrom($$source: any = {}): DialogFile {
+        const $$createField2_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("Dimensions" in $$parsedSource) {
+            $$parsedSource["Dimensions"] = $$createField2_0($$parsedSource["Dimensions"]);
+        }
         return new DialogFile($$parsedSource as Partial<DialogFile>);
     }
 }
+
+// Private type creation functions
+const $$createType0 = $Create.Array($Create.Any);

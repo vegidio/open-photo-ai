@@ -15,9 +15,12 @@ import (
 	"github.com/vegidio/go-sak/memo"
 	"github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
+	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"golang.org/x/image/tiff"
 )
 
 type ImageService struct {
@@ -141,8 +144,15 @@ func idsToOperations(opIds []string) []types.Operation {
 		case "athens":
 			precision := types.Precision(values[2])
 			operations = append(operations, athens.Op(precision))
+		case "santorini":
+			precision := types.Precision(values[2])
+			operations = append(operations, santorini.Op(precision))
 
 		// Upscale
+		case "tokyo":
+			scale, _ := strconv.Atoi(values[2])
+			precision := types.Precision(values[3])
+			operations = append(operations, tokyo.Op(scale, precision))
 		case "kyoto":
 			mode := kyoto.Mode(values[2])
 			scale, _ := strconv.Atoi(values[3])
@@ -163,8 +173,12 @@ func imageToBytes(img image.Image, format types.ImageFormat) ([]byte, error) {
 			return nil, err
 		}
 	case types.FormatPng:
-		encoder := &png.Encoder{CompressionLevel: png.NoCompression}
+		encoder := &png.Encoder{CompressionLevel: png.BestCompression}
 		if err := encoder.Encode(&buf, img); err != nil {
+			return nil, err
+		}
+	case types.FormatTiff:
+		if err := tiff.Encode(&buf, img, &tiff.Options{Compression: tiff.Deflate}); err != nil {
 			return nil, err
 		}
 	default:

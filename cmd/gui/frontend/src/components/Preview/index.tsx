@@ -25,8 +25,8 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     const setEnhancedImage = useImageStore((state) => state.setEnhancedImage);
 
     // EnhancementStore
-    const operations = useEnhancementStore(
-        (state) => state.operations.get(selectedFile?.Path ?? '') ?? EMPTY_OPERATIONS,
+    const operations = useEnhancementStore((state) =>
+        selectedFile ? (state.enhancements.get(selectedFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
     );
 
     useEffect(() => {

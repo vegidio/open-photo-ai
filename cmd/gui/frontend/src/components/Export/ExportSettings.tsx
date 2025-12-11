@@ -102,7 +102,7 @@ const Filename = () => {
             <Typography variant='caption' className='text-[#ffcc00] mt-1.5'>
                 When file location and extension are the same,
                 {overwrite
-                    ? ' your original file will be overwritten. This cannot be reversed.'
+                    ? ' your original file will be overwritten. This cannot be reverted.'
                     : ' new filenames will add a number instead of overwriting your original.'}
             </Typography>
         </div>

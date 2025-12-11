@@ -2,17 +2,18 @@ import { enableMapSet } from 'immer';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 import type { Operation } from '@/operations';
+import type { DialogFile } from '../../bindings/gui/types';
 
 type EnhancementStore = {
     autopilot: boolean;
-    operations: Map<string, Operation[]>;
+    enhancements: Map<DialogFile, Operation[]>;
 
     setAutopilot: (enable: boolean) => void;
     toggle: () => void;
-    addOperation: (filePath: string, operation: Operation) => void;
-    removeOperation: (filePath: string, id: string) => void;
+    addEnhancement: (file: DialogFile, operation: Operation) => void;
+    removeEnhancement: (file: DialogFile, id: string) => void;
 
-    removeFile: (filePath: string) => void;
+    removeFile: (file: DialogFile) => void;
     clearFiles: () => void;
 };
 
@@ -22,7 +23,7 @@ enableMapSet();
 export const useEnhancementStore = create(
     immer<EnhancementStore>((set, _) => ({
         autopilot: false,
-        operations: new Map<string, Operation[]>(),
+        enhancements: new Map<DialogFile, Operation[]>(),
 
         setAutopilot: (enable: boolean) => {
             set((state) => {
@@ -36,32 +37,34 @@ export const useEnhancementStore = create(
             });
         },
 
-        addOperation: (filePath: string, operation: Operation) => {
+        addEnhancement: (file: DialogFile, operation: Operation) => {
             set((state) => {
-                const ops = state.operations.get(filePath) ?? [];
-                state.operations.set(filePath, [...ops, operation]);
+                const ops = state.enhancements.get(file) ?? [];
+                state.enhancements.set(file, [...ops, operation]);
             });
         },
 
-        removeOperation: (filePath: string, id: string) => {
+        removeEnhancement: (file: DialogFile, id: string) => {
             set((state) => {
-                const ops = state.operations.get(filePath) ?? [];
-                state.operations.set(
-                    filePath,
-                    ops.filter((op) => op.id !== id),
-                );
+                const ops = (state.enhancements.get(file) ?? []).filter((op) => op.id !== id);
+
+                if (ops.length > 0) {
+                    state.enhancements.set(file, ops);
+                } else {
+                    state.enhancements.delete(file);
+                }
             });
         },
 
-        removeFile: (filePath: string) => {
+        removeFile: (file: DialogFile) => {
             set((state) => {
-                state.operations.delete(filePath);
+                state.enhancements.delete(file);
             });
         },
 
         clearFiles: () => {
             set((state) => {
-                state.operations.clear();
+                state.enhancements.clear();
             });
         },
     })),

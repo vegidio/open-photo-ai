@@ -19,7 +19,7 @@ export const Export = ({ open, onClose }: ExportProps) => {
             }}
             slotProps={{
                 paper: {
-                    className: 'bg-[#212121] w-5xl h-[40rem] max-w-full',
+                    className: 'bg-[#212121] w-[70rem] h-[40rem] max-w-full',
                     sx: {
                         backgroundImage: 'none',
                     },
@@ -45,6 +45,9 @@ export const Export = ({ open, onClose }: ExportProps) => {
 
             <div className='h-full flex flex-row'>
                 <ExportQueue className='flex-1' />
+
+                <Divider orientation='vertical' flexItem className='border-[#171717] my-0.5' />
+
                 <ExportSettings onClose={onClose} className='w-80' />
             </div>
         </Dialog>
