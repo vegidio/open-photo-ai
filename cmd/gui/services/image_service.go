@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
+	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/memo"
 	"github.com/vegidio/open-photo-ai"
@@ -49,7 +51,7 @@ func NewImageService(app *application.App) (*ImageService, error) {
 //   - filePath: The path to the image file to load
 //   - size: The target size for the longest dimension of the image. If size is 0, the image is returned at its original
 //     dimensions. If size > 0, the image is resized proportionally so that its longest dimension (width or height)
-//     equals the specified size, using Lanczos resampling for high quality.
+//     equals the specified size.
 //
 // # Returns:
 //   - []byte: The image data encoded as PNG bytes (lossless)
@@ -80,52 +82,98 @@ func (i *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 	return data, bounds.Dx(), bounds.Dy(), nil
 }
 
+// ProcessImage runs inference operations on an image and returns the processed result.
+//
+// # Parameters:
+//   - filePath: The path to the image file to process.
+//   - opIds: Variable number of operation IDs specifying the inference operations to apply to the image.
+//     Each operation ID encodes the model name, parameters, and precision.
+//
+// # Returns:
+//   - []byte: The processed image data encoded as JPEG bytes for presentation purposes.
+//   - int: The width of the processed image.
+//   - int: The height of the processed image.
+//   - error: An error if the inference fails or the image cannot be processed.
 func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, int, int, error) {
-	inputImage, err := opai.LoadImage(filePath)
+	pngBytes, err := i.runInference(filePath, opIds)
 	if err != nil {
 		return nil, 0, 0, err
 	}
 
-	operations := idsToOperations(opIds)
-	outputData, err := opai.Process(inputImage, func(name string, progress float64) {
-		i.app.Event.Emit("app:progress", name, progress)
-	}, operations...)
-
+	img, err := bytesToImage(pngBytes)
 	if err != nil {
 		return nil, 0, 0, err
 	}
 
-	pngBytes, err := imageToBytes(outputData.Pixels, types.FormatPng)
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	// Cache the image as lossless PNG to be reused later
-	ctx := context.Background()
-	key := memo.KeyFrom(filePath, operations[0].Id())
-	ttl := time.Hour * 24
-
-	err = i.diskCache.Store.Set(ctx, key, pngBytes, ttl)
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	data, err := imageToBytes(outputData.Pixels, types.FormatJpeg)
+	jpgBytes, err := imageToBytes(img, types.FormatJpeg)
 	if err != nil {
 		return nil, 0, 0, err
 	}
 
 	// Return a version of the image as JPG for presentation purposes
-	bounds := outputData.Pixels.Bounds()
-	return data, bounds.Dx(), bounds.Dy(), nil
+	bounds := img.Bounds()
+	return jpgBytes, bounds.Dx(), bounds.Dy(), nil
 }
 
-// region - Private methods
+// ExportImage runs inference operations on an image and saves the result to disk.
+//
+// # Parameters:
+//   - filePath: The path to the image file to process and also the base path for the exported file.
+//   - format: The image format to use when saving the processed imag.
+//   - opIds: Variable number of operation IDs specifying the inference operations to apply to the image.
+//     Each operation ID encodes the model name, parameters, and precision.
+//
+// # Returns:
+//   - error: An error if the inference fails, the image cannot be processed, or the file cannot be saved.
+func (i *ImageService) ExportImage(filePath string, format types.ImageFormat, opIds ...string) error {
+	pngBytes, err := i.runInference(filePath, opIds)
+	if err != nil {
+		return err
+	}
+
+	img, err := bytesToImage(pngBytes)
+	if err != nil {
+		return err
+	}
+
+	return opai.SaveImage(&types.ImageData{
+		FilePath: filePath,
+		Pixels:   img,
+	}, format, 100)
+}
 
 func (i *ImageService) Destroy() {
 	if i.diskCache != nil {
 		i.diskCache.Close()
 	}
+}
+
+// region - Private methods
+
+func (i *ImageService) runInference(filePath string, opIds []string) ([]byte, error) {
+	// Cache the image as PNG to be reused later
+	ctx := context.Background()
+	key := getCacheKey(filePath, opIds)
+	ttl := time.Hour * 24
+
+	return memo.Do(i.diskCache, ctx, key, ttl, func(ctx context.Context) ([]byte, error) {
+		inputImage, err := opai.LoadImage(filePath)
+		if err != nil {
+			return nil, err
+		}
+
+		operations := idsToOperations(opIds)
+		outputData, err := opai.Process(inputImage, func(name string, progress float64) {
+			i.app.Event.Emit("app:progress", name, progress)
+		}, operations...)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert to PNG bytes since it's lossless
+		return imageToBytes(outputData.Pixels, types.FormatPng)
+	})
 }
 
 // endregion
@@ -164,6 +212,17 @@ func idsToOperations(opIds []string) []types.Operation {
 	return operations
 }
 
+func getCacheKey(filePath string, opIds []string) string {
+	key := lo.Reduce(opIds, func(agg string, item string, _ int) string {
+		if len(agg) == 0 {
+			return item
+		}
+		return agg + "|" + item
+	}, "")
+
+	return memo.KeyFrom(filePath, key)
+}
+
 func imageToBytes(img image.Image, format types.ImageFormat) ([]byte, error) {
 	var buf bytes.Buffer
 
@@ -173,7 +232,7 @@ func imageToBytes(img image.Image, format types.ImageFormat) ([]byte, error) {
 			return nil, err
 		}
 	case types.FormatPng:
-		encoder := &png.Encoder{CompressionLevel: png.BestCompression}
+		encoder := &png.Encoder{CompressionLevel: png.DefaultCompression}
 		if err := encoder.Encode(&buf, img); err != nil {
 			return nil, err
 		}
@@ -182,10 +241,15 @@ func imageToBytes(img image.Image, format types.ImageFormat) ([]byte, error) {
 			return nil, err
 		}
 	default:
-		panic("unhandled default case")
+		return nil, fmt.Errorf("unsupported image format: %d", format)
 	}
 
 	return buf.Bytes(), nil
+}
+
+func bytesToImage(data []byte) (image.Image, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	return img, err
 }
 
 // endregion

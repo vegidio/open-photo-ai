@@ -5,8 +5,16 @@
 // @ts-ignore: Unused imports
 import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as types$0 from "../../github.com/vegidio/open-photo-ai/types/models.js";
+
 export function Destroy(): $CancellablePromise<void> {
     return $Call.ByID(3681465753);
+}
+
+export function ExportImage(filePath: string, format: types$0.ImageFormat, ...opIds: string[]): $CancellablePromise<void> {
+    return $Call.ByID(1308095068, filePath, format, opIds);
 }
 
 /**
@@ -16,7 +24,7 @@ export function Destroy(): $CancellablePromise<void> {
  *   - filePath: The path to the image file to load
  *   - size: The target size for the longest dimension of the image. If size is 0, the image is returned at its original
  *     dimensions. If size > 0, the image is resized proportionally so that its longest dimension (width or height)
- *     equals the specified size, using Lanczos resampling for high quality.
+ *     equals the specified size.
  * 
  * # Returns:
  *   - []byte: The image data encoded as PNG bytes (lossless)
