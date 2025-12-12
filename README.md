@@ -13,7 +13,7 @@ It currently supports the following enhancements:
 
 ## 🖼️ Usage
 
-You can use **Open Photo AI** in two ways: as an app (both GUI and CLI) or as a Go library.
+You can use **Open Photo AI** in two ways: as an app, both GUI and CLI (coming soon), or as a Go library.
 
 ### GUI
 
@@ -21,15 +21,31 @@ You can use **Open Photo AI** in two ways: as an app (both GUI and CLI) or as a 
 <img src="docs/assets/gui-screenshot.avif" width="80%" alt="Open Photo AI - GUI"/>
 </p>
 
-## 💡 Features
+## 💡 Motivation
+
+There are many excellent AI-based photo editing tools available nowadays, ranging from open-source solutions – often with complex setup and usage, such as ComfyUI – to commercial products that prioritize ease of use over deep customization, like those from Topaz Labs.
+
+For this reason, I have always used both ComfyUI and Topaz Labs products, choosing between them depending on the task at hand. Recently, however, Topaz Labs switched their pricing model from a perpetual license to a subscription-based one, and I strongly dislike that change. As a developer, I do not mind paying for software that provides real value (whether open source or proprietary), but I believe subscription-based models are rarely designed to benefit users; they primarily serve the interests of the companies behind them.
+
+That is why I created this project: an open-source alternative to Topaz Photo AI. It may never reach the same level of polish or performance as Topaz Labs' products — after all, they have teams of brilliant engineers, while I am a single developer. Even so, I have ambitious goals and intend to achieve feature parity with Topaz's product over time.
+
+## ✨ Enhancements
+
+All enhancements available here come from open-source AI models that were adapted and converted to work on this project. The original models and the credits to their respective authors, can be found in the Hugging Face repository [vegidio/open-photo-ai](https://huggingface.co/vegidio/open-photo-ai):
 
 ### Face Recovery
 
-Coming soon...
+- **Athens**: use when you need to restore a face while preserving the original identity. It reconstructs details conservatively, avoids inventing features, and works well on heavily degraded images. This makes it suitable for real people and any case where facial accuracy matters more than visual polish.
+- **Santorini**: use when your priority is maximum visual realism and sharpness. It works well for moderately degraded faces and produces very clean, attractive results, but it can hallucinate features and drift from the original identity. It is better suited for creative, entertainment, or non-critical use cases where realism matters more than strict accuracy.
+
+*Verdict*: if identity matters, start with **Athens**; if aesthetics matter more, use **Santorini**.
 
 ### Upscale
 
-Coming soon...
+- **Tokyo**: use when you want accurate, conservative upscaling that stays close to the original image. It focuses on structure and texture consistency, avoids inventing details, and works well for clean images, illustrations, screenshots, and content where correctness matters more than sharpness. It is a good choice when artifacts or hallucinated details would be unacceptable (currently not supported by Apple's CoreML).
+- **Kyoto**: use when you want visually strong, sharp upscaling, even if new details are introduced. It aggressively enhances textures and edges, can add perceived detail that was not present before, and performs especially well on photos and noisy or compressed images. It is best suited for creative or perceptual use cases where impact matters more than strict fidelity.
+
+*Verdict*: start with **Tokyo**, then try **Kyoto** if the result looks too soft.
 
 ## 💬 FAQ
 
@@ -48,7 +64,7 @@ To bypass this, open the Terminal and run one of the commands below (depending o
 
 ### Dependencies
 
-In order to build this project you will need the following dependencies installed in your computer:
+In order to build this project, you will need the following dependencies installed in your computer:
 
 -   [Golang](https://go.dev/doc/install)
 -   [Task](https://taskfile.dev/installation/)
