@@ -3,7 +3,8 @@ import { Button, Divider, MenuItem, Select, type SelectChangeEvent, TextField, T
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { DialogService } from '../../../bindings/gui/services';
 import { Toggle } from '@/components/Toggle.tsx';
-import { useExportStore } from '@/stores';
+import { useEnhancementStore, useExportStore } from '@/stores';
+import { exportImage } from '@/utils/export.ts';
 
 type LocationType = 'hidden' | 'original' | 'browse';
 
@@ -119,6 +120,7 @@ const Location = () => {
 
         if (newValue !== 'browse') {
             setValue(newValue as LocationType);
+            setLocation(undefined);
             return;
         }
 
@@ -210,6 +212,15 @@ const Format = () => {
 };
 
 const Buttons = ({ onClose }: ExportSettingsProps) => {
+    const enhancements = useEnhancementStore((state) => state.enhancements);
+
+    const handleExport = () => {
+        Array.from(enhancements.entries()).forEach(async ([file, operations]) => {
+            await exportImage(file, operations);
+            console.log(`Exported ${file.Path}`);
+        });
+    };
+
     return (
         <div className='flex gap-3'>
             <Button
@@ -222,6 +233,7 @@ const Buttons = ({ onClose }: ExportSettingsProps) => {
             <Button
                 variant='contained'
                 className='flex-1 bg-[#009aff] hover:bg-[#007eff] text-[#f2f2f2] normal-case font-normal'
+                onClick={handleExport}
             >
                 Save
             </Button>

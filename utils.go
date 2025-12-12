@@ -76,7 +76,8 @@ func SaveImage(data *types.ImageData, format types.ImageFormat, quality int) err
 	case types.FormatJpeg:
 		err = jpeg.Encode(outputFile, data.Pixels, &jpeg.Options{Quality: quality})
 	case types.FormatPng:
-		err = png.Encode(outputFile, data.Pixels)
+		encoder := &png.Encoder{CompressionLevel: png.DefaultCompression}
+		err = encoder.Encode(outputFile, data.Pixels)
 	case types.FormatTiff:
 		err = tiff.Encode(outputFile, data.Pixels, &tiff.Options{Compression: tiff.Deflate})
 	}

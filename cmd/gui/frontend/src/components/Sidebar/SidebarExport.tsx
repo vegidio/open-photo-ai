@@ -21,7 +21,7 @@ export const SidebarExport = ({ className = '' }: TailwindProps) => {
                 Export image
             </Button>
 
-            <Export open={openExport} onClose={() => setOpenExport(false)} />
+            {openExport && <Export open={true} onClose={() => setOpenExport(false)} />}
         </div>
     );
 };

@@ -22,7 +22,7 @@ type DialogService struct{}
 func (d *DialogService) OpenFileDialog() ([]types.DialogFile, error) {
 	dialog := application.OpenFileDialog()
 	dialog.SetTitle("Select Image")
-	dialog.AddFilter("Images (*.png;*.jpg)", "*.png;*.jpg")
+	dialog.AddFilter("Images (*.png;*.jpg;*.tiff)", "*.png;*.jpg;*.jpeg;*.tif;*.tiff")
 
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {

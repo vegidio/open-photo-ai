@@ -49,7 +49,9 @@ const ImageList = ({ enhancements }: ImageListProps) => {
                     </TableRow>
                 </TableHead>
 
-                <div className='h-4' />
+                <TableBody>
+                    <TableRow className='h-4' />
+                </TableBody>
 
                 <TableBody>
                     {Array.from(enhancements.entries()).map(([file, operations]) => (

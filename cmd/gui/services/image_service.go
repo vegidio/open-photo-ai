@@ -118,15 +118,16 @@ func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, i
 // ExportImage runs inference operations on an image and saves the result to disk.
 //
 // # Parameters:
-//   - filePath: The path to the image file to process and also the base path for the exported file.
+//   - inputPath: The path to the image file to process.
+//   - outputPath: The path to the output file to save the processed image.
 //   - format: The image format to use when saving the processed imag.
 //   - opIds: Variable number of operation IDs specifying the inference operations to apply to the image.
 //     Each operation ID encodes the model name, parameters, and precision.
 //
 // # Returns:
 //   - error: An error if the inference fails, the image cannot be processed, or the file cannot be saved.
-func (i *ImageService) ExportImage(filePath string, format types.ImageFormat, opIds ...string) error {
-	pngBytes, err := i.runInference(filePath, opIds)
+func (i *ImageService) ExportImage(inputPath, outputPath string, format types.ImageFormat, opIds ...string) error {
+	pngBytes, err := i.runInference(inputPath, opIds)
 	if err != nil {
 		return err
 	}
@@ -137,7 +138,7 @@ func (i *ImageService) ExportImage(filePath string, format types.ImageFormat, op
 	}
 
 	return opai.SaveImage(&types.ImageData{
-		FilePath: filePath,
+		FilePath: outputPath,
 		Pixels:   img,
 	}, format, 100)
 }

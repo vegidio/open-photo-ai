@@ -36,10 +36,6 @@ export const getEnhancedImage = async (file: DialogFile, ...operations: string[]
     return image;
 };
 
-export const exportImage = async (file: DialogFile, ...operations: string[]) => {
-    //
-};
-
 export const clearCache = () => {
     imageCache.clear();
 };

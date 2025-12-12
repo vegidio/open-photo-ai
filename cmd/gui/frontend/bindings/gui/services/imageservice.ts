@@ -13,8 +13,21 @@ export function Destroy(): $CancellablePromise<void> {
     return $Call.ByID(3681465753);
 }
 
-export function ExportImage(filePath: string, format: types$0.ImageFormat, ...opIds: string[]): $CancellablePromise<void> {
-    return $Call.ByID(1308095068, filePath, format, opIds);
+/**
+ * ExportImage runs inference operations on an image and saves the result to disk.
+ * 
+ * # Parameters:
+ *   - inputPath: The path to the image file to process.
+ *   - outputPath: The path to the output file to save the processed image.
+ *   - format: The image format to use when saving the processed imag.
+ *   - opIds: Variable number of operation IDs specifying the inference operations to apply to the image.
+ *     Each operation ID encodes the model name, parameters, and precision.
+ * 
+ * # Returns:
+ *   - error: An error if the inference fails, the image cannot be processed, or the file cannot be saved.
+ */
+export function ExportImage(inputPath: string, outputPath: string, format: types$0.ImageFormat, ...opIds: string[]): $CancellablePromise<void> {
+    return $Call.ByID(1308095068, inputPath, outputPath, format, opIds);
 }
 
 /**
@@ -39,6 +52,20 @@ export function GetImage(filePath: string, size: number): $CancellablePromise<[s
     });
 }
 
+/**
+ * ProcessImage runs inference operations on an image and returns the processed result.
+ * 
+ * # Parameters:
+ *   - filePath: The path to the image file to process.
+ *   - opIds: Variable number of operation IDs specifying the inference operations to apply to the image.
+ *     Each operation ID encodes the model name, parameters, and precision.
+ * 
+ * # Returns:
+ *   - []byte: The processed image data encoded as JPEG bytes for presentation purposes.
+ *   - int: The width of the processed image.
+ *   - int: The height of the processed image.
+ *   - error: An error if the inference fails or the image cannot be processed.
+ */
 export function ProcessImage(filePath: string, ...opIds: string[]): $CancellablePromise<[string, number, number]> {
     return $Call.ByID(3391347795, filePath, opIds).then(($result: any) => {
         $result[0] = $Create.ByteSlice($result[0]);
