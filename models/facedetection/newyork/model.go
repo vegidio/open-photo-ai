@@ -1,6 +1,7 @@
 package newyork
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/vegidio/open-photo-ai/internal"
@@ -66,17 +67,16 @@ func (m *NewYork) Name() string {
 	return m.name
 }
 
-func (m *NewYork) Run(input *types.ImageData, onProgress types.ProgressCallback) ([]facedetection.Face, error) {
+func (m *NewYork) Run(ctx context.Context, input *types.ImageData, onProgress types.ProgressCallback) ([]facedetection.Face, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if onProgress != nil {
 		onProgress("fd", 0)
 	}
 
 	// Preprocess image
 	inputData, originalWidth, originalHeight := facedetection.PreprocessImage(input.Pixels, targetSize)
-
-	if onProgress != nil {
-		onProgress("fd", 0.2)
-	}
 
 	// Create input tensor
 	inputShape := ort.NewShape(1, 3, int64(targetSize), int64(targetSize))
@@ -105,20 +105,30 @@ func (m *NewYork) Run(input *types.ImageData, onProgress types.ProgressCallback)
 	}
 	defer landmarksTensor.Destroy()
 
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	if onProgress != nil {
+		onProgress("fd", 0.2)
+	}
+
 	// Run inference
 	err = m.session.Run([]ort.Value{inputTensor}, []ort.Value{locTensor, confTensor, landmarksTensor})
 	if err != nil {
 		return nil, fmt.Errorf("failed to run inference: %w", err)
 	}
 
-	if onProgress != nil {
-		onProgress("fd", 0.6)
-	}
-
 	// Post-process results
 	locData := locTensor.GetData()
 	confData := confTensor.GetData()
 	landmarksData := landmarksTensor.GetData()
+
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	if onProgress != nil {
+		onProgress("fd", 0.6)
+	}
 
 	faces := facedetection.PostProcessDetections(locData, confData, landmarksData,
 		originalWidth, originalHeight, confidenceThreshold)

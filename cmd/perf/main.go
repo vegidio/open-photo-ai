@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"log"
 	"time"
@@ -46,9 +47,10 @@ func main() {
 func startUpscaleTest(inputData *types.ImageData) {
 	// Warm-up; the first run is not included in the measurements because it's a cold-start
 	log.Printf("UPSCALE: Warming up!\n")
+	ctx := context.Background()
 
 	op := kyoto.Op(kyoto.ModeGeneral, 4, types.PrecisionFp32)
-	_, err := opai.Process(inputData, nil, op)
+	_, err := opai.Process(ctx, inputData, nil, op)
 	if err != nil {
 		log.Fatalf("Failed to upscale the image: %v\n", err)
 	}
@@ -58,7 +60,7 @@ func startUpscaleTest(inputData *types.ImageData) {
 	for i := 0; i < 5; i++ {
 		log.Printf("Running test %d...\n", i+1)
 
-		_, err = opai.Process(inputData, nil, op)
+		_, err = opai.Process(ctx, inputData, nil, op)
 		if err != nil {
 			log.Fatalf("Failed to upscale the image: %v\n", err)
 		}

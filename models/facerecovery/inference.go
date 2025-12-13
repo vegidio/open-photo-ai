@@ -1,6 +1,7 @@
 package facerecovery
 
 import (
+	"context"
 	"fmt"
 	"image"
 
@@ -11,6 +12,7 @@ import (
 )
 
 func RestoreFaces(
+	ctx context.Context,
 	session *ort.DynamicAdvancedSession,
 	img image.Image,
 	faces []facedetection.Face,
@@ -20,6 +22,9 @@ func RestoreFaces(
 ) (image.Image, error) {
 	mask := createCircularMask(tileSize, tileSize, 15.0)
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if onProgress != nil {
 		onProgress("fr", 0.2)
 	}
@@ -32,11 +37,18 @@ func RestoreFaces(
 	result := img
 
 	for _, face := range faces {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		restored, transform, err := restoreSingleFace(session, img, face, tileSize, fidelity)
 		if err != nil {
 			return nil, err
 		}
 
+		if err = ctx.Err(); err != nil {
+			return nil, err
+		}
 		if onProgress != nil {
 			total += step
 			onProgress("fr", total)

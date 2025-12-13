@@ -1,6 +1,7 @@
 package kyoto
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/vegidio/open-photo-ai/internal"
@@ -67,12 +68,12 @@ func (m *Kyoto) Name() string {
 	return m.name
 }
 
-func (m *Kyoto) Run(input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
+func (m *Kyoto) Run(ctx context.Context, input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
 	if onProgress != nil {
 		onProgress("up", 0)
 	}
 
-	result, err := upscale.Process(m.session, input.Pixels, tileSize, tileOverlap, m.operation.scale, onProgress)
+	result, err := upscale.Process(ctx, m.session, input.Pixels, tileSize, tileOverlap, m.operation.scale, onProgress)
 	if err != nil {
 		return nil, err
 	}

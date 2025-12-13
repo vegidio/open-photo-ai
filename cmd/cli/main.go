@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -32,8 +33,10 @@ func main() {
 		//tokyo.Op(4, types.PrecisionFp32),
 	}
 
+	ctx := context.Background()
 	now := time.Now()
-	outputData, err := opai.Process(inputData, func(name string, progress float64) {
+
+	outputData, err := opai.Process(ctx, inputData, func(name string, progress float64) {
 		fmt.Printf("%s - Progress: %.1f%%\n", name, progress*100)
 	}, ops...)
 
@@ -41,6 +44,7 @@ func main() {
 		fmt.Printf("Failed to upscale the image: %v\n", err)
 		return
 	}
+	
 	since := time.Since(now)
 	fmt.Println("Time elapsed: ", since)
 

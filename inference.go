@@ -1,6 +1,7 @@
 package opai
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -20,9 +21,10 @@ import (
 // operations are applied.
 //
 // # Parameters:
-//   - input: The input image data to be processed
-//   - onProgress: A callback function that is called with the progress of the current operation (0-1)
-//   - operations: A variable number of operations to apply sequentially
+//   - ctx: A context object that can be used to cancel the operation.
+//   - input: The input image data to be processed.
+//   - onProgress: A callback function called with the progress of the current operation (0-1).
+//   - operations: A variable number of operations to apply sequentially.
 //
 // # Returns:
 //   - *types.ImageData: The final processed image data after all operations
@@ -30,8 +32,9 @@ import (
 //
 // # Example:
 //
-//	output, err := Process(inputImage, faceRecoveryOp, upscaleOp)
+//	output, err := Process(ctx, inputImage, faceRecoveryOp, upscaleOp)
 func Process(
+	ctx context.Context,
 	input *types.ImageData,
 	onProgress types.ProgressCallback,
 	operations ...types.Operation,
@@ -52,7 +55,7 @@ func Process(
 			return nil, fmt.Errorf("operation type not supported: %s", op.Id())
 		}
 
-		output, err = imageModel.Run(inputCopy, onProgress)
+		output, err = imageModel.Run(ctx, inputCopy, onProgress)
 		if err != nil {
 			return nil, err
 		}
@@ -74,9 +77,10 @@ func Process(
 // not an image, but the information data returned by the model.
 //
 // # Parameters:
-//   - input: The input image data to be processed
-//   - onProgress: A callback function that is called with the progress of the current operation (0-1)
-//   - operation: The operation to apply to the image
+//   - ctx: A context object that can be used to cancel the operation.
+//   - input: The input image data to be processed.
+//   - onProgress: A callback function called with the progress of the current operation (0-1).
+//   - operation: The operation to apply to the image.
 //
 // # Returns:
 //   - T: The result of the operation with the specified generic type
@@ -84,8 +88,9 @@ func Process(
 //
 // # Example:
 //
-//	faces, err := Execute[[]types.Face](inputImage, progressCallback, faceDetectionOp)
+//	faces, err := Execute[[]types.Face](ctx, inputImage, progressCallback, faceDetectionOp)
 func Execute[T any](
+	ctx context.Context,
 	input *types.ImageData,
 	onProgress types.ProgressCallback,
 	operation types.Operation,
@@ -103,7 +108,7 @@ func Execute[T any](
 		return genericNil, fmt.Errorf("operation type not supported: %s", operation.Id())
 	}
 
-	return dataModel.Run(input, onProgress)
+	return dataModel.Run(ctx, input, onProgress)
 }
 
 // CleanRegistry releases all resources held by registered models. It iterates through all models in the registry and

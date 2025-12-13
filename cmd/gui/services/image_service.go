@@ -95,14 +95,26 @@ func (i *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 //   - int: The width of the processed image.
 //   - int: The height of the processed image.
 //   - error: An error if the inference fails or the image cannot be processed.
-func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, int, int, error) {
-	pngBytes, err := i.runInference(filePath, opIds)
+func (i *ImageService) ProcessImage(
+	ctx context.Context,
+	filePath string,
+	opIds ...string,
+) ([]byte, int, int, error) {
+	pngBytes, err := i.runInference(ctx, filePath, opIds)
 	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	if err = ctx.Err(); err != nil {
 		return nil, 0, 0, err
 	}
 
 	img, err := bytesToImage(pngBytes)
 	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	if err = ctx.Err(); err != nil {
 		return nil, 0, 0, err
 	}
 
@@ -127,20 +139,32 @@ func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, i
 //
 // # Returns:
 //   - error: An error if the inference fails, the image cannot be processed, or the file cannot be saved.
-func (i *ImageService) ExportImage(file guitypes.File, outputPath string, format types.ImageFormat, opIds ...string) error {
+func (i *ImageService) ExportImage(
+	ctx context.Context,
+	file guitypes.File,
+	outputPath string,
+	format types.ImageFormat,
+	opIds ...string,
+) error {
 	eventName := fmt.Sprintf("app:export:%s", file.Hash)
-
 	i.app.Event.Emit(eventName, "RUNNING", 0.1)
 
-	pngBytes, err := i.runInference(file.Path, opIds)
+	pngBytes, err := i.runInference(ctx, file.Path, opIds)
 	if err != nil {
 		return err
 	}
 
 	i.app.Event.Emit(eventName, "RUNNING", 0.9)
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 
 	img, err := bytesToImage(pngBytes)
 	if err != nil {
+		return err
+	}
+
+	if err = ctx.Err(); err != nil {
 		return err
 	}
 
@@ -166,20 +190,23 @@ func (i *ImageService) Destroy() {
 
 // region - Private methods
 
-func (i *ImageService) runInference(filePath string, opIds []string) ([]byte, error) {
+func (i *ImageService) runInference(ctx context.Context, filePath string, opIds []string) ([]byte, error) {
 	// Cache the image as PNG to be reused later
-	ctx := context.Background()
 	key := getCacheKey(filePath, opIds)
 	ttl := time.Hour * 24
 
 	return memo.Do(i.diskCache, ctx, key, ttl, func(ctx context.Context) ([]byte, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		inputImage, err := opai.LoadImage(filePath)
 		if err != nil {
 			return nil, err
 		}
 
 		operations := idsToOperations(opIds)
-		outputData, err := opai.Process(inputImage, func(name string, progress float64) {
+		outputData, err := opai.Process(ctx, inputImage, func(name string, progress float64) {
 			i.app.Event.Emit("app:progress", name, progress)
 		}, operations...)
 

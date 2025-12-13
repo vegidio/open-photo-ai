@@ -1,6 +1,7 @@
 package upscale
 
 import (
+	"context"
 	"image"
 	"math"
 
@@ -11,6 +12,7 @@ import (
 
 // Process upscales an entire image by processing it in overlapping tiles
 func Process(
+	ctx context.Context,
 	session *ort.DynamicAdvancedSession,
 	img image.Image,
 	tileSize,
@@ -18,6 +20,10 @@ func Process(
 	scaleFactor int,
 	onProgress types.ProgressCallback,
 ) (*image.RGBA, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// Get image dimensions
 	bounds := img.Bounds()
 	width := bounds.Dx()
@@ -37,6 +43,10 @@ func Process(
 	// Process image in tiles
 	for y := 0; y < height; y += stride {
 		for x := 0; x < width; x += stride {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+
 			tileX, tileY, tileW, tileH := calculateTileBounds(x, y, width, height, tileSize)
 
 			paddedTile := prepareTileForInference(img, tileX, tileY, tileW, tileH, tileSize)

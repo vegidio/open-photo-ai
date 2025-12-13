@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button, Divider, MenuItem, Select, type SelectChangeEvent, TextField, Typography } from '@mui/material';
+import { CancellablePromise } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { DialogService } from '../../../bindings/gui/services';
 import { Toggle } from '@/components/Toggle.tsx';
@@ -213,10 +214,22 @@ const Format = () => {
 
 const Buttons = ({ onClose }: ExportSettingsProps) => {
     const enhancements = useEnhancementStore((state) => state.enhancements);
+    let p: CancellablePromise<void>;
+
+    const handleCancel = () => {
+        console.log('Cancelling export');
+        p.cancel();
+    };
 
     const handleExport = async () => {
         for (const [file, operations] of enhancements.entries()) {
-            await exportImage(file, operations);
+            p = exportImage(file, operations);
+
+            try {
+                await p;
+            } catch (e) {
+                console.log('Cancelled 2', e);
+            }
         }
     };
 
@@ -225,7 +238,7 @@ const Buttons = ({ onClose }: ExportSettingsProps) => {
             <Button
                 variant='contained'
                 className='flex-1 bg-[#353535] hover:bg-[#171717] text-[#f2f2f2] normal-case font-normal'
-                onClick={onClose}
+                onClick={handleCancel}
             >
                 Cancel
             </Button>

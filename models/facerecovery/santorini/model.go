@@ -1,16 +1,13 @@
 package santorini
 
 import (
-	"fmt"
+	"context"
 
-	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 const (
@@ -26,20 +23,8 @@ type Santorini struct {
 }
 
 func New(operation types.Operation) (*Santorini, error) {
-	// Init the Face Detection model, which is a dependency of this model
-	fdModel, err := facerecovery.GetFdModel()
+	fdModel, modelFile, modelName, err := facerecovery.LoadModel(operation)
 	if err != nil {
-		return nil, err
-	}
-
-	op := operation.(OpFrSantorini)
-	modelFile := op.Id() + ".onnx"
-	name := fmt.Sprintf("Face Recovery (%s)",
-		cases.Upper(language.English).String(string(op.precision)),
-	)
-
-	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-	if err = utils.PrepareDependency(url, "models", modelFile, nil); err != nil {
 		return nil, err
 	}
 
@@ -53,8 +38,8 @@ func New(operation types.Operation) (*Santorini, error) {
 	}
 
 	return &Santorini{
-		name:      name,
-		operation: op,
+		name:      modelName,
+		operation: operation.(OpFrSantorini),
 		session:   session,
 		fdModel:   fdModel,
 	}, nil
@@ -73,18 +58,10 @@ func (m *Santorini) Name() string {
 	return m.name
 }
 
-func (m *Santorini) Run(input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
-	if onProgress != nil {
-		onProgress("fr", 0)
-	}
-
-	faces, err := m.fdModel.Run(input, nil)
+func (m *Santorini) Run(ctx context.Context, input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
+	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, input, onProgress)
 	if err != nil {
 		return nil, err
-	}
-
-	if onProgress != nil {
-		onProgress("fr", 0.1)
 	}
 
 	if len(faces) == 0 {
@@ -94,7 +71,7 @@ func (m *Santorini) Run(input *types.ImageData, onProgress types.ProgressCallbac
 		}, nil
 	}
 
-	result, err := facerecovery.RestoreFaces(m.session, input.Pixels, faces, tileSize, -1, onProgress)
+	result, err := facerecovery.RestoreFaces(ctx, m.session, input.Pixels, faces, tileSize, -1, onProgress)
 	if err != nil {
 		return nil, err
 	}

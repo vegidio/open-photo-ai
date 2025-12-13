@@ -159,7 +159,7 @@ const ImageRow = ({ file, operations }: ImageRowProps) => {
             </TableRow>
 
             <TableRow>
-                <TableCell colSpan={4}>
+                <TableCell colSpan={4} className='overflow-hidden'>
                     <LinearProgress variant='determinate' value={progress} />
                 </TableCell>
             </TableRow>
