@@ -25,7 +25,7 @@ You can use **Open Photo AI** in two ways: as an app, both GUI and CLI (coming s
 
 There are many excellent AI-based photo editing tools available today, ranging from open-source solutions – often powerful but complex to set up and use, such as ComfyUI – to commercial products that favor ease of use over deep customization, like those from Topaz Labs.
 
-For this reason, I have long used both ComfyUI and Topaz Labs products, choosing between them depending on the task. Recently, however, Topaz Labs moved from a perpetual license to a subscription-based pricing model, a change I strongly dislike. As a developer, I am happy to pay for software that delivers real value, whether open source or proprietary, but I believe subscription models are rarely designed to benefit users and instead primarily serve company interests.
+I have long used both ComfyUI and Topaz Labs solutions, choosing between them depending on the task. Recently, however, Topaz Labs moved from a perpetual license to a subscription-based pricing model, a change I strongly dislike. As a developer, I am happy to pay for software that is useful for me, whether open source or proprietary, but I believe subscription models are rarely designed to benefit users and instead primarily serve company interests.
 
 That is why I created this project: an open-source alternative to Topaz Photo AI. It may never match the same level of polish or performance – Topaz has teams of full-time engineers, while this is a solo project built in my spare time – but I have ambitious goals and aim to reach feature parity with their product over time.
 

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button, Divider, MenuItem, Select, type SelectChangeEvent, TextField, Typography } from '@mui/material';
-import { CancellablePromise } from '@wailsio/runtime';
+import type { CancellablePromise } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { DialogService } from '../../../bindings/gui/services';
 import { Toggle } from '@/components/Toggle.tsx';
@@ -214,24 +214,44 @@ const Format = () => {
 
 const Buttons = ({ onClose }: ExportSettingsProps) => {
     const enhancements = useEnhancementStore((state) => state.enhancements);
-    let p: CancellablePromise<void>;
+    const format = useExportStore((state) => state.format);
+    const prefix = useExportStore((state) => state.prefix);
+    const suffix = useExportStore((state) => state.suffix);
+    const location = useExportStore((state) => state.location);
+
+    const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
+    const promiseRef = useRef<CancellablePromise<void> | null>(null);
 
     const handleCancel = () => {
-        console.log('Cancelling export');
-        p.cancel();
+        switch (state) {
+            case 'idle':
+            case 'completed':
+                onClose();
+                break;
+
+            case 'processing':
+                promiseRef.current?.cancel();
+        }
     };
 
     const handleExport = async () => {
+        setState('processing');
+
         for (const [file, operations] of enhancements.entries()) {
-            p = exportImage(file, operations);
+            promiseRef.current = exportImage(file, operations, format, prefix, suffix, location);
 
             try {
-                await p;
-            } catch (e) {
-                console.log('Cancelled 2', e);
+                await promiseRef.current;
+            } catch {
+                setState('idle');
+                return;
             }
         }
+
+        setState('completed');
     };
+
+    // Exporting
 
     return (
         <div className='flex gap-3'>
@@ -240,11 +260,13 @@ const Buttons = ({ onClose }: ExportSettingsProps) => {
                 className='flex-1 bg-[#353535] hover:bg-[#171717] text-[#f2f2f2] normal-case font-normal'
                 onClick={handleCancel}
             >
-                Cancel
+                {state === 'idle' ? 'Cancel' : state === 'processing' ? 'Abort' : 'Close'}
             </Button>
+
             <Button
                 variant='contained'
-                className='flex-1 bg-[#009aff] hover:bg-[#007eff] text-[#f2f2f2] normal-case font-normal'
+                disabled={state === 'processing'}
+                className='flex-1 bg-[#009aff] hover:bg-[#007eff] disabled:opacity-50 text-[#f2f2f2] normal-case font-normal'
                 onClick={handleExport}
             >
                 Save

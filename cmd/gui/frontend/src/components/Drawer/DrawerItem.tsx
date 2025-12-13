@@ -5,6 +5,7 @@ import { IoIosMore } from 'react-icons/io';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import type { File } from '../../../bindings/gui/types';
 import { EnvironmentService } from '../../../bindings/gui/services';
+import { RevealInFileManager } from '../../../bindings/gui/services/osservice.ts';
 import { useDrawerStore, useEnhancementStore, useFileStore } from '@/stores';
 import { getImage } from '@/utils/image.ts';
 
@@ -114,13 +115,17 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
         updateDrawer();
     };
 
+    const onReveal = () => {
+        RevealInFileManager(file.Path);
+    };
+
     const fmName = os === 'darwin' ? 'Finder' : os === 'windows' ? 'Explorer' : 'File Manager';
 
     const options = [
         { name: 'Close image', action: onCloseImage },
         { name: 'Close all image', action: onCloseAllImages },
         { name: undefined },
-        { name: `Show in ${fmName}`, action: () => {} },
+        { name: `Show in ${fmName}`, action: onReveal },
     ];
 
     return (

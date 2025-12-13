@@ -13,12 +13,13 @@ import {
     Typography,
 } from '@mui/material';
 import { Events } from '@wailsio/runtime';
-import path from 'path-browserify';
 import { RiFolderImageLine } from 'react-icons/ri';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import type { File } from '../../../bindings/gui/types';
+import { RevealInFileManager } from '../../../bindings/gui/services/osservice.ts';
 import { useEnhancementStore, useExportStore } from '@/stores';
+import { getExportInfo } from '@/utils/export.ts';
 import { getImage } from '@/utils/image.ts';
 
 export const ExportQueue = ({ className }: TailwindProps) => {
@@ -71,15 +72,18 @@ type ImageRowProps = {
 };
 
 const ImageRow = ({ file, operations }: ImageRowProps) => {
+    const format = useExportStore((state) => state.format);
+    const prefix = useExportStore((state) => state.prefix);
+    const suffix = useExportStore((state) => state.suffix);
+    const location = useExportStore((state) => state.location);
+
     const [image, setImage] = useState<string>();
     const [status, setStatus] = useState('');
     const [progress, setProgress] = useState(0);
 
-    const format = useExportStore((state) => state.format);
-    const prefix = useExportStore((state) => state.prefix);
-    const suffix = useExportStore((state) => state.suffix);
+    const { oldDims, newDims, oldSize, newExt, fileName, filePath } = useMemo(() => {
+        const { fileName, filePath, ext } = getExportInfo(file, format, prefix, suffix, location);
 
-    const { oldDims, newDims, oldSize, oldExt, newExt, output } = useMemo(() => {
         // Dimensions
         const scaleStr = operations.find((op) => op.id.startsWith('up'))?.options?.scale ?? '1';
         const scale = parseInt(scaleStr, 10);
@@ -90,16 +94,8 @@ const ImageRow = ({ file, operations }: ImageRowProps) => {
         const oldSize =
             file.Size < 1_000_000 ? `${(file.Size / 1_000).toFixed(2)} KB` : `${(file.Size / 1_000_000).toFixed(2)} MB`;
 
-        // Extension
-        const oldExt = file.Extension;
-        const newExt = format === 'preserve' ? file.Extension : format;
-
-        // Output
-        const baseName = path.basename(file.Path, path.extname(file.Path));
-        const output = `${prefix}${baseName}${suffix}.${newExt}`;
-
-        return { oldDims, newDims, oldSize, oldExt, newExt, output };
-    }, [operations, file, format, prefix, suffix]);
+        return { oldDims, newDims, oldSize, newExt: ext, fileName, filePath };
+    }, [file, format, location, operations, prefix, suffix]);
 
     useEffect(() => {
         async function loadImage() {
@@ -130,7 +126,7 @@ const ImageRow = ({ file, operations }: ImageRowProps) => {
                 </TableCell>
 
                 <TableCell className='flex flex-col text-[13px] gap-1'>
-                    <span>{output}</span>
+                    <span>{fileName}</span>
                     <div>
                         <span className='text-[#b0b0b0]'>{oldDims}</span>
                         {oldDims !== newDims && <span> → {newDims}</span>}
@@ -143,13 +139,13 @@ const ImageRow = ({ file, operations }: ImageRowProps) => {
                 </TableCell>
 
                 <TableCell className='text-[13px]'>
-                    <span className='text-[#b0b0b0]'>{oldExt.toUpperCase()}</span>
-                    {oldExt !== newExt && <span> → {newExt.toUpperCase()}</span>}
+                    <span className='text-[#b0b0b0]'>{file.Extension.toUpperCase()}</span>
+                    {file.Extension !== newExt && <span> → {newExt.toUpperCase()}</span>}
                 </TableCell>
 
                 <TableCell align='center'>
                     {status === 'COMPLETED' ? (
-                        <IconButton size='small' onClick={() => {}}>
+                        <IconButton size='small' onClick={() => RevealInFileManager(filePath)}>
                             <RiFolderImageLine />
                         </IconButton>
                     ) : status === 'RUNNING' ? (

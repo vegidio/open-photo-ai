@@ -63,6 +63,7 @@ func main() {
 	defer imageService.Destroy()
 
 	app.RegisterService(application.NewService(&services.EnvironmentService{}))
+	app.RegisterService(application.NewService(&services.OsService{}))
 	app.RegisterService(application.NewService(&services.DialogService{}))
 	app.RegisterService(application.NewService(imageService))
 
