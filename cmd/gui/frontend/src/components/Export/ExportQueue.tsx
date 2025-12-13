@@ -39,10 +39,16 @@ type ImageListProps = {
 };
 
 const ImageList = ({ enhancements }: ImageListProps) => {
+    const padding = enhancements.size > 7 ? 1 : 0;
+
     return (
-        <TableContainer component={Box}>
-            <Table className='[&_td]:p-0 [&_td]:border-0 [&_th]:p-0 [&_th]:border-0'>
-                <TableHead className='[&_th]:text-[#b0b0b0] [&_th]:text-[13px] [&_th]:font-normal'>
+        <TableContainer
+            component={Box}
+            className={padding === 0 ? 'scrollbar-none' : 'scrollbar-thin'}
+            sx={{ paddingRight: padding }}
+        >
+            <Table stickyHeader className='[&_td]:p-0 [&_td]:border-0 [&_th]:p-0 [&_th]:border-0'>
+                <TableHead className='[&_th]:text-[#b0b0b0] [&_th]:text-[13px] [&_th]:font-normal [&_th]:bg-[#212121]'>
                     <TableRow>
                         <TableCell className='w-[72px]'>Image</TableCell>
                         <TableCell>Output</TableCell>
