@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	guitypes "gui/types"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -126,21 +127,35 @@ func (i *ImageService) ProcessImage(filePath string, opIds ...string) ([]byte, i
 //
 // # Returns:
 //   - error: An error if the inference fails, the image cannot be processed, or the file cannot be saved.
-func (i *ImageService) ExportImage(inputPath, outputPath string, format types.ImageFormat, opIds ...string) error {
-	pngBytes, err := i.runInference(inputPath, opIds)
+func (i *ImageService) ExportImage(file guitypes.File, outputPath string, format types.ImageFormat, opIds ...string) error {
+	eventName := fmt.Sprintf("app:export:%s", file.Hash)
+
+	i.app.Event.Emit(eventName, "RUNNING", 0.1)
+
+	pngBytes, err := i.runInference(file.Path, opIds)
 	if err != nil {
 		return err
 	}
+
+	i.app.Event.Emit(eventName, "RUNNING", 0.9)
 
 	img, err := bytesToImage(pngBytes)
 	if err != nil {
 		return err
 	}
 
-	return opai.SaveImage(&types.ImageData{
+	err = opai.SaveImage(&types.ImageData{
 		FilePath: outputPath,
 		Pixels:   img,
 	}, format, 100)
+
+	if err != nil {
+		i.app.Event.Emit(eventName, "ERROR", 0.0)
+		return err
+	}
+
+	i.app.Event.Emit(eventName, "COMPLETED", 1.0)
+	return nil
 }
 
 func (i *ImageService) Destroy() {

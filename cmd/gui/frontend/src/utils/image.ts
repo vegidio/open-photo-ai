@@ -1,4 +1,4 @@
-import type { DialogFile } from '../../bindings/gui/types';
+import type { File } from '../../bindings/gui/types';
 import { GetImage, ProcessImage } from '../../bindings/gui/services/imageservice.ts';
 
 export type ImageData = {
@@ -9,7 +9,7 @@ export type ImageData = {
 
 const imageCache = new Map<string, ImageData>();
 
-export const getImage = async (file: DialogFile, size: number) => {
+export const getImage = async (file: File, size: number) => {
     const cacheKey = `${file.Hash}_${size}`;
     let image = imageCache.get(cacheKey);
 
@@ -22,7 +22,7 @@ export const getImage = async (file: DialogFile, size: number) => {
     return image;
 };
 
-export const getEnhancedImage = async (file: DialogFile, ...operations: string[]) => {
+export const getEnhancedImage = async (file: File, ...operations: string[]) => {
     const opIds = operations.join('_');
     const cacheKey = `${file.Hash}_${opIds}`;
     let image = imageCache.get(cacheKey);

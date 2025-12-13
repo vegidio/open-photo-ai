@@ -1,6 +1,6 @@
 package types
 
-type DialogFile struct {
+type File struct {
 	Path       string
 	Hash       string
 	Dimensions []int

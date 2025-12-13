@@ -1,13 +1,13 @@
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
-import type { DialogFile } from '../../bindings/gui/types';
+import type { File } from '../../bindings/gui/types';
 
 type FileStore = {
-    files: DialogFile[];
+    files: File[];
     selectedIndex: number;
 
     setSelectedIndex: (index: number) => void;
-    addFiles: (files: DialogFile[]) => void;
+    addFiles: (files: File[]) => void;
     removeFile: (hash: string) => void;
     clear: () => void;
 };
@@ -23,7 +23,7 @@ export const useFileStore = create(
             });
         },
 
-        addFiles: (files: DialogFile[]) => {
+        addFiles: (files: File[]) => {
             set((state) => {
                 const uniqueFiles = files.filter(
                     (file) => !state.files.some((existingFile) => existingFile.Hash === file.Hash),

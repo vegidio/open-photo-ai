@@ -76,10 +76,10 @@ const ProgressUpdate = () => {
     const [progress, setProgress] = useState({ name: 'Enhancing', value: 0 });
 
     const getOperationName = useCallback((id: string) => {
-        switch (id) {
-            case 'upscale':
+        switch (true) {
+            case id.startsWith('up'):
                 return 'Upscale';
-            case 'face-recovery':
+            case id.startsWith('fr'):
                 return 'Face Recovery';
             default:
                 return 'Enhancing';

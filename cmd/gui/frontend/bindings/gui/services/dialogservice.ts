@@ -13,12 +13,12 @@ export function OpenDirDialog(): $CancellablePromise<string> {
     return $Call.ByID(690693041);
 }
 
-export function OpenFileDialog(): $CancellablePromise<types$0.DialogFile[]> {
+export function OpenFileDialog(): $CancellablePromise<types$0.File[]> {
     return $Call.ByID(3411436064).then(($result: any) => {
         return $$createType1($result);
     });
 }
 
 // Private type creation functions
-const $$createType0 = types$0.DialogFile.createFrom;
+const $$createType0 = types$0.File.createFrom;
 const $$createType1 = $Create.Array($$createType0);

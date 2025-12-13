@@ -7,7 +7,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as types$0 from "../../github.com/vegidio/open-photo-ai/types/models.js";
+import * as types$1 from "../../github.com/vegidio/open-photo-ai/types/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as types$0 from "../types/models.js";
 
 export function Destroy(): $CancellablePromise<void> {
     return $Call.ByID(3681465753);
@@ -26,8 +29,8 @@ export function Destroy(): $CancellablePromise<void> {
  * # Returns:
  *   - error: An error if the inference fails, the image cannot be processed, or the file cannot be saved.
  */
-export function ExportImage(inputPath: string, outputPath: string, format: types$0.ImageFormat, ...opIds: string[]): $CancellablePromise<void> {
-    return $Call.ByID(1308095068, inputPath, outputPath, format, opIds);
+export function ExportImage(file: types$0.File, outputPath: string, format: types$1.ImageFormat, ...opIds: string[]): $CancellablePromise<void> {
+    return $Call.ByID(1308095068, file, outputPath, format, opIds);
 }
 
 /**

@@ -23,11 +23,11 @@ You can use **Open Photo AI** in two ways: as an app, both GUI and CLI (coming s
 
 ## 💡 Motivation
 
-There are many excellent AI-based photo editing tools available nowadays, ranging from open-source solutions – often with complex setup and usage, such as ComfyUI – to commercial products that prioritize ease of use over deep customization, like those from Topaz Labs.
+There are many excellent AI-based photo editing tools available today, ranging from open-source solutions – often powerful but complex to set up and use, such as ComfyUI – to commercial products that favor ease of use over deep customization, like those from Topaz Labs.
 
-For this reason, I have always used both ComfyUI and Topaz Labs products, choosing between them depending on the task at hand. Recently, however, Topaz Labs switched their pricing model from a perpetual license to a subscription-based one, and I strongly dislike that change. As a developer, I do not mind paying for software that provides real value (whether open source or proprietary), but I believe subscription-based models are rarely designed to benefit users; they primarily serve the interests of the companies behind them.
+For this reason, I have long used both ComfyUI and Topaz Labs products, choosing between them depending on the task. Recently, however, Topaz Labs moved from a perpetual license to a subscription-based pricing model, a change I strongly dislike. As a developer, I am happy to pay for software that delivers real value, whether open source or proprietary, but I believe subscription models are rarely designed to benefit users and instead primarily serve company interests.
 
-That is why I created this project: an open-source alternative to Topaz Photo AI. It may never reach the same level of polish or performance as Topaz Labs' products — after all, they have teams of brilliant engineers, while I am a single developer. Even so, I have ambitious goals and intend to achieve feature parity with Topaz's product over time.
+That is why I created this project: an open-source alternative to Topaz Photo AI. It may never match the same level of polish or performance – Topaz has teams of full-time engineers, while this is a solo project built in my spare time – but I have ambitious goals and aim to reach feature parity with their product over time.
 
 ## ✨ Enhancements
 
@@ -42,7 +42,7 @@ All enhancements available here come from open-source AI models that were adapte
 
 ### Upscale
 
-- **Tokyo**: use when you want accurate, conservative upscaling that stays close to the original image. It focuses on structure and texture consistency, avoids inventing details, and works well for clean images, illustrations, screenshots, and content where correctness matters more than sharpness. It is a good choice when artifacts or hallucinated details would be unacceptable (currently not supported by Apple's CoreML).
+- **Tokyo**: use when you want accurate, conservative upscaling that stays close to the original image. It focuses on structure and texture consistency, avoids inventing details, and works well for clean images, illustrations, screenshots, and content where correctness matters more than sharpness. It is a good choice when artifacts or hallucinated details would be unacceptable.
 - **Kyoto**: use when you want visually strong, sharp upscaling, even if new details are introduced. It aggressively enhances textures and edges, can add perceived detail that was not present before, and performs especially well on photos and noisy or compressed images. It is best suited for creative or perceptual use cases where impact matters more than strict fidelity.
 
 *Verdict*: start with **Tokyo**, then try **Kyoto** if the result looks too soft.
@@ -60,11 +60,17 @@ To bypass this, open the Terminal and run one of the commands below (depending o
 -   Windows: `Unblock-File -Path <path-to-app>`
 -   macOS: `xattr -d com.apple.quarantine <path-to-app>`
 
+## 🐞 Known Issues
+
+1. Using half-precision (FP16) models using CPU often doesn't give any performance boost; a bug fix for this is expected to be available in the next ONNX release.
+2. The ONNX Runtime has a [bug](https://github.com/microsoft/onnxruntime/pull/26443) when running half-precision (FP16) models on Apple's M-series chip; a bug fix for this is expected to be available in the next ONNX release. Meanwhile, all image processing on Macs will be done in full precision, which gives the best quality possible, but it's often unnecessarily slow.
+3. The **Tokyo** model doesn't work with Apple's CoreML. This is a limitation on CoreML's architecture, so any upscaling using this model on a Mac will be slow.
+
 ## 🛠️ Build
 
 ### Dependencies
 
-In order to build this project, you will need the following dependencies installed in your computer:
+To build this project, you will need the following dependencies installed in your computer:
 
 -   [Golang](https://go.dev/doc/install)
 -   [Task](https://taskfile.dev/installation/)
@@ -94,12 +100,6 @@ For example, if I wanted to build a GUI version of the app for Windows, on archi
 ```bash
 $ task gui os=windows arch=amd64
 ```
-
-## 📈 Telemetry
-
-This app collects information about the data that you're downloading to help me track bugs and improve the general stability of the software.
-
-**No identifiable information about you or your computer is tracked.** But if you still want to stop the telemetry, you can do that by adding the flag `--no-telemetry` in the CLI tool.
 
 ## 📝 License
 

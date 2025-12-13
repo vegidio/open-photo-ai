@@ -3,13 +3,13 @@ import { Divider, IconButton, ListItemText, Menu, MenuItem, Typography } from '@
 import path from 'path-browserify';
 import { IoIosMore } from 'react-icons/io';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import type { DialogFile } from '../../../bindings/gui/types';
+import type { File } from '../../../bindings/gui/types';
 import { EnvironmentService } from '../../../bindings/gui/services';
 import { useDrawerStore, useEnhancementStore, useFileStore } from '@/stores';
 import { getImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
-    file: DialogFile;
+    file: File;
     selected?: boolean;
     onClick?: () => void;
 };
@@ -46,7 +46,7 @@ export const DrawerItem = ({ file, selected = false, onClick }: FileListItemProp
 };
 
 type BottomBarProps = TailwindProps & {
-    file: DialogFile;
+    file: File;
     selected?: boolean;
 };
 
@@ -83,7 +83,7 @@ const BottomBar = ({ file, selected = false, className = '' }: BottomBarProps) =
 };
 
 type OptionsMenuProps = {
-    file: DialogFile;
+    file: File;
     anchorEl: HTMLElement | null;
     open: boolean;
     onMenuClose: () => void;

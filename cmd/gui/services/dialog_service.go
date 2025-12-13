@@ -19,7 +19,7 @@ import (
 
 type DialogService struct{}
 
-func (d *DialogService) OpenFileDialog() ([]types.DialogFile, error) {
+func (d *DialogService) OpenFileDialog() ([]types.File, error) {
 	dialog := application.OpenFileDialog()
 	dialog.SetTitle("Select Image")
 	dialog.AddFilter("Images (*.png;*.jpg;*.tiff)", "*.png;*.jpg;*.jpeg;*.tif;*.tiff")
@@ -29,7 +29,7 @@ func (d *DialogService) OpenFileDialog() ([]types.DialogFile, error) {
 		return nil, err
 	}
 
-	concurrentCh := async.SliceToChannel(paths, runtime.NumCPU(), func(path string) types.DialogFile {
+	concurrentCh := async.SliceToChannel(paths, runtime.NumCPU(), func(path string) types.File {
 		hash, _ := crypto.Xxh3File(path)
 		dims, _ := getImageDimensions(path)
 
@@ -43,7 +43,7 @@ func (d *DialogService) OpenFileDialog() ([]types.DialogFile, error) {
 		fileInfo, _ := os.Stat(path)
 		size := int(fileInfo.Size())
 
-		return types.DialogFile{
+		return types.File{
 			Path:       path,
 			Hash:       hash,
 			Dimensions: dims,
@@ -55,7 +55,7 @@ func (d *DialogService) OpenFileDialog() ([]types.DialogFile, error) {
 	files := lo.ChannelToSlice(concurrentCh)
 
 	// Keep the files sorted by path
-	slices.SortFunc(files, func(a, b types.DialogFile) int {
+	slices.SortFunc(files, func(a, b types.File) int {
 		if a.Path < b.Path {
 			return -1
 		}

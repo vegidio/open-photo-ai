@@ -1,11 +1,11 @@
 import path from 'path-browserify';
 import type { Operation } from '@/operations';
-import type { DialogFile } from '../../bindings/gui/types';
+import type { File } from '../../bindings/gui/types';
 import { ImageFormat } from '../../bindings/github.com/vegidio/open-photo-ai/types';
 import { ExportImage } from '../../bindings/gui/services/imageservice.ts';
 import { useExportStore } from '@/stores';
 
-export const exportImage = (file: DialogFile, operations: Operation[]) => {
+export const exportImage = (file: File, operations: Operation[]) => {
     const format = useExportStore.getState().format;
     const prefix = useExportStore.getState().prefix;
     const suffix = useExportStore.getState().suffix;
@@ -20,7 +20,7 @@ export const exportImage = (file: DialogFile, operations: Operation[]) => {
     const imgFormat = getImageFormat(ext);
     const opIds = operations.map((op) => op.id);
 
-    return ExportImage(file.Path, filePath, imgFormat, ...opIds);
+    return ExportImage(file, filePath, imgFormat, ...opIds);
 };
 
 const getImageFormat = (ext: string) => {

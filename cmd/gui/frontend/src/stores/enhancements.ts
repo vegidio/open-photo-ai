@@ -2,18 +2,18 @@ import { enableMapSet } from 'immer';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 import type { Operation } from '@/operations';
-import type { DialogFile } from '../../bindings/gui/types';
+import type { File } from '../../bindings/gui/types';
 
 type EnhancementStore = {
     autopilot: boolean;
-    enhancements: Map<DialogFile, Operation[]>;
+    enhancements: Map<File, Operation[]>;
 
     setAutopilot: (enable: boolean) => void;
     toggle: () => void;
-    addEnhancement: (file: DialogFile, operation: Operation) => void;
-    removeEnhancement: (file: DialogFile, id: string) => void;
+    addEnhancement: (file: File, operation: Operation) => void;
+    removeEnhancement: (file: File, id: string) => void;
 
-    removeFile: (file: DialogFile) => void;
+    removeFile: (file: File) => void;
     clearFiles: () => void;
 };
 
@@ -23,7 +23,7 @@ enableMapSet();
 export const useEnhancementStore = create(
     immer<EnhancementStore>((set, _) => ({
         autopilot: false,
-        enhancements: new Map<DialogFile, Operation[]>(),
+        enhancements: new Map<File, Operation[]>(),
 
         setAutopilot: (enable: boolean) => {
             set((state) => {
@@ -37,14 +37,14 @@ export const useEnhancementStore = create(
             });
         },
 
-        addEnhancement: (file: DialogFile, operation: Operation) => {
+        addEnhancement: (file: File, operation: Operation) => {
             set((state) => {
                 const ops = state.enhancements.get(file) ?? [];
                 state.enhancements.set(file, [...ops, operation]);
             });
         },
 
-        removeEnhancement: (file: DialogFile, id: string) => {
+        removeEnhancement: (file: File, id: string) => {
             set((state) => {
                 const ops = (state.enhancements.get(file) ?? []).filter((op) => op.id !== id);
 
@@ -56,7 +56,7 @@ export const useEnhancementStore = create(
             });
         },
 
-        removeFile: (file: DialogFile) => {
+        removeFile: (file: File) => {
             set((state) => {
                 state.enhancements.delete(file);
             });

@@ -5,15 +5,15 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-export class DialogFile {
+export class File {
     "Path": string;
     "Hash": string;
     "Dimensions": number[];
     "Extension": string;
     "Size": number;
 
-    /** Creates a new DialogFile instance. */
-    constructor($$source: Partial<DialogFile> = {}) {
+    /** Creates a new File instance. */
+    constructor($$source: Partial<File> = {}) {
         if (!("Path" in $$source)) {
             this["Path"] = "";
         }
@@ -34,15 +34,15 @@ export class DialogFile {
     }
 
     /**
-     * Creates a new DialogFile instance from a string or object.
+     * Creates a new File instance from a string or object.
      */
-    static createFrom($$source: any = {}): DialogFile {
+    static createFrom($$source: any = {}): File {
         const $$createField2_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("Dimensions" in $$parsedSource) {
             $$parsedSource["Dimensions"] = $$createField2_0($$parsedSource["Dimensions"]);
         }
-        return new DialogFile($$parsedSource as Partial<DialogFile>);
+        return new File($$parsedSource as Partial<File>);
     }
 }
 

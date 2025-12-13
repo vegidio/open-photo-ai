@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
     Box,
+    CircularProgress,
     IconButton,
     LinearProgress,
     Table,
@@ -11,11 +12,12 @@ import {
     TableRow,
     Typography,
 } from '@mui/material';
+import { Events } from '@wailsio/runtime';
 import path from 'path-browserify';
 import { RiFolderImageLine } from 'react-icons/ri';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import type { DialogFile } from '../../../bindings/gui/types';
+import type { File } from '../../../bindings/gui/types';
 import { useEnhancementStore, useExportStore } from '@/stores';
 import { getImage } from '@/utils/image.ts';
 
@@ -32,7 +34,7 @@ export const ExportQueue = ({ className }: TailwindProps) => {
 };
 
 type ImageListProps = {
-    enhancements: Map<DialogFile, Operation[]>;
+    enhancements: Map<File, Operation[]>;
 };
 
 const ImageList = ({ enhancements }: ImageListProps) => {
@@ -64,12 +66,15 @@ const ImageList = ({ enhancements }: ImageListProps) => {
 };
 
 type ImageRowProps = {
-    file: DialogFile;
+    file: File;
     operations: Operation[];
 };
 
 const ImageRow = ({ file, operations }: ImageRowProps) => {
     const [image, setImage] = useState<string>();
+    const [status, setStatus] = useState('');
+    const [progress, setProgress] = useState(0);
+
     const format = useExportStore((state) => state.format);
     const prefix = useExportStore((state) => state.prefix);
     const suffix = useExportStore((state) => state.suffix);
@@ -105,6 +110,18 @@ const ImageRow = ({ file, operations }: ImageRowProps) => {
         loadImage();
     }, [file]);
 
+    useEffect(() => {
+        const eventName = `app:export:${file.Hash}`;
+
+        Events.On(eventName, (event) => {
+            const [state, value] = event.data as [string, number];
+            setStatus(state);
+            setProgress(value * 100);
+        });
+
+        return () => Events.Off(eventName);
+    }, [file.Hash]);
+
     return (
         <>
             <TableRow>
@@ -131,15 +148,19 @@ const ImageRow = ({ file, operations }: ImageRowProps) => {
                 </TableCell>
 
                 <TableCell align='center'>
-                    <IconButton size='small' onClick={() => {}}>
-                        <RiFolderImageLine />
-                    </IconButton>
+                    {status === 'COMPLETED' ? (
+                        <IconButton size='small' onClick={() => {}}>
+                            <RiFolderImageLine />
+                        </IconButton>
+                    ) : status === 'RUNNING' ? (
+                        <CircularProgress size={20} />
+                    ) : null}
                 </TableCell>
             </TableRow>
 
             <TableRow>
                 <TableCell colSpan={4}>
-                    <LinearProgress variant='determinate' value={50} />
+                    <LinearProgress variant='determinate' value={progress} />
                 </TableCell>
             </TableRow>
 

@@ -113,7 +113,7 @@ const Filename = () => {
 const Location = () => {
     const location = useExportStore((state) => state.location);
     const setLocation = useExportStore((state) => state.setLocation);
-    const [value, setValue] = useState<LocationType>('original');
+    const [value, setValue] = useState<LocationType>(location ? 'hidden' : 'original');
 
     const handleChange = async (event: SelectChangeEvent) => {
         const newValue = event.target.value;
@@ -214,11 +214,10 @@ const Format = () => {
 const Buttons = ({ onClose }: ExportSettingsProps) => {
     const enhancements = useEnhancementStore((state) => state.enhancements);
 
-    const handleExport = () => {
-        Array.from(enhancements.entries()).forEach(async ([file, operations]) => {
+    const handleExport = async () => {
+        for (const [file, operations] of enhancements.entries()) {
             await exportImage(file, operations);
-            console.log(`Exported ${file.Path}`);
-        });
+        }
     };
 
     return (
