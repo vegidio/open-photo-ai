@@ -275,7 +275,7 @@ func imageToBytes(img image.Image, format types.ImageFormat) ([]byte, error) {
 			return nil, err
 		}
 	case types.FormatPng:
-		encoder := &png.Encoder{CompressionLevel: png.DefaultCompression}
+		encoder := &png.Encoder{CompressionLevel: png.BestSpeed}
 		if err := encoder.Encode(&buf, img); err != nil {
 			return nil, err
 		}

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Drawer } from './components/Drawer';
-import { Navbar } from './components/Navbar';
-import { Preview } from './components/Preview';
-import { Sidebar } from './components/Sidebar';
+import { Drawer } from '@/components/Drawer';
+import { Navbar } from '@/components/Navbar';
+import { Preview } from '@/components/Preview';
+import { Sidebar } from '@/components/Sidebar';
 
 export const App = () => {
     const containerRef = useRef<HTMLDivElement>(null);

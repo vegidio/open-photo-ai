@@ -12,7 +12,7 @@ export const DrawerHeader = ({ drawerBleeding, className = '' }: FileListHeaderP
     return (
         <div
             style={{ height: drawerBleeding, top: -drawerBleeding }}
-            className={`flex items-center absolute visible pointer-events-auto pl-2 pr-4 gap-2 bg-[#272727] ${className}`}
+            className={`flex items-center absolute visible pointer-events-auto pl-0.5 pr-4 gap-1 bg-[#272727] ${className}`}
         >
             <DrawerToggle />
 

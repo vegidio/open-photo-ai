@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LinearProgress, Typography } from '@mui/material';
-import { Events } from '@wailsio/runtime';
+import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { PreviewEmpty } from './PreviewEmpty';
 import { PreviewImageSideBySide } from './PreviewImageSideBySide.tsx';
 import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
-import { getEnhancedImage, getImage } from '@/utils/image.ts';
+import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 
 const EMPTY_OPERATIONS: Operation[] = [];
 
@@ -30,6 +30,8 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     );
 
     useEffect(() => {
+        let p: CancellablePromise<ImageData>;
+
         async function loadPreview() {
             if (selectedFile) {
                 const originalImage = await getImage(selectedFile, 0);
@@ -43,10 +45,16 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                     setIsRunning(true);
 
                     const opIds = operations.map((op) => op.id);
-                    const enhancedImage = await getEnhancedImage(selectedFile, ...opIds);
-                    setEnhancedImage(enhancedImage);
+                    p = getEnhancedImage(selectedFile, ...opIds);
 
-                    setIsRunning(false);
+                    try {
+                        const enhancedImage = await p;
+                        setEnhancedImage(enhancedImage);
+                    } catch (e) {
+                        if (!(e instanceof CancelError)) console.error('Error loading enhanced image', e);
+                    } finally {
+                        setIsRunning(false);
+                    }
                 }
             } else {
                 setOriginalImage(undefined);
@@ -55,7 +63,12 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         }
 
         loadPreview();
-    }, [selectedFile, setEnhancedImage, setIsRunning, setOriginalImage, operations]);
+
+        return () => {
+            // Cancel any pending request to preview the enhanced image
+            p?.cancel();
+        };
+    }, [operations, selectedFile, setEnhancedImage, setIsRunning, setOriginalImage]);
 
     // useEffect(() => {
     //     if (filesLength > 0) setOpen(true);

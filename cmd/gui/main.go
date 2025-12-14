@@ -31,7 +31,7 @@ func main() {
 	// Create a new Wails application by providing the necessary options.
 	app := application.New(application.Options{
 		Name:        "Open Photo AI",
-		Description: "A demo of using raw HTML & CSS",
+		Description: "An open source photo AI editor",
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
@@ -43,14 +43,14 @@ func main() {
 
 	// Create a new window with the necessary options.
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:      "Home",
+		Title:      "Open Photo AI",
 		StartState: application.WindowStateMaximised,
 		MinWidth:   1280,
 		MinHeight:  720,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
+			TitleBar:                application.MacTitleBarHidden,
 		},
 		URL: "/",
 	})

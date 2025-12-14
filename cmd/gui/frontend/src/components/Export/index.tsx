@@ -43,7 +43,7 @@ export const Export = ({ open, onClose }: ExportProps) => {
 
             <Divider />
 
-            <div className='flex flex-row overflow-hidden'>
+            <div className='flex flex-row h-full overflow-hidden'>
                 <ExportQueue className='flex-1' />
 
                 <Divider orientation='vertical' flexItem className='border-[#171717] my-0.5' />

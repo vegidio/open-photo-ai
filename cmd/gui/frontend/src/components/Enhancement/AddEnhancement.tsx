@@ -9,6 +9,8 @@ type AddEnhancementProps = {
     disabled?: boolean;
 };
 
+const EMPTY_OPERATIONS: Operation[] = [];
+
 export const AddEnhancement = ({ disabled = false }: AddEnhancementProps) => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const open = Boolean(anchorEl);
@@ -46,11 +48,13 @@ type EnhancementsMenuProps = {
 
 const options = [
     {
+        type: 'fr',
         icon: <MdOutlineFaceRetouchingNatural />,
         name: 'Face Recovery',
         op: new Athens('fp32'),
     },
     {
+        type: 'up',
         icon: <MdOpenInFull />,
         name: 'Upscale',
         op: new Kyoto('general', 4, 'fp32'),
@@ -58,11 +62,14 @@ const options = [
 ];
 
 const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps) => {
-    const file = useFileStore((state) => state.files[state.selectedIndex]);
+    const selectedFile = useFileStore((state) => state.files[state.selectedIndex]);
+    const operations = useEnhancementStore((state) =>
+        selectedFile ? (state.enhancements.get(selectedFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
+    );
     const addEnhancement = useEnhancementStore((state) => state.addEnhancement);
 
     const onAddEnhancement = (op: Operation) => {
-        addEnhancement(file, op);
+        addEnhancement(selectedFile, op);
         onMenuClose();
     };
 
@@ -87,12 +94,21 @@ const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps
                 },
             }}
         >
-            {options.map((option) => (
-                <MenuItem key={option.name} className='min-h-12' onClick={() => onAddEnhancement(option.op)}>
-                    <ListItemIcon className='min-w-9 [&>svg]:size-5'>{option.icon}</ListItemIcon>
-                    <ListItemText slotProps={{ primary: { className: 'text-[13px]' } }}>{option.name}</ListItemText>
-                </MenuItem>
-            ))}
+            {options.map((option) => {
+                const exists = operations.some((op) => op.id.startsWith(option.type));
+
+                return (
+                    <MenuItem
+                        key={option.name}
+                        disabled={exists}
+                        className='min-h-12'
+                        onClick={() => onAddEnhancement(option.op)}
+                    >
+                        <ListItemIcon className='min-w-9 [&>svg]:size-5'>{option.icon}</ListItemIcon>
+                        <ListItemText slotProps={{ primary: { className: 'text-[13px]' } }}>{option.name}</ListItemText>
+                    </MenuItem>
+                );
+            })}
         </Menu>
     );
 };

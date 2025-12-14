@@ -1,5 +1,5 @@
 import { type MouseEvent, useEffect, useState } from 'react';
-import { Divider, IconButton, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
+import { Checkbox, Divider, IconButton, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import path from 'path-browserify';
 import { IoIosMore } from 'react-icons/io';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
@@ -39,6 +39,8 @@ export const DrawerItem = ({ file, selected = false, onClick }: FileListItemProp
         >
             <div className='relative size-full'>
                 <img alt='Preview' src={image} className='size-full object-cover rounded' />
+
+                <Checkbox size='small' className='absolute top-0 right-0 p-0 m-0.5 rounded bg-black/50 text-white' />
 
                 <BottomBar file={file} selected={selected} className='absolute bottom-0 left-0 right-0 h-5 rounded-b' />
             </div>
@@ -117,6 +119,7 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
 
     const onReveal = () => {
         RevealInFileManager(file.Path);
+        onMenuClose();
     };
 
     const fmName = os === 'darwin' ? 'Finder' : os === 'windows' ? 'Explorer' : 'File Manager';
