@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useState } from 'react';
+import { type ChangeEvent, type MouseEvent, useEffect, useState } from 'react';
 import { Checkbox, Divider, IconButton, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import path from 'path-browserify';
 import { IoIosMore } from 'react-icons/io';
@@ -11,14 +11,30 @@ import { getImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
     file: File;
-    selected?: boolean;
+    current?: boolean;
     onClick?: () => void;
 };
 
 const os = await EnvironmentService.GetOS();
 
-export const DrawerItem = ({ file, selected = false, onClick }: FileListItemProps) => {
+export const DrawerItem = ({ file, current = false, onClick }: FileListItemProps) => {
+    const isSelected = useFileStore((state) =>
+        state.selectedFiles.some((selectedFile) => selectedFile.Path === file.Path),
+    );
+    const addSelectedFile = useFileStore((state) => state.addSelectedFile);
+    const removeSelectedFile = useFileStore((state) => state.removeSelectedFile);
+
     const [image, setImage] = useState<string>();
+
+    const handleCheckboxChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const checked = event.target.checked;
+
+        if (checked) {
+            addSelectedFile(file);
+        } else {
+            removeSelectedFile(file.Path);
+        }
+    };
 
     useEffect(() => {
         async function loadImage() {
@@ -35,14 +51,19 @@ export const DrawerItem = ({ file, selected = false, onClick }: FileListItemProp
         // biome-ignore lint/a11y/useKeyWithClickEvents: N/A
         <div
             onClick={onClick}
-            className={`h-full aspect-square rounded ${selected ? 'outline-3 outline-blue-500' : ''}`}
+            className={`h-full aspect-square rounded ${current ? 'outline-3 outline-blue-500' : ''}`}
         >
             <div className='relative size-full'>
                 <img alt='Preview' src={image} className='size-full object-cover rounded' />
 
-                <Checkbox size='small' className='absolute top-0 right-0 p-0 m-0.5 rounded bg-black/50 text-white' />
+                <Checkbox
+                    size='small'
+                    checked={isSelected}
+                    onChange={handleCheckboxChange}
+                    className='absolute top-0 right-0 p-0 m-0.5 rounded bg-black/50 text-white'
+                />
 
-                <BottomBar file={file} selected={selected} className='absolute bottom-0 left-0 right-0 h-5 rounded-b' />
+                <BottomBar file={file} selected={current} className='absolute bottom-0 left-0 right-0 h-5 rounded-b' />
             </div>
         </div>
     );
@@ -106,7 +127,7 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
     };
 
     const onCloseImage = () => {
-        removeFile(file.Hash);
+        removeFile(file.Path);
         enhancementRemoveFile(file);
         updateDrawer();
     };
@@ -126,7 +147,7 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
 
     const options = [
         { name: 'Close image', action: onCloseImage },
-        { name: 'Close all image', action: onCloseAllImages },
+        { name: 'Close all images', action: onCloseAllImages },
         { name: undefined },
         { name: `Show in ${fmName}`, action: onReveal },
     ];

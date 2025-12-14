@@ -7,11 +7,11 @@ type FileListBodyProps = {
 
 export const DrawerBody = ({ drawerHeight }: FileListBodyProps) => {
     const files = useFileStore((state) => state.files);
-    const selectedIndex = useFileStore((state) => state.selectedIndex);
-    const setSelectedIndex = useFileStore((state) => state.setSelectedIndex);
+    const currentIndex = useFileStore((state) => state.currentIndex);
+    const setCurrentIndex = useFileStore((state) => state.setCurrentIndex);
 
     const onImageClicked = (index: number) => {
-        setSelectedIndex(index);
+        setCurrentIndex(index);
     };
 
     return (
@@ -20,7 +20,7 @@ export const DrawerBody = ({ drawerHeight }: FileListBodyProps) => {
                 <DrawerItem
                     key={`img-${index}`}
                     file={file}
-                    selected={index === selectedIndex}
+                    current={index === currentIndex}
                     onClick={() => onImageClicked(index)}
                 />
             ))}

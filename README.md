@@ -62,7 +62,7 @@ To bypass this, open the Terminal and run one of the commands below (depending o
 
 ## 🐞 Known Issues
 
-1. Using half-precision (FP16) models using CPU often doesn't give any performance boost; a bug fix for this is expected to be available in the next ONNX release.
+1. Using half-precision (FP16) models with CPU execution provider often doesn't give any performance boost; a bug fix for this is expected to be available in the next ONNX release.
 2. The ONNX Runtime has a [bug](https://github.com/microsoft/onnxruntime/pull/26443) when running half-precision (FP16) models on Apple's M-series chip; a bug fix for this is expected to be available in the next ONNX release. Meanwhile, all image processing on Macs will be done in full precision, which gives the best quality possible, but it's often unnecessarily slow.
 3. The **Tokyo** model doesn't work with Apple's CoreML. This is a limitation on CoreML's architecture, so any upscaling using this model on a Mac will be slow.
 

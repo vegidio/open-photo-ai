@@ -10,7 +10,7 @@ type EnhancementProps = {
 
 export const Enhancement = ({ op }: EnhancementProps) => {
     const [isHovered, setIsHovered] = useState(false);
-    const file = useFileStore((state) => state.files[state.selectedIndex]);
+    const file = useFileStore((state) => state.files[state.currentIndex]);
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
     const { name, config, icon } = opToEnhancement(op);
 

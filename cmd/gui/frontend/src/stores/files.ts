@@ -4,54 +4,89 @@ import type { File } from '../../bindings/gui/types';
 
 type FileStore = {
     files: File[];
-    selectedIndex: number;
+    selectedFiles: File[];
+    currentIndex: number;
 
-    setSelectedIndex: (index: number) => void;
+    setCurrentIndex: (index: number) => void;
     addFiles: (files: File[]) => void;
-    removeFile: (hash: string) => void;
+    removeFile: (path: string) => void;
+    addSelectedFile: (file: File) => void;
+    removeSelectedFile: (path: string) => void;
+    selectAll: () => void;
+    unselectAll: () => void;
     clear: () => void;
 };
 
 export const useFileStore = create(
     immer<FileStore>((set, _) => ({
         files: [],
-        selectedIndex: 0,
+        selectedFiles: [],
+        currentIndex: 0,
 
-        setSelectedIndex: (index: number) => {
+        setCurrentIndex: (index: number) => {
             set((state) => {
-                state.selectedIndex = index;
+                state.currentIndex = index;
             });
         },
 
         addFiles: (files: File[]) => {
             set((state) => {
                 const uniqueFiles = files.filter(
-                    (file) => !state.files.some((existingFile) => existingFile.Hash === file.Hash),
+                    (file) => !state.files.some((existingFile) => existingFile.Path === file.Path),
                 );
                 state.files.push(...uniqueFiles);
             });
         },
 
-        removeFile: (hash: string) => {
+        removeFile: (path: string) => {
             set((state) => {
-                const removedIndex = state.files.findIndex((file) => file.Hash === hash);
+                const removedIndex = state.files.findIndex((file) => file.Path === path);
                 if (removedIndex === -1) return;
 
-                state.files = state.files.filter((file) => file.Hash !== hash);
+                state.files = state.files.filter((file) => file.Path !== path);
 
-                // Update selectedIndex if necessary
+                // Update currentIndex if necessary
                 if (state.files.length === 0) {
-                    state.selectedIndex = 0;
-                } else if (state.selectedIndex >= state.files.length) {
-                    state.selectedIndex = state.files.length - 1;
+                    state.currentIndex = 0;
+                } else if (state.currentIndex >= state.files.length) {
+                    state.currentIndex = state.files.length - 1;
                 }
+            });
+        },
+
+        addSelectedFile: (file: File) => {
+            set((state) => {
+                const exists = state.selectedFiles.some((existingFile) => existingFile.Path === file.Path);
+                if (!exists) state.selectedFiles.push(file);
+            });
+        },
+
+        removeSelectedFile: (path: string) => {
+            set((state) => {
+                const removedIndex = state.selectedFiles.findIndex((file) => file.Path === path);
+                if (removedIndex === -1) return;
+
+                state.selectedFiles = state.selectedFiles.filter((file) => file.Path !== path);
+            });
+        },
+
+        selectAll: () => {
+            set((state) => {
+                state.selectedFiles = state.files;
+            });
+        },
+
+        unselectAll: () => {
+            set((state) => {
+                state.selectedFiles = [];
             });
         },
 
         clear: () => {
             set((state) => {
                 state.files = [];
-                state.selectedIndex = 0;
+                state.selectedFiles = [];
+                state.currentIndex = 0;
             });
         },
     })),

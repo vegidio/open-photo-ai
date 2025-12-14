@@ -7,7 +7,7 @@ import { useEnhancementStore, useFileStore } from '@/stores';
 const EMPTY_OPERATIONS: Operation[] = [];
 
 export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
-    const file = useFileStore((state) => state.files[state.selectedIndex]);
+    const file = useFileStore((state) => state.files[state.currentIndex]);
     const operations = useEnhancementStore((state) => state.enhancements.get(file) ?? EMPTY_OPERATIONS);
 
     return (

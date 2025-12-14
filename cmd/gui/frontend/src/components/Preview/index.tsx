@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { LinearProgress, Typography } from '@mui/material';
+import { LinearProgress, Paper, Typography } from '@mui/material';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
@@ -13,9 +13,7 @@ const EMPTY_OPERATIONS: Operation[] = [];
 export const Preview = ({ className = '' }: TailwindProps) => {
     // FileListStore
     const filesLength = useFileStore((state) => state.files.length);
-    const selectedFile = useFileStore((state) =>
-        state.files.length > 0 ? state.files[state.selectedIndex] : undefined,
-    );
+    const currentFile = useFileStore((state) => (state.files.length > 0 ? state.files[state.currentIndex] : undefined));
     const setOpen = useDrawerStore((state) => state.setOpen);
 
     // ImageStore
@@ -26,15 +24,15 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
     // EnhancementStore
     const operations = useEnhancementStore((state) =>
-        selectedFile ? (state.enhancements.get(selectedFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
+        currentFile ? (state.enhancements.get(currentFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
     );
 
     useEffect(() => {
         let p: CancellablePromise<ImageData>;
 
         async function loadPreview() {
-            if (selectedFile) {
-                const originalImage = await getImage(selectedFile, 0);
+            if (currentFile) {
+                const originalImage = await getImage(currentFile, 0);
 
                 // We set both images to the original image for now, later we will determine if we need to display the
                 // enhanced image or not based on the autopilot state.
@@ -45,7 +43,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                     setIsRunning(true);
 
                     const opIds = operations.map((op) => op.id);
-                    p = getEnhancedImage(selectedFile, ...opIds);
+                    p = getEnhancedImage(currentFile, ...opIds);
 
                     try {
                         const enhancedImage = await p;
@@ -68,7 +66,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             // Cancel any pending request to preview the enhanced image
             p?.cancel();
         };
-    }, [operations, selectedFile, setEnhancedImage, setIsRunning, setOriginalImage]);
+    }, [operations, currentFile, setEnhancedImage, setIsRunning, setOriginalImage]);
 
     // useEffect(() => {
     //     if (filesLength > 0) setOpen(true);
@@ -109,11 +107,17 @@ const ProgressUpdate = () => {
     }, [getOperationName]);
 
     return (
-        <div className='absolute flex top-4 right-4 w-32 h-7 items-center justify-center shadow-xl'>
+        <Paper
+            elevation={8}
+            className='absolute flex top-4 right-4 w-32 h-7 items-center justify-center rounded-lg z-10'
+            sx={{
+                backgroundImage: 'none',
+            }}
+        >
             <LinearProgress variant='determinate' value={progress.value} className='size-full rounded-[5px]' />
             <Typography variant='subtitle2' className='absolute text-gray-700'>
                 {progress.name}
             </Typography>
-        </div>
+        </Paper>
     );
 };
