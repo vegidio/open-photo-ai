@@ -40,7 +40,18 @@ export const useEnhancementStore = create(
         addEnhancement: (file: File, operation: Operation) => {
             set((state) => {
                 const ops = state.enhancements.get(file) ?? [];
-                state.enhancements.set(file, [...ops, operation]);
+
+                // Check if there's already an upscale operation;
+                // Upscale operations should always be the last to be processed
+                const firstUpscaleIndex = ops.findIndex((op) => op.id.startsWith('up'));
+
+                // If there's an upscale operation, insert before it; otherwise add at the end
+                if (firstUpscaleIndex !== -1) {
+                    const newOps = [...ops.slice(0, firstUpscaleIndex), operation, ...ops.slice(firstUpscaleIndex)];
+                    state.enhancements.set(file, newOps);
+                } else {
+                    state.enhancements.set(file, [...ops, operation]);
+                }
             });
         },
 

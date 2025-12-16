@@ -5,11 +5,13 @@ import (
 	_ "embed"
 	"fmt"
 	"gui/services"
+	"gui/utils"
 	"log"
 	"log/slog"
 
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 const AppName = "open-photo-ai"
@@ -42,7 +44,7 @@ func main() {
 	})
 
 	// Create a new window with the necessary options.
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:      "Open Photo AI",
 		StartState: application.WindowStateMaximised,
 		MinWidth:   1280,
@@ -52,8 +54,12 @@ func main() {
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHidden,
 		},
-		URL: "/",
+		URL:               "/",
+		EnableDragAndDrop: true,
 	})
+
+	// Track drag and drops on the app
+	eventDragAndDrop(app, win)
 
 	// Services
 	imageService, err := services.NewImageService(app)
@@ -62,9 +68,11 @@ func main() {
 	}
 	defer imageService.Destroy()
 
+	dialogService := services.NewDialogService(app)
+
 	app.RegisterService(application.NewService(&services.EnvironmentService{}))
 	app.RegisterService(application.NewService(&services.OsService{}))
-	app.RegisterService(application.NewService(&services.DialogService{}))
+	app.RegisterService(application.NewService(dialogService))
 	app.RegisterService(application.NewService(imageService))
 
 	// Run the application. This blocks until the application has been exited.
@@ -74,4 +82,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func eventDragAndDrop(app *application.App, win *application.WebviewWindow) {
+	win.OnWindowEvent(
+		events.Common.WindowDropZoneFilesDropped,
+		func(event *application.WindowEvent) {
+			paths := event.Context().DroppedFiles()
+			files := utils.CreateFileTypes(paths)
+
+			app.Event.Emit("app:FilesDropped", files)
+		})
 }
