@@ -9,16 +9,12 @@ import (
 
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
+	"github.com/vegidio/open-photo-ai/types"
 )
 
-func PrepareDependency(url, destination, fileName string, onDownload func()) error {
+func PrepareDependency(url, destination, fileName string, onProgress types.DownloadProgress) error {
 	if !shouldDownload(destination, fileName) {
 		return nil
-	}
-
-	// Notify the user that a download is necessary
-	if onDownload != nil {
-		onDownload()
 	}
 
 	file, err := fs.MkUserConfigFile(internal.AppName, destination, fileName)
@@ -27,7 +23,7 @@ func PrepareDependency(url, destination, fileName string, onDownload func()) err
 	}
 	defer file.Close()
 
-	err = downloadFile(url, file)
+	err = downloadFile(url, file, onProgress)
 	if err != nil {
 		return err
 	}
@@ -36,7 +32,7 @@ func PrepareDependency(url, destination, fileName string, onDownload func()) err
 
 	// If it's a zip file, unzip it
 	if ext == ".zip" {
-		defer os.Remove(file.Name())
+		//defer os.Remove(file.Name())
 
 		targetDir := filepath.Dir(file.Name())
 		err = fs.Unzip(file.Name(), targetDir)
@@ -47,6 +43,29 @@ func PrepareDependency(url, destination, fileName string, onDownload func()) err
 
 	return nil
 }
+
+// region - Progress reader
+
+type progressReader struct {
+	reader     io.Reader
+	total      int64
+	downloaded int64
+	onProgress func(downloaded, total int64, percent float64)
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	pr.downloaded += int64(n)
+
+	if pr.onProgress != nil {
+		percent := float64(pr.downloaded) / float64(pr.total)
+		pr.onProgress(pr.downloaded, pr.total, percent)
+	}
+
+	return n, err
+}
+
+// endregion
 
 // region - Private functions
 
@@ -61,7 +80,7 @@ func shouldDownload(destination, fileName string) bool {
 	return os.IsNotExist(fErr)
 }
 
-func downloadFile(url string, dstFile *os.File) error {
+func downloadFile(url string, dstFile *os.File, onProgress types.DownloadProgress) error {
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -72,7 +91,17 @@ func downloadFile(url string, dstFile *os.File) error {
 		return fmt.Errorf("bad status: %s", resp.Status)
 	}
 
-	_, err = io.Copy(dstFile, resp.Body)
+	// Get the total file size from the Content-Length header
+	totalSize := resp.ContentLength
+
+	// Wrap the reader with a progress tracker
+	reader := &progressReader{
+		reader:     resp.Body,
+		total:      totalSize,
+		onProgress: onProgress,
+	}
+
+	_, err = io.Copy(dstFile, reader)
 	if err != nil {
 		return err
 	}

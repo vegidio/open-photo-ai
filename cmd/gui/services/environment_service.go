@@ -4,10 +4,10 @@ import "runtime"
 
 type EnvironmentService struct{}
 
-func (e *EnvironmentService) GetOS() string {
+func (s *EnvironmentService) GetOS() string {
 	return runtime.GOOS
 }
 
-func (e *EnvironmentService) GetArch() string {
+func (s *EnvironmentService) GetArch() string {
 	return runtime.GOARCH
 }

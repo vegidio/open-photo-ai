@@ -50,10 +50,6 @@ func LoadImage(path string) (*types.ImageData, error) {
 // SaveImage saves the image data to a file in the specified format.
 // The output format is determined by the Format field in the OutputImage structure.
 //
-// For JPEG format, the quality parameter controls the compression level.
-// For PNG format, the quality parameter is ignored as PNG uses lossless compression.
-// For TIFF format, the quality parameter is ignored and Deflate compression is used.
-//
 // # Parameters:
 //   - data: A pointer to OutputImage containing the file path, pixel data, and desired format.
 //   - format: The image format to save the image data as.

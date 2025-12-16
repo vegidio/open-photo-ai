@@ -8,6 +8,7 @@ import (
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
+	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 )
 
@@ -37,13 +38,13 @@ const (
 //	    log.Fatal("Failed to initialize:", err)
 //	}
 //	defer opai.Destroy() // Clean up resources
-func Initialize(name string) error {
+func Initialize(name string, onProgress types.DownloadProgress) error {
 	internal.AppName = name
 
 	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
 		onnxRuntimeTag, runtime.GOOS, runtime.GOARCH)
 
-	if err := utils.PrepareDependency(url, "", onnxRuntimeZip, nil); err != nil {
+	if err := utils.PrepareDependency(url, "", onnxRuntimeZip, onProgress); err != nil {
 		return err
 	}
 

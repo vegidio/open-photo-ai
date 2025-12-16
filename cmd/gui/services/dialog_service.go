@@ -15,8 +15,8 @@ func NewDialogService(app *application.App) *DialogService {
 	return &DialogService{app: app}
 }
 
-func (d *DialogService) OpenFileDialog() ([]types.File, error) {
-	dialog := d.app.Dialog.OpenFile()
+func (s *DialogService) OpenFileDialog() ([]types.File, error) {
+	dialog := s.app.Dialog.OpenFile()
 	dialog.SetTitle("Select Image")
 	dialog.AddFilter("Images (*.png;*.jpg;*.tiff)", "*.png;*.jpg;*.jpeg;*.tif;*.tiff")
 
@@ -29,8 +29,8 @@ func (d *DialogService) OpenFileDialog() ([]types.File, error) {
 	return files, nil
 }
 
-func (d *DialogService) OpenDirDialog() (string, error) {
-	dialog := d.app.Dialog.OpenFile()
+func (s *DialogService) OpenDirDialog() (string, error) {
+	dialog := s.app.Dialog.OpenFile()
 	dialog.SetTitle("Select Directory")
 	dialog.CanChooseFiles(false)
 	dialog.CanChooseDirectories(true)

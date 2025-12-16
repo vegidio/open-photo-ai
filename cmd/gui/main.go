@@ -3,18 +3,14 @@ package main
 import (
 	"embed"
 	_ "embed"
-	"fmt"
 	"gui/services"
 	"gui/utils"
 	"log"
 	"log/slog"
 
-	opai "github.com/vegidio/open-photo-ai"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
-
-const AppName = "open-photo-ai"
 
 //go:embed all:frontend/dist
 var assets embed.FS
@@ -23,13 +19,6 @@ var assets embed.FS
 // and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
 // logs any error that might occur.
 func main() {
-	// Initialize the model runtime
-	if err := opai.Initialize(AppName); err != nil {
-		fmt.Printf("Failed to initialize the model runtime: %v\n", err)
-		return
-	}
-	defer opai.Destroy()
-
 	// Create a new Wails application by providing the necessary options.
 	app := application.New(application.Options{
 		Name:        "Open Photo AI",
@@ -62,6 +51,9 @@ func main() {
 	eventDragAndDrop(app, win)
 
 	// Services
+	appService := services.NewAppService(app)
+	defer appService.Destroy()
+
 	imageService, err := services.NewImageService(app)
 	if err != nil {
 		log.Fatal(err)
@@ -69,13 +61,15 @@ func main() {
 	defer imageService.Destroy()
 
 	dialogService := services.NewDialogService(app)
+	osService := services.NewOsService(app)
 
-	app.RegisterService(application.NewService(&services.EnvironmentService{}))
-	app.RegisterService(application.NewService(&services.OsService{}))
-	app.RegisterService(application.NewService(dialogService))
+	app.RegisterService(application.NewService(appService))
 	app.RegisterService(application.NewService(imageService))
+	app.RegisterService(application.NewService(&services.EnvironmentService{}))
+	app.RegisterService(application.NewService(osService))
+	app.RegisterService(application.NewService(dialogService))
 
-	// Run the application. This blocks until the application has been exited.
+	// Run the application. This blocks until the application exists
 	err = app.Run()
 
 	// If an error occurred while running the application, log it and exit.
