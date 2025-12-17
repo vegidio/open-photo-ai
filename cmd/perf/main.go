@@ -10,6 +10,7 @@ import (
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/types"
+	"github.com/vegidio/open-photo-ai/utils"
 )
 
 const AppName = "open-photo-ai"
@@ -20,7 +21,7 @@ var testDataBinary []byte
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	if err := opai.Initialize(AppName); err != nil {
+	if err := opai.Initialize(AppName, nil); err != nil {
 		log.Fatalf("Failed to initialize the model runtime: %v\n", err)
 	}
 	defer opai.Destroy()
@@ -36,7 +37,7 @@ func main() {
 		log.Fatalf("Error writing temp file: %v\n", err)
 	}
 
-	inputData, err := opai.LoadImage(tempFile.Name())
+	inputData, err := utils.LoadImage(tempFile.Name())
 	if err != nil {
 		log.Fatalf("Failed to load the input image: %v\n", err)
 	}

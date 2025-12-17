@@ -22,6 +22,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
+	"github.com/vegidio/open-photo-ai/utils"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/image/tiff"
 )
@@ -60,7 +61,7 @@ func NewImageService(app *application.App) (*ImageService, error) {
 //   - int: The height of the image
 //   - error: An error if the image cannot be loaded, processed, or encoded
 func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, error) {
-	inputData, err := opai.LoadImage(filePath)
+	inputData, err := utils.LoadImage(filePath)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -168,7 +169,7 @@ func (s *ImageService) ExportImage(
 		return err
 	}
 
-	err = opai.SaveImage(&types.ImageData{
+	err = utils.SaveImage(&types.ImageData{
 		FilePath: outputPath,
 		Pixels:   img,
 	}, format, 100)
@@ -200,7 +201,7 @@ func (s *ImageService) runInference(ctx context.Context, filePath string, opIds 
 			return nil, err
 		}
 
-		inputImage, err := opai.LoadImage(filePath)
+		inputImage, err := utils.LoadImage(filePath)
 		if err != nil {
 			return nil, err
 		}
