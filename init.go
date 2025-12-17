@@ -33,7 +33,7 @@ const (
 //
 // # Example:
 //
-//	err := opai.Initialize("myapp")
+//	err := opai.Initialize("myapp",  nil)
 //	if err != nil {
 //	    log.Fatal("Failed to initialize:", err)
 //	}
@@ -41,10 +41,11 @@ const (
 func Initialize(name string, onProgress types.DownloadProgress) error {
 	internal.AppName = name
 
+	// ONNX Runtime
 	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
 		onnxRuntimeTag, runtime.GOOS, runtime.GOARCH)
 
-	if err := utils.PrepareDependency(url, "", onnxRuntimeZip, onProgress); err != nil {
+	if err := utils.PrepareDependency(url, "", onnxRuntimeZip, internal.OnnxRuntimeName, onProgress); err != nil {
 		return err
 	}
 
@@ -78,7 +79,7 @@ func startRuntime() error {
 		return err
 	}
 
-	runtimePath := filepath.Join(configDir, onnxRuntimeName)
+	runtimePath := filepath.Join(configDir, internal.OnnxRuntimeName)
 	ort.SetSharedLibraryPath(runtimePath)
 	if err = ort.InitializeEnvironment(); err != nil {
 		return err

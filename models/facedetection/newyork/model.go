@@ -26,7 +26,7 @@ type NewYork struct {
 	session   *ort.DynamicAdvancedSession
 }
 
-func New(operation types.Operation) (*NewYork, error) {
+func New(operation types.Operation, onProgress types.DownloadProgress) (*NewYork, error) {
 	op := operation.(OpFdNewYork)
 	modelFile := op.Id() + ".onnx"
 	name := fmt.Sprintf("Face Detection (%s)",
@@ -34,7 +34,7 @@ func New(operation types.Operation) (*NewYork, error) {
 	)
 
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-	if err := utils.PrepareDependency(url, "models", modelFile, nil); err != nil {
+	if err := utils.PrepareDependency(url, "models", modelFile, "", onProgress); err != nil {
 		return nil, err
 	}
 
@@ -67,7 +67,7 @@ func (m *NewYork) Name() string {
 	return m.name
 }
 
-func (m *NewYork) Run(ctx context.Context, input *types.ImageData, onProgress types.ProgressCallback) ([]facedetection.Face, error) {
+func (m *NewYork) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) ([]facedetection.Face, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

@@ -36,7 +36,7 @@ import (
 func Process(
 	ctx context.Context,
 	input *types.ImageData,
-	onProgress types.ProgressCallback,
+	onProgress types.InferenceProgress,
 	operations ...types.Operation,
 ) (*types.ImageData, error) {
 	var output *types.ImageData
@@ -45,7 +45,12 @@ func Process(
 	inputCopy := &types.ImageData{Pixels: input.Pixels}
 
 	for _, op := range operations {
-		model, err := selectModel(op)
+		model, err := selectModel(op, func(_, _ int64, percent float64) {
+			if onProgress != nil {
+				onProgress("dl", percent)
+			}
+		})
+
 		if err != nil {
 			return nil, err
 		}
@@ -92,13 +97,18 @@ func Process(
 func Execute[T any](
 	ctx context.Context,
 	input *types.ImageData,
-	onProgress types.ProgressCallback,
+	onProgress types.InferenceProgress,
 	operation types.Operation,
 ) (T, error) {
 	// nil value for type T
 	var genericNil T
 
-	model, err := selectModel(operation)
+	model, err := selectModel(operation, func(_, _ int64, percent float64) {
+		if onProgress != nil {
+			onProgress("dl", percent)
+		}
+	})
+	
 	if err != nil {
 		return genericNil, err
 	}
@@ -126,7 +136,7 @@ func CleanRegistry() {
 
 // region - Private functions
 
-func selectModel(operation types.Operation) (interface{}, error) {
+func selectModel(operation types.Operation, onProgress types.DownloadProgress) (interface{}, error) {
 	var model interface{}
 	var err error
 
@@ -138,19 +148,19 @@ func selectModel(operation types.Operation) (interface{}, error) {
 	switch {
 	// Face Detection
 	case strings.HasPrefix(operation.Id(), "fd_newyork"):
-		model, err = newyork.New(operation)
+		model, err = newyork.New(operation, onProgress)
 
 	// Face Recovery
 	case strings.HasPrefix(operation.Id(), "fr_athens"):
-		model, err = athens.New(operation)
+		model, err = athens.New(operation, onProgress)
 	case strings.HasPrefix(operation.Id(), "fr_santorini"):
-		model, err = santorini.New(operation)
+		model, err = santorini.New(operation, onProgress)
 
 	// Upscale
 	case strings.HasPrefix(operation.Id(), "up_tokyo"):
-		model, err = tokyo.New(operation)
+		model, err = tokyo.New(operation, onProgress)
 	case strings.HasPrefix(operation.Id(), "up_kyoto"):
-		model, err = kyoto.New(operation)
+		model, err = kyoto.New(operation, onProgress)
 
 	default:
 		err = fmt.Errorf("no model found with ID: %s", operation.Id())

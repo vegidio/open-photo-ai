@@ -18,7 +18,7 @@ type Model[T any] interface {
 	Name() string
 
 	// Run processes the input image data and returns the processed output
-	Run(ctx context.Context, input *ImageData, onProgress ProgressCallback) (T, error)
+	Run(ctx context.Context, input *ImageData, onProgress InferenceProgress) (T, error)
 }
 
 // Destroyable defines an interface for types that require explicit resource cleanup. Implementations must provide a
@@ -30,9 +30,3 @@ type Destroyable interface {
 	// Destroy cleans up resources and releases memory used by the model
 	Destroy()
 }
-
-// ProgressCallback is a function type for reporting progress during model operations.
-//
-// The operation parameter describes the current processing step, and progress represents the completion percentage as a
-// value between 0.0 and 1.0.
-type ProgressCallback func(operation string, progress float64)

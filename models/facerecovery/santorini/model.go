@@ -22,8 +22,8 @@ type Santorini struct {
 	fdModel   types.Model[[]facedetection.Face]
 }
 
-func New(operation types.Operation) (*Santorini, error) {
-	fdModel, modelFile, modelName, err := facerecovery.LoadModel(operation)
+func New(operation types.Operation, onProgress types.DownloadProgress) (*Santorini, error) {
+	fdModel, modelFile, modelName, err := facerecovery.LoadModel(operation, onProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (m *Santorini) Name() string {
 	return m.name
 }
 
-func (m *Santorini) Run(ctx context.Context, input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
+func (m *Santorini) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) (*types.ImageData, error) {
 	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, input, onProgress)
 	if err != nil {
 		return nil, err

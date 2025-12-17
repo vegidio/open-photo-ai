@@ -23,8 +23,8 @@ type Athens struct {
 	fdModel   types.Model[[]facedetection.Face]
 }
 
-func New(operation types.Operation) (*Athens, error) {
-	fdModel, modelFile, modelName, err := facerecovery.LoadModel(operation)
+func New(operation types.Operation, onProgress types.DownloadProgress) (*Athens, error) {
+	fdModel, modelFile, modelName, err := facerecovery.LoadModel(operation, onProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (m *Athens) Name() string {
 	return m.name
 }
 
-func (m *Athens) Run(ctx context.Context, input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
+func (m *Athens) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) (*types.ImageData, error) {
 	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, input, onProgress)
 	if err != nil {
 		return nil, err

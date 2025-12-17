@@ -25,7 +25,7 @@ type Kyoto struct {
 	session   *ort.DynamicAdvancedSession
 }
 
-func New(operation types.Operation) (*Kyoto, error) {
+func New(operation types.Operation, onProgress types.DownloadProgress) (*Kyoto, error) {
 	op := operation.(OpUpKyoto)
 	modelFile := op.Id() + ".onnx"
 	name := fmt.Sprintf("Upscale %dx (%s, %s)",
@@ -35,7 +35,7 @@ func New(operation types.Operation) (*Kyoto, error) {
 	)
 
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-	if err := utils.PrepareDependency(url, "models", modelFile, nil); err != nil {
+	if err := utils.PrepareDependency(url, "models", modelFile, "", onProgress); err != nil {
 		return nil, err
 	}
 
@@ -68,7 +68,7 @@ func (m *Kyoto) Name() string {
 	return m.name
 }
 
-func (m *Kyoto) Run(ctx context.Context, input *types.ImageData, onProgress types.ProgressCallback) (*types.ImageData, error) {
+func (m *Kyoto) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) (*types.ImageData, error) {
 	if onProgress != nil {
 		onProgress("up", 0)
 	}

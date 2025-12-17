@@ -12,8 +12,26 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-func PrepareDependency(url, destination, fileName string, onProgress types.DownloadProgress) error {
-	if !shouldDownload(destination, fileName) {
+// PrepareDependency downloads a file from the given URL to the destination directory if it doesn't already exist.
+//
+// If the downloaded file is a zip archive, it will be automatically extracted to the destination directory and the zip
+// file will be removed.
+//
+// # Parameters:
+//   - url: the URL to download the file from.
+//   - destination: the subdirectory within the user's config directory to store the file.
+//   - fileName: the name to save the downloaded file as.
+//   - checkFile: the file to check for existence (if empty, fileName is used).
+//   - onProgress: optional callback function to track download progress.
+//
+// Returns an error if the download or extraction fails, nil otherwise.
+func PrepareDependency(url, destination, fileName, checkFile string, onProgress types.DownloadProgress) error {
+	fileToCheck := checkFile
+	if fileToCheck == "" {
+		fileToCheck = fileName
+	}
+
+	if !shouldDownload(destination, fileToCheck) {
 		return nil
 	}
 
@@ -32,7 +50,7 @@ func PrepareDependency(url, destination, fileName string, onProgress types.Downl
 
 	// If it's a zip file, unzip it
 	if ext == ".zip" {
-		//defer os.Remove(file.Name())
+		defer os.Remove(file.Name())
 
 		targetDir := filepath.Dir(file.Name())
 		err = fs.Unzip(file.Name(), targetDir)
@@ -50,7 +68,7 @@ type progressReader struct {
 	reader     io.Reader
 	total      int64
 	downloaded int64
-	onProgress func(downloaded, total int64, percent float64)
+	onProgress types.DownloadProgress
 }
 
 func (pr *progressReader) Read(p []byte) (int, error) {
@@ -58,7 +76,11 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	pr.downloaded += int64(n)
 
 	if pr.onProgress != nil {
-		percent := float64(pr.downloaded) / float64(pr.total)
+		percent := 0.0
+		if pr.total > 0 {
+			percent = float64(pr.downloaded) / float64(pr.total)
+		}
+
 		pr.onProgress(pr.downloaded, pr.total, percent)
 	}
 

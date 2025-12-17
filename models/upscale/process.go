@@ -18,7 +18,7 @@ func Process(
 	tileSize,
 	overlap,
 	scaleFactor int,
-	onProgress types.ProgressCallback,
+	onProgress types.InferenceProgress,
 ) (*image.RGBA, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

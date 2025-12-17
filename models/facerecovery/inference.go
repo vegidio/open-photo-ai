@@ -18,7 +18,7 @@ func RestoreFaces(
 	faces []facedetection.Face,
 	tileSize int,
 	fidelity float32,
-	onProgress types.ProgressCallback,
+	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	mask := createCircularMask(tileSize, tileSize, 15.0)
 

@@ -12,7 +12,10 @@ import (
 	"golang.org/x/text/language"
 )
 
-func LoadModel(operation types.Operation) (types.Model[[]facedetection.Face], string, string, error) {
+func LoadModel(
+	operation types.Operation,
+	onProgress types.DownloadProgress,
+) (types.Model[[]facedetection.Face], string, string, error) {
 	fdModel, err := GetFdModel()
 	if err != nil {
 		return nil, "", "", err
@@ -24,7 +27,7 @@ func LoadModel(operation types.Operation) (types.Model[[]facedetection.Face], st
 	)
 
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-	if err = utils.PrepareDependency(url, "models", modelFile, nil); err != nil {
+	if err = utils.PrepareDependency(url, "models", modelFile, "", onProgress); err != nil {
 		return nil, "", "", err
 	}
 
@@ -35,7 +38,7 @@ func ExtractFaces(
 	ctx context.Context,
 	fdModel types.Model[[]facedetection.Face],
 	input *types.ImageData,
-	onProgress types.ProgressCallback,
+	onProgress types.InferenceProgress,
 ) ([]facedetection.Face, error) {
 	if onProgress != nil {
 		onProgress("fr", 0)

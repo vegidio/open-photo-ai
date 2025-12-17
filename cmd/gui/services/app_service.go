@@ -22,6 +22,7 @@ func (s *AppService) Initialize() error {
 
 	// Initialize the model runtime
 	if err := opai.Initialize(AppName, onProgress); err != nil {
+		s.app.Event.Emit("app:download:error")
 		return err
 	}
 

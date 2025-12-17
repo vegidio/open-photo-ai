@@ -18,7 +18,7 @@ func GetFdModel() (types.Model[[]facedetection.Face], error) {
 
 	model, exists := internal.Registry[fdOp.Id()]
 	if !exists {
-		model, err = newyork.New(fdOp)
+		model, err = newyork.New(fdOp, nil)
 		if err != nil {
 			return nil, err
 		}
