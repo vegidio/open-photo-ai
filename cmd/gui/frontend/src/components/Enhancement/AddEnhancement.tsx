@@ -66,10 +66,10 @@ const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps
     const operations = useEnhancementStore((state) =>
         currentFile ? (state.enhancements.get(currentFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
     );
-    const addEnhancement = useEnhancementStore((state) => state.addEnhancement);
+    const addEnhancements = useEnhancementStore((state) => state.addEnhancements);
 
     const onAddEnhancement = (op: Operation) => {
-        addEnhancement(currentFile, op);
+        addEnhancements(currentFile, [op]);
         onMenuClose();
     };
 

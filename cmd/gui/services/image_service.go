@@ -5,22 +5,17 @@ import (
 	"context"
 	"fmt"
 	guitypes "gui/types"
+	guiutils "gui/utils"
 	"image"
 	"image/jpeg"
 	"image/png"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/disintegration/imaging"
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/memo"
-	"github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
-	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
-	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
-	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
+	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -129,6 +124,30 @@ func (s *ImageService) ProcessImage(
 	return jpgBytes, bounds.Dx(), bounds.Dy(), nil
 }
 
+// SuggestEnhancements analyzes an image and returns suggestions for enhancement operations.
+//
+// # Parameters:
+//   - filePath: The path to the image file to analyze
+//
+// # Returns:
+//   - []string: A slice of operation IDs representing suggested enhancements (e.g., "up_athens_4x_fp32").
+//   - error: An error if the image cannot be loaded or the AI analysis fails.
+func (s *ImageService) SuggestEnhancements(filePath string) ([]string, error) {
+	inputImage, err := utils.LoadImage(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	operations, err := opai.SuggestEnhancements(inputImage)
+	if err != nil {
+		return nil, err
+	}
+
+	return lo.Map(operations, func(op types.Operation, _ int) string {
+		return op.Id()
+	}), nil
+}
+
 // ExportImage runs inference operations on an image and saves the result to disk.
 //
 // # Parameters:
@@ -206,7 +225,7 @@ func (s *ImageService) runInference(ctx context.Context, filePath string, opIds 
 			return nil, err
 		}
 
-		operations := idsToOperations(opIds)
+		operations := guiutils.IdsToOperations(opIds)
 		outputData, err := opai.Process(ctx, inputImage, func(name string, progress float64) {
 			s.app.Event.Emit("app:progress", name, progress)
 		}, operations...)
@@ -223,38 +242,6 @@ func (s *ImageService) runInference(ctx context.Context, filePath string, opIds 
 // endregion
 
 // region - Private functions
-
-func idsToOperations(opIds []string) []types.Operation {
-	operations := make([]types.Operation, 0)
-
-	for _, opId := range opIds {
-		values := strings.Split(opId, "_")
-		name := values[1]
-
-		switch name {
-		// Face Recovery
-		case "athens":
-			precision := types.Precision(values[2])
-			operations = append(operations, athens.Op(precision))
-		case "santorini":
-			precision := types.Precision(values[2])
-			operations = append(operations, santorini.Op(precision))
-
-		// Upscale
-		case "tokyo":
-			scale, _ := strconv.Atoi(values[2])
-			precision := types.Precision(values[3])
-			operations = append(operations, tokyo.Op(scale, precision))
-		case "kyoto":
-			mode := kyoto.Mode(values[2])
-			scale, _ := strconv.Atoi(values[3])
-			precision := types.Precision(values[4])
-			operations = append(operations, kyoto.Op(mode, scale, precision))
-		}
-	}
-
-	return operations
-}
 
 func getCacheKey(filePath string, opIds []string) string {
 	key := lo.Reduce(opIds, func(agg string, item string, _ int) string {

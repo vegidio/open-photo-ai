@@ -75,3 +75,22 @@ export function ProcessImage(filePath: string, ...opIds: string[]): $Cancellable
         return $result;
     });
 }
+
+/**
+ * SuggestEnhancements analyzes an image and returns suggestions for enhancement operations.
+ * 
+ * # Parameters:
+ *   - filePath: The path to the image file to analyze
+ * 
+ * # Returns:
+ *   - []string: A slice of operation IDs representing suggested enhancements (e.g., "up_athens_4x_fp32").
+ *   - error: An error if the image cannot be loaded or the AI analysis fails.
+ */
+export function SuggestEnhancements(filePath: string): $CancellablePromise<string[]> {
+    return $Call.ByID(808798930, filePath).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+// Private type creation functions
+const $$createType0 = $Create.Array($Create.Any);

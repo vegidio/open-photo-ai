@@ -9,3 +9,13 @@ export class Athens implements Operation {
         this.options = { precision };
     }
 }
+
+export class Santorini implements Operation {
+    id = '';
+    options: Record<string, string> = {};
+
+    constructor(precision: string) {
+        this.id = `fr_santorini_${precision}`;
+        this.options = { precision };
+    }
+}

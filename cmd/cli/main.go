@@ -6,7 +6,6 @@ import (
 	"time"
 
 	opai "github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 )
@@ -26,12 +25,10 @@ func main() {
 		return
 	}
 
-	ops := []types.Operation{
-		//newyork.Op(types.PrecisionFp32),
-		//athens.Op(types.PrecisionFp32),
-		//santorini.Op(types.PrecisionFp32),
-		kyoto.Op(kyoto.ModeGeneral, 4, types.PrecisionFp32),
-		//tokyo.Op(4, types.PrecisionFp32),
+	ops, err := opai.SuggestEnhancements(inputData)
+	if err != nil {
+		fmt.Printf("Failed to get enhancement suggestions: %v\n", err)
+		return
 	}
 
 	ctx := context.Background()

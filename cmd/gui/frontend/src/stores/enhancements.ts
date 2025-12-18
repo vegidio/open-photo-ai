@@ -10,7 +10,7 @@ type EnhancementStore = {
 
     setAutopilot: (enable: boolean) => void;
     toggle: () => void;
-    addEnhancement: (file: File, operation: Operation) => void;
+    addEnhancements: (file: File, operations: Operation[]) => void;
     removeEnhancement: (file: File, id: string) => void;
 
     removeFile: (file: File) => void;
@@ -37,20 +37,24 @@ export const useEnhancementStore = create(
             });
         },
 
-        addEnhancement: (file: File, operation: Operation) => {
+        addEnhancements: (file: File, operations: Operation[]) => {
             set((state) => {
-                const ops = state.enhancements.get(file) ?? [];
+                const existingOps = state.enhancements.get(file) ?? [];
 
                 // Check if there's already an upscale operation;
                 // Upscale operations should always be the last to be processed
-                const firstUpscaleIndex = ops.findIndex((op) => op.id.startsWith('up'));
+                const firstUpscaleIndex = existingOps.findIndex((op) => op.id.startsWith('up'));
 
                 // If there's an upscale operation, insert before it; otherwise add at the end
                 if (firstUpscaleIndex !== -1) {
-                    const newOps = [...ops.slice(0, firstUpscaleIndex), operation, ...ops.slice(firstUpscaleIndex)];
+                    const newOps = [
+                        ...existingOps.slice(0, firstUpscaleIndex),
+                        ...operations,
+                        ...existingOps.slice(firstUpscaleIndex),
+                    ];
                     state.enhancements.set(file, newOps);
                 } else {
-                    state.enhancements.set(file, [...ops, operation]);
+                    state.enhancements.set(file, [...existingOps, ...operations]);
                 }
             });
         },
@@ -58,12 +62,7 @@ export const useEnhancementStore = create(
         removeEnhancement: (file: File, id: string) => {
             set((state) => {
                 const ops = (state.enhancements.get(file) ?? []).filter((op) => op.id !== id);
-
-                if (ops.length > 0) {
-                    state.enhancements.set(file, ops);
-                } else {
-                    state.enhancements.delete(file);
-                }
+                state.enhancements.set(file, ops);
             });
         },
 
