@@ -1,19 +1,23 @@
 import { useRef, useState } from 'react';
 import { Button, Divider, MenuItem, Select, type SelectChangeEvent, TextField, Typography } from '@mui/material';
 import type { CancellablePromise } from '@wailsio/runtime';
+import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
+import type { File } from '../../../bindings/gui/types';
 import { DialogService } from '../../../bindings/gui/services';
 import { Toggle } from '@/components/Toggle.tsx';
-import { useEnhancementStore, useExportStore } from '@/stores';
+import { useExportStore } from '@/stores';
+import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { exportImage } from '@/utils/export.ts';
 
 type LocationType = 'hidden' | 'original' | 'browse';
 
 type ExportSettingsProps = TailwindProps & {
+    enhancements: Map<File, Operation[]>;
     onClose: () => void;
 };
 
-export const ExportSettings = ({ onClose, className }: ExportSettingsProps) => {
+export const ExportSettings = ({ enhancements, onClose, className }: ExportSettingsProps) => {
     return (
         <div className={`${className} p-3 flex flex-col gap-4`}>
             <Typography variant='subtitle2'>Export Settings</Typography>
@@ -30,7 +34,7 @@ export const ExportSettings = ({ onClose, className }: ExportSettingsProps) => {
 
             <div className='flex-1' />
 
-            <Buttons onClose={onClose} />
+            <Buttons enhancements={enhancements} onClose={onClose} />
         </div>
     );
 };
@@ -212,8 +216,7 @@ const Format = () => {
     );
 };
 
-const Buttons = ({ onClose }: ExportSettingsProps) => {
-    const enhancements = useEnhancementStore((state) => state.enhancements);
+const Buttons = ({ enhancements, onClose }: ExportSettingsProps) => {
     const format = useExportStore((state) => state.format);
     const prefix = useExportStore((state) => state.prefix);
     const suffix = useExportStore((state) => state.suffix);
@@ -238,6 +241,14 @@ const Buttons = ({ onClose }: ExportSettingsProps) => {
         setState('processing');
 
         for (const [file, operations] of enhancements.entries()) {
+            // The list of operations for this file is empty; it means Autopilot added this file in the export list.
+            // We need to check if there are any suitable operations to apply to the file.
+            if (operations.length === 0) {
+                const suggestions = await suggestEnhancement(file.Path);
+                if (suggestions.length === 0) continue;
+                operations.push(...suggestions);
+            }
+
             promiseRef.current = exportImage(file, operations, format, prefix, suffix, location);
 
             try {

@@ -1,14 +1,17 @@
 import { Dialog, DialogTitle, Divider, IconButton } from '@mui/material';
 import { MdClose } from 'react-icons/md';
+import type { Operation } from '@/operations';
+import type { File } from '../../../bindings/gui/types';
 import { ExportQueue } from '@/components/Export/ExportQueue.tsx';
 import { ExportSettings } from '@/components/Export/ExportSettings.tsx';
 
 type ExportProps = {
+    enhancements: Map<File, Operation[]>;
     open: boolean;
     onClose: () => void;
 };
 
-export const Export = ({ open, onClose }: ExportProps) => {
+export const Export = ({ enhancements, open, onClose }: ExportProps) => {
     return (
         <Dialog
             open={open}
@@ -44,11 +47,11 @@ export const Export = ({ open, onClose }: ExportProps) => {
             <Divider />
 
             <div className='flex flex-row h-full overflow-hidden'>
-                <ExportQueue className='flex-1' />
+                <ExportQueue enhancements={enhancements} className='flex-1' />
 
                 <Divider orientation='vertical' flexItem className='border-[#171717] my-0.5' />
 
-                <ExportSettings onClose={onClose} className='w-80' />
+                <ExportSettings enhancements={enhancements} onClose={onClose} className='w-80' />
             </div>
         </Dialog>
     );

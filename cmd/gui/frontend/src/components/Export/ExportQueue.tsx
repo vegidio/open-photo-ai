@@ -18,13 +18,15 @@ import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import type { File } from '../../../bindings/gui/types';
 import { RevealInFileManager } from '../../../bindings/gui/services/osservice.ts';
-import { useEnhancementStore, useExportStore } from '@/stores';
+import { useExportStore } from '@/stores';
 import { getExportInfo } from '@/utils/export.ts';
 import { getImage } from '@/utils/image.ts';
 
-export const ExportQueue = ({ className }: TailwindProps) => {
-    const enhancements = useEnhancementStore((state) => state.enhancements);
+type ExportQueueProps = TailwindProps & {
+    enhancements: Map<File, Operation[]>;
+};
 
+export const ExportQueue = ({ enhancements, className }: ExportQueueProps) => {
     return (
         <div className={`${className} p-3 flex flex-col gap-4`}>
             <Typography variant='subtitle2'>Queue ({enhancements.size})</Typography>
