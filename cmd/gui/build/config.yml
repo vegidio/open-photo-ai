@@ -36,7 +36,7 @@ dev_mode:
       type: once
     - cmd: wails3 task common:dev:frontend
       type: background
-    - cmd: go mod tidy
+    - cmd: go work sync
       type: blocking
     - cmd: wails3 task build
       type: blocking

@@ -2,10 +2,10 @@ version: '3'
 
 tasks:
   go:mod:tidy:
-    summary: Runs `go mod tidy`
+    summary: Runs `go work sync`
     internal: true
     cmds:
-      - go mod tidy
+      - go work sync
 
   install:frontend:deps:
     summary: Install frontend dependencies
