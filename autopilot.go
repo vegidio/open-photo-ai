@@ -1,11 +1,18 @@
 package opai
 
 import (
+	"context"
+
+	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
+// SuggestEnhancements analyzes the input image and returns a list of recommended enhancement operations.
+//
+// It evaluates the image for potential face recovery and upscaling improvements based on image characteristics such as
+// detected faces and resolution.
 func SuggestEnhancements(input *types.ImageData) ([]types.Operation, error) {
 	operations := make([]types.Operation, 0)
 
@@ -19,10 +26,26 @@ func SuggestEnhancements(input *types.ImageData) ([]types.Operation, error) {
 	return operations, nil
 }
 
+// region - Private functions
+
 func analyseFaceRecovery(input *types.ImageData) ([]types.Operation, error) {
-	return []types.Operation{
-		athens.Op(types.PrecisionFp32),
-	}, nil
+	operation := make([]types.Operation, 0)
+
+	model, err := facerecovery.GetFdModel()
+	if err != nil {
+		return nil, err
+	}
+
+	faces, err := facerecovery.ExtractFaces(context.Background(), model, input, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(faces) > 0 {
+		operation = append(operation, athens.Op(types.PrecisionFp32))
+	}
+
+	return operation, nil
 }
 
 func analyseUpscale(input *types.ImageData) ([]types.Operation, error) {
@@ -42,3 +65,5 @@ func analyseUpscale(input *types.ImageData) ([]types.Operation, error) {
 
 	return operation, nil
 }
+
+// endregion
