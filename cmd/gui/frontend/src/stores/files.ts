@@ -18,7 +18,7 @@ type FileStore = {
 };
 
 export const useFileStore = create(
-    immer<FileStore>((set, _) => ({
+    immer<FileStore>((set, get) => ({
         files: [],
         selectedFiles: [],
         currentIndex: 0,
@@ -30,12 +30,20 @@ export const useFileStore = create(
         },
 
         addFiles: (files: File[]) => {
+            // Check if the list of files was empty before adding new ones
+            const wasEmpty = get().files.length === 0;
+
             set((state) => {
                 const uniqueFiles = files.filter(
                     (file) => !state.files.some((existingFile) => existingFile.Path === file.Path),
                 );
                 state.files.push(...uniqueFiles);
             });
+
+            // If the list was empty and now has files, select the first one
+            if (wasEmpty && get().files.length > 0) {
+                get().addSelectedFile(get().files[0]);
+            }
         },
 
         removeFile: (path: string) => {

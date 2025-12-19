@@ -69,6 +69,7 @@ const Filename = () => {
                     },
                     htmlInput: {
                         autoCapitalize: 'off',
+                        autoCorrect: 'off',
                     },
                 }}
             />
@@ -89,6 +90,7 @@ const Filename = () => {
                     },
                     htmlInput: {
                         autoCapitalize: 'off',
+                        autoCorrect: 'off',
                     },
                 }}
             />
@@ -221,6 +223,7 @@ const Buttons = ({ enhancements, onClose }: ExportSettingsProps) => {
     const prefix = useExportStore((state) => state.prefix);
     const suffix = useExportStore((state) => state.suffix);
     const location = useExportStore((state) => state.location);
+    const overwrite = useExportStore((state) => state.overwrite);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const promiseRef = useRef<CancellablePromise<void> | null>(null);
@@ -249,7 +252,7 @@ const Buttons = ({ enhancements, onClose }: ExportSettingsProps) => {
                 operations.push(...suggestions);
             }
 
-            promiseRef.current = exportImage(file, operations, format, prefix, suffix, location);
+            promiseRef.current = exportImage(file, operations, overwrite, format, prefix, suffix, location);
 
             try {
                 await promiseRef.current;

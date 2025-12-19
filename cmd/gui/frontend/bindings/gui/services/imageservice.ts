@@ -29,8 +29,8 @@ export function Destroy(): $CancellablePromise<void> {
  * # Returns:
  *   - error: An error if the inference fails, the image cannot be processed, or the file cannot be saved.
  */
-export function ExportImage(file: types$0.File, outputPath: string, format: types$1.ImageFormat, ...opIds: string[]): $CancellablePromise<void> {
-    return $Call.ByID(1308095068, file, outputPath, format, opIds);
+export function ExportImage(file: types$0.File, outputPath: string, overwrite: boolean, format: types$1.ImageFormat, ...opIds: string[]): $CancellablePromise<void> {
+    return $Call.ByID(1308095068, file, outputPath, overwrite, format, opIds);
 }
 
 /**

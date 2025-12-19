@@ -1,4 +1,5 @@
 import { enableMapSet } from 'immer';
+import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 import type { Operation } from '@/operations';
@@ -21,61 +22,70 @@ type EnhancementStore = {
 enableMapSet();
 
 export const useEnhancementStore = create(
-    immer<EnhancementStore>((set, _) => ({
-        autopilot: false,
-        enhancements: new Map<File, Operation[]>(),
+    persist(
+        immer<EnhancementStore>((set, _) => ({
+            autopilot: true,
+            enhancements: new Map<File, Operation[]>(),
 
-        setAutopilot: (enable: boolean) => {
-            set((state) => {
-                state.autopilot = enable;
-            });
+            setAutopilot: (enable: boolean) => {
+                set((state) => {
+                    state.autopilot = enable;
+                });
+            },
+
+            toggle: () => {
+                set((state) => {
+                    state.autopilot = !state.autopilot;
+                });
+            },
+
+            addEnhancements: (file: File, operations: Operation[]) => {
+                set((state) => {
+                    const existingOps = state.enhancements.get(file) ?? [];
+
+                    // Check if there's already an upscale operation;
+                    // Upscale operations should always be the last to be processed
+                    const firstUpscaleIndex = existingOps.findIndex((op) => op.id.startsWith('up'));
+
+                    // If there's an upscale operation, insert before it; otherwise add at the end
+                    if (firstUpscaleIndex !== -1) {
+                        const newOps = [
+                            ...existingOps.slice(0, firstUpscaleIndex),
+                            ...operations,
+                            ...existingOps.slice(firstUpscaleIndex),
+                        ];
+                        state.enhancements.set(file, newOps);
+                    } else {
+                        state.enhancements.set(file, [...existingOps, ...operations]);
+                    }
+                });
+            },
+
+            removeEnhancement: (file: File, id: string) => {
+                set((state) => {
+                    const ops = (state.enhancements.get(file) ?? []).filter((op) => op.id !== id);
+                    state.enhancements.set(file, ops);
+                });
+            },
+
+            removeFile: (file: File) => {
+                set((state) => {
+                    state.enhancements.delete(file);
+                });
+            },
+
+            clearFiles: () => {
+                set((state) => {
+                    state.enhancements.clear();
+                });
+            },
+        })),
+        {
+            name: 'enhancements-storage',
+            partialize: (state) => ({
+                // Persist only the `autopilot` state
+                autopilot: state.autopilot,
+            }),
         },
-
-        toggle: () => {
-            set((state) => {
-                state.autopilot = !state.autopilot;
-            });
-        },
-
-        addEnhancements: (file: File, operations: Operation[]) => {
-            set((state) => {
-                const existingOps = state.enhancements.get(file) ?? [];
-
-                // Check if there's already an upscale operation;
-                // Upscale operations should always be the last to be processed
-                const firstUpscaleIndex = existingOps.findIndex((op) => op.id.startsWith('up'));
-
-                // If there's an upscale operation, insert before it; otherwise add at the end
-                if (firstUpscaleIndex !== -1) {
-                    const newOps = [
-                        ...existingOps.slice(0, firstUpscaleIndex),
-                        ...operations,
-                        ...existingOps.slice(firstUpscaleIndex),
-                    ];
-                    state.enhancements.set(file, newOps);
-                } else {
-                    state.enhancements.set(file, [...existingOps, ...operations]);
-                }
-            });
-        },
-
-        removeEnhancement: (file: File, id: string) => {
-            set((state) => {
-                const ops = (state.enhancements.get(file) ?? []).filter((op) => op.id !== id);
-                state.enhancements.set(file, ops);
-            });
-        },
-
-        removeFile: (file: File) => {
-            set((state) => {
-                state.enhancements.delete(file);
-            });
-        },
-
-        clearFiles: () => {
-            set((state) => {
-                state.enhancements.clear();
-            });
-        },
-    })),
+    ),
 );

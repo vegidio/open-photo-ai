@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"path/filepath"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -33,7 +34,8 @@ func NewImageService(app *application.App) (*ImageService, error) {
 		return nil, err
 	}
 
-	opts := memo.CacheOpts{MaxEntries: 100, MaxCapacity: 1024 * 1024 * 500}
+	const capacity = 1024 * 1024 * 1000 // 1 GB
+	opts := memo.CacheOpts{MaxEntries: 100, MaxCapacity: capacity}
 	diskCache, err := memo.NewDiskOnly(cachePath, opts)
 	if err != nil {
 		return nil, err
@@ -163,6 +165,7 @@ func (s *ImageService) ExportImage(
 	ctx context.Context,
 	file guitypes.File,
 	outputPath string,
+	overwrite bool,
 	format types.ImageFormat,
 	opIds ...string,
 ) error {
@@ -188,8 +191,8 @@ func (s *ImageService) ExportImage(
 		return err
 	}
 
-	err = utils.SaveImage(&types.ImageData{
-		FilePath: outputPath,
+	size, err := utils.SaveImage(&types.ImageData{
+		FilePath: getOutputPath(outputPath, overwrite),
 		Pixels:   img,
 	}, format, 100)
 
@@ -198,7 +201,7 @@ func (s *ImageService) ExportImage(
 		return err
 	}
 
-	s.app.Event.Emit(eventName, "COMPLETED", 1.0)
+	s.app.Event.Emit(eventName, "COMPLETED", size)
 	return nil
 }
 
@@ -281,6 +284,26 @@ func imageToBytes(img image.Image, format types.ImageFormat) ([]byte, error) {
 func bytesToImage(data []byte) (image.Image, error) {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	return img, err
+}
+
+func getOutputPath(filePath string, overwrite bool) string {
+	if overwrite {
+		return filePath
+	}
+
+	ext := filepath.Ext(filePath)
+	basePath := filePath[:len(filePath)-len(ext)]
+	outputPath := basePath + ext
+	count := 1
+
+	for {
+		if exists := fs.FileExists(outputPath); !exists {
+			return outputPath
+		}
+
+		outputPath = fmt.Sprintf("%s_%d%s", basePath, count, ext)
+		count++
+	}
 }
 
 // endregion

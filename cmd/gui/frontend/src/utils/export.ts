@@ -3,7 +3,6 @@ import type { Operation } from '@/operations';
 import type { File } from '../../bindings/gui/types';
 import { ImageFormat } from '../../bindings/github.com/vegidio/open-photo-ai/types';
 import { ExportImage } from '../../bindings/gui/services/imageservice.ts';
-import { suggestEnhancement } from '@/utils/enhancement.ts';
 
 export const getExportEligible = (selectedFiles: File[], enhancements: Map<File, Operation[]>, autopilot: boolean) => {
     const allEnhancements = new Map<File, Operation[]>();
@@ -31,6 +30,7 @@ export const getExportInfo = (file: File, format: string, prefix: string, suffix
 export const exportImage = (
     file: File,
     operations: Operation[],
+    overwrite: boolean,
     format: string,
     prefix: string,
     suffix: string,
@@ -40,7 +40,7 @@ export const exportImage = (
     const imgFormat = getImageFormat(ext);
     const opIds = operations.map((op) => op.id);
 
-    return ExportImage(file, filePath, imgFormat, ...opIds);
+    return ExportImage(file, filePath, overwrite, imgFormat, ...opIds);
 };
 
 const getImageFormat = (ext: string) => {

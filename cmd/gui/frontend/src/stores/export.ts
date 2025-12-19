@@ -1,3 +1,4 @@
+import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 
@@ -16,41 +17,46 @@ type ExportStore = {
 };
 
 export const useExportStore = create(
-    immer<ExportStore>((set, _) => ({
-        prefix: '',
-        suffix: '',
-        overwrite: false,
-        location: undefined,
-        format: 'png',
+    persist(
+        immer<ExportStore>((set, _) => ({
+            prefix: '',
+            suffix: '',
+            overwrite: false,
+            location: undefined,
+            format: 'png',
 
-        setPrefix: (prefix: string) => {
-            set((state) => {
-                state.prefix = prefix;
-            });
-        },
+            setPrefix: (prefix: string) => {
+                set((state) => {
+                    state.prefix = prefix;
+                });
+            },
 
-        setSuffix: (suffix: string) => {
-            set((state) => {
-                state.suffix = suffix;
-            });
-        },
+            setSuffix: (suffix: string) => {
+                set((state) => {
+                    state.suffix = suffix;
+                });
+            },
 
-        setOverwrite: (overwrite: boolean) => {
-            set((state) => {
-                state.overwrite = overwrite;
-            });
-        },
+            setOverwrite: (overwrite: boolean) => {
+                set((state) => {
+                    state.overwrite = overwrite;
+                });
+            },
 
-        setLocation: (location?: string) => {
-            set((state) => {
-                state.location = location;
-            });
-        },
+            setLocation: (location?: string) => {
+                set((state) => {
+                    state.location = location;
+                });
+            },
 
-        setFormat: (format: string) => {
-            set((state) => {
-                state.format = format;
-            });
+            setFormat: (format: string) => {
+                set((state) => {
+                    state.format = format;
+                });
+            },
+        })),
+        {
+            name: 'export-storage',
         },
-    })),
+    ),
 );

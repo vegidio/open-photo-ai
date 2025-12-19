@@ -56,15 +56,16 @@ func LoadImage(path string) (*types.ImageData, error) {
 //   - quality: The quality level the encoding (0-100, where 100 is the highest quality).
 //
 // # Returns:
-//   - error: An error if the quality is out of range, the file cannot be created, or encoding fails
-func SaveImage(data *types.ImageData, format types.ImageFormat, quality int) error {
+//   - int64: The size of the saved file in bytes.
+//   - error: An error if the quality is out of range, the file cannot be created, or encoding fails.
+func SaveImage(data *types.ImageData, format types.ImageFormat, quality int) (int64, error) {
 	if quality < 0 || quality > 100 {
-		return fmt.Errorf("invalid quality: %d, must be between 0 and 100", quality)
+		return 0, fmt.Errorf("invalid quality: %d, must be between 0 and 100", quality)
 	}
 
 	outputFile, err := os.Create(data.FilePath)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer outputFile.Close()
 
@@ -79,8 +80,13 @@ func SaveImage(data *types.ImageData, format types.ImageFormat, quality int) err
 	}
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	info, err := os.Stat(data.FilePath)
+	if err != nil {
+		return 0, err
+	}
+
+	return info.Size(), nil
 }

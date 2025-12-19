@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { SwipeableDrawer } from '@mui/material';
+import { ClickAwayListener, SwipeableDrawer } from '@mui/material';
 import { DrawerBody } from '@/components/Drawer/DrawerBody.tsx';
 import { DrawerHeader } from '@/components/Drawer/DrawerHeader.tsx';
 import { useDrawerStore } from '@/stores/drawer.ts';
@@ -24,6 +24,7 @@ export const Drawer = ({ containerRef }: FileListProps) => {
             onOpen={() => {}}
             disableSwipeToOpen={true}
             keepMounted
+            hideBackdrop
             ModalProps={{
                 container: containerRef.current,
                 className: 'absolute',
@@ -36,14 +37,14 @@ export const Drawer = ({ containerRef }: FileListProps) => {
                         position: 'absolute',
                     },
                 },
-                backdrop: {
-                    invisible: true,
-                },
             }}
         >
-            <DrawerHeader drawerBleeding={drawerBleeding} className='w-full' />
-
-            <DrawerBody drawerHeight={drawerHeight} />
+            <ClickAwayListener onClickAway={() => open && setOpen(false)}>
+                <div>
+                    <DrawerHeader drawerBleeding={drawerBleeding} className='w-full' />
+                    <DrawerBody drawerHeight={drawerHeight} />
+                </div>
+            </ClickAwayListener>
         </SwipeableDrawer>
     );
 };
