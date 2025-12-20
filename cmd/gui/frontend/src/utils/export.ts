@@ -45,11 +45,18 @@ export const exportImage = (
 
 const getImageFormat = (ext: string) => {
     switch (ext) {
+        case 'avif':
+            return ImageFormat.FormatAvif;
+
         case 'bmp':
             return ImageFormat.FormatBmp;
 
         case 'gif':
             return ImageFormat.FormatGif;
+
+        case 'heic':
+        case 'heif':
+            return ImageFormat.FormatHeic;
 
         case 'jpg':
         case 'jpeg':
@@ -61,6 +68,9 @@ const getImageFormat = (ext: string) => {
         case 'tif':
         case 'tiff':
             return ImageFormat.FormatTiff;
+
+        case 'webp':
+            return ImageFormat.FormatWebp;
 
         default:
             throw new Error(`Unsupported image format: ${ext}`);

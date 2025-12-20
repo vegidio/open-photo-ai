@@ -12,6 +12,13 @@ import (
 	_ "image/png"
 	"os"
 
+	"github.com/vegidio/avif-go"
+	_ "github.com/vegidio/avif-go"
+	"github.com/vegidio/heif-go"
+	_ "github.com/vegidio/heif-go"
+	"github.com/vegidio/webp-go"
+	_ "github.com/vegidio/webp-go"
+
 	"github.com/vegidio/open-photo-ai/types"
 	"golang.org/x/image/bmp"
 	_ "golang.org/x/image/bmp"
@@ -28,11 +35,14 @@ import (
 //   - []string: A slice of supported image file extensions
 func SupportedImageExtensions() []string {
 	return []string{
+		"avif",
 		"bmp",
 		"gif",
+		"heic", "heif",
 		"jpeg", "jpg",
 		"png",
 		"tif", "tiff",
+		"webp",
 	}
 }
 
@@ -80,10 +90,14 @@ func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte
 	var err error
 
 	switch format {
+	case types.FormatAvif:
+		err = avif.Encode(&buf, img, &avif.Options{Speed: 6, AlphaQuality: 60, ColorQuality: 60})
 	case types.FormatBmp:
 		err = bmp.Encode(&buf, img)
 	case types.FormatGif:
 		err = gif.Encode(&buf, img, &gif.Options{NumColors: 256})
+	case types.FormatHeic:
+		err = heif.Encode(&buf, img, &heif.Options{Quality: 60})
 	case types.FormatJpeg:
 		err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality})
 	case types.FormatPng:
@@ -91,6 +105,8 @@ func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte
 		err = encoder.Encode(&buf, img)
 	case types.FormatTiff:
 		err = tiff.Encode(&buf, img, &tiff.Options{Compression: tiff.Deflate})
+	case types.FormatWebp:
+		err = webp.Encode(&buf, img, &webp.Options{Quality: 75})
 	default:
 		err = fmt.Errorf("unsupported image format: %d", format)
 	}

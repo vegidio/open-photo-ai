@@ -204,11 +204,17 @@ const Format = () => {
                 <MenuItem value='preserve' className='text-sm'>
                     Preserve
                 </MenuItem>
+                <MenuItem value='avif' className='text-sm'>
+                    AVIF
+                </MenuItem>
                 <MenuItem value='bmp' className='text-sm'>
                     BMP
                 </MenuItem>
                 <MenuItem value='gif' className='text-sm'>
                     GIF
+                </MenuItem>
+                <MenuItem value='heic' className='text-sm'>
+                    HEIC
                 </MenuItem>
                 <MenuItem value='jpg' className='text-sm'>
                     JPG
@@ -218,6 +224,9 @@ const Format = () => {
                 </MenuItem>
                 <MenuItem value='tiff' className='text-sm'>
                     TIFF
+                </MenuItem>
+                <MenuItem value='webp' className='text-sm'>
+                    WEBP
                 </MenuItem>
             </Select>
         </div>
