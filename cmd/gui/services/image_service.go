@@ -7,9 +7,8 @@ import (
 	guitypes "gui/types"
 	guiutils "gui/utils"
 	"image"
-	"image/jpeg"
-	"image/png"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -20,7 +19,6 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"golang.org/x/image/tiff"
 )
 
 type ImageService struct {
@@ -72,7 +70,7 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 		}
 	}
 
-	data, err := imageToBytes(inputData.Pixels, types.FormatJpeg)
+	data, err := utils.EncodeImage(inputData.Pixels, types.FormatJpeg, 90)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -116,7 +114,7 @@ func (s *ImageService) ProcessImage(
 		return nil, 0, 0, err
 	}
 
-	jpgBytes, err := imageToBytes(img, types.FormatJpeg)
+	jpgBytes, err := utils.EncodeImage(img, types.FormatJpeg, 90)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -238,7 +236,7 @@ func (s *ImageService) runInference(ctx context.Context, filePath string, opIds 
 		}
 
 		// Convert to PNG bytes since it's lossless
-		return imageToBytes(outputData.Pixels, types.FormatPng)
+		return utils.EncodeImage(outputData.Pixels, types.FormatPng, 0)
 	})
 }
 
@@ -247,38 +245,8 @@ func (s *ImageService) runInference(ctx context.Context, filePath string, opIds 
 // region - Private functions
 
 func getCacheKey(filePath string, opIds []string) string {
-	key := lo.Reduce(opIds, func(agg string, item string, _ int) string {
-		if len(agg) == 0 {
-			return item
-		}
-		return agg + "|" + item
-	}, "")
-
+	key := strings.Join(opIds, "|")
 	return memo.KeyFrom(filePath, key)
-}
-
-func imageToBytes(img image.Image, format types.ImageFormat) ([]byte, error) {
-	var buf bytes.Buffer
-
-	switch format {
-	case types.FormatJpeg:
-		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 100}); err != nil {
-			return nil, err
-		}
-	case types.FormatPng:
-		encoder := &png.Encoder{CompressionLevel: png.BestSpeed}
-		if err := encoder.Encode(&buf, img); err != nil {
-			return nil, err
-		}
-	case types.FormatTiff:
-		if err := tiff.Encode(&buf, img, &tiff.Options{Compression: tiff.Deflate}); err != nil {
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("unsupported image format: %d", format)
-	}
-
-	return buf.Bytes(), nil
 }
 
 func bytesToImage(data []byte) (image.Image, error) {

@@ -18,7 +18,9 @@ type ImageFormat int
 
 // Constants for supported image formats.
 const (
-	FormatJpeg ImageFormat = iota
+	FormatBmp ImageFormat = iota
+	FormatGif
+	FormatJpeg
 	FormatPng
 	FormatTiff
 )

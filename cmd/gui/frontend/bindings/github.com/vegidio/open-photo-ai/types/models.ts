@@ -17,7 +17,9 @@ export enum ImageFormat {
     /**
      * Constants for supported image formats.
      */
-    FormatJpeg = 0,
-    FormatPng = 1,
-    FormatTiff = 2,
+    FormatBmp = 0,
+    FormatGif = 1,
+    FormatJpeg = 2,
+    FormatPng = 3,
+    FormatTiff = 4,
 };
