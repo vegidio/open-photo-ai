@@ -62,14 +62,14 @@ const options = [
 ];
 
 const EnhancementsMenu = ({ anchorEl, open, onMenuClose }: EnhancementsMenuProps) => {
-    const currentFile = useFileStore((state) => state.files[state.currentIndex]);
+    const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
     const operations = useEnhancementStore((state) =>
         currentFile ? (state.enhancements.get(currentFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
     );
     const addEnhancements = useEnhancementStore((state) => state.addEnhancements);
 
     const onAddEnhancement = (op: Operation) => {
-        addEnhancements(currentFile, [op]);
+        if (currentFile) addEnhancements(currentFile, [op]);
         onMenuClose();
     };
 

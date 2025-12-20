@@ -3,6 +3,7 @@ import type { File } from '../../bindings/gui/types';
 import { GetImage, ProcessImage } from '../../bindings/gui/services/imageservice.ts';
 
 export type ImageData = {
+    id: string;
     url: string;
     width: number;
     height: number;
@@ -23,7 +24,7 @@ export const getImage = async (file: File, size: number) => {
 
     if (!image) {
         const [base64, width, height] = await GetImage(file.Path, size);
-        image = await createImageData(base64, width, height);
+        image = await createImageData(file.Hash, base64, width, height);
         imageCache.set(cacheKey, image);
     }
 
@@ -53,7 +54,7 @@ export const getEnhancedImage = (file: File, ...operations: string[]) => {
 
                 try {
                     const [base64, width, height] = await p;
-                    image = await createImageData(base64, width, height);
+                    image = await createImageData(file.Hash, base64, width, height);
                     imageCache.set(cacheKey, image);
 
                     resolve(image);
@@ -72,10 +73,10 @@ export const clearCache = () => {
     imageCache.clear();
 };
 
-const createImageData = async (base64: string, width: number, height: number): Promise<ImageData> => {
+const createImageData = async (id: string, base64: string, width: number, height: number): Promise<ImageData> => {
     const response = await fetch(`data:application/octet-stream;base64,${base64}`);
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
 
-    return { url, width, height };
+    return { id, url, width, height };
 };

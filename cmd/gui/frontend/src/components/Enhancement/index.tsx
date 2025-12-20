@@ -10,9 +10,13 @@ type EnhancementProps = {
 
 export const Enhancement = ({ op }: EnhancementProps) => {
     const [isHovered, setIsHovered] = useState(false);
-    const file = useFileStore((state) => state.files[state.currentIndex]);
+    const file = useFileStore((state) => state.files.at(state.currentIndex));
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
     const { name, config, icon } = opToEnhancement(op);
+
+    const onRemove = () => {
+        if (file) removeEnhancement(file, op.id);
+    };
 
     return (
         <ListItem
@@ -21,7 +25,7 @@ export const Enhancement = ({ op }: EnhancementProps) => {
             onMouseLeave={() => setIsHovered(false)}
             secondaryAction={
                 isHovered ? (
-                    <IconButton disableRipple edge='end' onClick={() => removeEnhancement(file, op.id)}>
+                    <IconButton disableRipple edge='end' onClick={onRemove}>
                         <MdClose />
                     </IconButton>
                 ) : null

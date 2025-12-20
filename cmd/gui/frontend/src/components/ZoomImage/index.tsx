@@ -1,57 +1,106 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type ReactZoomPanPinchRef, TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
 import type { ImageData } from '@/utils/image.ts';
-import { useImageStore } from '@/stores';
+import { type ImageTransform, useImageStore } from '@/stores';
 
 type ZoomImageProps = {
     image: ImageData;
+    imageTransform: ImageTransform;
 };
 
-export const ZoomImage = ({ image }: ZoomImageProps) => {
-    const imageState = useImageStore((state) => state.imageState);
-    const setImageState = useImageStore((state) => state.setImageState);
-
+export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
     const tRef = useRef<ReactZoomPanPinchRef>(null);
-    const [originalScale, setOriginalScale] = useState(1);
+    const setImageTransform = useImageStore((state) => state.setImageTransform);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
     const onPanning = (ref: ReactZoomPanPinchRef) => {
-        const { positionX, positionY } = ref.state;
-        const scale = imageState?.scale ?? 1;
-        setImageState({ scale, positionX, positionY });
+        const { positionX, positionY, scale } = ref.state;
+        setImageTransform(image.id, { positionX, positionY, scale });
     };
 
-    // Scale the image to fit the container when it's opened
-    useEffect(() => {
-        const rect = tRef.current?.instance.wrapperComponent?.getBoundingClientRect();
-        if (!rect) return;
+    // Calculate a new position keeping center as the focal point
+    const calcPosition = useCallback(
+        (center: number, currentPos: number, scaledSize: number, scaleDiff: number, containerSize: number) => {
+            const newPos = center - (center - currentPos) * scaleDiff;
+            if (scaledSize > containerSize) return Math.max(containerSize - scaledSize, Math.min(0, newPos));
+            return (containerSize - scaledSize) / 2;
+        },
+        [],
+    );
 
+    // Set the image dimensions when the image loads
+    useEffect(() => {
+        const container = tRef.current?.instance.wrapperComponent;
+        if (!container) return;
+
+        const rect = container.getBoundingClientRect();
         const scaleX = rect.width / image.width;
         const scaleY = rect.height / image.height;
-        const fitScale = Math.min(scaleX, scaleY) < 1 ? 1 : Math.min(scaleX, scaleY);
+        const scale = Math.min(scaleX, scaleY);
 
-        setOriginalScale(fitScale);
+        setDimensions({
+            width: image.width * scale,
+            height: image.height * scale,
+        });
     }, [image]);
 
-    // Control the panning & zoom
-    // TODO: Fix the panning issue when the image is zoomed out
+    // Update the zoom level and position of the image
     useEffect(() => {
-        const x = imageState?.positionX ?? 0;
-        const y = imageState?.positionY ?? 0;
-        const scale = originalScale * (imageState?.scale ?? 1);
-        tRef.current?.setTransform(x, y, scale, 0);
-    }, [imageState?.positionX, imageState?.positionY, imageState?.scale, originalScale]);
+        if (!tRef.current) return;
+
+        const {
+            scale: currentScale,
+            positionX: currentPosX,
+            positionY: currentPosY,
+        } = tRef.current.instance.transformState;
+        const { scale: newScale, positionX, positionY } = imageTransform;
+
+        // If scale didn't change, just update the position
+        if (currentScale === newScale) {
+            tRef.current.setTransform(positionX, positionY, newScale, 0);
+            return;
+        }
+
+        const container = tRef.current.instance.wrapperComponent;
+        if (!container) return;
+
+        const { width: containerWidth, height: containerHeight } = container.getBoundingClientRect();
+        const scaleDiff = newScale / currentScale;
+        const scaledWidth = dimensions.width * newScale;
+        const scaledHeight = dimensions.height * newScale;
+        const newPosX = calcPosition(containerWidth / 2, currentPosX, scaledWidth, scaleDiff, containerWidth);
+        const newPosY = calcPosition(containerHeight / 2, currentPosY, scaledHeight, scaleDiff, containerHeight);
+
+        tRef.current.setTransform(newPosX, newPosY, newScale, 0);
+    }, [imageTransform, dimensions, calcPosition]);
 
     return (
         <TransformWrapper
             ref={tRef}
-            maxScale={8}
+            disablePadding={true}
             panning={{ velocityDisabled: true }}
             onPanning={onPanning}
             onPanningStop={onPanning}
             alignmentAnimation={{ animationTime: 0 }}
+            doubleClick={{ disabled: true }}
+            wheel={{ disabled: true }}
         >
-            <TransformComponent wrapperStyle={{ flex: 1, width: '100%', height: '100%' }}>
-                <img alt='Preview' src={image.url} />
+            <TransformComponent
+                wrapperStyle={{
+                    flex: 1,
+                    width: '100%',
+                    height: '100%',
+                }}
+            >
+                <img
+                    alt='Preview'
+                    src={image.url}
+                    style={{
+                        width: dimensions.width || 'auto',
+                        height: dimensions.height || 'auto',
+                    }}
+                    className='max-w-full max-h-full block'
+                />
             </TransformComponent>
         </TransformWrapper>
     );

@@ -25,7 +25,7 @@ export const useEnhancementStore = create(
     persist(
         immer<EnhancementStore>((set, _) => ({
             autopilot: true,
-            enhancements: new Map<File, Operation[]>(),
+            enhancements: new Map(),
 
             setAutopilot: (enable: boolean) => {
                 set((state) => {

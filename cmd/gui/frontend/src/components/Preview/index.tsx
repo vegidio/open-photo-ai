@@ -13,7 +13,7 @@ const EMPTY_OPERATIONS: Operation[] = [];
 export const Preview = ({ className = '' }: TailwindProps) => {
     // FileListStore
     const filesLength = useFileStore((state) => state.files.length);
-    const currentFile = useFileStore((state) => (state.files.length > 0 ? state.files[state.currentIndex] : undefined));
+    const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
     const setOpen = useDrawerStore((state) => state.setOpen);
 
     // ImageStore
@@ -33,11 +33,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         async function loadPreview() {
             if (currentFile) {
                 const originalImage = await getImage(currentFile, 0);
-
-                // We set both images to the original image for now, later we will determine if we need to display the
-                // enhanced image or not based on the autopilot state.
                 setOriginalImage(originalImage);
-                setEnhancedImage(originalImage);
 
                 if (operations.length > 0) {
                     setIsRunning(true);
@@ -53,6 +49,9 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                     } finally {
                         setIsRunning(false);
                     }
+                } else {
+                    // When there are no operations, use the original image
+                    setEnhancedImage(originalImage);
                 }
             } else {
                 setOriginalImage(undefined);

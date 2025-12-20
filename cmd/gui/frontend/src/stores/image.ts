@@ -1,23 +1,27 @@
+import { enableMapSet } from 'immer';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 import type { ImageData } from '@/utils/image.ts';
 
-type ImageState = {
+export type ImageTransform = {
     scale: number;
     positionX: number;
     positionY: number;
 };
 
+// Enable MapSet support in Immer
+enableMapSet();
+
 type ImageStore = {
     running: boolean;
     originalImage?: ImageData;
     enhancedImage?: ImageData;
-    imageState?: ImageState;
+    imageTransform: Map<string, ImageTransform>;
 
     setIsRunning: (running: boolean) => void;
     setOriginalImage: (image: ImageData | undefined) => void;
     setEnhancedImage: (image: ImageData | undefined) => void;
-    setImageState: (imageState: ImageState | undefined) => void;
+    setImageTransform: (id: string, imageState: ImageTransform) => void;
 };
 
 export const useImageStore = create(
@@ -25,7 +29,7 @@ export const useImageStore = create(
         running: false,
         originalImage: undefined,
         enhancedImage: undefined,
-        position: { scale: 1, positionX: 0, positionY: 0 },
+        imageTransform: new Map(),
 
         setIsRunning: (running: boolean) => {
             set((state) => {
@@ -45,9 +49,9 @@ export const useImageStore = create(
             });
         },
 
-        setImageState: (imageState: ImageState | undefined) => {
+        setImageTransform: (id: string, imageTransform: ImageTransform) => {
             set((state) => {
-                state.imageState = imageState;
+                state.imageTransform.set(id, imageTransform);
             });
         },
     })),

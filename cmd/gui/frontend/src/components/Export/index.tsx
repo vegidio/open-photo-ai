@@ -32,7 +32,6 @@ export const Export = ({ enhancements, open, onClose }: ExportProps) => {
             <DialogTitle className='p-3 text-xs text-[#9e9e9e]'>Export</DialogTitle>
 
             <IconButton
-                aria-label='close'
                 onClick={onClose}
                 sx={(theme) => ({
                     position: 'absolute',

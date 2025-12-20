@@ -91,11 +91,7 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 //   - int: The width of the processed image.
 //   - int: The height of the processed image.
 //   - error: An error if the inference fails or the image cannot be processed.
-func (s *ImageService) ProcessImage(
-	ctx context.Context,
-	filePath string,
-	opIds ...string,
-) ([]byte, int, int, error) {
+func (s *ImageService) ProcessImage(ctx context.Context, filePath string, opIds ...string) ([]byte, int, int, error) {
 	pngBytes, err := s.runInference(ctx, filePath, opIds)
 	if err != nil {
 		return nil, 0, 0, err
