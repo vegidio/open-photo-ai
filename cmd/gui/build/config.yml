@@ -11,7 +11,7 @@ info:
   description: "An AI photo editing tool" # The application description
   copyright: "(c) 2025, Vinicius Egidio" # Copyright text
   comments: "Some Product Comments" # Comments
-  version: "0.0.1" # The application version
+  version: "25.12.0" # The application version
 
 # Dev mode configuration
 dev_mode:
@@ -46,17 +46,12 @@ dev_mode:
 # File Associations
 # More information at: https://v3.wails.io/noit/done/yet
 fileAssociations:
-#  - ext: wails
-#    name: Wails
-#    description: Wails Application File
-#    iconName: wailsFileIcon
-#    role: Editor
-#  - ext: jpg
-#    name: JPEG
-#    description: Image File
-#    iconName: jpegFileIcon
-#    role: Editor
-#    mimeType: image/jpeg  # (optional)
+  - ext: jpg
+    name: JPEG
+    description: Image File
+    iconName: jpegFileIcon
+    role: Editor
+    mimeType: image/jpeg  # (optional)
 
 # Other data
 other:

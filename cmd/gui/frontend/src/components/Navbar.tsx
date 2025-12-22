@@ -9,8 +9,8 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
         <AppBar position='static'>
             <Toolbar className='min-h-12 pl-24'>
                 <Typography className='grow mt-1'>Open Photo AI</Typography>
-                <Button color='inherit' disabled className='mt-0.5'>
-                    Preferences
+                <Button color='inherit' className='mt-0.5 normal-case font-normal'>
+                    About
                 </Button>
             </Toolbar>
         </AppBar>

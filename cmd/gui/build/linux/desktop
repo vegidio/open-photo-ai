@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=My Product Description
+Name=Open Photo AI
+Comment=An open source photo AI editor
 # The Exec line includes %u to pass the URL to the application
 Exec=/usr/local/bin/blah %u
 Terminal=false
@@ -10,4 +10,4 @@ Icon=blah
 Categories=Utility;
 StartupWMClass=blah
 
- 
+

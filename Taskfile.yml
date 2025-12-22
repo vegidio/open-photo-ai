@@ -23,6 +23,22 @@ tasks:
         go build -o "{{.ROOT_DIR}}/build/{{.FILE}}"
         {{if .isPackage}}7z a -tzip -mx=9 "{{.ROOT_DIR}}/build/perftest_{{.os}}_{{.arch}}.zip" "{{.ROOT_DIR}}/build/{{.FILE}}"{{end}}
 
+  # GUI build tasks
+  gui:
+    desc: Build the GUI version of the app
+    dir: cmd/gui
+    requires:
+      vars: [ os, arch ]
+    vars:
+      file: "{{if eq .os `darwin`}}OpenPhotoAI.app{{else}}{{if eq .os `windows`}}OpenPhotoAI.exe{{else}}OpenPhotoAI{{end}}{{end}}"
+    cmds:
+      - |
+        wails3 build -platform {{.os}}/{{.arch}} {{if eq .os `linux`}}-tags "webkit2_41"{{end}}
+        rm -rf "{{.ROOT_DIR}}/build/{{.file}}"
+        mkdir -p "{{.ROOT_DIR}}/build"
+        mv "build/bin/{{.file}}" "{{.ROOT_DIR}}/build/{{.file}}"
+        {{if .isPackage}}7z a -tzip -mx=9 "{{.ROOT_DIR}}/build/umd-gui_{{.os}}_{{.arch}}.zip" "{{.ROOT_DIR}}/build/{{.file}}"{{end}}
+
   package:
     desc: Build and pack in .zip files
     requires:

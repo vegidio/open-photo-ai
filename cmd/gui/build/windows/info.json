@@ -5,10 +5,10 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "My Product Description",
-			"LegalCopyright": "© now, My Company",
-			"ProductName": "My Product",
+			"CompanyName": "Ascentiun AB",
+			"FileDescription": "An open source photo AI editor",
+			"LegalCopyright": "© 2025, Vinicius Egidio",
+			"ProductName": "Open Photo AI",
 			"Comments": "This is a comment"
 		}
 	}

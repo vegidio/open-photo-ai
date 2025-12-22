@@ -8,29 +8,29 @@
         AllowPromptForPassword="false">
     </Settings>
     <Installer
-        Path="blah"
+        Path="opai"
         Arguments=""
-        InstallLocation="C:\Program Files\My Company\My Product">
+        InstallLocation="C:\Program Files\Ascentiun AB\Open Photo AI">
     </Installer>
     <PackageInformation
-        PackageName="My Product"
-        PackageDisplayName="My Product"
-        PublisherName="CN=My Company"
-        PublisherDisplayName="My Company"
+        PackageName="Open Photo AI"
+        PackageDisplayName="Open Photo AI"
+        PublisherName="CN=Ascentiun AB"
+        PublisherDisplayName="Ascentiun AB"
         Version="0.1.0.0"
-        PackageDescription="My Product Description">
+        PackageDescription="An open source photo AI editor">
         <Capabilities>
             <Capability Name="runFullTrust" />
-            
+
         </Capabilities>
         <Applications>
             <Application
-                Id="com.wails.blah"
-                Description="My Product Description"
-                DisplayName="My Product"
-                ExecutableName="blah"
+                Id="io.vinicius.opai"
+                Description="An open source photo AI editor"
+                DisplayName="Open Photo AI"
+                ExecutableName="opai"
                 EntryPoint="Windows.FullTrustApplication">
-                
+
             </Application>
         </Applications>
         <Resources>
@@ -41,13 +41,13 @@
         </Dependencies>
         <Properties>
             <Framework>false</Framework>
-            <DisplayName>My Product</DisplayName>
-            <PublisherDisplayName>My Company</PublisherDisplayName>
-            <Description>My Product Description</Description>
+            <DisplayName>Open Photo AI</DisplayName>
+            <PublisherDisplayName>Ascentiun AB</PublisherDisplayName>
+            <Description>An open source photo AI editor</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>
-    <SaveLocation PackagePath="blah.msix" />
+    <SaveLocation PackagePath="opai.msix" />
     <PackageIntegrity>
         <CertificatePath></CertificatePath>
     </PackageIntegrity>
