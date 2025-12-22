@@ -13,12 +13,10 @@ export type ImageTransform = {
 enableMapSet();
 
 type ImageStore = {
-    running: boolean;
     originalImage?: ImageData;
     enhancedImage?: ImageData;
     imageTransform: Map<string, ImageTransform>;
 
-    setIsRunning: (running: boolean) => void;
     setOriginalImage: (image: ImageData | undefined) => void;
     setEnhancedImage: (image: ImageData | undefined) => void;
     setImageTransform: (id: string, imageState: ImageTransform) => void;
@@ -26,16 +24,9 @@ type ImageStore = {
 
 export const useImageStore = create(
     immer<ImageStore>((set, _) => ({
-        running: false,
         originalImage: undefined,
         enhancedImage: undefined,
         imageTransform: new Map(),
-
-        setIsRunning: (running: boolean) => {
-            set((state) => {
-                state.running = running;
-            });
-        },
 
         setOriginalImage: (image: ImageData | undefined) => {
             set((state) => {

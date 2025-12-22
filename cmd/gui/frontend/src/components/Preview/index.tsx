@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { CancelError, type CancellablePromise } from '@wailsio/runtime';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
@@ -17,8 +17,6 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     const setOpen = useDrawerStore((state) => state.setOpen);
 
     // ImageStore
-    const running = useImageStore((state) => state.running);
-    const setIsRunning = useImageStore((state) => state.setIsRunning);
     const setOriginalImage = useImageStore((state) => state.setOriginalImage);
     const setEnhancedImage = useImageStore((state) => state.setEnhancedImage);
 
@@ -27,13 +25,17 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         currentFile ? (state.enhancements.get(currentFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
     );
 
+    const [isRunning, setIsRunning] = useState(false);
+
     useEffect(() => {
         let p: CancellablePromise<ImageData>;
+        let isCancelled = false;
 
         async function loadPreview() {
             if (currentFile) {
                 const originalImage = await getImage(currentFile, 0);
                 setOriginalImage(originalImage);
+                setEnhancedImage(originalImage);
 
                 if (operations.length > 0) {
                     setIsRunning(true);
@@ -47,11 +49,11 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                     } catch (e) {
                         if (!(e instanceof CancelError)) console.error('Error loading enhanced image', e);
                     } finally {
-                        setIsRunning(false);
+                        if (!isCancelled) setIsRunning(false);
                     }
                 } else {
                     // When there are no operations, use the original image
-                    setEnhancedImage(originalImage);
+                    setIsRunning(false);
                 }
             } else {
                 setOriginalImage(undefined);
@@ -63,10 +65,12 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
         return () => {
             // Cancel any pending request to preview the enhanced image
+            isCancelled = true;
             p?.cancel();
         };
-    }, [operations, currentFile, setEnhancedImage, setIsRunning, setOriginalImage]);
+    }, [operations, currentFile, setEnhancedImage, setOriginalImage]);
 
+    // TODO: Fix bug that makes the drawer jump when it opens automatically
     // useEffect(() => {
     //     if (filesLength > 0) setOpen(true);
     // }, [filesLength, setOpen]);
@@ -76,7 +80,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             id='preview'
             className={`flex items-center justify-center bg-[#171717] [background-image:radial-gradient(#383838_1px,transparent_1px)] [background-size:3rem_3rem] ${className}`}
         >
-            {running && <PreviewProgress />}
+            {isRunning && <PreviewProgress />}
             {filesLength === 0 ? <PreviewEmpty /> : <PreviewImageSideBySide />}
         </div>
     );
