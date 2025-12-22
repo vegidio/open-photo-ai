@@ -58,6 +58,7 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
         // Calculate new positions based on whether the scale changed
         let newPosX: number, newPosY: number;
 
+        // If scale didn't change, just update the position
         if (currentScale === newScale) {
             newPosX = constrainPosition(positionX, scaledWidth, containerWidth);
             newPosY = constrainPosition(positionY, scaledHeight, containerHeight);
@@ -88,6 +89,9 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
                     flex: 1,
                     width: '100%',
                     height: '100%',
+                }}
+                contentStyle={{
+                    cursor: 'grab',
                 }}
             >
                 <img
