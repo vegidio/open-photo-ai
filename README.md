@@ -47,6 +47,20 @@ All enhancements available here come from open-source AI models that were adapte
 
 *Verdict*: start with **Tokyo**, then try **Kyoto** if the result looks too soft.
 
+## 🛣️ Roadmap
+
+These are the features I plan to implement in the future, in no particular order:
+
+- [ ] Model selection and enhancements customization.
+- [ ] Crop and rotate images in the GUI.
+- [ ] Support different preview layouts.
+- [ ] Add new models for denoise, sharpening, light, and color correction.
+- [ ] Add app preferences so you don't have to configure them every time.
+- [ ] Attempt to include diffusion-based models (this will be hard!)
+- [ ] CLI implementation.
+- [ ] Improve documentation for the library.
+- [ ] Internationalization to other languages.
+
 ## 💬 FAQ
 
 ### "App Is Damaged/Blocked..." (Windows & macOS only)

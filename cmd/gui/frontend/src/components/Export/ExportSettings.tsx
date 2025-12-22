@@ -107,7 +107,7 @@ const Filename = () => {
                 className='mt-1'
             />
 
-            <Typography variant='caption' className='text-[#ffcc00] mt-1.5'>
+            <Typography variant='caption' className={`${overwrite ? 'text-[#ffcc00]' : ''} mt-1.5`}>
                 When file location and extension are the same,
                 {overwrite
                     ? ' your original file will be overwritten. This cannot be reverted.'
