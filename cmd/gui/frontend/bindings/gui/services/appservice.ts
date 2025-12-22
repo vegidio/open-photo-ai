@@ -12,3 +12,7 @@ export function Destroy(): $CancellablePromise<void> {
 export function Initialize(): $CancellablePromise<void> {
     return $Call.ByID(3426585365);
 }
+
+export function Version(): $CancellablePromise<string> {
+    return $Call.ByID(3408143585);
+}

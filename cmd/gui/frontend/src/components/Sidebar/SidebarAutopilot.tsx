@@ -1,6 +1,6 @@
 import { Typography } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { Toggle } from '@/components/Toggle.tsx';
+import { Toggle } from '@/components/Toggle';
 import { useEnhancementStore } from '@/stores';
 
 type SidebarAutopilotProps = TailwindProps & {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Box, Button, CircularProgress, Dialog, Divider, LinearProgress, Typography } from '@mui/material';
+import { Button, Dialog, Divider, Typography } from '@mui/material';
 import { Events } from '@wailsio/runtime';
-import { MdCloudDownload } from 'react-icons/md';
-import type { TailwindProps } from '@/utils/TailwindProps.ts';
+import { DownloadLoading } from '@/components/Download/DownloadLoading.tsx';
+import { DownloadProgress } from '@/components/Download/DownloadProgress.tsx';
 
 type DownloadProps = {
     open: boolean;
@@ -36,7 +36,7 @@ export const Download = ({ open, onClose }: DownloadProps) => {
             }}
         >
             <div className='flex flex-col items-center gap-4.5'>
-                <CircularProgressIcon />
+                <DownloadLoading />
 
                 <div className='flex flex-col items-center gap-0.5'>
                     <Typography>Downloading dependencies...</Typography>
@@ -46,42 +46,11 @@ export const Download = ({ open, onClose }: DownloadProps) => {
                 <Divider className='w-full' />
 
                 {Object.entries(downloads).map(([name, progress]) => {
-                    return <DependencyProgress key={name} name={name} value={progress * 100} className='w-full' />;
+                    return <DownloadProgress key={name} name={name} value={progress * 100} className='w-full' />;
                 })}
 
                 <Button disabled={true}>Working...</Button>
             </div>
         </Dialog>
-    );
-};
-
-const CircularProgressIcon = ({ className = '' }: TailwindProps) => {
-    return (
-        <Box className={`${className} relative flex items-center justify-center w-fit`}>
-            <CircularProgress variant='indeterminate' size={60} />
-            <MdCloudDownload className='absolute size-7' />
-        </Box>
-    );
-};
-
-type DependencyProgressProps = TailwindProps & {
-    name: string;
-    value: number;
-};
-
-const DependencyProgress = ({ name, value, className = '' }: DependencyProgressProps) => {
-    return (
-        <div className={`${className} flex flex-row gap-2 items-center`}>
-            <Typography variant='body2' className='w-28'>
-                {name}
-            </Typography>
-
-            <div className='flex flex-row flex-1 items-center'>
-                <LinearProgress variant='determinate' value={value} className='flex-1' />
-                <Typography variant='caption' align='right' className='text-[#b0b0b0] w-10'>
-                    {value.toFixed(0)}%
-                </Typography>
-            </div>
-        </div>
     );
 };

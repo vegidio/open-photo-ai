@@ -45,8 +45,12 @@ func (s *AppService) Initialize() error {
 	return nil
 }
 
+func (s *AppService) Version() string {
+	return utils.LibVersion()
+}
+
 func (s *AppService) Destroy() {
-	defer opai.Destroy()
+	opai.Destroy()
 }
 
 // region - Private methods
