@@ -3,13 +3,14 @@ import { Button } from '@mui/material';
 import { PiExport } from 'react-icons/pi';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Export } from '@/components/Export';
-import { useEnhancementStore, useFileStore } from '@/stores';
+import { useEnhancementStore, useExportStore, useFileStore } from '@/stores';
 import { getExportEligible } from '@/utils/export.ts';
 
 export const SidebarExport = ({ className = '' }: TailwindProps) => {
     const selectedFiles = useFileStore((state) => state.selectedFiles);
     const enhancements = useEnhancementStore((state) => state.enhancements);
     const autopilot = useEnhancementStore((state) => state.autopilot);
+    const exportKey = useExportStore((state) => state.key);
 
     const [openExport, setOpenExport] = useState(false);
 
@@ -29,7 +30,14 @@ export const SidebarExport = ({ className = '' }: TailwindProps) => {
                 Export image
             </Button>
 
-            {openExport && <Export enhancements={exportEligible} open={true} onClose={() => setOpenExport(false)} />}
+            {openExport && (
+                <Export
+                    key={exportKey}
+                    enhancements={exportEligible}
+                    open={true}
+                    onClose={() => setOpenExport(false)}
+                />
+            )}
         </div>
     );
 };

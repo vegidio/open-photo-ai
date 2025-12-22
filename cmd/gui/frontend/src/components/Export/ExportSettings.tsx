@@ -1,18 +1,16 @@
-import { useRef, useState } from 'react';
-import { Button, Divider, MenuItem, Select, type SelectChangeEvent, TextField, Typography } from '@mui/material';
-import type { CancellablePromise } from '@wailsio/runtime';
+import { useState } from 'react';
+import { Divider, MenuItem, Select, type SelectChangeEvent, TextField, Typography } from '@mui/material';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import type { File } from '../../../bindings/gui/types';
 import { DialogService } from '../../../bindings/gui/services';
+import { ExportSettingsButtons } from '@/components/Export/ExportSettingsButtons.tsx';
 import { Toggle } from '@/components/Toggle.tsx';
 import { useExportStore } from '@/stores';
-import { suggestEnhancement } from '@/utils/enhancement.ts';
-import { exportImage } from '@/utils/export.ts';
 
 type LocationType = 'hidden' | 'original' | 'browse';
 
-type ExportSettingsProps = TailwindProps & {
+export type ExportSettingsProps = TailwindProps & {
     enhancements: Map<File, Operation[]>;
     onClose: () => void;
 };
@@ -34,7 +32,7 @@ export const ExportSettings = ({ enhancements, onClose, className }: ExportSetti
 
             <div className='flex-1' />
 
-            <Buttons enhancements={enhancements} onClose={onClose} />
+            <ExportSettingsButtons enhancements={enhancements} onClose={onClose} />
         </div>
     );
 };
@@ -229,77 +227,6 @@ const Format = () => {
                     WEBP
                 </MenuItem>
             </Select>
-        </div>
-    );
-};
-
-const Buttons = ({ enhancements, onClose }: ExportSettingsProps) => {
-    const format = useExportStore((state) => state.format);
-    const prefix = useExportStore((state) => state.prefix);
-    const suffix = useExportStore((state) => state.suffix);
-    const location = useExportStore((state) => state.location);
-    const overwrite = useExportStore((state) => state.overwrite);
-
-    const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
-    const promiseRef = useRef<CancellablePromise<void> | null>(null);
-
-    const handleCancel = () => {
-        switch (state) {
-            case 'idle':
-            case 'completed':
-                onClose();
-                break;
-
-            case 'processing':
-                promiseRef.current?.cancel();
-        }
-    };
-
-    const handleExport = async () => {
-        setState('processing');
-
-        for (const [file, operations] of enhancements.entries()) {
-            // The list of operations for this file is empty; it means Autopilot added this file in the export list.
-            // We need to check if there are any suitable operations to apply to the file.
-            if (operations.length === 0) {
-                const suggestions = await suggestEnhancement(file.Path);
-                if (suggestions.length === 0) continue;
-                operations.push(...suggestions);
-            }
-
-            promiseRef.current = exportImage(file, operations, overwrite, format, prefix, suffix, location);
-
-            try {
-                await promiseRef.current;
-            } catch {
-                setState('idle');
-                return;
-            }
-        }
-
-        setState('completed');
-    };
-
-    // Exporting
-
-    return (
-        <div className='flex gap-3'>
-            <Button
-                variant='contained'
-                className='flex-1 bg-[#353535] hover:bg-[#171717] text-[#f2f2f2] normal-case font-normal'
-                onClick={handleCancel}
-            >
-                {state === 'idle' ? 'Cancel' : state === 'processing' ? 'Abort' : 'Close'}
-            </Button>
-
-            <Button
-                variant='contained'
-                disabled={state === 'processing'}
-                className='flex-1 bg-[#009aff] hover:bg-[#007eff] disabled:opacity-50 text-[#f2f2f2] normal-case font-normal'
-                onClick={handleExport}
-            >
-                Save
-            </Button>
         </div>
     );
 };
