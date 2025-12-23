@@ -116,23 +116,18 @@ const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) =>
     const clear = useFileStore((state) => state.clear);
     const setOpen = useDrawerStore((state) => state.setOpen);
 
-    const enhancementRemoveFile = useEnhancementStore((state) => state.removeFile);
-    const enhancementClearFiles = useEnhancementStore((state) => state.clearFiles);
-
     const updateDrawer = () => {
         onMenuClose();
         if (useFileStore.getState().files.length === 0) setOpen(false);
     };
 
     const onCloseImage = () => {
-        removeFile(file.Path);
-        enhancementRemoveFile(file);
+        removeFile(file);
         updateDrawer();
     };
 
     const onCloseAllImages = () => {
         clear();
-        enhancementClearFiles();
         updateDrawer();
     };
 

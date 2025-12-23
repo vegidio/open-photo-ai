@@ -1,6 +1,8 @@
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 import type { File } from '../../bindings/gui/types';
+import { useEnhancementStore } from '@/stores/enhancements.ts';
+import { useImageStore } from '@/stores/image.ts';
 
 type FileStore = {
     files: File[];
@@ -9,7 +11,7 @@ type FileStore = {
 
     setCurrentIndex: (index: number) => void;
     addFiles: (files: File[]) => void;
-    removeFile: (path: string) => void;
+    removeFile: (file: File) => void;
     addSelectedFile: (file: File) => void;
     removeSelectedFile: (path: string) => void;
     selectAll: () => void;
@@ -46,12 +48,12 @@ export const useFileStore = create(
             }
         },
 
-        removeFile: (path: string) => {
+        removeFile: (file: File) => {
             set((state) => {
-                const removedIndex = state.files.findIndex((file) => file.Path === path);
+                const removedIndex = state.files.findIndex((f) => f.Path === file.Path);
                 if (removedIndex === -1) return;
 
-                state.files = state.files.filter((file) => file.Path !== path);
+                state.files = state.files.filter((f) => f.Path !== file.Path);
 
                 // Update currentIndex if necessary
                 if (state.files.length === 0) {
@@ -60,6 +62,10 @@ export const useFileStore = create(
                     state.currentIndex = state.files.length - 1;
                 }
             });
+
+            // Remove any enhancements and image transforms associated with the removed file
+            useEnhancementStore.getState().removeKey(file);
+            useImageStore.getState().removeImageTransform(file.Hash);
         },
 
         addSelectedFile: (file: File) => {
@@ -96,6 +102,10 @@ export const useFileStore = create(
                 state.selectedFiles = [];
                 state.currentIndex = 0;
             });
+
+            // Clear all enhancements and image transforms as well
+            useEnhancementStore.getState().clear();
+            useImageStore.getState().clear();
         },
     })),
 );

@@ -35,12 +35,12 @@ func (s *AppService) Initialize() error {
 		}
 	}
 
-	if utils.IsTensorRtSupported() {
-		if err := s.initializeTensorRT(); err != nil {
-			s.app.Event.Emit("app:download:error")
-			return err
-		}
-	}
+	//if utils.IsTensorRtSupported() {
+	//	if err := s.initializeTensorRT(); err != nil {
+	//		s.app.Event.Emit("app:download:error")
+	//		return err
+	//	}
+	//}
 
 	return nil
 }

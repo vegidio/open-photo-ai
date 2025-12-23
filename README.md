@@ -35,8 +35,8 @@ Both versions are available for Windows, macOS, and Linux. Download the [latest 
 
 1. Click on the button `Browse images` to select one or more images that you would like to enhance.
 2. The images are enhanced automatically or manually depending on the toggle `Autopilot` in the top right side of the screen:
-   1. If enabled, the app will automatically analyse the images and suggest enhancements for them.
-   2. If disabled, you will need to select the enhancements yourself, using on the button `Add enhancement`.
+   - If enabled, the app will automatically analyse the images and suggest enhancements for them.
+   - If disabled, you will need to select the enhancements yourself, using the button `Add enhancement`.
 3. Select one or more images that you would like to export on the image drawer at the bottom of the screen.
 4. Click on the button `Export image`, select the location and image format, then click on `Export`.
 

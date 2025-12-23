@@ -14,8 +14,8 @@ type EnhancementStore = {
     addEnhancements: (file: File, operations: Operation[]) => void;
     removeEnhancement: (file: File, id: string) => void;
 
-    removeFile: (file: File) => void;
-    clearFiles: () => void;
+    removeKey: (file: File) => void;
+    clear: () => void;
 };
 
 // Enable MapSet support in Immer
@@ -68,13 +68,13 @@ export const useEnhancementStore = create(
                 });
             },
 
-            removeFile: (file: File) => {
+            removeKey: (file: File) => {
                 set((state) => {
                     state.enhancements.delete(file);
                 });
             },
 
-            clearFiles: () => {
+            clear: () => {
                 set((state) => {
                     state.enhancements.clear();
                 });

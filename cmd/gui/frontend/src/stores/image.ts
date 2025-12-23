@@ -20,6 +20,9 @@ type ImageStore = {
     setOriginalImage: (image: ImageData | undefined) => void;
     setEnhancedImage: (image: ImageData | undefined) => void;
     setImageTransform: (id: string, imageState: ImageTransform) => void;
+
+    removeImageTransform: (id: string) => void;
+    clear: () => void;
 };
 
 export const useImageStore = create(
@@ -43,6 +46,18 @@ export const useImageStore = create(
         setImageTransform: (id: string, imageTransform: ImageTransform) => {
             set((state) => {
                 state.imageTransform.set(id, imageTransform);
+            });
+        },
+
+        removeImageTransform: (id: string) => {
+            set((state) => {
+                state.imageTransform.delete(id);
+            });
+        },
+
+        clear: () => {
+            set((state) => {
+                state.imageTransform.clear();
             });
         },
     })),
