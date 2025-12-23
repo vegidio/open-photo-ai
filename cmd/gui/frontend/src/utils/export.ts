@@ -1,4 +1,4 @@
-import path from 'path-browserify';
+import { basename, dirname, extname, join } from 'pathe';
 import type { Operation } from '@/operations';
 import type { File } from '../../bindings/gui/types';
 import { ImageFormat } from '../../bindings/github.com/vegidio/open-photo-ai/types';
@@ -17,12 +17,12 @@ export const getExportEligible = (selectedFiles: File[], enhancements: Map<File,
 };
 
 export const getExportInfo = (file: File, format: string, prefix: string, suffix: string, location?: string) => {
-    const basePath = location ?? path.dirname(file.Path);
-    const baseName = path.basename(file.Path, path.extname(file.Path));
+    const basePath = location ?? dirname(file.Path);
+    const baseName = basename(file.Path, extname(file.Path));
 
     const ext = format === 'preserve' ? file.Extension : format;
     const fileName = `${prefix}${baseName}${suffix}.${ext}`;
-    const filePath = path.join(basePath, fileName);
+    const filePath = join(basePath, fileName);
 
     return { fileName, filePath, ext };
 };

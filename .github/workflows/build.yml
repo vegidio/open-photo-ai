@@ -40,15 +40,15 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Install Wails
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.0-dev
+          sudo apt install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
           pnpm install -g @go-task/cli
+
+      - name: Install Wails
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
       - name: Build Linux binaries
         run: |
@@ -78,15 +78,15 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Install Wails
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.0-dev
+          sudo apt install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
           pnpm install -g @go-task/cli
+
+      - name: Install Wails
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
       - name: Build Linux binaries
         run: |
@@ -149,13 +149,13 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Install Wails
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-
       - name: Install dependencies
         run: |
           pnpm install -g @go-task/cli
+
+      - name: Install Wails
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
       - name: Build Windows binaries
         run: |
@@ -193,13 +193,13 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Install Wails
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-
       - name: Install dependencies
         run: |
           pnpm install -g @go-task/cli
+
+      - name: Install Wails
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
       - name: Build Windows binaries
         shell: msys2 {0}

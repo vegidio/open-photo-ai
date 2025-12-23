@@ -1,6 +1,6 @@
 import { type ChangeEvent, type MouseEvent, useEffect, useState } from 'react';
 import { Checkbox, Divider, IconButton, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
-import path from 'path-browserify';
+import { basename } from 'pathe';
 import { IoIosMore } from 'react-icons/io';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import type { File } from '../../../bindings/gui/types';
@@ -75,7 +75,7 @@ type BottomBarProps = TailwindProps & {
 const BottomBar = ({ file, selected = false, className = '' }: BottomBarProps) => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const open = Boolean(anchorEl);
-    const fileName = path.basename(file.Path);
+    const fileName = basename(file.Path);
 
     const onMenuOpen = (event: MouseEvent<HTMLButtonElement>) => {
         // Prevent click from bubbling to the parent button

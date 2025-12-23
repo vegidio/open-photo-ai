@@ -1,0 +1,35 @@
+{
+    "plugins": {
+        "@release-it/conventional-changelog": {
+            "preset": {
+                "name": "conventionalcommits",
+                "types": [
+                    {
+                        "type": "feat",
+                        "section": "New Features"
+                    },
+                    {
+                        "type": "refactor",
+                        "section": "Improvements"
+                    },
+                    {
+                        "type": "fix",
+                        "section": "Bug Fixes"
+                    },
+                    {
+                        "type": "docs",
+                        "section": "Documentation"
+                    }
+                ]
+            },
+            "infile": "CHANGELOG.md"
+        }
+    },
+    "git": {
+        "requireCleanWorkingDir": false,
+        "commit": false,
+        "tag": false,
+        "push": false
+    },
+    "increment": false
+}
