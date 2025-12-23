@@ -1,9 +1,6 @@
 package utils
 
 import (
-	"fmt"
-	"runtime"
-
 	ort "github.com/yalue/onnxruntime_go"
 )
 
@@ -67,11 +64,14 @@ func getCoreMLEP(cachePath string, options *ort.SessionOptions) error {
 }
 
 func getOpenVINOEP(cachePath string, options *ort.SessionOptions) error {
-	return options.AppendExecutionProviderOpenVINO(map[string]string{
-		"device_type":    "AUTO",
-		"precision":      "FP32",
-		"num_of_threads": fmt.Sprintf("%d", runtime.NumCPU()),
-		"num_streams":    "2",
-		"cache_dir":      cachePath,
-	})
+	return nil
+
+	// TODO: Temporarily disable OpenVINO EP
+	//return options.AppendExecutionProviderOpenVINO(map[string]string{
+	//	"device_type":    "AUTO",
+	//	"precision":      "FP32",
+	//	"num_of_threads": fmt.Sprintf("%d", runtime.NumCPU()),
+	//	"num_streams":    "2",
+	//	"cache_dir":      cachePath,
+	//})
 }

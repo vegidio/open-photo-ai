@@ -50,6 +50,8 @@ func PrepareDependency(url, destination, fileName, checkFile string, onProgress 
 
 	// If it's a zip file, unzip it
 	if ext == ".zip" {
+		// Close the file before unzipping it on Windows
+		file.Close()
 		defer os.Remove(file.Name())
 
 		targetDir := filepath.Dir(file.Name())
