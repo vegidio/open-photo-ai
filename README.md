@@ -11,16 +11,6 @@ It currently supports the following enhancements:
 <img src="https://img.shields.io/badge/Upscale-984E7D?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjZTNlM2UzIj48cGF0aCBkPSJNMTIwLTEyMHYtMzIwaDgwdjE4NGw1MDQtNTA0SDUyMHYtODBoMzIwdjMyMGgtODB2LTE4NEwyNTYtMjAwaDE4NHY4MEgxMjBaIi8+PC9zdmc+"/>
 </p>
 
-## 🖼️ Usage
-
-You can use **Open Photo AI** in two ways: as an app, both GUI and CLI (coming soon), or as a Go library.
-
-### GUI
-
-<p align="center">
-<img src="docs/assets/gui-screenshot.avif" width="80%" alt="Open Photo AI - GUI"/>
-</p>
-
 ## 💡 Motivation
 
 There are many excellent AI-based photo editing tools available today, ranging from open-source solutions – often powerful but complex to set up and use, such as ComfyUI – to commercial products that favor ease of use over deep customization, like those from Topaz Labs.
@@ -29,9 +19,34 @@ I have long used both ComfyUI and Topaz Labs solutions, choosing between them de
 
 That is why I created this project: an open-source alternative to Topaz Photo AI. It may never match the same level of polish or performance – Topaz has teams of full-time engineers, while this is a solo project built in my spare time – but I have ambitious goals and aim to reach feature parity with their product over time.
 
+## 🖼️ Usage
+
+There are two ways to use **Open Photo AI**: using the GUI or the CLI.
+
+The GUI is the easiest way to use the app, with an intuitive interface that allows you to enhance images with just a few clicks. The CLI is more advanced and allows you to enhance images in a more automated way.
+
+Both versions are available for Windows, macOS, and Linux. Download the [latest release](https://github.com/vegidio/open-photo-ai/releases/) that matches your computer architecture and operating system and follow the instructions below:
+
+### GUI ([video](https://www.youtube.com/watch?v=NdSfeyiXPf8) 🎥)
+
+<p align="center">
+<img src="docs/assets/gui-screenshot.avif" width="80%" alt="Open Photo AI - GUI"/>
+</p>
+
+1. Click on the button `Browse images` to select one or more images that you would like to enhance.
+2. The images are enhanced automatically or manually depending on the toggle `Autopilot` in the top right side of the screen:
+   1. If enabled, the app will automatically analyse the images and suggest enhancements for them.
+   2. If disabled, you will need to select the enhancements yourself, using on the button `Add enhancement`.
+3. Select one or more images that you would like to export on the image drawer at the bottom of the screen.
+4. Click on the button `Export image`, select the location and image format, then click on `Export`.
+
+### CLI
+
+Coming soon...
+
 ## ✨ Enhancements
 
-All enhancements available here come from open-source AI models that were adapted and converted to work on this project. The original models and the credits to their respective authors, can be found in the Hugging Face repository [vegidio/open-photo-ai](https://huggingface.co/vegidio/open-photo-ai):
+All enhancements available here come from open-source AI models that were adapted and converted to work on this project. The models and the credits to the original works can be found in the Hugging Face repository [vegidio/open-photo-ai](https://huggingface.co/vegidio/open-photo-ai):
 
 ### Face Recovery
 
@@ -55,7 +70,9 @@ These are the features I plan to implement in the future, in no particular order
 - [ ] Crop and rotate images in the GUI.
 - [ ] Support different preview layouts.
 - [ ] Add new models for denoise, sharpening, light, and color correction.
+- [ ] Simplify the app installation using packages and installers.
 - [ ] Add app preferences so you don't have to configure them every time.
+- [ ] Enable TensorRT acceleration when pre warm-up is implemented.
 - [ ] Attempt to include diffusion-based models (this will be hard!)
 - [ ] CLI implementation.
 - [ ] Improve documentation for the library.
@@ -71,8 +88,17 @@ Translating to non-BS language, this means that if you’re not registered with 
 
 To bypass this, open the Terminal and run one of the commands below (depending on your operating system), replacing `<path-to-app>` with the correct path to where you’ve installed the app:
 
--   Windows: `Unblock-File -Path <path-to-app>`
--   macOS: `xattr -d com.apple.quarantine <path-to-app>`
+- Windows: `Unblock-File -Path <path-to-app>`
+- macOS: `xattr -d com.apple.quarantine <path-to-app>`
+
+### "Error loading libraries: libwebkit2gtk-4.1.so..." (Linux only)
+
+To run the GUI version of the app on Linux, you will need to install the following dependencies: `libgtk` and `libwebkit2gtk`. To do that, open your terminal and run the following command, depending on your distribution:
+
+- Debian/Ubuntu: `sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0`
+- Fedora 40+: `sudo dnf install gtk3 webkit2gtk4.1`
+- Arch Linux: `sudo pacman -S gtk3 webkit2gtk-4.1`
+- openSUSE: `sudo zypper install libgtk-3-0 libwebkit2gtk-4_1-0`
 
 ## 🐞 Known Issues
 
@@ -100,19 +126,18 @@ If you want to build the GUI you will also need:
 With all the dependencies installed, in the project's root folder run the command:
 
 ```bash
-$ task <interface> os=<operating-system> arch=<architecture>
+$ task <interface> arch=<architecture>
 ```
 
 Where:
 
--   `<interface>`: can be `cli` or `gui`.
--   `<operating-system>`: can be `windows`, `darwin` (macOS), or `linux`.
--   `<architecture>`: can be `amd64` or `arm64`.
+- `<interface>`: can be `cli` or `gui`.
+- `<architecture>`: can be `amd64` or `arm64`.
 
-For example, if I wanted to build a GUI version of the app for Windows, on architecture AMD64, I would run the command:
+For example, if I wanted to build a GUI version of the app, on architecture AMD64, I would run the command:
 
 ```bash
-$ task gui os=windows arch=amd64
+$ task gui arch=amd64
 ```
 
 ## 📝 License

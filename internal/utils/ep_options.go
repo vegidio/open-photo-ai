@@ -5,27 +5,30 @@ import (
 )
 
 func getTensorRTEP(cachePath string, options *ort.SessionOptions) error {
-	trtOptions, err := ort.NewTensorRTProviderOptions()
-	if err != nil {
-		return err
-	}
-	defer trtOptions.Destroy()
+	// Disable TensorRT EP until warm-up is implemented.
+	return nil
 
-	// TODO: Review 'trt_cuda_graph_enable' in the future; it can drastically increase the performance, but it often
-	//  causes crashes when re-using the same session.
-	trtOptions.Update(map[string]string{
-		"device_id":                      "0",
-		"trt_max_workspace_size":         "4294967296",
-		"trt_fp16_enable":                "0",
-		"trt_int8_enable":                "0",
-		"trt_engine_hw_compatible":       "1",
-		"trt_cuda_graph_enable":          "0",
-		"trt_builder_optimization_level": "5",
-		"trt_engine_cache_enable":        "1",
-		"trt_engine_cache_path":          cachePath,
-	})
-
-	return options.AppendExecutionProviderTensorRT(trtOptions)
+	//trtOptions, err := ort.NewTensorRTProviderOptions()
+	//if err != nil {
+	//	return err
+	//}
+	//defer trtOptions.Destroy()
+	//
+	//// TODO: Review 'trt_cuda_graph_enable' in the future; it can drastically increase the performance, but it often
+	////  causes crashes when re-using the same session.
+	//trtOptions.Update(map[string]string{
+	//	"device_id":                      "0",
+	//	"trt_max_workspace_size":         "4294967296",
+	//	"trt_fp16_enable":                "0",
+	//	"trt_int8_enable":                "0",
+	//	"trt_engine_hw_compatible":       "1",
+	//	"trt_cuda_graph_enable":          "0",
+	//	"trt_builder_optimization_level": "5",
+	//	"trt_engine_cache_enable":        "1",
+	//	"trt_engine_cache_path":          cachePath,
+	//})
+	//
+	//return options.AppendExecutionProviderTensorRT(trtOptions)
 }
 
 func getCudaEP(_ string, options *ort.SessionOptions) error {
