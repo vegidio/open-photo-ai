@@ -11,42 +11,52 @@ tasks:
     desc: Build the performance test binary
     dir: cmd/perf
     requires:
-      vars: [ os, arch ]
+      vars: [ arch ]
     vars:
-      FILE: "{{if eq .os `windows`}}perftest.exe{{else}}perftest{{end}}"
+      FILE: "{{if eq OS `windows`}}perftest.exe{{else}}perftest{{end}}"
     env:
       CGO_ENABLED: 1
-      GOOS: "{{.os}}"
       GOARCH: "{{.arch}}"
     cmds:
       - |
         go build -o "{{.ROOT_DIR}}/build/{{.FILE}}"
-        {{if .isPackage}}7z a -tzip -mx=9 "{{.ROOT_DIR}}/build/perftest_{{.os}}_{{.arch}}.zip" "{{.ROOT_DIR}}/build/{{.FILE}}"{{end}}
+        {{if .isPackage}}7z a -tzip -mx=9 "{{.ROOT_DIR}}/build/perftest_{{OS}}_{{.arch}}.zip" "{{.ROOT_DIR}}/build/{{.FILE}}"{{end}}
 
   # GUI build tasks
   gui:
     desc: Build the GUI version of the app
     dir: cmd/gui
     requires:
-      vars: [ os, arch ]
+      vars: [ arch ]
     vars:
-      file: "{{if eq .os `darwin`}}OpenPhotoAI.app{{else}}{{if eq .os `windows`}}OpenPhotoAI.exe{{else}}OpenPhotoAI{{end}}{{end}}"
+      OLD_FILE: "{{if eq OS `darwin`}}opai.app{{else}}{{if eq OS `windows`}}opai.exe{{else}}opai{{end}}{{end}}"
+      NEW_FILE: "{{if eq OS `darwin`}}OpenPhotoAI.app{{else}}{{if eq OS `windows`}}OpenPhotoAI.exe{{else}}OpenPhotoAI{{end}}{{end}}"
+    env:
+      CGO_ENABLED: 1
+      PRODUCTION: true
+      ARCH: "{{.arch}}"
     cmds:
       - |
-        wails3 build -platform {{.os}}/{{.arch}} {{if eq .os `linux`}}-tags "webkit2_41"{{end}}
-        rm -rf "{{.ROOT_DIR}}/build/{{.file}}"
+        {{if eq OS "darwin"}}
+          wails3 package ARCH={{.arch}}
+        {{else}}
+          wails3 build ARCH={{.arch}}
+        {{end}}
+
+        rm -rf "{{.ROOT_DIR}}/build/{{.NEW_FILE}}"
         mkdir -p "{{.ROOT_DIR}}/build"
-        mv "build/bin/{{.file}}" "{{.ROOT_DIR}}/build/{{.file}}"
-        {{if .isPackage}}7z a -tzip -mx=9 "{{.ROOT_DIR}}/build/umd-gui_{{.os}}_{{.arch}}.zip" "{{.ROOT_DIR}}/build/{{.file}}"{{end}}
+        mv "{{.ROOT_DIR}}/cmd/gui/bin/{{.OLD_FILE}}" "{{.ROOT_DIR}}/build/{{.NEW_FILE}}"
+
+        {{if .isPackage}}
+          7z a -tzip -mx=9 "{{.ROOT_DIR}}/build/opai-gui_{{OS}}_{{.arch}}.zip" "{{.ROOT_DIR}}/build/{{.NEW_FILE}}"
+        {{end}}
 
   package:
     desc: Build and pack in .zip files
     requires:
-      vars: [ oses, archs ]
+      vars: [ archs ]
     cmds:
       - |
-        for os in {{.oses}}; do
-          for arch in {{.archs}}; do
-            task perf os=$os arch=$arch isPackage=true
-          done
+        for arch in {{.archs}}; do
+          task gui arch=$arch isPackage=true
         done

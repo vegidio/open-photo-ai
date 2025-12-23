@@ -2,14 +2,14 @@ import { Dialog, DialogTitle, Divider, IconButton, Link, Typography } from '@mui
 import { Browser } from '@wailsio/runtime';
 import { MdClose } from 'react-icons/md';
 import icon from '@/assets/icon.avif';
+import { version } from '@/utils/constants.ts';
 
 type NavbarAboutProps = {
-    version: string;
     open: boolean;
     onClose: () => void;
 };
 
-export const NavbarAbout = ({ version, open, onClose }: NavbarAboutProps) => {
+export const NavbarAbout = ({ open, onClose }: NavbarAboutProps) => {
     return (
         <Dialog
             open={open}
@@ -43,7 +43,7 @@ export const NavbarAbout = ({ version, open, onClose }: NavbarAboutProps) => {
 
             <Divider />
 
-            <div className='flex flex-col p-6 pt-4 gap-4 items-center'>
+            <div className='flex flex-col p-6 pt-2.5 gap-4 items-center'>
                 <img src={icon} alt='App Icon' className='size-36' />
 
                 <div className='flex flex-col gap-1 items-center'>

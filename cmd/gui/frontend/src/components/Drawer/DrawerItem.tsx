@@ -4,9 +4,9 @@ import path from 'path-browserify';
 import { IoIosMore } from 'react-icons/io';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import type { File } from '../../../bindings/gui/types';
-import { EnvironmentService } from '../../../bindings/gui/services';
 import { RevealInFileManager } from '../../../bindings/gui/services/osservice.ts';
 import { useDrawerStore, useEnhancementStore, useFileStore } from '@/stores';
+import { os } from '@/utils/constants.ts';
 import { getImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
@@ -14,8 +14,6 @@ type FileListItemProps = {
     current?: boolean;
     onClick?: () => void;
 };
-
-const os = await EnvironmentService.GetOS();
 
 export const DrawerItem = ({ file, current = false, onClick }: FileListItemProps) => {
     const isSelected = useFileStore((state) =>

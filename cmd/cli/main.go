@@ -46,7 +46,7 @@ func main() {
 	since := time.Since(now)
 	fmt.Println("Time elapsed: ", since)
 
-	err = utils.SaveImage(&types.ImageData{
+	_, err = utils.SaveImage(&types.ImageData{
 		FilePath: "/Users/vegidio/Desktop/" + fileName + "_new.jpg",
 		Pixels:   outputData.Pixels,
 	}, types.FormatJpeg, 90)

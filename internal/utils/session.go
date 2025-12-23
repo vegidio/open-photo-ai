@@ -32,8 +32,13 @@ func CreateSession(modelFile string, inputs, outputs []string) (*ort.DynamicAdva
 	defer options.Destroy()
 
 	// Extra session options
-	options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll)
-	options.SetExecutionMode(ort.ExecutionModeParallel)
+	if err = options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll); err != nil {
+		return nil, err
+	}
+
+	if err = options.SetExecutionMode(ort.ExecutionModeParallel); err != nil {
+		return nil, err
+	}
 
 	modelPath := filepath.Join(configDir, internal.AppName, "models", modelFile)
 	session, err := ort.NewDynamicAdvancedSession(modelPath, inputs, outputs, options)

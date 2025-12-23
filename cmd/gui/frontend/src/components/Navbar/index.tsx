@@ -1,15 +1,9 @@
 import { useState } from 'react';
 import { AppBar, Button, Toolbar, Typography } from '@mui/material';
-import { Version } from '../../../bindings/gui/services/appservice.ts';
 import { NavbarAbout } from '@/components/Navbar/NavbarAbout.tsx';
+import { os, version } from '@/utils/constants.ts';
 
-type NavbarProps = {
-    className?: string;
-};
-
-const version = await Version();
-
-export const Navbar = ({ className = '' }: NavbarProps) => {
+export const Navbar = () => {
     const [openAbout, setOpenAbout] = useState(false);
 
     const onAboutClick = () => {
@@ -19,7 +13,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
     return (
         <>
             <AppBar position='static'>
-                <Toolbar className='min-h-12 pl-24'>
+                <Toolbar className={`min-h-12 ${os === 'darwin' ? 'pl-[86px]' : ''}`}>
                     <Typography className='grow mt-1'>Open Photo AI</Typography>
 
                     <div className='mt-0.5 flex flex-row items-center gap-3'>
@@ -34,7 +28,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                 </Toolbar>
             </AppBar>
 
-            <NavbarAbout version={version} open={openAbout} onClose={() => setOpenAbout(false)} />
+            <NavbarAbout open={openAbout} onClose={() => setOpenAbout(false)} />
         </>
     );
 };
