@@ -3,7 +3,7 @@
 <p align="center">
 <img src="docs/assets/icon.avif" width="300" alt="Open Photo AI (OPAI)"/>
 <br/>
-<strong>Open Photo AI</strong> is an open source alternative for the popular photo AI editor.
+<strong>Open Photo AI</strong> is an open source alternative to the popular photo AI editor.
 <br/>
 It currently supports the following enhancements:
 <br/><br/>

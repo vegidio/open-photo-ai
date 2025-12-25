@@ -33,7 +33,7 @@ export const DrawerZoom = ({ className }: TailwindProps) => {
     };
 
     const valueLabelFormat = (value: number) => {
-        return `${value}x`;
+        return `${value.toFixed(1)}x`;
     };
 
     return (
