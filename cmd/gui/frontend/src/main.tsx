@@ -25,9 +25,9 @@ const Main = () => {
     const isDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
 
     return (
-        <ThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
+        <ThemeProvider theme={darkTheme}>
             <StyledEngineProvider enableCssLayer>
-                <GlobalStyles styles="@layer theme, base, mui, components, utilities;" />
+                <GlobalStyles styles='@layer theme, base, mui, components, utilities;' />
                 <App />
             </StyledEngineProvider>
         </ThemeProvider>
