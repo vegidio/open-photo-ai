@@ -3,14 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
+	"shared"
 	"time"
 
+	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 )
 
 func main() {
+	tel := o11y.NewTelemetry(shared.OtelEndpoint, "opai", shared.Version, shared.OtelEnvironment, false)
+	defer tel.Close()
+
+	shared.ReportSystemInfo(tel)
+
 	if err := opai.Initialize("open-photo-ai", nil); err != nil {
 		fmt.Printf("Failed to initialize the AI runtime: %v\n", err)
 		return

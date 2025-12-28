@@ -1,18 +1,10 @@
-module github.com/vegidio/open-photo-ai
+module shared
 
-go 1.25.3
+go 1.25.5
 
 require (
-	github.com/disintegration/imaging v1.6.2
 	github.com/jaypipes/ghw v0.21.2
-	github.com/samber/lo v1.51.0
-	github.com/vegidio/avif-go v0.0.0-20251219222054-ccab1b992d2d
 	github.com/vegidio/go-sak v0.0.0-20251227190924-1b6256a93bb7
-	github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84
-	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6
-	github.com/yalue/onnxruntime_go v1.21.0
-	golang.org/x/image v0.32.0
-	golang.org/x/text v0.31.0
 )
 
 require (
@@ -25,10 +17,8 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
 	github.com/jaypipes/pcidb v1.1.1 // indirect
-	github.com/otiai10/copy v1.14.1 // indirect
-	github.com/otiai10/mint v1.6.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/ulikunitz/xz v0.5.15 // indirect
+	github.com/samber/lo v1.51.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.39.0 // indirect
@@ -40,8 +30,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.39.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.77.0 // indirect

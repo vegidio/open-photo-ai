@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/utils"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -8,12 +9,16 @@ import (
 
 type AppService struct {
 	app *application.App
+	tel *o11y.Telemetry
 }
 
 const AppName = "open-photo-ai"
 
-func NewAppService(app *application.App) *AppService {
-	return &AppService{app: app}
+func NewAppService(app *application.App, tel *o11y.Telemetry) *AppService {
+	return &AppService{
+		app: app,
+		tel: tel,
+	}
 }
 
 func (s *AppService) Initialize() error {
@@ -23,6 +28,7 @@ func (s *AppService) Initialize() error {
 
 	// Initialize the model runtime
 	if err := opai.Initialize(AppName, onProgress); err != nil {
+		s.tel.LogError("Error initializing ONNX", nil, err)
 		s.app.Event.Emit("app:download:error")
 		return err
 	}
@@ -30,6 +36,7 @@ func (s *AppService) Initialize() error {
 	// Initialize CUDA and TensorRT if they are supported
 	if utils.IsCudaSupported() {
 		if err := s.initializeCuda(); err != nil {
+			s.tel.LogError("Error initializing CUDA", nil, err)
 			s.app.Event.Emit("app:download:error")
 			return err
 		}
@@ -37,6 +44,7 @@ func (s *AppService) Initialize() error {
 
 	//if utils.IsTensorRtSupported() {
 	//	if err := s.initializeTensorRT(); err != nil {
+	//		s.tel.LogError("Error initializing TensorRT", nil, err)
 	//		s.app.Event.Emit("app:download:error")
 	//		return err
 	//	}
@@ -46,7 +54,7 @@ func (s *AppService) Initialize() error {
 }
 
 func (s *AppService) Version() string {
-	return utils.LibVersion()
+	return utils.Version()
 }
 
 func (s *AppService) Destroy() {

@@ -7,7 +7,9 @@ import (
 	"gui/utils"
 	"log"
 	"log/slog"
+	"shared"
 
+	"github.com/vegidio/go-sak/o11y"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -15,10 +17,13 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-// main function serves as the application's entry point. It initializes the application, creates a window,
-// and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
-// logs any error that might occur.
 func main() {
+	tel := o11y.NewTelemetry(shared.OtelEndpoint, "opai", shared.Version, shared.OtelEnvironment, true)
+	defer tel.Close()
+
+	// Track of system info
+	shared.ReportSystemInfo(tel)
+
 	// Create a new Wails application by providing the necessary options.
 	app := application.New(application.Options{
 		Name:        "Open Photo AI",
@@ -51,11 +56,12 @@ func main() {
 	eventDragAndDrop(app, win)
 
 	// Services
-	appService := services.NewAppService(app)
+	appService := services.NewAppService(app, tel)
 	defer appService.Destroy()
 
 	imageService, err := services.NewImageService(app)
 	if err != nil {
+		tel.LogError("Error initializing ImageService", nil, err)
 		log.Fatal(err)
 	}
 	defer imageService.Destroy()
@@ -74,6 +80,7 @@ func main() {
 
 	// If an error occurred while running the application, log it and exit.
 	if err != nil {
+		tel.LogError("Error running the app", nil, err)
 		log.Fatal(err)
 	}
 }
