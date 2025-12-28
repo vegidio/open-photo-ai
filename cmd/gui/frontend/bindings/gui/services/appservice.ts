@@ -13,6 +13,10 @@ export function Initialize(): $CancellablePromise<void> {
     return $Call.ByID(3426585365);
 }
 
+export function IsOutdated(): $CancellablePromise<boolean> {
+    return $Call.ByID(2990044471);
+}
+
 export function Version(): $CancellablePromise<string> {
     return $Call.ByID(3408143585);
 }

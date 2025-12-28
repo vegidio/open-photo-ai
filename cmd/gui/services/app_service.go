@@ -1,6 +1,9 @@
 package services
 
 import (
+	"shared"
+
+	"github.com/vegidio/go-sak/github"
 	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/utils"
@@ -54,7 +57,11 @@ func (s *AppService) Initialize() error {
 }
 
 func (s *AppService) Version() string {
-	return utils.Version()
+	return shared.Version
+}
+
+func (s *AppService) IsOutdated() bool {
+	return github.IsOutdatedRelease("vegidio", "open-photo-ai", shared.Version)
 }
 
 func (s *AppService) Destroy() {

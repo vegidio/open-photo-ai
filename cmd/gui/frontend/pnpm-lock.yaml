@@ -17,6 +17,9 @@ importers:
       '@fontsource/roboto':
         specifier: 5.2.8
         version: 5.2.8
+      '@midudev/tailwind-animations':
+        specifier: 0.2.0
+        version: 0.2.0(tailwindcss@4.1.14)
       '@mui/material':
         specifier: 7.3.4
         version: 7.3.4(@emotion/react@11.14.0(@types/react@19.2.2)(react@18.2.0))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.2)(react@18.2.0))(@types/react@19.2.2)(react@18.2.0))(@types/react@19.2.2)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -456,6 +459,11 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@midudev/tailwind-animations@0.2.0':
+    resolution: {integrity: sha512-4mktb060dA7SZz0LjMfhBT30HWPmQENwF4AJC7/etESWohe4pukST0ohC2yAePS5GNinhY3MXmZZ8//2ywafOQ==}
+    peerDependencies:
+      tailwindcss: ^3.0.0 || ^4.0.0
 
   '@mui/core-downloads-tracker@7.3.6':
     resolution: {integrity: sha512-QaYtTHlr8kDFN5mE1wbvVARRKH7Fdw1ZuOjBJcFdVpfNfRYKF3QLT4rt+WaB6CKJvpqxRsmEo0kpYinhH5GeHg==}
@@ -1594,6 +1602,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@midudev/tailwind-animations@0.2.0(tailwindcss@4.1.14)':
+    dependencies:
+      tailwindcss: 4.1.14
 
   '@mui/core-downloads-tracker@7.3.6': {}
 

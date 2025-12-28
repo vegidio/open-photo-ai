@@ -1,3 +1,4 @@
 /** biome-ignore-all lint/suspicious/noUnknownAtRules: N/A */
 @import "tailwindcss";
-@plugin 'tailwind-scrollbar';
+@plugin "tailwind-scrollbar";
+@plugin "@midudev/tailwind-animations";
