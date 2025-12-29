@@ -4,8 +4,8 @@ import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import type { File } from '../../../bindings/gui/types';
 import { DialogService } from '../../../bindings/gui/services';
+import { Toggle } from '@/components/atoms/Toggle';
 import { ExportSettingsButtons } from '@/components/Export/ExportSettingsButtons.tsx';
-import { Toggle } from '@/components/Toggle';
 import { useExportStore } from '@/stores';
 
 type LocationType = 'hidden' | 'original' | 'browse';

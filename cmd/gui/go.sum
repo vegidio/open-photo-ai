@@ -128,8 +128,7 @@ github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81P
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/ulikunitz/xz v0.5.15 h1:9DNdB5s+SgV3bQ2ApL10xRc35ck0DuIX/isZvIk+ubY=
 github.com/ulikunitz/xz v0.5.15/go.mod h1:nbz6k7qbPmH4IRqmfOplQw/tblSgqTqBwxkY0oWt/14=
-github.com/vegidio/go-sak v0.0.0-20251228191536-5d0d6e4bd5b3 h1:afAuE3TeoCYZjA5ItYHm8Cm2CkBCX8YwCSKwX6lIdX0=
-github.com/vegidio/go-sak v0.0.0-20251228191536-5d0d6e4bd5b3/go.mod h1:UlZVJKCyXZTW30FJtjiDUPGtgGqXUc/s0Y4JBeJVmjQ=
+github.com/vegidio/go-sak v0.0.0-20251229101900-69359b5ac6b8 h1:KO561FyzsY4c7coDq62htDCztfYZ2Gyo3AgFyYjKzb4=
 github.com/wailsapp/go-webview2 v1.0.22 h1:YT61F5lj+GGaat5OB96Aa3b4QA+mybD0Ggq6NZijQ58=
 github.com/wailsapp/go-webview2 v1.0.22/go.mod h1:qJmWAmAmaniuKGZPWwne+uor3AHMB5PFhqiK0Bbj8kc=
 github.com/wailsapp/mimetype v1.4.1 h1:pQN9ycO7uo4vsUUuPeHEYoUkLVkaRntMnHJxVwYhwHs=

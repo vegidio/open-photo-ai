@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AppBar, Button, Toolbar, Typography } from '@mui/material';
+import { AppBar, Toolbar, Typography } from '@mui/material';
+import { Browser } from '@wailsio/runtime';
 import { IsOutdated } from '../../../bindings/gui/services/appservice.ts';
 import { NavbarAbout } from './NavbarAbout.tsx';
-import { NavbarUpdate } from './NavbarUpdate.tsx';
+import { Button } from '@/components/atoms/Button';
 import { os, version } from '@/utils/constants.ts';
 
 export const Navbar = () => {
@@ -11,6 +12,10 @@ export const Navbar = () => {
 
     const onAboutClick = () => {
         setOpenAbout(true);
+    };
+
+    const onUpdateClick = () => {
+        Browser.OpenURL('https://github.com/vegidio/open-photo-ai/releases');
     };
 
     useEffect(() => {
@@ -24,7 +29,7 @@ export const Navbar = () => {
                     <Typography className='grow mt-1'>Open Photo AI</Typography>
 
                     <div className='mt-0.5 flex flex-row items-center gap-3'>
-                        <Button color='inherit' size='small' onClick={onAboutClick} className='normal-case font-normal'>
+                        <Button option='tertiary' size='small' onClick={onAboutClick}>
                             About
                         </Button>
 
@@ -32,7 +37,11 @@ export const Navbar = () => {
                             v{version}
                         </Typography>
 
-                        {updateAvailable && <NavbarUpdate className='ml-1' />}
+                        {updateAvailable && (
+                            <Button size='small' onClick={onUpdateClick} className='ml-1 animate-pulse'>
+                                Update Available
+                            </Button>
+                        )}
                     </div>
                 </Toolbar>
             </AppBar>

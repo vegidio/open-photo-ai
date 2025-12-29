@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
 import { CancelError, type CancellablePromise } from '@wailsio/runtime';
-import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { PreviewEmpty } from './PreviewEmpty';
 import { PreviewImageSideBySide } from './PreviewImageSideBySide.tsx';
 import { PreviewProgress } from './PreviewProgress.tsx';
 import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
+import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
-
-const EMPTY_OPERATIONS: Operation[] = [];
 
 export const Preview = ({ className = '' }: TailwindProps) => {
     // FileListStore

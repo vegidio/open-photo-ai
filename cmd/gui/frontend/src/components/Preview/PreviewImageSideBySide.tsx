@@ -1,4 +1,4 @@
-import { ZoomImage } from '@/components/ZoomImage';
+import { ZoomImage } from '@/components/molecules/ZoomImage';
 import { useFileStore, useImageStore } from '@/stores';
 
 const INITIAL_TRANSFORM = { scale: 1, positionX: 0, positionY: 0 };

@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/jaypipes/ghw v0.21.2
-	github.com/vegidio/go-sak v0.0.0-20251228191536-5d0d6e4bd5b3
+	github.com/vegidio/go-sak v0.0.0-20251229101900-69359b5ac6b8
 )
 
 require (

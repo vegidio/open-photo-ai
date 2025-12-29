@@ -7,7 +7,7 @@ require (
 	github.com/jaypipes/ghw v0.21.2
 	github.com/samber/lo v1.51.0
 	github.com/vegidio/avif-go v0.0.0-20251219222054-ccab1b992d2d
-	github.com/vegidio/go-sak v0.0.0-20251228191536-5d0d6e4bd5b3
+	github.com/vegidio/go-sak v0.0.0-20251229101900-69359b5ac6b8
 	github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84
 	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6
 	github.com/yalue/onnxruntime_go v1.21.0

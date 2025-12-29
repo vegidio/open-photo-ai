@@ -1,9 +1,10 @@
 import { type DragEvent, useEffect, useState } from 'react';
-import { Button, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
 import { Events } from '@wailsio/runtime';
 import { MdFolderOpen } from 'react-icons/md';
 import type { File } from '../../../bindings/gui/types';
 import { DialogService } from '../../../bindings/gui/services';
+import { Button } from '@/components/atoms/Button';
 import { useFileStore } from '@/stores';
 
 export const PreviewEmpty = () => {
@@ -65,13 +66,7 @@ export const PreviewEmpty = () => {
                 </Typography>
             </div>
 
-            <Button
-                variant='contained'
-                className='bg-[#009aff] hover:bg-[#007eff] text-[#f2f2f2] normal-case font-normal'
-                onClick={onBrowseClick}
-            >
-                Browse images
-            </Button>
+            <Button onClick={onBrowseClick}>Browse images</Button>
         </div>
     );
 };
