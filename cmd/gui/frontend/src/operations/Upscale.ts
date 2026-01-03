@@ -6,7 +6,7 @@ export class Tokyo implements Operation {
 
     constructor(scale: number, precision: string) {
         this.id = `up_tokyo_${scale}x_${precision}`;
-        this.options = { scale: scale.toString(), precision };
+        this.options = { name: 'tokyo', scale: scale.toString(), precision };
     }
 }
 
@@ -16,6 +16,6 @@ export class Kyoto implements Operation {
 
     constructor(mode: 'general' | 'cartoon', scale: number, precision: string) {
         this.id = `up_kyoto_${mode}_${scale}x_${precision}`;
-        this.options = { mode, scale: scale.toString(), precision };
+        this.options = { name: 'kyoto', mode, scale: scale.toString(), precision };
     }
 }

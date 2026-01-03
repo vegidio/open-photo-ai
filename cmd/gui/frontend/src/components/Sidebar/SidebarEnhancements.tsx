@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Divider, List } from '@mui/material';
+import { List } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { AutopilotAnalysis } from '@/components/Enhancement/AutopilotAnalysis.tsx';
 import { EnhancementListItem } from '@/components/molecules/EnhancementListItem';
@@ -42,16 +42,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
 
     return (
         <List className={`${className}`} dense>
-            {isAnalysing ? (
-                <AutopilotAnalysis />
-            ) : (
-                operations.map((op) => (
-                    <div key={op.id}>
-                        <EnhancementListItem op={op} />
-                        <Divider className='border-[#363636] mx-0.5' />
-                    </div>
-                ))
-            )}
+            {isAnalysing ? <AutopilotAnalysis /> : operations.map((op) => <EnhancementListItem key={op.id} op={op} />)}
         </List>
     );
 };

@@ -1,14 +1,14 @@
 import { type MouseEvent, useState } from 'react';
 import { FiPlus } from 'react-icons/fi';
 import { Button } from '@/components/atoms/Button';
-import { EnhancementAddMenu } from '@/components/molecules/EnhancementAddMenu';
+import { MenuAddEnhancement } from '@/components/molecules/MenuAddEnhancement';
 
 type AddEnhancementProps = {
     disabled?: boolean;
 };
 
 export const AddEnhancement = ({ disabled = false }: AddEnhancementProps) => {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
     const open = Boolean(anchorEl);
 
     const onMenuOpen = (event: MouseEvent<HTMLButtonElement>) => {
@@ -30,7 +30,7 @@ export const AddEnhancement = ({ disabled = false }: AddEnhancementProps) => {
                 Add enhancement
             </Button>
 
-            <EnhancementAddMenu anchorEl={anchorEl} open={open} onMenuClose={onMenuClose} />
+            {open && <MenuAddEnhancement anchorEl={anchorEl} open={true} onMenuClose={onMenuClose} />}
         </>
     );
 };

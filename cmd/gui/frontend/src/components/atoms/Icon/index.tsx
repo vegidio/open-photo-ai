@@ -1,7 +1,7 @@
 import { MdClose, MdOpenInFull, MdOutlineFaceRetouchingNatural } from 'react-icons/md';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 
-type IconName = 'close' | 'face_recovery' | 'upscale';
+export type IconName = 'close' | 'face_recovery' | 'upscale';
 
 type IconProps = TailwindProps & {
     option: IconName;

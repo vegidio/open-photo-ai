@@ -25,8 +25,14 @@ func ReportSystemInfo(tel *o11y.Telemetry) {
 	if gpu, err := ghw.GPU(); err == nil {
 		for index, card := range gpu.GraphicsCards {
 			key := fmt.Sprintf("gpu.%d.", index+1)
-			info[key+"name"] = card.DeviceInfo.Product.Name
-			info[key+"memory"] = card.DeviceInfo.Node.Memory.TotalPhysicalBytes
+
+			if card.DeviceInfo != nil && card.DeviceInfo.Product != nil {
+				info[key+"name"] = card.DeviceInfo.Product.Name
+			}
+
+			if card.Node != nil {
+				info[key+"memory"] = card.Node.Memory.TotalPhysicalBytes
+			}
 		}
 	}
 

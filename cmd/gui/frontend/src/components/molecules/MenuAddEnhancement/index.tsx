@@ -4,12 +4,6 @@ import { Athens, Kyoto, type Operation } from '@/operations';
 import { useEnhancementStore, useFileStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 
-type EnhancementAddMenuProps = {
-    anchorEl: HTMLElement | null;
-    open: boolean;
-    onMenuClose: () => void;
-};
-
 const options = [
     {
         type: 'fr',
@@ -25,7 +19,13 @@ const options = [
     },
 ];
 
-export const EnhancementAddMenu = ({ anchorEl, open, onMenuClose }: EnhancementAddMenuProps) => {
+type MenuAddEnhancementProps = {
+    anchorEl: HTMLElement | null;
+    open: boolean;
+    onMenuClose: () => void;
+};
+
+export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhancementProps) => {
     const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
     const operations = useEnhancementStore((state) =>
         currentFile ? (state.enhancements.get(currentFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
