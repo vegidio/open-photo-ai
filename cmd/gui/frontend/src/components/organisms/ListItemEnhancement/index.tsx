@@ -2,15 +2,15 @@ import { type MouseEvent, type ReactNode, useState } from 'react';
 import { IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
-import { OptionsFaceRecovery } from '@/components/molecules/OptionsFaceRecovery';
-import { OptionsUpscale } from '@/components/molecules/OptionsUpscale';
+import { OptionsFaceRecovery } from '@/components/organisms/OptionsFaceRecovery';
+import { OptionsUpscale } from '@/components/organisms/OptionsUpscale';
 import { useEnhancementStore, useFileStore } from '@/stores';
 
-type EnhancementItemProps = {
+type ListItemEnhancementProps = {
     op: Operation;
 };
 
-export const EnhancementListItem = ({ op }: EnhancementItemProps) => {
+export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const [isHovered, setIsHovered] = useState(false);
     const file = useFileStore((state) => state.files.at(state.currentIndex));
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
@@ -67,17 +67,17 @@ export const EnhancementListItem = ({ op }: EnhancementItemProps) => {
                 </ListItemButton>
             </ListItem>
 
-            {open && OptionsComponent && <OptionsComponent anchorEl={anchorEl} open={true} onMenuClose={onMenuClose} />}
+            {open && OptionsComponent && <OptionsComponent anchorEl={anchorEl} open={true} onClose={onMenuClose} />}
         </>
     );
 };
 
-const selectOptionsComponent = (id: string) => {
+const selectOptionsComponent = (operationId: string) => {
     switch (true) {
-        case id.startsWith('fr'):
+        case operationId.startsWith('fr'):
             return OptionsFaceRecovery;
 
-        case id.startsWith('up'):
+        case operationId.startsWith('up'):
             return OptionsUpscale;
     }
 };

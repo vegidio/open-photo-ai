@@ -12,7 +12,8 @@ type EnhancementStore = {
     setAutopilot: (enable: boolean) => void;
     toggle: () => void;
     addEnhancements: (file: File, operations: Operation[]) => void;
-    removeEnhancement: (file: File, id: string) => void;
+    replaceEnhancement: (file: File, operation: Operation) => void;
+    removeEnhancement: (file: File, operationId: string) => void;
 
     removeKey: (file: File) => void;
     clear: () => void;
@@ -61,9 +62,20 @@ export const useEnhancementStore = create(
                 });
             },
 
-            removeEnhancement: (file: File, id: string) => {
+            replaceEnhancement: (file: File, operation: Operation) => {
                 set((state) => {
-                    const ops = (state.enhancements.get(file) ?? []).filter((op) => op.id !== id);
+                    const prefix = operation.id.split('_')[0];
+                    const ops = (state.enhancements.get(file) ?? []).map((op) =>
+                        op.id.startsWith(prefix) ? operation : op,
+                    );
+
+                    state.enhancements.set(file, ops);
+                });
+            },
+
+            removeEnhancement: (file: File, operationId: string) => {
+                set((state) => {
+                    const ops = (state.enhancements.get(file) ?? []).filter((op) => op.id !== operationId);
                     state.enhancements.set(file, ops);
                 });
             },

@@ -1,5 +1,5 @@
 import { Divider, Typography } from '@mui/material';
-import { IconButton } from '@/components/molecules/IconButton';
+import { IconButton } from '@/components/atoms/IconButton';
 
 type ModalTitleProps = {
     title: string;

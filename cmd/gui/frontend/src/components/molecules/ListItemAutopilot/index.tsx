@@ -1,6 +1,6 @@
 import { CircularProgress, ListItem, ListItemIcon, ListItemText } from '@mui/material';
 
-export const AutopilotAnalysis = () => {
+export const ListItemAutopilot = () => {
     return (
         <ListItem disablePadding className='py-2 px-4'>
             <ListItemIcon className='ml-6 min-w-10'>

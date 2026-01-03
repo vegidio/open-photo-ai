@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { List } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { AutopilotAnalysis } from '@/components/Enhancement/AutopilotAnalysis.tsx';
-import { EnhancementListItem } from '@/components/molecules/EnhancementListItem';
+import { ListItemAutopilot } from '@/components/molecules/ListItemAutopilot';
+import { ListItemEnhancement } from '@/components/organisms/ListItemEnhancement';
 import { useEnhancementStore, useFileStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
@@ -42,7 +42,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
 
     return (
         <List className={`${className}`} dense>
-            {isAnalysing ? <AutopilotAnalysis /> : operations.map((op) => <EnhancementListItem key={op.id} op={op} />)}
+            {isAnalysing ? <ListItemAutopilot /> : operations.map((op) => <ListItemEnhancement key={op.id} op={op} />)}
         </List>
     );
 };

@@ -2,12 +2,13 @@ import { ClickAwayListener, Popover } from '@mui/material';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { Athens, Santorini } from '@/operations';
-import { useOptionsFaceRecoveryStore } from '@/stores';
+import { useEnhancementStore, useFileStore } from '@/stores';
+import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 
 type OptionsFaceRecoveryProps = {
     anchorEl: HTMLElement | null;
     open: boolean;
-    onMenuClose: () => void;
+    onClose: () => void;
 };
 
 const options: ModelSelectorOption[] = [
@@ -17,22 +18,27 @@ const options: ModelSelectorOption[] = [
     { value: 'santorini_fp16', label: 'Santorini Std.' },
 ];
 
-export const OptionsFaceRecovery = ({ anchorEl, open, onMenuClose }: OptionsFaceRecoveryProps) => {
-    const model = useOptionsFaceRecoveryStore((state) => state.model);
-    const setModel = useOptionsFaceRecoveryStore((state) => state.setModel);
+export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceRecoveryProps) => {
+    const file = useFileStore((state) => state.files[state.currentIndex]);
+    const operations = useEnhancementStore((state) => state.enhancements.get(file) ?? EMPTY_OPERATIONS);
+    const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
 
-    const selectedModel = `${model.options.name}_${model.options.precision}`;
+    const currentOp = operations.find((op) => op.id.startsWith('fr'));
+    if (!currentOp) return null;
+
+    const selectedModel = `${currentOp.options.name}_${currentOp.options.precision}`;
 
     const onModelChange = (value: string) => {
+        if (!value) return;
         const values = value.split('_');
 
         switch (values[0]) {
             case 'athens':
-                setModel(new Athens(values[1]));
+                replaceEnhancement(file, new Athens(values[1]));
                 break;
 
             case 'santorini':
-                setModel(new Santorini(values[1]));
+                replaceEnhancement(file, new Santorini(values[1]));
                 break;
         }
     };
@@ -41,7 +47,7 @@ export const OptionsFaceRecovery = ({ anchorEl, open, onMenuClose }: OptionsFace
         <Popover
             anchorEl={anchorEl}
             open={open}
-            onClose={onMenuClose}
+            onClose={onClose}
             anchorOrigin={{
                 vertical: 'center',
                 horizontal: 'left',
@@ -59,9 +65,9 @@ export const OptionsFaceRecovery = ({ anchorEl, open, onMenuClose }: OptionsFace
                 },
             }}
         >
-            <ClickAwayListener onClickAway={onMenuClose}>
+            <ClickAwayListener onClickAway={onClose}>
                 <div className='flex flex-col'>
-                    <ModalTitle title='Face Recovery' onClose={onMenuClose} />
+                    <ModalTitle title='Face Recovery' onClose={onClose} />
 
                     <div className='mt-1 p-3'>
                         <ModelSelector options={options} value={selectedModel} onChange={onModelChange} />
