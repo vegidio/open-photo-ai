@@ -7,7 +7,7 @@ version: '3'
 info:
   companyName: "Vinicius Egidio" # The name of the company
   productName: "Open Photo AI" # The name of the application
-  productIdentifier: "io.vinicius.openphotoai" # The unique product identifier
+  productIdentifier: "io.vinicius.opai" # The unique product identifier
   description: "An AI photo editing tool" # The application description
   copyright: "(c) 2025, Vinicius Egidio" # Copyright text
   comments: "Some Product Comments" # Comments
