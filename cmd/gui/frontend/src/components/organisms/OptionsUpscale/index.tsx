@@ -1,6 +1,8 @@
-import { ClickAwayListener, Popover } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { ClickAwayListener, Divider, Popover } from '@mui/material';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
+import { ScaleSelector } from '@/components/molecules/ScaleSelector';
 import { Kyoto, Tokyo } from '@/operations';
 import { useEnhancementStore, useFileStore } from '@/stores';
 import { EMPTY_OPERATIONS, os } from '@/utils/constants.ts';
@@ -24,23 +26,23 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
     const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
 
     const currentOp = operations.find((op) => op.id.startsWith('up'));
-    if (!currentOp) return null;
+    const [model, setModel] = useState(`${currentOp?.options.name}_${currentOp?.options.precision}`);
+    const [scale, setScale] = useState(parseInt(currentOp?.options.scale ?? '1', 10));
 
-    const selectedModel = `${currentOp.options.name}_${currentOp.options.precision}`;
-
-    const onModelChange = (value: string) => {
-        const values = value.split('_');
+    useEffect(() => {
+        console.log(model, scale);
+        const values = model.split('_');
 
         switch (values[0]) {
             case 'tokyo':
-                replaceEnhancement(file, new Tokyo(4, values[1]));
+                replaceEnhancement(file, new Tokyo(scale, values[1]));
                 break;
 
             case 'kyoto':
-                replaceEnhancement(file, new Kyoto('general', 4, values[1]));
+                replaceEnhancement(file, new Kyoto('general', scale, values[1]));
                 break;
         }
-    };
+    }, [file, replaceEnhancement, model, scale]);
 
     return (
         <Popover
@@ -68,8 +70,12 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
                 <div className='flex flex-col'>
                     <ModalTitle title='Upscale' onClose={onClose} />
 
-                    <div className='mt-1 p-3'>
-                        <ModelSelector options={options} value={selectedModel} onChange={onModelChange} />
+                    <div className='flex flex-col mt-1 p-3 gap-4'>
+                        <ModelSelector options={options} value={model} onChange={setModel} />
+
+                        <Divider />
+
+                        <ScaleSelector value={scale} onChange={setScale} />
                     </div>
                 </div>
             </ClickAwayListener>

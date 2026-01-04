@@ -7,14 +7,13 @@ import (
 )
 
 type OpUpKyoto struct {
-	id        string
 	precision types.Precision
 	mode      Mode
-	scale     int
+	scale     float64
 }
 
 func (o OpUpKyoto) Id() string {
-	return o.id
+	return fmt.Sprintf("up_kyoto_%s_%.4gx_%s", o.mode, o.scale, o.precision)
 }
 
 func (o OpUpKyoto) Precision() types.Precision {
@@ -23,9 +22,15 @@ func (o OpUpKyoto) Precision() types.Precision {
 
 var _ types.Operation = (*OpUpKyoto)(nil)
 
-func Op(mode Mode, scale int, precision types.Precision) OpUpKyoto {
+func Op(mode Mode, scale float64, precision types.Precision) OpUpKyoto {
+	if scale < 1 {
+		scale = 1
+	}
+	if scale > 16 {
+		scale = 16
+	}
+
 	return OpUpKyoto{
-		id:        fmt.Sprintf("up_kyoto_%s_%dx_%s", mode, scale, precision),
 		precision: precision,
 		mode:      mode,
 		scale:     scale,

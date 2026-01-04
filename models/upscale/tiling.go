@@ -2,6 +2,7 @@ package upscale
 
 import (
 	"image"
+	"math"
 
 	"github.com/disintegration/imaging"
 	ort "github.com/yalue/onnxruntime_go"
@@ -136,4 +137,16 @@ func reflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 	}
 
 	return padded
+}
+
+// ResizeToIntendedScale rescales the given image to the specified scale factor while preserving its aspect ratio.
+func ResizeToIntendedScale(img image.Image, originalBounds image.Rectangle, scale float64) image.Image {
+	width := int(math.Round(float64(originalBounds.Dx()) * scale))
+	height := int(math.Round(float64(originalBounds.Dy()) * scale))
+
+	if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+		img = imaging.Resize(img, width, height, imaging.Lanczos)
+	}
+
+	return img
 }
