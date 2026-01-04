@@ -28,7 +28,7 @@ type Kyoto struct {
 
 func New(operation types.Operation, onProgress types.DownloadProgress) (*Kyoto, error) {
 	op := operation.(OpUpKyoto)
-	name := fmt.Sprintf("Upscale %dx (%s, %s)",
+	name := fmt.Sprintf("Upscale %.4gx (%s, %s)",
 		op.scale,
 		cases.Title(language.English).String(string(op.mode)),
 		cases.Upper(language.English).String(string(op.precision)),
