@@ -6,7 +6,7 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/jaypipes/ghw v0.21.2
 	github.com/samber/lo v1.52.0
-	github.com/vegidio/avif-go v0.0.0-20251219222054-ccab1b992d2d
+	github.com/vegidio/avif-go v0.0.0-20260104153230-9241dada5213
 	github.com/vegidio/go-sak v0.0.0-20251231095403-269ef6b33bb6
 	github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84
 	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6
