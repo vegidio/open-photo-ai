@@ -1,7 +1,7 @@
 import { Button as MuiButton, type ButtonProps as MuiButtonProps } from '@mui/material';
 
 type ButtonProps = MuiButtonProps & {
-    option?: 'primary' | 'secondary' | 'tertiary';
+    option?: 'primary' | 'secondary' | 'tertiary' | 'text';
 };
 
 export const Button = ({ option = 'primary', className = '', ...props }: ButtonProps) => {
@@ -18,13 +18,22 @@ export const Button = ({ option = 'primary', className = '', ...props }: ButtonP
         case 'secondary':
             return (
                 <MuiButton
+                    variant='contained'
+                    className={`bg-[#353535] hover:bg-[#171717] text-[#f2f2f2] normal-case font-normal ${className}`}
+                    {...props}
+                />
+            );
+
+        case 'tertiary':
+            return (
+                <MuiButton
                     variant='outlined'
                     className={`text-[#f2f2f2] normal-case font-normal ${className}`}
                     {...props}
                 />
             );
 
-        case 'tertiary':
+        case 'text':
             return (
                 <MuiButton
                     variant='text'

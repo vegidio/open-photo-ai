@@ -42,8 +42,18 @@ export const ScaleSelector = ({ value, onChange }: ScaleSelectorProps) => {
             <Typography variant='body2'>Scale</Typography>
 
             <div className='flex flex-row gap-2 items-center'>
-                <TextField value={value} onChange={onTextChange} className='flex-3 m-0' />
-                <Button option='primary' size='small' className='h-9 flex-1' onClick={() => onChange?.('16')}>
+                <TextField
+                    value={value}
+                    onChange={onTextChange}
+                    className='flex-3 m-0'
+                    slotProps={{
+                        input: {
+                            endAdornment: <Typography>x</Typography>,
+                        },
+                    }}
+                />
+
+                <Button option='secondary' size='small' className='h-8.5 flex-1' onClick={() => onChange?.('16')}>
                     Max
                 </Button>
             </div>

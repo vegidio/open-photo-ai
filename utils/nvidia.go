@@ -41,6 +41,7 @@ func IsCudaSupported() bool {
 		})
 	})
 
+	wg.Wait()
 	return found
 }
 
@@ -69,6 +70,7 @@ func IsTensorRtSupported() bool {
 		})
 	})
 
+	wg.Wait()
 	return found
 }
 

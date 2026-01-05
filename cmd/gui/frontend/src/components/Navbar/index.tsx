@@ -29,7 +29,7 @@ export const Navbar = () => {
                     <Typography className='grow mt-1'>Open Photo AI</Typography>
 
                     <div className='mt-0.5 flex flex-row items-center gap-3'>
-                        <Button option='tertiary' size='small' onClick={onAboutClick}>
+                        <Button option='text' size='small' onClick={onAboutClick}>
                             About
                         </Button>
 

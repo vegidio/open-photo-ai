@@ -51,6 +51,7 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
             anchorEl={anchorEl}
             open={open}
             onClose={onClose}
+            hideBackdrop={true}
             anchorOrigin={{
                 vertical: 'center',
                 horizontal: 'left',
@@ -59,9 +60,10 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
                 vertical: 'top',
                 horizontal: 'right',
             }}
+            className='pointer-events-none'
             slotProps={{
                 paper: {
-                    className: 'w-64 -ml-4',
+                    className: 'w-64 -ml-4 pointer-events-auto',
                 },
             }}
         >

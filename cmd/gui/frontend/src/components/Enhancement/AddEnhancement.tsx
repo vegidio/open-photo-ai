@@ -22,7 +22,7 @@ export const AddEnhancement = ({ disabled = false }: AddEnhancementProps) => {
     return (
         <>
             <Button
-                option='secondary'
+                option='tertiary'
                 disabled={disabled}
                 startIcon={<FiPlus className='size-6 stroke-1' />}
                 onClick={onMenuOpen}

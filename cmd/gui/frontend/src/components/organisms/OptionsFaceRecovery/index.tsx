@@ -56,9 +56,10 @@ export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceReco
                 vertical: 'top',
                 horizontal: 'right',
             }}
+            className='pointer-events-none'
             slotProps={{
                 paper: {
-                    className: 'w-64 -ml-4',
+                    className: 'w-64 -ml-4 pointer-events-auto',
                 },
             }}
         >
