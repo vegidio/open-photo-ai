@@ -27,20 +27,22 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
 
     const currentOp = operations.find((op) => op.id.startsWith('up'));
     const [model, setModel] = useState(`${currentOp?.options.name}_${currentOp?.options.precision}`);
-    const [scale, setScale] = useState(parseInt(currentOp?.options.scale ?? '1', 10));
+    const [scale, setScale] = useState(currentOp?.options.scale ?? '1');
 
     useEffect(() => {
-        console.log(model, scale);
-        const values = model.split('_');
+        if (scale !== '') {
+            const numScale = parseFloat(scale);
+            const values = model.split('_');
 
-        switch (values[0]) {
-            case 'tokyo':
-                replaceEnhancement(file, new Tokyo(scale, values[1]));
-                break;
+            switch (values[0]) {
+                case 'tokyo':
+                    replaceEnhancement(file, new Tokyo(numScale, values[1]));
+                    break;
 
-            case 'kyoto':
-                replaceEnhancement(file, new Kyoto('general', scale, values[1]));
-                break;
+                case 'kyoto':
+                    replaceEnhancement(file, new Kyoto('general', numScale, values[1]));
+                    break;
+            }
         }
     }, [file, replaceEnhancement, model, scale]);
 
@@ -60,9 +62,6 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
             slotProps={{
                 paper: {
                     className: 'w-64 -ml-4',
-                },
-                root: {
-                    // className: 'pointer-events-none',
                 },
             }}
         >

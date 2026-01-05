@@ -6,7 +6,7 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.52.0
 	github.com/vegidio/go-sak v0.0.0-20251231095403-269ef6b33bb6
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.55
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.57
 )
 
 require (
@@ -32,7 +32,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect

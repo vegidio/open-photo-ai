@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/jaypipes/ghw"
 	"github.com/samber/lo"
@@ -24,15 +25,20 @@ const (
 //
 // Returns false if an error occurs while querying GPU information or no NVIDIA GPU is found.
 func IsCudaSupported() bool {
-	gpu, err := ghw.GPU()
-	if err != nil {
-		return false
-	}
+	found := false
+	var wg sync.WaitGroup
 
-	_, found := lo.Find(gpu.GraphicsCards, func(card *ghw.GraphicsCard) bool {
-		vendor := strings.ToLower(card.DeviceInfo.Vendor.Name)
-		product := strings.ToLower(card.DeviceInfo.Product.Name)
-		return vendor == "nvidia" || strings.Contains(product, "nvidia")
+	wg.Go(func() {
+		gpu, err := ghw.GPU()
+		if err != nil {
+			return
+		}
+
+		_, found = lo.Find(gpu.GraphicsCards, func(card *ghw.GraphicsCard) bool {
+			vendor := strings.ToLower(card.DeviceInfo.Vendor.Name)
+			product := strings.ToLower(card.DeviceInfo.Product.Name)
+			return vendor == "nvidia" || strings.Contains(product, "nvidia")
+		})
 	})
 
 	return found
@@ -42,20 +48,25 @@ func IsCudaSupported() bool {
 //
 // Returns false if an error occurs while querying GPU information or no NVIDIA GPU is found.
 func IsTensorRtSupported() bool {
-	gpu, err := ghw.GPU()
-	if err != nil {
-		return false
-	}
+	found := false
+	var wg sync.WaitGroup
 
-	_, found := lo.Find(gpu.GraphicsCards, func(card *ghw.GraphicsCard) bool {
-		vendor := strings.ToLower(card.DeviceInfo.Vendor.Name)
-		product := strings.ToLower(card.DeviceInfo.Product.Name)
+	wg.Go(func() {
+		gpu, err := ghw.GPU()
+		if err != nil {
+			return
+		}
 
-		return vendor == "nvidia" &&
-			(strings.Contains(product, "rtx 50") ||
-				strings.Contains(product, "rtx 40") ||
-				strings.Contains(product, "rtx 30") ||
-				strings.Contains(product, "rtx 20"))
+		_, found = lo.Find(gpu.GraphicsCards, func(card *ghw.GraphicsCard) bool {
+			vendor := strings.ToLower(card.DeviceInfo.Vendor.Name)
+			product := strings.ToLower(card.DeviceInfo.Product.Name)
+
+			return vendor == "nvidia" &&
+				(strings.Contains(product, "rtx 50") ||
+					strings.Contains(product, "rtx 40") ||
+					strings.Contains(product, "rtx 30") ||
+					strings.Contains(product, "rtx 20"))
+		})
 	})
 
 	return found

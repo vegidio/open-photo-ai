@@ -48,8 +48,8 @@ func main() {
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHidden,
 		},
-		URL:               "/",
-		EnableDragAndDrop: true,
+		URL:            "/",
+		EnableFileDrop: true,
 	})
 
 	// Track drag and drops on the app
@@ -87,7 +87,7 @@ func main() {
 
 func eventDragAndDrop(app *application.App, win *application.WebviewWindow) {
 	win.OnWindowEvent(
-		events.Common.WindowDropZoneFilesDropped,
+		events.Common.WindowFilesDropped,
 		func(event *application.WindowEvent) {
 			paths := event.Context().DroppedFiles()
 			files := utils.CreateFileTypes(paths)

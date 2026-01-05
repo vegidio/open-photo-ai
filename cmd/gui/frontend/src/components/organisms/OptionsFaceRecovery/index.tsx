@@ -60,9 +60,6 @@ export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceReco
                 paper: {
                     className: 'w-64 -ml-4',
                 },
-                root: {
-                    // className: 'pointer-events-none',
-                },
             }}
         >
             <ClickAwayListener onClickAway={onClose}>

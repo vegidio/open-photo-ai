@@ -29,12 +29,12 @@ func IdsToOperations(opIds []string) []types.Operation {
 
 		// Upscale
 		case "tokyo":
-			scale, _ := strconv.Atoi(strings.Replace(values[2], "x", "", 1))
+			scale, _ := strconv.ParseFloat(strings.Replace(values[2], "x", "", 1), 64)
 			precision := types.Precision(values[3])
 			operations = append(operations, tokyo.Op(scale, precision))
 		case "kyoto":
 			mode := kyoto.Mode(values[2])
-			scale, _ := strconv.Atoi(strings.Replace(values[3], "x", "", 1))
+			scale, _ := strconv.ParseFloat(strings.Replace(values[3], "x", "", 1), 64)
 			precision := types.Precision(values[4])
 			operations = append(operations, kyoto.Op(mode, scale, precision))
 		}

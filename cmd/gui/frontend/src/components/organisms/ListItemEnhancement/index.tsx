@@ -16,7 +16,7 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
 
     // Get enhancement details and options component menu
-    const { name, config, icon } = opToEnhancement(op);
+    const { name, info, icon } = opToEnhancement(op);
     const OptionsComponent = selectOptionsComponent(op.id);
 
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
@@ -53,7 +53,7 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
                     <ListItemIcon className='min-w-9 [&>svg]:size-5'>{icon}</ListItemIcon>
                     <ListItemText
                         primary={name}
-                        secondary={config}
+                        secondary={info}
                         className='my-0'
                         slotProps={{
                             primary: {
@@ -82,30 +82,27 @@ const selectOptionsComponent = (operationId: string) => {
     }
 };
 
-const opToEnhancement = (op: Operation): { name: string; config: string; icon: ReactNode } => {
-    let config = '';
+const opToEnhancement = (op: Operation): { name: string; info: string; icon: ReactNode } => {
+    const quality = `${op.options.precision === 'fp32' ? 'High' : 'Std.'} Quality`;
 
     switch (true) {
         // Face Recovery
         case op.id.startsWith('fr'): {
-            config = `${op.options.precision === 'fp32' ? 'High' : 'Std.'} Quality`;
-            return { name: 'Face Recovery', config, icon: <Icon option='face_recovery' /> };
+            const info = `${titleCase(op.options.name)}, ${quality}`;
+            return { name: 'Face Recovery', info, icon: <Icon option='face_recovery' /> };
         }
 
         // Upscale
-        case op.id.startsWith('up_tokyo'): {
-            config = `${op.options.scale}x`;
-            config += `, ${op.options.precision === 'fp32' ? 'High' : 'Std.'} Quality`;
-            return { name: 'Upscale', config, icon: <Icon option='upscale' /> };
-        }
-
-        case op.id.startsWith('up_kyoto'): {
-            config = op.options.mode === 'general' ? 'General' : 'Cartoon';
-            config += `, ${op.options.scale}x`;
-            config += `, ${op.options.precision === 'fp32' ? 'High' : 'Std.'} Quality`;
-            return { name: 'Upscale', config, icon: <Icon option='upscale' /> };
+        case op.id.startsWith('up'): {
+            const info = `${titleCase(op.options.name)}, ${op.options.scale}x, ${quality}`;
+            return { name: 'Upscale', info, icon: <Icon option='upscale' /> };
         }
     }
 
-    return { name: '', config: '', icon: null };
+    return { name: '', info: '', icon: null };
+};
+
+const titleCase = (input: string): string => {
+    if (!input) return input;
+    return input[0].toUpperCase() + input.slice(1);
 };

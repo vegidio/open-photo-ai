@@ -42,7 +42,14 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
 
     return (
         <List className={`${className}`} dense>
-            {isAnalysing ? <ListItemAutopilot /> : operations.map((op) => <ListItemEnhancement key={op.id} op={op} />)}
+            {isAnalysing ? (
+                <ListItemAutopilot />
+            ) : (
+                operations.map((op) => {
+                    const prefix = op.id.slice(0, 2);
+                    return <ListItemEnhancement key={prefix} op={op} />;
+                })
+            )}
         </List>
     );
 };
