@@ -50,15 +50,16 @@ All enhancements available here come from open-source AI models that were adapte
 
 ### Face Recovery
 
-- **Athens**: use when you need to restore a face while preserving the original identity. It reconstructs details conservatively, avoids inventing features, and works well on heavily degraded images. This makes it suitable for real people and any case where facial accuracy matters more than visual polish.
-- **Santorini**: use when your priority is maximum visual realism and sharpness. It works well for moderately degraded faces and produces very clean, attractive results, but it can hallucinate features and drift from the original identity. It is better suited for creative, entertainment, or non-critical use cases where realism matters more than strict accuracy.
+- **Athens**: use when identity fidelity matters most. This model lets you preserve facial structure while restoring details, even on heavily degraded faces. Best when you want restoration without changing the person.
+- **Santorini**: use when you want aggressive, fast enhancement and can tolerate identity drift. It produces sharp, visually pleasing faces on moderate degradation, but may hallucinate features and alter identity on very low-quality inputs.
 
 *Verdict*: if identity matters, start with **Athens**; if aesthetics matter more, use **Santorini**.
 
 ### Upscale
 
-- **Tokyo**: use when you want accurate, conservative upscaling that stays close to the original image. It focuses on structure and texture consistency, avoids inventing details, and works well for clean images, illustrations, screenshots, and content where correctness matters more than sharpness. It is a good choice when artifacts or hallucinated details would be unacceptable.
-- **Kyoto**: use when you want visually strong, sharp upscaling, even if new details are introduced. It aggressively enhances textures and edges, can add perceived detail that was not present before, and performs especially well on photos and noisy or compressed images. It is best suited for creative or perceptual use cases where impact matters more than strict fidelity.
+- **Tokyo**: use when you want a natural upscale without exaggeration. It focuses on preserving the original look and fine structures instead of "inventing" new details, making it ideal when realism and faithfulness matter more than sharpness.
+- **Kyoto**: use for real-world photos (people, landscapes, products). It excels at restoring details while handling noise, blur, and compression artifacts. Ideal for practical applications where images are imperfect, and you want visually pleasing, robust results fast.
+- **Saitama**: use for cartoon, drawings, line art, and digital illustrations. It preserves clean lines, flat colors, and stylized shading without introducing photo-like textures. Best when sharp edges and stylistic consistency matter more than realism.
 
 *Verdict*: start with **Tokyo**, then try **Kyoto** if the result looks too soft.
 

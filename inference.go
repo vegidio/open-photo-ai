@@ -141,8 +141,6 @@ func selectModel(operation types.Operation, onProgress types.DownloadProgress) (
 	var model interface{}
 	var err error
 
-	fmt.Println("id", operation.Id())
-
 	model, exists := internal.Registry[operation.Id()]
 	if exists {
 		return model, nil
