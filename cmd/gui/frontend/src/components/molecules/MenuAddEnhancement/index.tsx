@@ -15,7 +15,7 @@ const options = [
         type: 'up',
         icon: <Icon option='upscale' />,
         name: 'Upscale',
-        op: new Kyoto('general', 4, 'fp32'),
+        op: new Kyoto(4, 'fp32'),
     },
 ];
 

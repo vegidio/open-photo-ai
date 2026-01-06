@@ -25,8 +25,8 @@ func Op(scale float64, precision types.Precision) OpUpTokyo {
 	if scale < 1 {
 		scale = 1
 	}
-	if scale > 16 {
-		scale = 16
+	if scale > 8 {
+		scale = 8
 	}
 
 	return OpUpTokyo{

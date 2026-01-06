@@ -66,7 +66,7 @@ All enhancements available here come from open-source AI models that were adapte
 
 These are the features I plan to implement in the future, in no particular order:
 
-- [ ] Model selection and enhancements customization.
+- [x] Model selection and enhancements customization.
 - [ ] Crop and rotate images in the GUI.
 - [ ] Support different preview layouts.
 - [ ] Add new models for denoise, sharpening, light, and color correction.

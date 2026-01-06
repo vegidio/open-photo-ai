@@ -26,9 +26,9 @@ export const ScaleSelector = ({ value, onChange }: ScaleSelectorProps) => {
 
         const numValue = parseFloat(inputValue);
 
-        // Validate: must be a number between 1-16
+        // Validate: must be a number between 1-8
         if (!Number.isNaN(numValue)) {
-            const clampedValue = Math.max(1, Math.min(16, numValue));
+            const clampedValue = Math.max(1, Math.min(8, numValue));
             onChange?.(clampedValue.toString());
         }
     };
@@ -53,7 +53,7 @@ export const ScaleSelector = ({ value, onChange }: ScaleSelectorProps) => {
                     }}
                 />
 
-                <Button option='secondary' size='small' className='h-8.5 flex-1' onClick={() => onChange?.('16')}>
+                <Button option='secondary' size='small' className='h-8.5 flex-1' onClick={() => onChange?.('8')}>
                     Max
                 </Button>
             </div>

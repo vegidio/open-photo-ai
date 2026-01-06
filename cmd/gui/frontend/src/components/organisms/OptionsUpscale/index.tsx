@@ -3,7 +3,7 @@ import { ClickAwayListener, Divider, Popover } from '@mui/material';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { ScaleSelector } from '@/components/molecules/ScaleSelector';
-import { Kyoto, Tokyo } from '@/operations';
+import { Kyoto, Saitama, Tokyo } from '@/operations';
 import { useEnhancementStore, useFileStore } from '@/stores';
 import { EMPTY_OPERATIONS, os } from '@/utils/constants.ts';
 
@@ -18,6 +18,8 @@ const options: ModelSelectorOption[] = [
     { value: 'tokyo_fp16', label: 'Tokyo Std.', disabled: os === 'darwin' },
     { value: 'kyoto_fp32', label: 'Kyoto High' },
     { value: 'kyoto_fp16', label: 'Kyoto Std.' },
+    { value: 'saitama_fp32', label: 'Saitama High' },
+    { value: 'saitama_fp16', label: 'Saitama Std.' },
 ];
 
 export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps) => {
@@ -40,7 +42,11 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
                     break;
 
                 case 'kyoto':
-                    replaceEnhancement(file, new Kyoto('general', numScale, values[1]));
+                    replaceEnhancement(file, new Kyoto(numScale, values[1]));
+                    break;
+
+                case 'saitama':
+                    replaceEnhancement(file, new Saitama(numScale, values[1]));
                     break;
             }
         }

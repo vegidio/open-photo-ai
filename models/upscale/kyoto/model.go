@@ -28,9 +28,8 @@ type Kyoto struct {
 
 func New(operation types.Operation, onProgress types.DownloadProgress) (*Kyoto, error) {
 	op := operation.(OpUpKyoto)
-	name := fmt.Sprintf("Upscale %.4gx (%s, %s)",
+	name := fmt.Sprintf("Upscale %.4gx (%s)",
 		op.scale,
-		cases.Title(language.English).String(string(op.mode)),
 		cases.Upper(language.English).String(string(op.precision)),
 	)
 
@@ -120,8 +119,6 @@ func selectScaleMatrix(scale float64) []int {
 		return []int{4}
 	case scale <= 8:
 		return []int{4, 2}
-	case scale <= 16:
-		return []int{4, 4}
 	default:
 		return []int{}
 	}

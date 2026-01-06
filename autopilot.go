@@ -58,9 +58,9 @@ func analyseUpscale(input *types.ImageData) ([]types.Operation, error) {
 
 	switch {
 	case mp <= _1Mp:
-		operation = append(operation, kyoto.Op(kyoto.ModeGeneral, 4, types.PrecisionFp32))
+		operation = append(operation, kyoto.Op(4, types.PrecisionFp32))
 	case mp <= _2Mp:
-		operation = append(operation, kyoto.Op(kyoto.ModeGeneral, 2, types.PrecisionFp32))
+		operation = append(operation, kyoto.Op(2, types.PrecisionFp32))
 	}
 
 	return operation, nil

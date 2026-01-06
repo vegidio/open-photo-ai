@@ -1,4 +1,4 @@
-package tokyo
+package saitama
 
 import (
 	"context"
@@ -18,16 +18,16 @@ const (
 	tileSize    = 256
 )
 
-type Tokyo struct {
+type Saitama struct {
 	id        string
 	name      string
-	operation OpUpTokyo
+	operation OpUpSaitama
 	sessions  []*ort.DynamicAdvancedSession
 	scales    []int
 }
 
-func New(operation types.Operation, onProgress types.DownloadProgress) (*Tokyo, error) {
-	op := operation.(OpUpTokyo)
+func New(operation types.Operation, onProgress types.DownloadProgress) (*Saitama, error) {
+	op := operation.(OpUpSaitama)
 	name := fmt.Sprintf("Upscale %.4gx (%s)",
 		op.scale,
 		cases.Upper(language.English).String(string(op.precision)),
@@ -58,7 +58,7 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Tokyo, 
 		sessions = append(sessions, session)
 	}
 
-	return &Tokyo{
+	return &Saitama{
 		name:      name,
 		operation: op,
 		sessions:  sessions,
@@ -67,19 +67,19 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Tokyo, 
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[*types.ImageData] = (*Tokyo)(nil)
+var _ types.Model[*types.ImageData] = (*Saitama)(nil)
 
 // region - Model methods
 
-func (m *Tokyo) Id() string {
+func (m *Saitama) Id() string {
 	return m.operation.Id()
 }
 
-func (m *Tokyo) Name() string {
+func (m *Saitama) Name() string {
 	return m.name
 }
 
-func (m *Tokyo) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) (*types.ImageData, error) {
+func (m *Saitama) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) (*types.ImageData, error) {
 	if onProgress != nil {
 		onProgress("up", 0)
 	}
@@ -101,7 +101,7 @@ func (m *Tokyo) Run(ctx context.Context, input *types.ImageData, onProgress type
 	}, nil
 }
 
-func (m *Tokyo) Destroy() {
+func (m *Saitama) Destroy() {
 	for _, session := range m.sessions {
 		session.Destroy()
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/models/upscale/saitama"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -108,7 +109,7 @@ func Execute[T any](
 			onProgress("dl", percent)
 		}
 	})
-	
+
 	if err != nil {
 		return genericNil, err
 	}
@@ -140,6 +141,8 @@ func selectModel(operation types.Operation, onProgress types.DownloadProgress) (
 	var model interface{}
 	var err error
 
+	fmt.Println("id", operation.Id())
+
 	model, exists := internal.Registry[operation.Id()]
 	if exists {
 		return model, nil
@@ -161,6 +164,8 @@ func selectModel(operation types.Operation, onProgress types.DownloadProgress) (
 		model, err = tokyo.New(operation, onProgress)
 	case strings.HasPrefix(operation.Id(), "up_kyoto"):
 		model, err = kyoto.New(operation, onProgress)
+	case strings.HasPrefix(operation.Id(), "up_saitama"):
+		model, err = saitama.New(operation, onProgress)
 
 	default:
 		err = fmt.Errorf("no model found with ID: %s", operation.Id())

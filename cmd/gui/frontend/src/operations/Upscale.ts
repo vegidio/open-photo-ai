@@ -14,8 +14,18 @@ export class Kyoto implements Operation {
     id = '';
     options: Record<string, string> = {};
 
-    constructor(mode: 'general' | 'cartoon', scale: number, precision: string) {
-        this.id = `up_kyoto_${mode}_${scale}x_${precision}`;
-        this.options = { name: 'kyoto', mode, scale: scale.toString(), precision };
+    constructor(scale: number, precision: string) {
+        this.id = `up_kyoto_${scale}x_${precision}`;
+        this.options = { name: 'kyoto', scale: scale.toString(), precision };
+    }
+}
+
+export class Saitama implements Operation {
+    id = '';
+    options: Record<string, string> = {};
+
+    constructor(scale: number, precision: string) {
+        this.id = `up_saitama_${scale}x_${precision}`;
+        this.options = { name: 'saitama', scale: scale.toString(), precision };
     }
 }

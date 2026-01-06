@@ -7,6 +7,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/models/upscale/saitama"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -33,10 +34,13 @@ func IdsToOperations(opIds []string) []types.Operation {
 			precision := types.Precision(values[3])
 			operations = append(operations, tokyo.Op(scale, precision))
 		case "kyoto":
-			mode := kyoto.Mode(values[2])
-			scale, _ := strconv.ParseFloat(strings.Replace(values[3], "x", "", 1), 64)
-			precision := types.Precision(values[4])
-			operations = append(operations, kyoto.Op(mode, scale, precision))
+			scale, _ := strconv.ParseFloat(strings.Replace(values[2], "x", "", 1), 64)
+			precision := types.Precision(values[3])
+			operations = append(operations, kyoto.Op(scale, precision))
+		case "saitama":
+			scale, _ := strconv.ParseFloat(strings.Replace(values[2], "x", "", 1), 64)
+			precision := types.Precision(values[3])
+			operations = append(operations, saitama.Op(scale, precision))
 		}
 	}
 
