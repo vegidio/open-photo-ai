@@ -2,10 +2,7 @@ module shared
 
 go 1.25.5
 
-require (
-	github.com/jaypipes/ghw v0.21.2
-	github.com/vegidio/go-sak v0.0.0-20251231095403-269ef6b33bb6
-)
+require github.com/vegidio/go-sak v0.0.0-20260108170806-4467e6d8c7d4
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -14,14 +11,10 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.4 // indirect
-	github.com/jaypipes/pcidb v1.1.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/samber/lo v1.52.0 // indirect
-	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.39.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.15.0 // indirect
@@ -38,6 +31,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251222181119-0a764e51fe1b // indirect
 	google.golang.org/grpc v1.78.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
-	howett.net/plist v1.0.2-0.20250314012144-ee69052608d9 // indirect
 )

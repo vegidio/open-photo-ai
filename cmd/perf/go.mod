@@ -2,7 +2,7 @@ module perf
 
 go 1.25.3
 
-require github.com/vegidio/go-sak v0.0.0-20251231095403-269ef6b33bb6
+require github.com/vegidio/go-sak v0.0.0-20260108170806-4467e6d8c7d4
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

@@ -4,10 +4,9 @@ go 1.25.3
 
 require (
 	github.com/disintegration/imaging v1.6.2
-	github.com/jaypipes/ghw v0.21.2
 	github.com/samber/lo v1.52.0
 	github.com/vegidio/avif-go v0.0.0-20260104153230-9241dada5213
-	github.com/vegidio/go-sak v0.0.0-20251231095403-269ef6b33bb6
+	github.com/vegidio/go-sak v0.0.0-20260108170806-4467e6d8c7d4
 	github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84
 	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6
 	github.com/yalue/onnxruntime_go v1.21.0
@@ -17,19 +16,10 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/jaypipes/pcidb v1.1.1 // indirect
-	github.com/kr/pretty v0.3.1 // indirect
 	github.com/otiai10/copy v1.14.1 // indirect
 	github.com/otiai10/mint v1.6.3 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
-	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
-	howett.net/plist v1.0.2-0.20250314012144-ee69052608d9 // indirect
 )

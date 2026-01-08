@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/jaypipes/ghw"
 	"github.com/vegidio/go-sak/o11y"
+	"github.com/vegidio/go-sak/sysinfo"
 )
 
 func ReportSystemInfo(tel *o11y.Telemetry) {
@@ -13,29 +13,20 @@ func ReportSystemInfo(tel *o11y.Telemetry) {
 	var wg sync.WaitGroup
 
 	wg.Go(func() {
-		if cpu, err := ghw.CPU(); err == nil {
-			for index, processor := range cpu.Processors {
-				key := fmt.Sprintf("cpu.%d.", index+1)
-				info[key+"model"] = processor.Model
-				info[key+"cores"] = len(processor.Cores)
-			}
+		if cpu, err := sysinfo.GetCPUInfo(); err == nil {
+			info["cpu.model"] = cpu.Name
+			info["cpu.cores"] = cpu.Cores
 		}
 
-		if mem, err := ghw.Memory(); err == nil {
-			info["memory"] = mem.TotalPhysicalBytes
+		if mem, err := sysinfo.GetMemoryInfo(); err == nil {
+			info["memory"] = mem.Total
 		}
 
-		if gpu, err := ghw.GPU(); err == nil {
-			for index, card := range gpu.GraphicsCards {
+		if gpu, err := sysinfo.GetGPUInfo(); err == nil {
+			for index, card := range gpu {
 				key := fmt.Sprintf("gpu.%d.", index+1)
-
-				if card.DeviceInfo != nil && card.DeviceInfo.Product != nil {
-					info[key+"name"] = card.DeviceInfo.Product.Name
-				}
-
-				if card.Node != nil {
-					info[key+"memory"] = card.Node.Memory.TotalPhysicalBytes
-				}
+				info[key+"name"] = card.Name
+				info[key+"memory"] = card.Memory
 			}
 		}
 	})

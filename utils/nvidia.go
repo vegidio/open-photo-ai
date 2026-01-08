@@ -5,11 +5,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
-	"github.com/jaypipes/ghw"
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
+	"github.com/vegidio/go-sak/sysinfo"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
@@ -25,23 +24,17 @@ const (
 //
 // Returns false if an error occurs while querying GPU information or no NVIDIA GPU is found.
 func IsCudaSupported() bool {
-	found := false
-	var wg sync.WaitGroup
+	gpus, err := sysinfo.GetGPUInfo()
+	if err != nil {
+		return false
+	}
 
-	wg.Go(func() {
-		gpu, err := ghw.GPU()
-		if err != nil {
-			return
-		}
-
-		_, found = lo.Find(gpu.GraphicsCards, func(card *ghw.GraphicsCard) bool {
-			vendor := strings.ToLower(card.DeviceInfo.Vendor.Name)
-			product := strings.ToLower(card.DeviceInfo.Product.Name)
-			return vendor == "nvidia" || strings.Contains(product, "nvidia")
-		})
+	_, found := lo.Find(gpus, func(gpu sysinfo.GPUInfo) bool {
+		vendor := strings.ToLower(gpu.Vendor)
+		product := strings.ToLower(gpu.Name)
+		return vendor == "nvidia" || strings.Contains(product, "nvidia")
 	})
 
-	wg.Wait()
 	return found
 }
 
@@ -49,28 +42,22 @@ func IsCudaSupported() bool {
 //
 // Returns false if an error occurs while querying GPU information or no NVIDIA GPU is found.
 func IsTensorRtSupported() bool {
-	found := false
-	var wg sync.WaitGroup
+	gpus, err := sysinfo.GetGPUInfo()
+	if err != nil {
+		return false
+	}
 
-	wg.Go(func() {
-		gpu, err := ghw.GPU()
-		if err != nil {
-			return
-		}
+	_, found := lo.Find(gpus, func(gpu sysinfo.GPUInfo) bool {
+		vendor := strings.ToLower(gpu.Vendor)
+		product := strings.ToLower(gpu.Name)
 
-		_, found = lo.Find(gpu.GraphicsCards, func(card *ghw.GraphicsCard) bool {
-			vendor := strings.ToLower(card.DeviceInfo.Vendor.Name)
-			product := strings.ToLower(card.DeviceInfo.Product.Name)
-
-			return vendor == "nvidia" &&
-				(strings.Contains(product, "rtx 50") ||
-					strings.Contains(product, "rtx 40") ||
-					strings.Contains(product, "rtx 30") ||
-					strings.Contains(product, "rtx 20"))
-		})
+		return vendor == "nvidia" &&
+			(strings.Contains(product, "rtx 50") ||
+				strings.Contains(product, "rtx 40") ||
+				strings.Contains(product, "rtx 30") ||
+				strings.Contains(product, "rtx 20"))
 	})
 
-	wg.Wait()
 	return found
 }
 
