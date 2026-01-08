@@ -8,9 +8,8 @@ import (
 )
 
 func main() {
-	os2.AppendEnvPath("LD_LIBRARY_PATH", "/usr/local/cuda/lib64")
-	os2.AppendEnvPath("LD_LIBRARY_PATH", "/usr/local/cuda/libcoco")
+	fmt.Println("Running app...")
+	fmt.Println("LD_LIBRARY_PATH", os.Getenv("LD_LIBRARY_PATH"))
 
-	path := os.Getenv("LD_LIBRARY_PATH")
-	fmt.Println(path)
+	os2.ReExec("LD_LIBRARY_PATH=/home/vegidio/.config/open-photo-ai/libs/cuda:/home/vegidio/.config/open-photo-ai/libs/cudnn")
 }

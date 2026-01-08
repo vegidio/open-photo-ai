@@ -3,13 +3,18 @@ package main
 import (
 	"embed"
 	_ "embed"
+	"fmt"
 	"gui/services"
 	"gui/utils"
 	"log"
 	"log/slog"
+	"runtime"
 	"shared"
+	"strings"
 
+	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/o11y"
+	"github.com/vegidio/go-sak/os"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -18,6 +23,11 @@ import (
 var assets embed.FS
 
 func main() {
+	// TODO: Workaround for Linux to set LD_LIBRARY_PATH; I must revisit this approach in the future
+	if runtime.GOOS == "linux" {
+		setLibPathAndRestart()
+	}
+
 	tel := o11y.NewTelemetry(shared.OtelEndpoint, "opai", shared.Version, shared.OtelEnvironment, true)
 	defer tel.Close()
 
@@ -83,6 +93,19 @@ func main() {
 		tel.LogError("Error running the app", nil, err)
 		log.Fatal(err)
 	}
+}
+
+func setLibPathAndRestart() {
+	libPaths := make([]string, 0)
+
+	if path, err := fs.MkUserConfigDir(shared.AppName, "libs", "cuda"); err == nil {
+		libPaths = append(libPaths, path)
+	}
+	if path, err := fs.MkUserConfigDir(shared.AppName, "libs", "cudnn"); err == nil {
+		libPaths = append(libPaths, path)
+	}
+
+	os.ReExec(fmt.Sprintf("LD_LIBRARY_PATH=%s", strings.Join(libPaths, ":")))
 }
 
 func eventDragAndDrop(app *application.App, win *application.WebviewWindow) {

@@ -15,8 +15,6 @@ type AppService struct {
 	tel *o11y.Telemetry
 }
 
-const AppName = "open-photo-ai"
-
 func NewAppService(app *application.App, tel *o11y.Telemetry) *AppService {
 	return &AppService{
 		app: app,
@@ -30,7 +28,7 @@ func (s *AppService) Initialize() error {
 	}
 
 	// Initialize the model runtime
-	if err := opai.Initialize(AppName, onProgress); err != nil {
+	if err := opai.Initialize(shared.AppName, onProgress); err != nil {
 		s.tel.LogError("Error initializing ONNX", nil, err)
 		s.app.Event.Emit("app:download:error")
 		return err
