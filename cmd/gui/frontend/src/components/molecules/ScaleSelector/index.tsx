@@ -34,7 +34,7 @@ export const ScaleSelector = ({ value, onChange }: ScaleSelectorProps) => {
     };
 
     const onButtonClick = (_: MouseEvent<HTMLElement>, newValue: string) => {
-        if (newValue !== '-') onChange?.(newValue);
+        if (newValue && newValue !== '-') onChange?.(newValue);
     };
 
     return (

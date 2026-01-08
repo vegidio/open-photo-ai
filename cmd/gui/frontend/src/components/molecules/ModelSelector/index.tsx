@@ -15,7 +15,7 @@ type ModelSelectorProps = {
 
 export const ModelSelector = ({ options, value, onChange }: ModelSelectorProps) => {
     const onButtonClick = (_: MouseEvent<HTMLElement>, newValue: string) => {
-        onChange?.(newValue);
+        if (newValue) onChange?.(newValue);
     };
 
     return (
