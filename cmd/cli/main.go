@@ -1,7 +1,16 @@
 package main
 
-import "github.com/vegidio/open-photo-ai/utils"
+import (
+	"fmt"
+	"os"
+
+	os2 "github.com/vegidio/go-sak/os"
+)
 
 func main() {
-	utils.GetGPUInfo()
+	os2.AppendEnvPath("LD_LIBRARY_PATH", "/usr/local/cuda/lib64")
+	os2.AppendEnvPath("LD_LIBRARY_PATH", "/usr/local/cuda/libcoco")
+
+	path := os.Getenv("LD_LIBRARY_PATH")
+	fmt.Println(path)
 }

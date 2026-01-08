@@ -8,6 +8,7 @@ import (
 
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
+	"github.com/vegidio/go-sak/os"
 	"github.com/vegidio/go-sak/sysinfo"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
@@ -83,12 +84,13 @@ func InitializeNvidiaLib(libName, libTag, checkFile string, onProgress types.Dow
 		return err
 	}
 
-	envPath, err := fs.MkUserConfigDir(internal.AppName, "libs", libName)
+	libPath, err := fs.MkUserConfigDir(internal.AppName, "libs", libName)
 	if err != nil {
 		return err
 	}
 
-	utils.AddEnvPath(envPath)
+	os.AppendEnvPath("PATH", libPath)
+	os.AppendEnvPath("LD_LIBRARY_PATH", libPath)
 
 	return nil
 }
