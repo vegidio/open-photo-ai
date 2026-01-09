@@ -17,8 +17,8 @@
         "noImplicitAny": false,
         "noFallthroughCasesInSwitch": true,
         "paths": {
-            "@/*": ["./src/*"],
-            "@/bindings/*": ["./bindings/*"]
+            "@/bindings/*": ["./bindings/*"],
+            "@/*": ["./src/*"]
         }
     },
     "include": ["src"],

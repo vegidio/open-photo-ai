@@ -1,3 +1,4 @@
+import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 
@@ -8,13 +9,18 @@ type AppStore = {
 };
 
 export const useAppStore = create(
-    immer<AppStore>((set, _) => ({
-        previewMode: 'side',
+    persist(
+        immer<AppStore>((set, _) => ({
+            previewMode: 'side',
 
-        setPreviewMode: (mode: 'full' | 'side' | 'split') => {
-            set((state) => {
-                state.previewMode = mode;
-            });
+            setPreviewMode: (mode: 'full' | 'side' | 'split') => {
+                set((state) => {
+                    state.previewMode = mode;
+                });
+            },
+        })),
+        {
+            name: 'app-storage',
         },
-    })),
+    ),
 );

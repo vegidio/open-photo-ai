@@ -2,21 +2,23 @@ import type { MouseEvent } from 'react';
 import { ToggleButton, ToggleButtonGroup } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Icon } from '@/components/atoms/Icon';
+import { useAppStore } from '@/stores';
 
 type PreviewSelectorProps = TailwindProps & {
-    value: string;
-    onChange?: (value: string) => void;
     disabled?: boolean;
 };
 
-export const PreviewSelector = ({ value, onChange, disabled = false, className = '' }: PreviewSelectorProps) => {
-    const onButtonClick = (_: MouseEvent<HTMLElement>, newValue: string) => {
-        if (newValue) onChange?.(newValue);
+export const PreviewSelector = ({ disabled = false, className = '' }: PreviewSelectorProps) => {
+    const previewModel = useAppStore((state) => state.previewMode);
+    const setPreviewMode = useAppStore((state) => state.setPreviewMode);
+
+    const onButtonClick = (_: MouseEvent<HTMLElement>, newValue: 'full' | 'side' | 'split') => {
+        if (newValue) setPreviewMode(newValue);
     };
 
     return (
         <ToggleButtonGroup
-            value={disabled ? undefined : value}
+            value={disabled ? undefined : previewModel}
             disabled={disabled}
             exclusive
             onChange={onButtonClick}

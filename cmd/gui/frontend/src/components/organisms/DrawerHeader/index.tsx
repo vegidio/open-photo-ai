@@ -31,7 +31,7 @@ export const DrawerHeader = ({ drawerBleeding, className = '' }: FileListHeaderP
 
             <div id='spacer' className='flex-1' />
 
-            <PreviewSelector value='full' disabled={fileCount === 0} className='h-full' />
+            <PreviewSelector disabled={fileCount === 0} className='h-full' />
 
             <Divider orientation='vertical' variant='middle' flexItem className='mx-1.5' />
 
