@@ -2,8 +2,8 @@ import { type DragEvent, useEffect, useState } from 'react';
 import { Typography } from '@mui/material';
 import { Events } from '@wailsio/runtime';
 import { MdFolderOpen } from 'react-icons/md';
-import type { File } from '../../../bindings/gui/types';
-import { DialogService } from '../../../bindings/gui/services';
+import type { File } from '@/bindings/gui/types';
+import { DialogService } from '@/bindings/gui/services';
 import { Button } from '@/components/atoms/Button';
 import { useFileStore } from '@/stores';
 

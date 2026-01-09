@@ -1,7 +1,7 @@
 import { Dialog, DialogTitle, Divider, IconButton } from '@mui/material';
 import { MdClose } from 'react-icons/md';
+import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
-import type { File } from '../../../bindings/gui/types';
 import { ExportQueue } from '@/components/Export/ExportQueue.tsx';
 import { ExportSettings } from '@/components/Export/ExportSettings.tsx';
 

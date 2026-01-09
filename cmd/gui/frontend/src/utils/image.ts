@@ -1,6 +1,6 @@
 import { CancellablePromise } from '@wailsio/runtime';
-import type { File } from '../../bindings/gui/types';
-import { GetImage, ProcessImage } from '../../bindings/gui/services/imageservice.ts';
+import type { File } from '@/bindings/gui/types';
+import { GetImage, ProcessImage } from '@/bindings/gui/services/imageservice.ts';
 
 export type ImageData = {
     id: string;

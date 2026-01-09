@@ -1,9 +1,10 @@
 import { Divider } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { DrawerAddImages } from './DrawerAddImages.tsx';
-import { DrawerSelectAll } from './DrawerSelectAll.tsx';
-import { DrawerToggle } from './DrawerToggle';
-import { DrawerZoom } from './DrawerZoom';
+import { DrawerAddImages } from '@/components/Drawer/DrawerAddImages.tsx';
+import { DrawerSelectAll } from '@/components/Drawer/DrawerSelectAll.tsx';
+import { DrawerToggle } from '@/components/Drawer/DrawerToggle.tsx';
+import { DrawerZoom } from '@/components/Drawer/DrawerZoom.tsx';
+import { PreviewSelector } from '@/components/molecules/PreviewSelector';
 import { useFileStore } from '@/stores';
 
 type FileListHeaderProps = TailwindProps & {
@@ -28,11 +29,13 @@ export const DrawerHeader = ({ drawerBleeding, className = '' }: FileListHeaderP
 
             <DrawerSelectAll disabled={fileCount === 0} className='ml-0.5' />
 
-            <Divider orientation='vertical' variant='middle' flexItem />
+            <div id='spacer' className='flex-1' />
 
-            <div className='flex-1' />
+            <PreviewSelector value='full' disabled={fileCount === 0} className='h-full' />
 
-            <DrawerZoom className='w-44' />
+            <Divider orientation='vertical' variant='middle' flexItem className='mx-1.5' />
+
+            <DrawerZoom disabled={fileCount === 0} className='w-44' />
         </div>
     );
 };

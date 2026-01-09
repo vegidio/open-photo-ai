@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { CancelError, type CancellablePromise } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { PreviewEmpty } from './PreviewEmpty';
-import { PreviewImageSideBySide } from './PreviewImageSideBySide.tsx';
-import { PreviewProgress } from './PreviewProgress.tsx';
+import { EnhancementProgress } from '@/components/molecules/EnhancementProgress';
+import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
+import { PreviewImageSideBySide } from '@/components/organisms/PreviewImageSideBySide';
 import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
@@ -78,7 +78,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             id='preview'
             className={`flex items-center justify-center bg-[#171717] [background-image:radial-gradient(#383838_1px,transparent_1px)] [background-size:3rem_3rem] ${className}`}
         >
-            {isRunning && <PreviewProgress />}
+            {isRunning && <EnhancementProgress />}
             {filesLength === 0 ? <PreviewEmpty /> : <PreviewImageSideBySide />}
         </div>
     );

@@ -1,8 +1,8 @@
 import { basename, dirname, extname, join } from 'pathe';
+import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
-import type { File } from '../../bindings/gui/types';
-import { ImageFormat } from '../../bindings/github.com/vegidio/open-photo-ai/types';
-import { ExportImage } from '../../bindings/gui/services/imageservice.ts';
+import { ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
+import { ExportImage } from '@/bindings/gui/services/imageservice.ts';
 
 export const getExportEligible = (selectedFiles: File[], enhancements: Map<File, Operation[]>, autopilot: boolean) => {
     const allEnhancements = new Map<File, Operation[]>();

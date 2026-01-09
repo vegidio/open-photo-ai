@@ -1,7 +1,7 @@
 import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import type { File } from '../../../bindings/gui/types';
 import { ExportQueueRow } from './ExportQueueRow.tsx';
 
 type ExportQueueProps = TailwindProps & {

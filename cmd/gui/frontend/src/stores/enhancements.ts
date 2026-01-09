@@ -2,8 +2,8 @@ import { enableMapSet } from 'immer';
 import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
+import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
-import type { File } from '../../bindings/gui/types';
 
 type EnhancementStore = {
     autopilot: boolean;

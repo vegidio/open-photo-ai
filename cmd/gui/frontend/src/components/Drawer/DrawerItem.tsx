@@ -2,10 +2,10 @@ import { type ChangeEvent, type MouseEvent, useEffect, useState } from 'react';
 import { Checkbox, Divider, IconButton, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import { basename } from 'pathe';
 import { IoIosMore } from 'react-icons/io';
+import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import type { File } from '../../../bindings/gui/types';
-import { RevealInFileManager } from '../../../bindings/gui/services/osservice.ts';
-import { useDrawerStore, useEnhancementStore, useFileStore } from '@/stores';
+import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
+import { useDrawerStore, useFileStore } from '@/stores';
 import { os } from '@/utils/constants.ts';
 import { getImage } from '@/utils/image.ts';
 

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Events } from '@wailsio/runtime';
-import { Initialize } from '../bindings/gui/services/appservice.ts';
+import { Initialize } from '@/bindings/gui/services/appservice.ts';
 import { Download } from '@/components/Download';
 import { Drawer } from '@/components/Drawer';
 import { Navbar } from '@/components/Navbar';
-import { Preview } from '@/components/Preview';
+import { Preview } from '@/components/organisms/Preview';
 import { Sidebar } from '@/components/Sidebar';
 
 export const App = () => {

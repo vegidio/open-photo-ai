@@ -1,6 +1,6 @@
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
-import type { File } from '../../bindings/gui/types';
+import type { File } from '@/bindings/gui/types';
 import { useEnhancementStore } from '@/stores/enhancements.ts';
 import { useImageStore } from '@/stores/image.ts';
 

@@ -3,7 +3,11 @@ import { FiMinus, FiPlus } from 'react-icons/fi';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { useFileStore, useImageStore } from '@/stores';
 
-export const DrawerZoom = ({ className }: TailwindProps) => {
+type DrawerZoomProps = TailwindProps & {
+    disabled?: boolean;
+};
+
+export const DrawerZoom = ({ disabled = false, className = '' }: DrawerZoomProps) => {
     const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
     const imageTransform = useImageStore((state) => state.imageTransform.get(currentFile?.Hash ?? ''));
     const setImageTransform = useImageStore((state) => state.setImageTransform);
@@ -42,7 +46,7 @@ export const DrawerZoom = ({ className }: TailwindProps) => {
                 type='button'
                 disableRipple
                 size='small'
-                disabled={!currentFile}
+                disabled={disabled}
                 onClick={() => stepZoom('minus')}
                 className='p-0.5'
             >
@@ -60,14 +64,14 @@ export const DrawerZoom = ({ className }: TailwindProps) => {
                 valueLabelDisplay='auto'
                 valueLabelFormat={valueLabelFormat}
                 onChange={onSliderChange}
-                disabled={!currentFile}
+                disabled={disabled}
             />
 
             <IconButton
                 type='button'
                 disableRipple
                 size='small'
-                disabled={!currentFile}
+                disabled={disabled}
                 onClick={() => stepZoom('plus')}
                 className='p-0.5'
             >

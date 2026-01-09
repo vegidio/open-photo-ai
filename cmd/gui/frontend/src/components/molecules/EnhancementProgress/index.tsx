@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { LinearProgress, Paper, Typography } from '@mui/material';
 import { Events } from '@wailsio/runtime';
 
-export const PreviewProgress = () => {
+export const EnhancementProgress = () => {
     const [progress, setProgress] = useState({ name: 'Enhancing', value: 0 });
 
     const getOperationName = useCallback((id: string) => {

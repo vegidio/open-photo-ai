@@ -1,6 +1,6 @@
 import { Button } from '@mui/material';
 import { FiPlus } from 'react-icons/fi';
-import { DialogService } from '../../../bindings/gui/services';
+import { DialogService } from '@/bindings/gui/services';
 import { useFileStore } from '@/stores';
 
 export const DrawerAddImages = () => {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AppBar, Toolbar, Typography } from '@mui/material';
 import { Browser } from '@wailsio/runtime';
-import { IsOutdated } from '../../../bindings/gui/services/appservice.ts';
 import { NavbarAbout } from './NavbarAbout.tsx';
+import { IsOutdated } from '@/bindings/gui/services/appservice.ts';
 import { Button } from '@/components/atoms/Button';
 import { os, version } from '@/utils/constants.ts';
 

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Divider, MenuItem, Select, type SelectChangeEvent, TextField, Typography } from '@mui/material';
+import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import type { File } from '../../../bindings/gui/types';
-import { DialogService } from '../../../bindings/gui/services';
+import { DialogService } from '@/bindings/gui/services';
 import { Toggle } from '@/components/atoms/Toggle';
 import { ExportSettingsButtons } from '@/components/Export/ExportSettingsButtons.tsx';
 import { useExportStore } from '@/stores';

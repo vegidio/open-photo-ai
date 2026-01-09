@@ -1,4 +1,4 @@
-import { SuggestEnhancements } from '../../bindings/gui/services/imageservice.ts';
+import { SuggestEnhancements } from '@/bindings/gui/services/imageservice.ts';
 import { Athens, Kyoto, type Operation, Saitama, Santorini, Tokyo } from '@/operations';
 
 export const suggestEnhancement = async (filePath: string) => {

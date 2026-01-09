@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import { ClickAwayListener, SwipeableDrawer } from '@mui/material';
 import { DrawerBody } from '@/components/Drawer/DrawerBody.tsx';
-import { DrawerHeader } from '@/components/Drawer/DrawerHeader.tsx';
+import { DrawerHeader } from '@/components/organisms/DrawerHeader';
 import { useDrawerStore } from '@/stores/drawer.ts';
 
 const drawerBleeding = 48;
