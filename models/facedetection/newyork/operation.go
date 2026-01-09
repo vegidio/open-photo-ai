@@ -7,12 +7,11 @@ import (
 )
 
 type OpFdNewYork struct {
-	id        string
 	precision types.Precision
 }
 
 func (o OpFdNewYork) Id() string {
-	return o.id
+	return fmt.Sprintf("fd_newyork_%s", o.precision)
 }
 
 func (o OpFdNewYork) Precision() types.Precision {
@@ -24,7 +23,6 @@ var _ types.Operation = (*OpFdNewYork)(nil)
 
 func Op(precision types.Precision) OpFdNewYork {
 	return OpFdNewYork{
-		id:        fmt.Sprintf("fd_newyork_%s", precision),
 		precision: precision,
 	}
 }

@@ -2,7 +2,7 @@ module shared
 
 go 1.25.5
 
-require github.com/vegidio/go-sak v0.0.0-20260109071253-9d860e0005c7
+require github.com/vegidio/go-sak v0.0.0-20260109112614-e99ce92e6f55
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect

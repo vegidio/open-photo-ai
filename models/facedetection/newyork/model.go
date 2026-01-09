@@ -29,7 +29,7 @@ type NewYork struct {
 func New(operation types.Operation, onProgress types.DownloadProgress) (*NewYork, error) {
 	op := operation.(OpFdNewYork)
 	modelFile := op.Id() + ".onnx"
-	name := fmt.Sprintf("Face Detection (%s)",
+	name := fmt.Sprintf("New York (%s)",
 		cases.Upper(language.English).String(string(op.precision)),
 	)
 
