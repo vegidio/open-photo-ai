@@ -66,24 +66,12 @@ func main() {
 	eventDragAndDrop(app, win)
 
 	// Services
-	appService := services.NewAppService(app, tel)
-	defer appService.Destroy()
-
-	imageService, err := services.NewImageService(app)
+	destroyServices, err := services.RegisterServices(app, tel)
 	if err != nil {
-		tel.LogError("Error initializing ImageService", nil, err)
+		tel.LogError("Error starting the services", nil, err)
 		log.Fatal(err)
 	}
-	defer imageService.Destroy()
-
-	dialogService := services.NewDialogService(app)
-	osService := services.NewOsService(app)
-
-	app.RegisterService(application.NewService(appService))
-	app.RegisterService(application.NewService(imageService))
-	app.RegisterService(application.NewService(&services.EnvironmentService{}))
-	app.RegisterService(application.NewService(osService))
-	app.RegisterService(application.NewService(dialogService))
+	defer destroyServices()
 
 	// Run the application. This blocks until the application exists
 	err = app.Run()

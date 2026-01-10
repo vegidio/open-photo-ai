@@ -3,13 +3,11 @@
 
 import * as AppService from "./appservice.js";
 import * as DialogService from "./dialogservice.js";
-import * as EnvironmentService from "./environmentservice.js";
 import * as ImageService from "./imageservice.js";
 import * as OsService from "./osservice.js";
 export {
     AppService,
     DialogService,
-    EnvironmentService,
     ImageService,
     OsService
 };

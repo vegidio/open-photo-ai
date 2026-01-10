@@ -12,10 +12,6 @@ import * as types$1 from "../../github.com/vegidio/open-photo-ai/types/models.js
 // @ts-ignore: Unused imports
 import * as types$0 from "../types/models.js";
 
-export function Destroy(): $CancellablePromise<void> {
-    return $Call.ByID(3681465753);
-}
-
 /**
  * ExportImage runs inference operations on an image and saves the result to disk.
  * 

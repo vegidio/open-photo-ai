@@ -62,11 +62,11 @@ func (s *AppService) IsOutdated() bool {
 	return github.IsOutdatedRelease("vegidio", "open-photo-ai", shared.Version)
 }
 
-func (s *AppService) Destroy() {
+// region - Private methods
+
+func (s *AppService) destroy() {
 	opai.Destroy()
 }
-
-// region - Private methods
 
 func (s *AppService) initializeCuda() error {
 	if err := utils.InitializeNvidiaLib("cuda", utils.CudaTag, "LICENSE_CudaRT.txt",

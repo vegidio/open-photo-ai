@@ -5,6 +5,14 @@
 // @ts-ignore: Unused imports
 import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
+export function GetArch(): $CancellablePromise<string> {
+    return $Call.ByID(2217750252);
+}
+
+export function GetOS(): $CancellablePromise<string> {
+    return $Call.ByID(60039734);
+}
+
 export function RevealInFileManager(path: string): $CancellablePromise<void> {
     return $Call.ByID(4171282367, path);
 }

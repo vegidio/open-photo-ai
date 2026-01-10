@@ -2,7 +2,6 @@ package shared
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/vegidio/go-sak/o11y"
 	"github.com/vegidio/go-sak/sysinfo"
@@ -10,27 +9,23 @@ import (
 
 func ReportSystemInfo(tel *o11y.Telemetry) {
 	info := make(map[string]any)
-	var wg sync.WaitGroup
 
-	wg.Go(func() {
-		if cpu, err := sysinfo.GetCPUInfo(); err == nil {
-			info["cpu.model"] = cpu.Name
-			info["cpu.cores"] = cpu.Cores
+	if cpu, err := sysinfo.GetCPUInfo(); err == nil {
+		info["cpu.model"] = cpu.Name
+		info["cpu.cores"] = cpu.Cores
+	}
+
+	if mem, err := sysinfo.GetMemoryInfo(); err == nil {
+		info["memory"] = mem.Total
+	}
+
+	if gpu, err := sysinfo.GetGPUInfo(); err == nil {
+		for index, card := range gpu {
+			key := fmt.Sprintf("gpu.%d.", index+1)
+			info[key+"name"] = card.Name
+			info[key+"memory"] = card.Memory
 		}
+	}
 
-		if mem, err := sysinfo.GetMemoryInfo(); err == nil {
-			info["memory"] = mem.Total
-		}
-
-		if gpu, err := sysinfo.GetGPUInfo(); err == nil {
-			for index, card := range gpu {
-				key := fmt.Sprintf("gpu.%d.", index+1)
-				info[key+"name"] = card.Name
-				info[key+"memory"] = card.Memory
-			}
-		}
-	})
-
-	wg.Wait()
 	tel.LogInfo("System info", info)
 }

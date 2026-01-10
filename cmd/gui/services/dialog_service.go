@@ -51,3 +51,7 @@ func (s *DialogService) OpenDirDialog() (string, error) {
 
 	return path, nil
 }
+
+func (s *DialogService) destroy() {
+	// Nothing to do here
+}

@@ -199,13 +199,13 @@ func (s *ImageService) ExportImage(
 	return nil
 }
 
-func (s *ImageService) Destroy() {
+// region - Private methods
+
+func (s *ImageService) destroy() {
 	if s.diskCache != nil {
 		s.diskCache.Close()
 	}
 }
-
-// region - Private methods
 
 func (s *ImageService) runInference(ctx context.Context, filePath string, opIds []string) ([]byte, error) {
 	// Cache the image as PNG to be reused later
