@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import { ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Icon } from '@/components/atoms/Icon';
 import { useAppStore } from '@/stores';
@@ -24,15 +24,23 @@ export const PreviewSelector = ({ disabled = false, className = '' }: PreviewSel
             onChange={onButtonClick}
             className={`${className}`}
         >
-            <ToggleButton value='full' className='w-12 border-0 rounded-none'>
-                <Icon option='preview_full' className='size-5.5' />
-            </ToggleButton>
-            <ToggleButton value='side' className='w-12 border-0 rounded-none'>
-                <Icon option='preview_side' className='size-5' />
-            </ToggleButton>
-            <ToggleButton value='split' className='w-12 border-0 rounded-none'>
-                <Icon option='preview_split' className='size-4.5' />
-            </ToggleButton>
+            <Tooltip title='Full'>
+                <ToggleButton value='full' className='w-12 border-0 rounded-none'>
+                    <Icon option='preview_full' className='size-5.5' />
+                </ToggleButton>
+            </Tooltip>
+
+            <Tooltip title='Side by Side'>
+                <ToggleButton value='side' className='w-12 border-0 rounded-none'>
+                    <Icon option='preview_side' className='size-5' />
+                </ToggleButton>
+            </Tooltip>
+
+            <Tooltip title='Split'>
+                <ToggleButton value='split' className='w-12 border-0 rounded-none'>
+                    <Icon option='preview_split' className='size-4.5' />
+                </ToggleButton>
+            </Tooltip>
         </ToggleButtonGroup>
     );
 };

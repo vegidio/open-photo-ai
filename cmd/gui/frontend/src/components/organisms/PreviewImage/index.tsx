@@ -1,6 +1,7 @@
 import type { ImageData } from '@/utils/image.ts';
 import { PreviewImageFull } from '@/components/molecules/PreviewImageFull';
 import { PreviewImageSideBySide } from '@/components/molecules/PreviewImageSideBySide';
+import { PreviewImageSplit } from '@/components/molecules/PreviewImageSplit';
 import { type ImageTransform, useAppStore, useFileStore, useImageStore } from '@/stores';
 
 const INITIAL_TRANSFORM = { scale: 1, positionX: 0, positionY: 0 };
@@ -25,13 +26,17 @@ export const PreviewImage = () => {
             return <PreviewImageFull enhancedImage={enhancedImage} transform={transform} />;
 
         case 'side':
-        case 'split':
             return (
                 <PreviewImageSideBySide
                     originalImage={originalImage}
                     enhancedImage={enhancedImage}
                     transform={transform}
                 />
+            );
+
+        case 'split':
+            return (
+                <PreviewImageSplit originalImage={originalImage} enhancedImage={enhancedImage} transform={transform} />
             );
     }
 };
