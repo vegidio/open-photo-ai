@@ -15,6 +15,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/memo"
+	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
@@ -24,9 +25,10 @@ import (
 type ImageService struct {
 	diskCache *memo.Memoizer
 	app       *application.App
+	tel       *o11y.Telemetry
 }
 
-func NewImageService(app *application.App) (*ImageService, error) {
+func NewImageService(app *application.App, tel *o11y.Telemetry) (*ImageService, error) {
 	cachePath, err := fs.MkUserConfigDir("open-photo-ai", "cache", "images")
 	if err != nil {
 		return nil, err
@@ -39,7 +41,11 @@ func NewImageService(app *application.App) (*ImageService, error) {
 		return nil, err
 	}
 
-	return &ImageService{diskCache: diskCache, app: app}, nil
+	return &ImageService{
+		diskCache: diskCache,
+		app:       app,
+		tel:       tel,
+	}, nil
 }
 
 // GetImage loads an image from the specified file path and optionally resizes it.
@@ -58,6 +64,7 @@ func NewImageService(app *application.App) (*ImageService, error) {
 func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, error) {
 	inputData, err := utils.LoadImage(filePath)
 	if err != nil {
+		s.tel.LogError("Error loading image", nil, err)
 		return nil, 0, 0, err
 	}
 
@@ -72,6 +79,7 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 
 	data, err := utils.EncodeImage(inputData.Pixels, types.FormatJpeg, 90)
 	if err != nil {
+		s.tel.LogError("Error encoding image", nil, err)
 		return nil, 0, 0, err
 	}
 
@@ -94,6 +102,10 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 func (s *ImageService) ProcessImage(ctx context.Context, filePath string, opIds ...string) ([]byte, int, int, error) {
 	pngBytes, err := s.runInference(ctx, filePath, opIds)
 	if err != nil {
+		s.tel.LogError("Error running inference", map[string]any{
+			"operations": strings.Join(opIds, ", "),
+		}, err)
+
 		return nil, 0, 0, err
 	}
 
@@ -112,6 +124,7 @@ func (s *ImageService) ProcessImage(ctx context.Context, filePath string, opIds 
 
 	jpgBytes, err := utils.EncodeImage(img, types.FormatJpeg, 90)
 	if err != nil {
+		s.tel.LogError("Error encoding image", nil, err)
 		return nil, 0, 0, err
 	}
 
@@ -131,11 +144,13 @@ func (s *ImageService) ProcessImage(ctx context.Context, filePath string, opIds 
 func (s *ImageService) SuggestEnhancements(filePath string) ([]string, error) {
 	inputImage, err := utils.LoadImage(filePath)
 	if err != nil {
+		s.tel.LogError("Error loading image", nil, err)
 		return nil, err
 	}
 
 	operations, err := opai.SuggestEnhancements(inputImage)
 	if err != nil {
+		s.tel.LogError("Error suggesting enhancements", nil, err)
 		return nil, err
 	}
 
@@ -168,6 +183,10 @@ func (s *ImageService) ExportImage(
 
 	pngBytes, err := s.runInference(ctx, file.Path, opIds)
 	if err != nil {
+		s.tel.LogError("Error running inference", map[string]any{
+			"operations": strings.Join(opIds, ", "),
+		}, err)
+
 		return err
 	}
 
@@ -191,6 +210,7 @@ func (s *ImageService) ExportImage(
 	}, format, 100)
 
 	if err != nil {
+		s.tel.LogError("Error saving image", nil, err)
 		s.app.Event.Emit(eventName, "ERROR", 0.0)
 		return err
 	}

@@ -6,16 +6,18 @@ import (
 	"strings"
 
 	"github.com/samber/lo"
+	"github.com/vegidio/go-sak/o11y"
 	"github.com/vegidio/open-photo-ai/utils"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type DialogService struct {
 	app *application.App
+	tel *o11y.Telemetry
 }
 
-func NewDialogService(app *application.App) *DialogService {
-	return &DialogService{app: app}
+func NewDialogService(app *application.App, tel *o11y.Telemetry) *DialogService {
+	return &DialogService{app: app, tel: tel}
 }
 
 func (s *DialogService) OpenFileDialog() ([]types.File, error) {
@@ -30,6 +32,7 @@ func (s *DialogService) OpenFileDialog() ([]types.File, error) {
 
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {
+		s.tel.LogError("Error opening file dialog", nil, err)
 		return nil, err
 	}
 
@@ -46,6 +49,7 @@ func (s *DialogService) OpenDirDialog() (string, error) {
 
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
+		s.tel.LogError("Error opening directory dialog", nil, err)
 		return "", err
 	}
 
