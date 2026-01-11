@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Events } from '@wailsio/runtime';
 import { Initialize } from '@/bindings/gui/services/appservice.ts';
-import { Download } from '@/components/Download';
 import { Drawer } from '@/components/Drawer';
 import { Navbar } from '@/components/Navbar';
+import { DownloadDialog } from '@/components/organisms/DownloadDialog';
 import { Preview } from '@/components/organisms/Preview';
 import { Sidebar } from '@/components/Sidebar';
 
@@ -19,22 +19,24 @@ export const App = () => {
     }, []);
 
     useEffect(() => {
-        Events.On('app:download', (_) => {
-            setOpenDownload(true);
-        });
+        Events.Once('app:download', (_) => setOpenDownload(true));
+        Events.Once('app:download:error', (_) => setOpenDownload(true));
 
-        async function init() {
+        const initDependencies = async () => {
             try {
                 await Initialize();
                 setOpenDownload(false);
             } catch {
                 console.error('Failed to initialize the app');
             }
-        }
+        };
 
-        init();
+        initDependencies();
 
-        return () => Events.Off('app:download');
+        return () => {
+            Events.Off('app:download');
+            Events.Off('app:download:error');
+        };
     }, []);
 
     return (
@@ -51,7 +53,7 @@ export const App = () => {
                 <Sidebar className='w-64 h-full' />
             </main>
 
-            <Download open={openDownload} onClose={() => setOpenDownload(false)} />
+            <DownloadDialog open={openDownload} onClose={() => setOpenDownload(false)} />
         </div>
     );
 };
