@@ -3,6 +3,7 @@ package athens
 import (
 	"fmt"
 
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -16,6 +17,10 @@ func (o OpFrAthens) Id() string {
 
 func (o OpFrAthens) Precision() types.Precision {
 	return o.precision
+}
+
+func (o OpFrAthens) Hash() string {
+	return utils.GetModelHash(o.Id())
 }
 
 var _ types.Operation = (*OpFrAthens)(nil)

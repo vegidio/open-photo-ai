@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	onnxRuntimeZip = "onnxruntime-1.22.0.zip"
 	onnxRuntimeTag = "runtime/1.22.0"
 )
 
@@ -41,12 +40,22 @@ const (
 func Initialize(name string, onProgress types.DownloadProgress) error {
 	internal.AppName = name
 
+	fileCheck := &types.FileCheck{
+		Path: internal.OnnxRuntimeName,
+		Hash: internal.OnnxRuntimeHash,
+	}
+
 	// ONNX Runtime
 	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
 		onnxRuntimeTag, runtime.GOOS, runtime.GOARCH)
 
-	if err := utils.PrepareDependency(url, "", onnxRuntimeZip, internal.OnnxRuntimeName, onProgress); err != nil {
+	if err := utils.PrepareDependency(url, "", fileCheck, onProgress); err != nil {
 		return err
+	}
+
+	// Load model data
+	if modelData, err := utils.LoadModelData(); err == nil {
+		internal.ModelData = modelData
 	}
 
 	// Initialize the ONNX runtime
@@ -62,7 +71,7 @@ func Initialize(name string, onProgress types.DownloadProgress) error {
 //
 // # Example:
 //
-//	if err := opai.Initialize("myapp"); err != nil {
+//	if err := opai.Initialize("myapp", nil); err != nil {
 //	    log.Fatal("Initialization failed:", err)
 //	}
 //	defer opai.Destroy() // Ensure cleanup on exit

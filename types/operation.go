@@ -9,4 +9,7 @@ type Operation interface {
 
 	// Precision returns the precision of the operation.
 	Precision() Precision
+
+	// Hash returns a hash of the model used.
+	Hash() string
 }

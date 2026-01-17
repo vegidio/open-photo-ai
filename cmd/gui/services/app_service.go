@@ -6,6 +6,7 @@ import (
 	"github.com/vegidio/go-sak/github"
 	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
+	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -69,14 +70,14 @@ func (s *AppService) destroy() {
 }
 
 func (s *AppService) initializeCuda() error {
-	if err := utils.InitializeNvidiaLib("cuda", utils.CudaTag, "LICENSE_CudaRT.txt",
+	if err := utils.InitializeNvidiaLib("cuda", utils.CudaTag, &types.FileCheck{Path: "LICENSE_CudaRT.txt"},
 		func(_, _ int64, percent float64) {
 			s.app.Event.Emit("app:download", "NVIDIA CUDA", percent)
 		}); err != nil {
 		return err
 	}
 
-	if err := utils.InitializeNvidiaLib("cudnn", utils.CudnnTag, "LICENSE.txt",
+	if err := utils.InitializeNvidiaLib("cudnn", utils.CudnnTag, &types.FileCheck{Path: "LICENSE.txt"},
 		func(_, _ int64, percent float64) {
 			s.app.Event.Emit("app:download", "NVIDIA cuDNN", percent)
 		}); err != nil {
@@ -87,7 +88,7 @@ func (s *AppService) initializeCuda() error {
 }
 
 func (s *AppService) initializeTensorRT() error {
-	if err := utils.InitializeNvidiaLib("tensorrt", utils.TensorrtTag, "LICENSE.txt",
+	if err := utils.InitializeNvidiaLib("tensorrt", utils.TensorrtTag, &types.FileCheck{Path: "LICENSE.txt"},
 		func(_, _ int64, percent float64) {
 			s.app.Event.Emit("app:download", "NVIDIA TensorRT", percent)
 		}); err != nil {

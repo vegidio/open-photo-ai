@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/vegidio/go-sak/crypto"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/types"
@@ -20,21 +21,20 @@ import (
 // # Parameters:
 //   - url: the URL to download the file from.
 //   - destination: the subdirectory within the user's config directory to store the file.
-//   - fileName: the name to save the downloaded file as.
-//   - checkFile: the file to check for existence (if empty, fileName is used).
+//   - checkFile: the file to check for existence and correctness.
 //   - onProgress: optional callback function to track download progress.
 //
 // Returns an error if the download or extraction fails, nil otherwise.
-func PrepareDependency(url, destination, fileName, checkFile string, onProgress types.DownloadProgress) error {
-	fileToCheck := checkFile
-	if fileToCheck == "" {
-		fileToCheck = fileName
-	}
-
-	if !shouldDownload(destination, fileToCheck) {
+func PrepareDependency(
+	url, destination string,
+	fileCheck *types.FileCheck,
+	onProgress types.DownloadProgress,
+) error {
+	if !shouldDownload(destination, fileCheck) {
 		return nil
 	}
 
+	fileName := filepath.Base(url)
 	file, err := fs.MkUserConfigFile(internal.AppName, destination, fileName)
 	if err != nil {
 		return err
@@ -93,15 +93,27 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 
 // region - Private functions
 
-func shouldDownload(destination, fileName string) bool {
+func shouldDownload(destination string, fileCheck *types.FileCheck) bool {
+	if fileCheck == nil {
+		return true
+	}
+
 	configDir, err := fs.MkUserConfigDir(internal.AppName, destination)
 	if err != nil {
 		return true
 	}
 
-	filePath := filepath.Join(configDir, fileName)
-	_, fErr := os.Stat(filePath)
-	return os.IsNotExist(fErr)
+	filePath := filepath.Join(configDir, fileCheck.Path)
+	if _, err = os.Stat(filePath); os.IsNotExist(err) {
+		return true
+	}
+
+	hash, err := crypto.Sha256File(filePath)
+	if err != nil {
+		return true
+	}
+
+	return fileCheck.Hash != "" && fileCheck.Hash != hash
 }
 
 func downloadFile(url string, dstFile *os.File, onProgress types.DownloadProgress) error {

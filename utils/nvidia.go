@@ -74,13 +74,12 @@ func IsTensorRtSupported() bool {
 //   - onProgress: A callback function to report download progress.
 //
 // Returns an error if the download, extraction, or path configuration fails.
-func InitializeNvidiaLib(libName, libTag, checkFile string, onProgress types.DownloadProgress) error {
+func InitializeNvidiaLib(libName, libTag string, fileCheck *types.FileCheck, onProgress types.DownloadProgress) error {
 	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/%s_%s_%s.zip",
 		libTag, libName, runtime.GOOS, runtime.GOARCH)
 	destination := filepath.Join("libs", libName)
-	zipFilename := fmt.Sprintf("%s.zip", libName)
 
-	if err := utils.PrepareDependency(url, destination, zipFilename, checkFile, onProgress); err != nil {
+	if err := utils.PrepareDependency(url, destination, fileCheck, onProgress); err != nil {
 		return err
 	}
 

@@ -3,6 +3,7 @@ package newyork
 import (
 	"fmt"
 
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -16,6 +17,10 @@ func (o OpFdNewYork) Id() string {
 
 func (o OpFdNewYork) Precision() types.Precision {
 	return o.precision
+}
+
+func (o OpFdNewYork) Hash() string {
+	return utils.GetModelHash(o.Id())
 }
 
 // Compile-time assertion to ensure it conforms to the Op interface.

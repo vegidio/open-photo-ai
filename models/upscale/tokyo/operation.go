@@ -3,6 +3,7 @@ package tokyo
 import (
 	"fmt"
 
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -17,6 +18,10 @@ func (o OpUpTokyo) Id() string {
 
 func (o OpUpTokyo) Precision() types.Precision {
 	return o.precision
+}
+
+func (o OpUpTokyo) Hash() string {
+	return utils.GetModelHash(o.Id())
 }
 
 var _ types.Operation = (*OpUpTokyo)(nil)

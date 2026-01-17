@@ -27,7 +27,12 @@ func LoadModel(
 	)
 
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-	if err = utils.PrepareDependency(url, "models", modelFile, "", onProgress); err != nil {
+	fileCheck := &types.FileCheck{
+		Path: modelFile,
+		Hash: operation.Hash(),
+	}
+
+	if err = utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
 		return nil, "", "", err
 	}
 

@@ -29,12 +29,15 @@ type NewYork struct {
 func New(operation types.Operation, onProgress types.DownloadProgress) (*NewYork, error) {
 	op := operation.(OpFdNewYork)
 	modelFile := op.Id() + ".onnx"
-	name := fmt.Sprintf("New York (%s)",
-		cases.Upper(language.English).String(string(op.precision)),
-	)
-
+	name := fmt.Sprintf("New York (%s)", cases.Upper(language.English).String(string(op.precision)))
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-	if err := utils.PrepareDependency(url, "models", modelFile, "", onProgress); err != nil {
+
+	fileCheck := &types.FileCheck{
+		Path: modelFile,
+		Hash: op.Hash(),
+	}
+
+	if err := utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
 		return nil, err
 	}
 

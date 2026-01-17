@@ -42,7 +42,12 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Saitama
 
 		modelFile := clonedOp.Id() + ".onnx"
 		url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-		if err := utils.PrepareDependency(url, "models", modelFile, "", onProgress); err != nil {
+		fileCheck := &types.FileCheck{
+			Path: modelFile,
+			Hash: clonedOp.Hash(),
+		}
+
+		if err := utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
 			return nil, err
 		}
 
