@@ -3,11 +3,14 @@ import { List } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { ListItemAutopilot } from '@/components/molecules/ListItemAutopilot';
 import { ListItemEnhancement } from '@/components/organisms/ListItemEnhancement';
+import { useNotify } from '@/hooks/useNotify.ts';
 import { useEnhancementStore, useFileStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 
 export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
+    const { enqueueSnackbar } = useNotify();
+
     const file = useFileStore((state) => state.files[state.currentIndex]);
     const autopilot = useEnhancementStore((state) => state.autopilot);
     const hasEnhancement = useEnhancementStore((state) => state.enhancements.has(file));
@@ -16,6 +19,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
 
     const [isAnalysing, setIsAnalysing] = useState(false);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: enqueueSnackbar
     useEffect(() => {
         // Autopilot should run if all conditions are met:
         //   1. There's a file selected
@@ -32,6 +36,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
                 addEnhancements(file, suggestions);
             } catch (e) {
                 console.error('Failed to run autopilot', e);
+                enqueueSnackbar('Failed to run autopilot', { variant: 'error' });
             } finally {
                 setIsAnalysing(false);
             }

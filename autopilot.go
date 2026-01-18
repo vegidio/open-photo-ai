@@ -16,12 +16,17 @@ import (
 func SuggestEnhancements(input *types.ImageData) ([]types.Operation, error) {
 	operations := make([]types.Operation, 0)
 
-	if frOp, err := analyseFaceRecovery(input); err == nil {
-		operations = append(operations, frOp...)
+	frOp, err := analyseFaceRecovery(input)
+	if err != nil {
+		return nil, err
 	}
-	if upOp, err := analyseUpscale(input); err == nil {
-		operations = append(operations, upOp...)
+	operations = append(operations, frOp...)
+
+	upOp, err := analyseUpscale(input)
+	if err != nil {
+		return nil, err
 	}
+	operations = append(operations, upOp...)
 
 	return operations, nil
 }

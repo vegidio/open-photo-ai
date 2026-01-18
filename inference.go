@@ -169,7 +169,10 @@ func selectModel(operation types.Operation, onProgress types.DownloadProgress) (
 		err = fmt.Errorf("no model found with ID: %s", operation.Id())
 	}
 
-	if model != nil {
+	// We can't check `model != nil` here because model is an interface and in Go a variable is only nil if both its
+	// type and value are nil. In this case, even though the value is nil, the type has a concrete type.
+	// In other words, Go is stupid!
+	if err == nil {
 		internal.Registry[operation.Id()] = model
 	}
 

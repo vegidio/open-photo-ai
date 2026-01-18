@@ -4,11 +4,14 @@ import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { EnhancementProgress } from '@/components/molecules/EnhancementProgress';
 import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
 import { PreviewImage } from '@/components/organisms/PreviewImage';
+import { useNotify } from '@/hooks/useNotify.ts';
 import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 
 export const Preview = ({ className = '' }: TailwindProps) => {
+    const { enqueueSnackbar } = useNotify();
+
     // FileListStore
     const filesLength = useFileStore((state) => state.files.length);
     const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
@@ -25,6 +28,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
     const [isRunning, setIsRunning] = useState(false);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: enqueueSnackbar
     useEffect(() => {
         let p: CancellablePromise<ImageData>;
         let isCancelled = false;
@@ -45,7 +49,10 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                         const enhancedImage = await p;
                         setEnhancedImage(enhancedImage);
                     } catch (e) {
-                        if (!(e instanceof CancelError)) console.error('Error loading enhanced image', e);
+                        if (!(e instanceof CancelError)) {
+                            console.error('Error loading enhanced image', e);
+                            enqueueSnackbar('Error loading enhanced image', { variant: 'error' });
+                        }
                     } finally {
                         if (!isCancelled) setIsRunning(false);
                     }

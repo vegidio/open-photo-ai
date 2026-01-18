@@ -2,7 +2,7 @@ import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { SidebarAutopilot } from './SidebarAutopilot.tsx';
 import { SidebarExport } from './SidebarExport.tsx';
 import { AddEnhancement } from '@/components/Enhancement/AddEnhancement.tsx';
-import { SidebarEnhancements } from '@/components/Sidebar/SidebarEnhancements.tsx';
+import { SidebarEnhancements } from '@/components/organisms/SidebarEnhancements';
 import { useFileStore } from '@/stores';
 
 export const Sidebar = ({ className }: TailwindProps) => {
