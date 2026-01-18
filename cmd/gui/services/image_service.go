@@ -211,7 +211,6 @@ func (s *ImageService) ExportImage(
 
 	if err != nil {
 		s.tel.LogError("Error saving image", nil, err)
-		s.app.Event.Emit(eventName, "ERROR", 0.0)
 		return err
 	}
 

@@ -5,6 +5,7 @@ import { RiFolderImageLine } from 'react-icons/ri';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
+import { ExportQueueState } from '@/components/atoms/ExportQueueState';
 import { useExportStore } from '@/stores';
 import { getExportInfo } from '@/utils/export.ts';
 import { getImage } from '@/utils/image.ts';
@@ -21,7 +22,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
     const location = useExportStore((state) => state.location);
 
     const [image, setImage] = useState<string>();
-    const [state, setState] = useState('');
+    const [state, setState] = useState('IDLE');
     const [progress, setProgress] = useState(0);
     const [newSize, setNewSize] = useState<string>();
 
@@ -104,7 +105,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                 {/* Status & Extension */}
                 <TableCell>
                     <div className='flex flex-col text-[13px] gap-1'>
-                        <ExportQueueStatus state={state} />
+                        <ExportQueueState state={state} />
                         <div>
                             <span className='text-[#b0b0b0]'>{file.Extension.toUpperCase()}</span>
                             {file.Extension !== newExt && <span> → {newExt.toUpperCase()}</span>}
@@ -134,25 +135,4 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
             <TableRow className='h-4' />
         </>
     );
-};
-
-type ExportQueueStatusProps = {
-    state: string;
-};
-
-const ExportQueueStatus = ({ state }: ExportQueueStatusProps) => {
-    const [msg, color] = useMemo(() => {
-        switch (state) {
-            case 'RUNNING':
-                return ['Processing', 'text-[#009aff]'];
-            case 'COMPLETED':
-                return ['Completed', 'text-[#009aff]'];
-            case 'ERROR':
-                return ['Error', 'text-[#ff5555]'];
-            default:
-                return ['<Invisible>', ''];
-        }
-    }, [state]);
-
-    return <span className={`${state === '' ? 'invisible' : ''} ${color}`}>{msg}</span>;
 };

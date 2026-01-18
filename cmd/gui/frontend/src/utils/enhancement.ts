@@ -1,9 +1,23 @@
+import { CancellablePromise } from '@wailsio/runtime';
 import { SuggestEnhancements } from '@/bindings/gui/services/imageservice.ts';
 import { Athens, Kyoto, type Operation, Saitama, Santorini, Tokyo } from '@/operations';
 
-export const suggestEnhancement = async (filePath: string) => {
-    const opIds = await SuggestEnhancements(filePath);
-    return idsToOperations(opIds);
+export const suggestEnhancement = (filePath: string) => {
+    let p: CancellablePromise<string[]>;
+
+    return new CancellablePromise<Operation[]>(
+        async (resolve, reject) => {
+            p = SuggestEnhancements(filePath);
+
+            try {
+                const opIds = await p;
+                resolve(idsToOperations(opIds));
+            } catch (e) {
+                reject(e);
+            }
+        },
+        () => p.cancel(),
+    );
 };
 
 const idsToOperations = (opIds: string[]): Operation[] => {

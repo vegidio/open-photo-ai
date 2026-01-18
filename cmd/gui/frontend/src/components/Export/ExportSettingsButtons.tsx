@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Button } from '@mui/material';
-import { CancellablePromise, Events } from '@wailsio/runtime';
+import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
+import type { Operation } from '@/operations';
 import type { ExportSettingsProps } from './ExportSettings.tsx';
 import { useExportStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
@@ -15,7 +16,8 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
     const resetKey = useExportStore((state) => state.resetKey);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
-    const promiseRef = useRef<CancellablePromise<void> | null>(null);
+    const suggestRef = useRef<CancellablePromise<Operation[]> | null>(null);
+    const exportRef = useRef<CancellablePromise<void> | null>(null);
 
     const handleCancel = () => {
         switch (state) {
@@ -25,7 +27,8 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
                 break;
 
             case 'processing':
-                promiseRef.current?.cancel();
+                suggestRef.current?.cancel();
+                exportRef.current?.cancel();
         }
     };
 
@@ -42,16 +45,24 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
                 // The list of operations for this file is empty; it means Autopilot added this file in the export list.
                 // We need to check if there are any suitable operations to apply to the file.
                 if (operations.length === 0) {
-                    const suggestions = await suggestEnhancement(file.Path);
+                    suggestRef.current = suggestEnhancement(file.Path);
+                    const suggestions = await suggestRef.current;
+
                     if (suggestions.length === 0) continue;
                     operations.push(...suggestions);
                 }
 
-                promiseRef.current = exportImage(file, operations, overwrite, format, prefix, suffix, location);
+                exportRef.current = exportImage(file, operations, overwrite, format, prefix, suffix, location);
+                await exportRef.current;
+            } catch (e) {
+                if (e instanceof CancelError) {
+                    Events.Emit(`app:export:${file.Hash}`, ['IDLE', 0]);
+                } else {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    const tag = msg.includes('[download]') ? 'ERROR_DOWNLOAD' : 'ERROR';
+                    Events.Emit(`app:export:${file.Hash}`, [tag, 0]);
+                }
 
-                await promiseRef.current;
-            } catch {
-                Events.Emit(`app:export:${file.Hash}`, ['ERROR', 0]);
                 setState('idle');
                 return;
             }
