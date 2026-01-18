@@ -41,19 +41,6 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
         return { oldDims, newDims, oldSize, newExt: ext, fileName, filePath };
     }, [file, format, location, operations, prefix, suffix]);
 
-    const getStatusText = (state: string): string => {
-        switch (state) {
-            case 'RUNNING':
-                return 'Processing...';
-            case 'ERROR':
-                return 'Error';
-            case 'COMPLETED':
-                return 'Completed';
-            default:
-                return 'invisible';
-        }
-    };
-
     useEffect(() => {
         async function loadImage() {
             const imageData = await getImage(file, 100);
@@ -117,9 +104,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                 {/* Status & Extension */}
                 <TableCell>
                     <div className='flex flex-col text-[13px] gap-1'>
-                        <span className={`${state === '' ? 'invisible' : ''} text-[#009aff]`}>
-                            {getStatusText(state)}
-                        </span>
+                        <ExportQueueStatus state={state} />
                         <div>
                             <span className='text-[#b0b0b0]'>{file.Extension.toUpperCase()}</span>
                             {file.Extension !== newExt && <span> → {newExt.toUpperCase()}</span>}
@@ -149,4 +134,25 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
             <TableRow className='h-4' />
         </>
     );
+};
+
+type ExportQueueStatusProps = {
+    state: string;
+};
+
+const ExportQueueStatus = ({ state }: ExportQueueStatusProps) => {
+    const [msg, color] = useMemo(() => {
+        switch (state) {
+            case 'RUNNING':
+                return ['Processing', 'text-[#009aff]'];
+            case 'COMPLETED':
+                return ['Completed', 'text-[#009aff]'];
+            case 'ERROR':
+                return ['Error', 'text-[#ff5555]'];
+            default:
+                return ['<Invisible>', ''];
+        }
+    }, [state]);
+
+    return <span className={`${state === '' ? 'invisible' : ''} ${color}`}>{msg}</span>;
 };

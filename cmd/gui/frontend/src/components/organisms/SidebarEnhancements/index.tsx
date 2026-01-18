@@ -35,8 +35,8 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
                 const suggestions = await suggestEnhancement(file.Path);
                 addEnhancements(file, suggestions);
             } catch (e) {
-                console.error('Failed to run autopilot', e);
-                enqueueSnackbar('Failed to run autopilot', { variant: 'error' });
+                const msg = userFriendlyErrorMessage(e);
+                enqueueSnackbar(msg, { variant: 'error' });
             } finally {
                 setIsAnalysing(false);
             }
@@ -57,4 +57,15 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
             )}
         </List>
     );
+};
+
+const userFriendlyErrorMessage = (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
+
+    switch (true) {
+        case msg.includes('[download]'):
+            return 'Failed to download AI model. Check your internet connection and try again.';
+        default:
+            return 'Something wrong wrong. Failed to run autopilot.';
+    }
 };

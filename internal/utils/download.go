@@ -43,7 +43,7 @@ func PrepareDependency(
 
 	err = downloadFile(url, file, onProgress)
 	if err != nil {
-		return err
+		return fmt.Errorf("[download] %w", err)
 	}
 
 	ext := filepath.Ext(fileName)
@@ -113,7 +113,7 @@ func shouldDownload(destination string, fileCheck *types.FileCheck) bool {
 		return true
 	}
 
-	return fileCheck.Hash != "" && fileCheck.Hash != hash
+	return fileCheck.Hash != hash
 }
 
 func downloadFile(url string, dstFile *os.File, onProgress types.DownloadProgress) error {

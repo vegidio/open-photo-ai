@@ -22,7 +22,7 @@ func LoadModel(
 	}
 
 	modelFile := operation.Id() + ".onnx"
-	modelName := fmt.Sprintf("Face Recovery (%s)",
+	modelName := fmt.Sprintf("New York (%s)",
 		cases.Upper(language.English).String(string(operation.Precision())),
 	)
 

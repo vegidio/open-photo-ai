@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Button } from '@mui/material';
-import type { CancellablePromise } from '@wailsio/runtime';
+import { CancellablePromise, Events } from '@wailsio/runtime';
 import type { ExportSettingsProps } from './ExportSettings.tsx';
 import { useExportStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
@@ -38,19 +38,20 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
         setState('processing');
 
         for (const [file, operations] of enhancements.entries()) {
-            // The list of operations for this file is empty; it means Autopilot added this file in the export list.
-            // We need to check if there are any suitable operations to apply to the file.
-            if (operations.length === 0) {
-                const suggestions = await suggestEnhancement(file.Path);
-                if (suggestions.length === 0) continue;
-                operations.push(...suggestions);
-            }
-
-            promiseRef.current = exportImage(file, operations, overwrite, format, prefix, suffix, location);
-
             try {
+                // The list of operations for this file is empty; it means Autopilot added this file in the export list.
+                // We need to check if there are any suitable operations to apply to the file.
+                if (operations.length === 0) {
+                    const suggestions = await suggestEnhancement(file.Path);
+                    if (suggestions.length === 0) continue;
+                    operations.push(...suggestions);
+                }
+
+                promiseRef.current = exportImage(file, operations, overwrite, format, prefix, suffix, location);
+
                 await promiseRef.current;
             } catch {
+                Events.Emit(`app:export:${file.Hash}`, ['ERROR', 0]);
                 setState('idle');
                 return;
             }

@@ -50,8 +50,8 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                         setEnhancedImage(enhancedImage);
                     } catch (e) {
                         if (!(e instanceof CancelError)) {
-                            console.error('Error loading enhanced image', e);
-                            enqueueSnackbar('Error loading enhanced image', { variant: 'error' });
+                            const msg = userFriendlyErrorMessage(e);
+                            enqueueSnackbar(msg, { variant: 'error' });
                         }
                     } finally {
                         if (!isCancelled) setIsRunning(false);
@@ -89,4 +89,15 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             {filesLength === 0 ? <PreviewEmpty /> : <PreviewImage />}
         </div>
     );
+};
+
+const userFriendlyErrorMessage = (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
+
+    switch (true) {
+        case msg.includes('[download]'):
+            return 'Failed to download AI model. Check your internet connection and try again.';
+        default:
+            return 'Something went wrong. Failed to enhance image.';
+    }
 };
