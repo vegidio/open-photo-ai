@@ -11,6 +11,7 @@ import "image"
 type ImageData struct {
 	FilePath string
 	Pixels   image.Image
+	Hash     string
 }
 
 // ImageFormat describes the type of image used.

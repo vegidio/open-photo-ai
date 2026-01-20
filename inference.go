@@ -9,6 +9,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
+	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/models/upscale/saitama"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
@@ -167,12 +168,16 @@ func selectModel(operation types.Operation, onProgress types.DownloadProgress) (
 	case strings.HasPrefix(operation.Id(), "up_saitama"):
 		model, err = saitama.New(operation, onProgress)
 
+	// Light Adjustment
+	case strings.HasPrefix(operation.Id(), "la_paris"):
+		model, err = paris.New(operation, onProgress)
+
 	default:
 		err = fmt.Errorf("no model found with ID: %s", operation.Id())
 	}
 
 	// We can't check `model != nil` here because model is an interface and in Go a variable is only nil if both its
-	// type and value are nil. In this case, even though the value is nil, the type has a concrete type.
+	// type and value are nil. In this case, even though the value is nil, the variable has a concrete type.
 	// In other words, Go is stupid!
 	if err == nil {
 		internal.Registry[operation.Id()] = model
