@@ -2,12 +2,15 @@ package athens
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -16,7 +19,6 @@ const (
 )
 
 type Athens struct {
-	id        string
 	name      string
 	operation OpFrAthens
 	session   *ort.DynamicAdvancedSession
@@ -24,7 +26,7 @@ type Athens struct {
 }
 
 func New(operation types.Operation, onProgress types.DownloadProgress) (*Athens, error) {
-	fdModel, modelFile, modelName, err := facerecovery.LoadModel(operation, onProgress)
+	fdModel, modelFile, err := facerecovery.LoadModel(operation, onProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -37,6 +39,8 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Athens,
 	if err != nil {
 		return nil, err
 	}
+
+	modelName := fmt.Sprintf("Athens (%s)", cases.Upper(language.English).String(string(operation.Precision())))
 
 	return &Athens{
 		name:      modelName,
@@ -59,7 +63,12 @@ func (m *Athens) Name() string {
 	return m.name
 }
 
-func (m *Athens) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) (*types.ImageData, error) {
+func (m *Athens) Run(
+	ctx context.Context,
+	input *types.ImageData,
+	params map[string]any,
+	onProgress types.InferenceProgress,
+) (*types.ImageData, error) {
 	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, input, onProgress)
 	if err != nil {
 		return nil, err

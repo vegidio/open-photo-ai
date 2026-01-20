@@ -13,13 +13,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-const (
-	tileOverlap = 16
-	tileSize    = 256
-)
-
 type Saitama struct {
-	id        string
 	name      string
 	operation OpUpSaitama
 	sessions  []*ort.DynamicAdvancedSession
@@ -84,26 +78,13 @@ func (m *Saitama) Name() string {
 	return m.name
 }
 
-func (m *Saitama) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) (*types.ImageData, error) {
-	if onProgress != nil {
-		onProgress("up", 0)
-	}
-
-	img := input.Pixels
-
-	for i, session := range m.sessions {
-		result, err := upscale.Process(ctx, session, img, tileSize, tileOverlap, m.scales[i], onProgress)
-		if err != nil {
-			return nil, err
-		}
-
-		img = result
-	}
-
-	return &types.ImageData{
-		FilePath: input.FilePath,
-		Pixels:   upscale.ResizeToIntendedScale(img, input.Pixels.Bounds(), m.operation.scale),
-	}, nil
+func (m *Saitama) Run(
+	ctx context.Context,
+	input *types.ImageData,
+	params map[string]any,
+	onProgress types.InferenceProgress,
+) (*types.ImageData, error) {
+	return upscale.RunPipeline(ctx, m.sessions, input, m.scales, m.operation.scale, onProgress)
 }
 
 func (m *Saitama) Destroy() {

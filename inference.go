@@ -37,6 +37,7 @@ import (
 func Process(
 	ctx context.Context,
 	input *types.ImageData,
+	params map[string]any,
 	onProgress types.InferenceProgress,
 	operations ...types.Operation,
 ) (*types.ImageData, error) {
@@ -61,7 +62,7 @@ func Process(
 			return nil, fmt.Errorf("operation type not supported: %s", op.Id())
 		}
 
-		output, err = imageModel.Run(ctx, inputCopy, onProgress)
+		output, err = imageModel.Run(ctx, inputCopy, params, onProgress)
 		if err != nil {
 			return nil, err
 		}
@@ -98,6 +99,7 @@ func Process(
 func Execute[T any](
 	ctx context.Context,
 	input *types.ImageData,
+	params map[string]any,
 	onProgress types.InferenceProgress,
 	operation types.Operation,
 ) (T, error) {
@@ -119,7 +121,7 @@ func Execute[T any](
 		return genericNil, fmt.Errorf("operation type not supported: %s", operation.Id())
 	}
 
-	return dataModel.Run(ctx, input, onProgress)
+	return dataModel.Run(ctx, input, params, onProgress)
 }
 
 // CleanRegistry releases all resources held by registered models. It iterates through all models in the registry and

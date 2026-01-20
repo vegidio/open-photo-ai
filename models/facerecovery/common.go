@@ -8,23 +8,18 @@ import (
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
 	"github.com/vegidio/open-photo-ai/types"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 func LoadModel(
 	operation types.Operation,
 	onProgress types.DownloadProgress,
-) (types.Model[[]facedetection.Face], string, string, error) {
+) (types.Model[[]facedetection.Face], string, error) {
 	fdModel, err := GetFdModel()
 	if err != nil {
-		return nil, "", "", err
+		return nil, "", err
 	}
 
 	modelFile := operation.Id() + ".onnx"
-	modelName := fmt.Sprintf("New York (%s)",
-		cases.Upper(language.English).String(string(operation.Precision())),
-	)
 
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
 	fileCheck := &types.FileCheck{
@@ -33,10 +28,10 @@ func LoadModel(
 	}
 
 	if err = utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
-		return nil, "", "", err
+		return nil, "", err
 	}
 
-	return fdModel, modelFile, modelName, nil
+	return fdModel, modelFile, nil
 }
 
 func ExtractFaces(
@@ -49,7 +44,7 @@ func ExtractFaces(
 		onProgress("fr", 0)
 	}
 
-	faces, err := fdModel.Run(ctx, input, nil)
+	faces, err := fdModel.Run(ctx, input, nil, nil)
 	if err != nil {
 		return nil, err
 	}

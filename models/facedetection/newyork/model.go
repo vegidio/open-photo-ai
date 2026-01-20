@@ -20,7 +20,6 @@ const (
 )
 
 type NewYork struct {
-	id        string
 	name      string
 	operation OpFdNewYork
 	session   *ort.DynamicAdvancedSession
@@ -70,7 +69,12 @@ func (m *NewYork) Name() string {
 	return m.name
 }
 
-func (m *NewYork) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) ([]facedetection.Face, error) {
+func (m *NewYork) Run(
+	ctx context.Context,
+	input *types.ImageData,
+	params map[string]any,
+	onProgress types.InferenceProgress,
+) ([]facedetection.Face, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

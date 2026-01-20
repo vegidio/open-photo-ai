@@ -2,12 +2,15 @@ package santorini
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -15,7 +18,6 @@ const (
 )
 
 type Santorini struct {
-	id        string
 	name      string
 	operation OpFrSantorini
 	session   *ort.DynamicAdvancedSession
@@ -23,7 +25,7 @@ type Santorini struct {
 }
 
 func New(operation types.Operation, onProgress types.DownloadProgress) (*Santorini, error) {
-	fdModel, modelFile, modelName, err := facerecovery.LoadModel(operation, onProgress)
+	fdModel, modelFile, err := facerecovery.LoadModel(operation, onProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -36,6 +38,8 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Santori
 	if err != nil {
 		return nil, err
 	}
+
+	modelName := fmt.Sprintf("Santorini (%s)", cases.Upper(language.English).String(string(operation.Precision())))
 
 	return &Santorini{
 		name:      modelName,
@@ -58,7 +62,12 @@ func (m *Santorini) Name() string {
 	return m.name
 }
 
-func (m *Santorini) Run(ctx context.Context, input *types.ImageData, onProgress types.InferenceProgress) (*types.ImageData, error) {
+func (m *Santorini) Run(
+	ctx context.Context,
+	input *types.ImageData,
+	params map[string]any,
+	onProgress types.InferenceProgress,
+) (*types.ImageData, error) {
 	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, input, onProgress)
 	if err != nil {
 		return nil, err
