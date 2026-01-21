@@ -113,7 +113,7 @@ func shouldDownload(destination string, fileCheck *types.FileCheck) bool {
 		return true
 	}
 
-	return fileCheck.Hash != hash
+	return fileCheck.Hash != "" && fileCheck.Hash != hash
 }
 
 func downloadFile(url string, dstFile *os.File, onProgress types.DownloadProgress) error {
