@@ -3,6 +3,7 @@ package newyork
 import (
 	"context"
 	"fmt"
+	"image"
 
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
@@ -71,7 +72,7 @@ func (m *NewYork) Name() string {
 
 func (m *NewYork) Run(
 	ctx context.Context,
-	input *types.ImageData,
+	img image.Image,
 	params map[string]any,
 	onProgress types.InferenceProgress,
 ) ([]facedetection.Face, error) {
@@ -83,7 +84,7 @@ func (m *NewYork) Run(
 	}
 
 	// Preprocess image
-	inputData, originalWidth, originalHeight := facedetection.PreprocessImage(input.Pixels, targetSize)
+	inputData, originalWidth, originalHeight := facedetection.PreprocessImage(img, targetSize)
 
 	// Create input tensor
 	inputShape := ort.NewShape(1, 3, int64(targetSize), int64(targetSize))

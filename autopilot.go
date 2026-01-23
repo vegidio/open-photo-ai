@@ -41,7 +41,7 @@ func analyseFaceRecovery(input *types.ImageData) ([]types.Operation, error) {
 		return nil, err
 	}
 
-	faces, err := facerecovery.ExtractFaces(context.Background(), model, input, nil)
+	faces, err := facerecovery.ExtractFaces(context.Background(), model, input.Pixels, nil)
 	if err != nil {
 		return nil, err
 	}

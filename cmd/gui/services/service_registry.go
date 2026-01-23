@@ -9,10 +9,7 @@ func RegisterServices(app *application.App, tel *o11y.Telemetry) (func(), error)
 	appService := NewAppService(app, tel)
 	app.RegisterService(application.NewService(appService))
 
-	imageService, err := NewImageService(app, tel)
-	if err != nil {
-		return nil, err
-	}
+	imageService := NewImageService(app, tel)
 	app.RegisterService(application.NewService(imageService))
 
 	dialogService := NewDialogService(app, tel)

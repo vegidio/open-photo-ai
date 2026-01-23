@@ -3,6 +3,7 @@ package facerecovery
 import (
 	"context"
 	"fmt"
+	"image"
 
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
@@ -37,14 +38,14 @@ func LoadModel(
 func ExtractFaces(
 	ctx context.Context,
 	fdModel types.Model[[]facedetection.Face],
-	input *types.ImageData,
+	img image.Image,
 	onProgress types.InferenceProgress,
 ) ([]facedetection.Face, error) {
 	if onProgress != nil {
 		onProgress("fr", 0)
 	}
 
-	faces, err := fdModel.Run(ctx, input, nil, nil)
+	faces, err := fdModel.Run(ctx, img, nil, nil)
 	if err != nil {
 		return nil, err
 	}

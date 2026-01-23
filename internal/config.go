@@ -23,3 +23,5 @@ var ModelData []RemoteModelData
 //
 // This variable is set by the `selectModel` function and should never be changed directly.
 var Registry = make(map[string]interface{})
+
+var ImageCache *Cache

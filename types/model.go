@@ -1,6 +1,9 @@
 package types
 
-import "context"
+import (
+	"context"
+	"image"
+)
 
 // Model defines the interface for AI models that process images.
 // It encapsulates specific AI models for image processing tasks such as upscaling, enhancement, or other
@@ -17,8 +20,8 @@ type Model[T any] interface {
 	// Name returns a human-readable name for the model
 	Name() string
 
-	// Run processes the input image data and returns the processed output
-	Run(ctx context.Context, input *ImageData, params map[string]any, onProgress InferenceProgress) (T, error)
+	// Run processes the image and returns the processed output
+	Run(ctx context.Context, img image.Image, params map[string]any, onProgress InferenceProgress) (T, error)
 }
 
 // Destroyable defines an interface for types that require explicit resource cleanup. Implementations must provide a

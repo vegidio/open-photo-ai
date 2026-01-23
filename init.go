@@ -40,6 +40,12 @@ const (
 func Initialize(name string, onProgress types.DownloadProgress) error {
 	internal.AppName = name
 
+	cache, err := internal.NewCache(100)
+	if err != nil {
+		return err
+	}
+	internal.ImageCache = cache
+
 	fileCheck := &types.FileCheck{
 		Path: internal.OnnxRuntimeName,
 		Hash: internal.OnnxRuntimeHash,
@@ -49,7 +55,7 @@ func Initialize(name string, onProgress types.DownloadProgress) error {
 	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
 		onnxRuntimeTag, runtime.GOOS, runtime.GOARCH)
 
-	if err := utils.PrepareDependency(url, "", fileCheck, onProgress); err != nil {
+	if err = utils.PrepareDependency(url, "", fileCheck, onProgress); err != nil {
 		return err
 	}
 
@@ -76,6 +82,8 @@ func Initialize(name string, onProgress types.DownloadProgress) error {
 //	}
 //	defer opai.Destroy() // Ensure cleanup on exit
 func Destroy() {
+	internal.ImageCache.Close()
+
 	CleanRegistry()
 	ort.DestroyEnvironment()
 }

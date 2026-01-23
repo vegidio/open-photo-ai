@@ -104,7 +104,7 @@ func shouldDownload(destination string, fileCheck *types.FileCheck) bool {
 	}
 
 	filePath := filepath.Join(configDir, fileCheck.Path)
-	if _, err = os.Stat(filePath); os.IsNotExist(err) {
+	if !fs.FileExists(filePath) {
 		return true
 	}
 

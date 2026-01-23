@@ -18,30 +18,27 @@ const (
 func RunPipeline(
 	ctx context.Context,
 	sessions []*ort.DynamicAdvancedSession,
-	input *types.ImageData,
+	img image.Image,
 	scales []int,
 	intendedScale float64,
 	onProgress types.InferenceProgress,
-) (*types.ImageData, error) {
+) (image.Image, error) {
 	if onProgress != nil {
 		onProgress("up", 0)
 	}
 
-	img := input.Pixels
+	resultImg := img
 
 	for i, session := range sessions {
-		result, err := process(ctx, session, img, scales[i], onProgress)
+		processedImg, err := process(ctx, session, resultImg, scales[i], onProgress)
 		if err != nil {
 			return nil, err
 		}
 
-		img = result
+		resultImg = processedImg
 	}
 
-	return &types.ImageData{
-		FilePath: input.FilePath,
-		Pixels:   resizeToIntendedScale(img, input.Pixels.Bounds(), intendedScale),
-	}, nil
+	return resizeToIntendedScale(resultImg, img.Bounds(), intendedScale), nil
 }
 
 // Process upscales an entire image by processing it in overlapping tiles

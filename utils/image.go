@@ -10,10 +10,12 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	_ "image/png"
+	"io"
 	"os"
 
 	"github.com/vegidio/avif-go"
 	_ "github.com/vegidio/avif-go"
+	"github.com/vegidio/go-sak/crypto"
 	"github.com/vegidio/heif-go"
 	_ "github.com/vegidio/heif-go"
 	"github.com/vegidio/webp-go"
@@ -49,9 +51,21 @@ func LoadImage(path string) (*types.ImageData, error) {
 		return nil, err
 	}
 
+	// Reset file pointer to the beginning
+	_, err = inputFile.Seek(0, io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+
+	hash, err := crypto.Xxh3Reader(inputFile)
+	if err != nil {
+		return nil, err
+	}
+
 	return &types.ImageData{
 		FilePath: path,
 		Pixels:   img,
+		Hash:     hash,
 	}, nil
 }
 

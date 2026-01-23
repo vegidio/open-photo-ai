@@ -3,6 +3,7 @@ package opai
 import (
 	"context"
 	"fmt"
+	"image"
 	"strings"
 
 	"github.com/vegidio/open-photo-ai/internal"
@@ -42,41 +43,33 @@ func Process(
 	onProgress types.InferenceProgress,
 	operations ...types.Operation,
 ) (*types.ImageData, error) {
-	var output *types.ImageData
+	var err error
 
-	// Make a copy of the input data so the original input is not modified
-	inputCopy := &types.ImageData{Pixels: input.Pixels}
+	// Make a copy of the input img so the original input is not modified
+	output := input.Pixels
 
-	for _, op := range operations {
-		model, err := selectModel(op, func(_, _ int64, percent float64) {
-			if onProgress != nil {
-				onProgress("dl", percent)
-			}
-		})
+	for i, op := range operations {
+		// Check first if there's a cached image for this operation
+		if cachedImg, err := internal.ImageCache.GetImage(input.Hash, operations[:i+1]...); err == nil {
+			output = cachedImg
+			continue
+		}
 
+		output, err = runInference(ctx, output, params, op, onProgress)
 		if err != nil {
 			return nil, err
 		}
 
-		imageModel, ok := model.(types.Model[*types.ImageData])
-		if !ok {
-			return nil, fmt.Errorf("operation type not supported: %s", op.Id())
-		}
-
-		output, err = imageModel.Run(ctx, inputCopy, params, onProgress)
-		if err != nil {
+		if err = internal.ImageCache.SetImage(output, input.Hash, operations[:i+1]...); err != nil {
 			return nil, err
 		}
-
-		// Update the input pixels so that the next operation can use them
-		inputCopy.Pixels = output.Pixels
 	}
 
-	if output == nil {
-		return nil, fmt.Errorf("unexpected error: output is nil")
-	}
-
-	return output, nil
+	return &types.ImageData{
+		FilePath: input.FilePath,
+		Pixels:   output,
+		Hash:     input.Hash,
+	}, nil
 }
 
 // Execute executes a single image operation and returns the result as a generic data type.
@@ -99,7 +92,7 @@ func Process(
 //	faces, err := Execute[[]types.Face](ctx, inputImage, progressCallback, faceDetectionOp)
 func Execute[T any](
 	ctx context.Context,
-	input *types.ImageData,
+	img image.Image,
 	params map[string]any,
 	onProgress types.InferenceProgress,
 	operation types.Operation,
@@ -122,7 +115,7 @@ func Execute[T any](
 		return genericNil, fmt.Errorf("operation type not supported: %s", operation.Id())
 	}
 
-	return dataModel.Run(ctx, input, params, onProgress)
+	return dataModel.Run(ctx, img, params, onProgress)
 }
 
 // CleanRegistry releases all resources held by registered models. It iterates through all models in the registry and
@@ -139,6 +132,31 @@ func CleanRegistry() {
 }
 
 // region - Private functions
+
+func runInference(
+	ctx context.Context,
+	img image.Image,
+	params map[string]any,
+	operation types.Operation,
+	onProgress types.InferenceProgress,
+) (image.Image, error) {
+	model, err := selectModel(operation, func(_, _ int64, percent float64) {
+		if onProgress != nil {
+			onProgress("dl", percent)
+		}
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	imageModel, ok := model.(types.Model[image.Image])
+	if !ok {
+		return nil, fmt.Errorf("operation type not supported: %s", operation.Id())
+	}
+
+	return imageModel.Run(ctx, img, params, onProgress)
+}
 
 func selectModel(operation types.Operation, onProgress types.DownloadProgress) (interface{}, error) {
 	var model interface{}

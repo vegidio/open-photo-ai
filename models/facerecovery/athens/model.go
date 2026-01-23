@@ -3,6 +3,7 @@ package athens
 import (
 	"context"
 	"fmt"
+	"image"
 
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
@@ -51,7 +52,7 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Athens,
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[*types.ImageData] = (*Athens)(nil)
+var _ types.Model[image.Image] = (*Athens)(nil)
 
 // region - Model methods
 
@@ -65,31 +66,25 @@ func (m *Athens) Name() string {
 
 func (m *Athens) Run(
 	ctx context.Context,
-	input *types.ImageData,
+	img image.Image,
 	params map[string]any,
 	onProgress types.InferenceProgress,
-) (*types.ImageData, error) {
-	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, input, onProgress)
+) (image.Image, error) {
+	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, img, onProgress)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(faces) == 0 {
-		return &types.ImageData{
-			FilePath: input.FilePath,
-			Pixels:   input.Pixels,
-		}, nil
+		return img, nil
 	}
 
-	result, err := facerecovery.RestoreFaces(ctx, m.session, input.Pixels, faces, tileSize, fidelity, onProgress)
+	result, err := facerecovery.RestoreFaces(ctx, m.session, img, faces, tileSize, fidelity, onProgress)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.ImageData{
-		FilePath: input.FilePath,
-		Pixels:   result,
-	}, nil
+	return result, nil
 }
 
 func (m *Athens) Destroy() {

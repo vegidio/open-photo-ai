@@ -3,6 +3,7 @@ package paris
 import (
 	"context"
 	"fmt"
+	"image"
 
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
@@ -52,7 +53,7 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Paris, 
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[*types.ImageData] = (*Paris)(nil)
+var _ types.Model[image.Image] = (*Paris)(nil)
 
 // region - Model methods
 
@@ -66,10 +67,10 @@ func (m *Paris) Name() string {
 
 func (m *Paris) Run(
 	ctx context.Context,
-	input *types.ImageData,
+	img image.Image,
 	params map[string]any,
 	onProgress types.InferenceProgress,
-) (*types.ImageData, error) {
+) (image.Image, error) {
 	if onProgress != nil {
 		onProgress("la", 0)
 	}
@@ -77,7 +78,7 @@ func (m *Paris) Run(
 		return nil, err
 	}
 
-	result, err := lightadjustment.Process(ctx, m.session, input.Pixels)
+	result, err := lightadjustment.Process(ctx, m.session, img)
 	if err != nil {
 		return nil, err
 	}
@@ -94,16 +95,13 @@ func (m *Paris) Run(
 		return nil, err
 	}
 
-	blendedImg := lightadjustment.BlendWithIntensity(input.Pixels, result, intensity)
+	blendedImg := lightadjustment.BlendWithIntensity(img, result, intensity)
 
 	if onProgress != nil {
 		onProgress("la", 1)
 	}
 
-	return &types.ImageData{
-		FilePath: input.FilePath,
-		Pixels:   blendedImg,
-	}, nil
+	return blendedImg, nil
 }
 
 func (m *Paris) Destroy() {

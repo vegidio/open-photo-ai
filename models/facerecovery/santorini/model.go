@@ -3,6 +3,7 @@ package santorini
 import (
 	"context"
 	"fmt"
+	"image"
 
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
@@ -50,7 +51,7 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Santori
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[*types.ImageData] = (*Santorini)(nil)
+var _ types.Model[image.Image] = (*Santorini)(nil)
 
 // region - Model methods
 
@@ -64,31 +65,25 @@ func (m *Santorini) Name() string {
 
 func (m *Santorini) Run(
 	ctx context.Context,
-	input *types.ImageData,
+	img image.Image,
 	params map[string]any,
 	onProgress types.InferenceProgress,
-) (*types.ImageData, error) {
-	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, input, onProgress)
+) (image.Image, error) {
+	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, img, onProgress)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(faces) == 0 {
-		return &types.ImageData{
-			FilePath: input.FilePath,
-			Pixels:   input.Pixels,
-		}, nil
+		return img, nil
 	}
 
-	result, err := facerecovery.RestoreFaces(ctx, m.session, input.Pixels, faces, tileSize, -1, onProgress)
+	result, err := facerecovery.RestoreFaces(ctx, m.session, img, faces, tileSize, -1, onProgress)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.ImageData{
-		FilePath: input.FilePath,
-		Pixels:   result,
-	}, nil
+	return result, nil
 }
 
 func (m *Santorini) Destroy() {

@@ -3,6 +3,7 @@ package kyoto
 import (
 	"context"
 	"fmt"
+	"image"
 
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
@@ -66,7 +67,7 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Kyoto, 
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[*types.ImageData] = (*Kyoto)(nil)
+var _ types.Model[image.Image] = (*Kyoto)(nil)
 
 // region - Model methods
 
@@ -80,11 +81,11 @@ func (m *Kyoto) Name() string {
 
 func (m *Kyoto) Run(
 	ctx context.Context,
-	input *types.ImageData,
+	img image.Image,
 	params map[string]any,
 	onProgress types.InferenceProgress,
-) (*types.ImageData, error) {
-	return upscale.RunPipeline(ctx, m.sessions, input, m.scales, m.operation.scale, onProgress)
+) (image.Image, error) {
+	return upscale.RunPipeline(ctx, m.sessions, img, m.scales, m.operation.scale, onProgress)
 }
 
 func (m *Kyoto) Destroy() {
