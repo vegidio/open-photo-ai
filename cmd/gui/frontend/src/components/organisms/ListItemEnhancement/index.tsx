@@ -92,6 +92,13 @@ const opToEnhancement = (op: Operation): { name: string; info: string; icon: Rea
             return { name: 'Face Recovery', info, icon: <Icon option='face_recovery' /> };
         }
 
+        // Light Adjustment
+        case op.id.startsWith('la'): {
+            const intensity = parseFloat(op.options.intensity) * 100;
+            const info = `${titleCase(op.options.name)}, ${intensity}%, ${quality}`;
+            return { name: 'Light Adjustment', info, icon: <Icon option='light_adjustment' /> };
+        }
+
         // Upscale
         case op.id.startsWith('up'): {
             const info = `${titleCase(op.options.name)}, ${op.options.scale}x, ${quality}`;

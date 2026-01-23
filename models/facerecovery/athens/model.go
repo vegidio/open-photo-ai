@@ -67,7 +67,6 @@ func (m *Athens) Name() string {
 func (m *Athens) Run(
 	ctx context.Context,
 	img image.Image,
-	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, img, onProgress)

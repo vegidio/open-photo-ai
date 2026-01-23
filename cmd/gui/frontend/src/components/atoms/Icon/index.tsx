@@ -5,14 +5,16 @@ import {
     MdInfoOutline,
     MdOpenInFull,
     MdOutlineFaceRetouchingNatural,
+    MdOutlineLightMode,
     MdSplitscreen,
 } from 'react-icons/md';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 
 export type IconName =
     | 'close'
-    | 'face_recovery'
     | 'info'
+    | 'face_recovery'
+    | 'light_adjustment'
     | 'upscale'
     | 'preview_full'
     | 'preview_side'
@@ -26,10 +28,12 @@ export const Icon = ({ option, className = '' }: IconProps) => {
     switch (option) {
         case 'close':
             return <MdClose className={className} />;
-        case 'face_recovery':
-            return <MdOutlineFaceRetouchingNatural className={className} />;
         case 'info':
             return <MdInfoOutline className={className} />;
+        case 'face_recovery':
+            return <MdOutlineFaceRetouchingNatural className={className} />;
+        case 'light_adjustment':
+            return <MdOutlineLightMode className={className} />;
         case 'upscale':
             return <MdOpenInFull className={className} />;
         case 'preview_full':

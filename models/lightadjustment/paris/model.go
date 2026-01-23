@@ -15,10 +15,10 @@ import (
 )
 
 type Paris struct {
-	id        string
 	name      string
 	operation OpLaParis
 	session   *ort.DynamicAdvancedSession
+	intensity float32
 }
 
 func New(operation types.Operation, onProgress types.DownloadProgress) (*Paris, error) {
@@ -68,7 +68,6 @@ func (m *Paris) Name() string {
 func (m *Paris) Run(
 	ctx context.Context,
 	img image.Image,
-	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	if onProgress != nil {
@@ -83,11 +82,6 @@ func (m *Paris) Run(
 		return nil, err
 	}
 
-	intensity, exists := params["intensity"].(float32)
-	if !exists {
-		intensity = 0.5
-	}
-
 	if onProgress != nil {
 		onProgress("la", 0.9)
 	}
@@ -95,7 +89,7 @@ func (m *Paris) Run(
 		return nil, err
 	}
 
-	blendedImg := lightadjustment.BlendWithIntensity(img, result, intensity)
+	blendedImg := lightadjustment.BlendWithIntensity(img, result, m.operation.intensity)
 
 	if onProgress != nil {
 		onProgress("la", 1)

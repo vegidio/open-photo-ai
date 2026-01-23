@@ -39,7 +39,6 @@ import (
 func Process(
 	ctx context.Context,
 	input *types.ImageData,
-	params map[string]any,
 	onProgress types.InferenceProgress,
 	operations ...types.Operation,
 ) (*types.ImageData, error) {
@@ -55,7 +54,7 @@ func Process(
 			continue
 		}
 
-		output, err = runInference(ctx, output, params, op, onProgress)
+		output, err = runInference(ctx, output, op, onProgress)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +92,6 @@ func Process(
 func Execute[T any](
 	ctx context.Context,
 	img image.Image,
-	params map[string]any,
 	onProgress types.InferenceProgress,
 	operation types.Operation,
 ) (T, error) {
@@ -115,7 +113,7 @@ func Execute[T any](
 		return genericNil, fmt.Errorf("operation type not supported: %s", operation.Id())
 	}
 
-	return dataModel.Run(ctx, img, params, onProgress)
+	return dataModel.Run(ctx, img, onProgress)
 }
 
 // CleanRegistry releases all resources held by registered models. It iterates through all models in the registry and
@@ -136,7 +134,6 @@ func CleanRegistry() {
 func runInference(
 	ctx context.Context,
 	img image.Image,
-	params map[string]any,
 	operation types.Operation,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
@@ -155,7 +152,7 @@ func runInference(
 		return nil, fmt.Errorf("operation type not supported: %s", operation.Id())
 	}
 
-	return imageModel.Run(ctx, img, params, onProgress)
+	return imageModel.Run(ctx, img, onProgress)
 }
 
 func selectModel(operation types.Operation, onProgress types.DownloadProgress) (interface{}, error) {

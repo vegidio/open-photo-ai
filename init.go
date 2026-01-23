@@ -40,7 +40,7 @@ const (
 func Initialize(name string, onProgress types.DownloadProgress) error {
 	internal.AppName = name
 
-	cache, err := internal.NewCache(100)
+	cache, err := internal.NewCache(500)
 	if err != nil {
 		return err
 	}

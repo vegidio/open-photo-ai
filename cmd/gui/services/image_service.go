@@ -207,7 +207,7 @@ func (s *ImageService) runInference(ctx context.Context, filePath string, opIds 
 	}
 
 	operations := guiutils.IdsToOperations(opIds)
-	outputData, err := opai.Process(ctx, inputImage, nil, func(name string, progress float64) {
+	outputData, err := opai.Process(ctx, inputImage, func(name string, progress float64) {
 		s.app.Event.Emit("app:progress", name, progress)
 	}, operations...)
 

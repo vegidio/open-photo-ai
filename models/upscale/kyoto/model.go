@@ -82,7 +82,6 @@ func (m *Kyoto) Name() string {
 func (m *Kyoto) Run(
 	ctx context.Context,
 	img image.Image,
-	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	return upscale.RunPipeline(ctx, m.sessions, img, m.scales, m.operation.scale, onProgress)

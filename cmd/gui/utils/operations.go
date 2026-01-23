@@ -6,6 +6,7 @@ import (
 
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
+	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/models/upscale/saitama"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
@@ -27,6 +28,12 @@ func IdsToOperations(opIds []string) []types.Operation {
 		case "santorini":
 			precision := types.Precision(values[2])
 			operations = append(operations, santorini.Op(precision))
+
+		// Light Adjustment
+		case "paris":
+			intensity, _ := strconv.ParseFloat(values[2], 32)
+			precision := types.Precision(values[3])
+			operations = append(operations, paris.Op(float32(intensity), precision))
 
 		// Upscale
 		case "tokyo":

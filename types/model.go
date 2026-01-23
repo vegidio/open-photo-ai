@@ -21,7 +21,7 @@ type Model[T any] interface {
 	Name() string
 
 	// Run processes the image and returns the processed output
-	Run(ctx context.Context, img image.Image, params map[string]any, onProgress InferenceProgress) (T, error)
+	Run(ctx context.Context, img image.Image, onProgress InferenceProgress) (T, error)
 }
 
 // Destroyable defines an interface for types that require explicit resource cleanup. Implementations must provide a

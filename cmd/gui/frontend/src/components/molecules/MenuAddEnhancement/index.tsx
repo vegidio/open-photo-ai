@@ -1,6 +1,6 @@
 import { ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
 import { Icon } from '@/components/atoms/Icon';
-import { Athens, Kyoto, type Operation } from '@/operations';
+import { Athens, Kyoto, type Operation, Paris } from '@/operations';
 import { useEnhancementStore, useFileStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 
@@ -10,6 +10,12 @@ const options = [
         icon: <Icon option='face_recovery' />,
         name: 'Face Recovery',
         op: new Athens('fp32'),
+    },
+    {
+        type: 'la',
+        icon: <Icon option='light_adjustment' />,
+        name: 'Light Adjustment',
+        op: new Paris('0.5', 'fp32'),
     },
     {
         type: 'up',

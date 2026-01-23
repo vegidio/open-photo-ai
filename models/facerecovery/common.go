@@ -45,7 +45,7 @@ func ExtractFaces(
 		onProgress("fr", 0)
 	}
 
-	faces, err := fdModel.Run(ctx, img, nil, nil)
+	faces, err := fdModel.Run(ctx, img, nil)
 	if err != nil {
 		return nil, err
 	}

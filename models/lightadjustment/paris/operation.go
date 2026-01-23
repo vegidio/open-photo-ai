@@ -8,6 +8,7 @@ import (
 )
 
 type OpLaParis struct {
+	intensity float32
 	precision types.Precision
 }
 
@@ -25,8 +26,9 @@ func (o OpLaParis) Hash() string {
 
 var _ types.Operation = (*OpLaParis)(nil)
 
-func Op(precision types.Precision) OpLaParis {
+func Op(intensity float32, precision types.Precision) OpLaParis {
 	return OpLaParis{
+		intensity: intensity,
 		precision: precision,
 	}
 }
