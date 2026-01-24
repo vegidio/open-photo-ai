@@ -3,6 +3,7 @@ import { IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from
 import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
 import { OptionsFaceRecovery } from '@/components/organisms/OptionsFaceRecovery';
+import { OptionsLightAdjustment } from '@/components/organisms/OptionsLightAdjustment';
 import { OptionsUpscale } from '@/components/organisms/OptionsUpscale';
 import { useEnhancementStore, useFileStore } from '@/stores';
 
@@ -76,6 +77,9 @@ const selectOptionsComponent = (operationId: string) => {
     switch (true) {
         case operationId.startsWith('fr'):
             return OptionsFaceRecovery;
+
+        case operationId.startsWith('la'):
+            return OptionsLightAdjustment;
 
         case operationId.startsWith('up'):
             return OptionsUpscale;

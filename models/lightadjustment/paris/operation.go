@@ -13,7 +13,7 @@ type OpLaParis struct {
 }
 
 func (o OpLaParis) Id() string {
-	return fmt.Sprintf("la_paris_%s", o.precision)
+	return fmt.Sprintf("la_paris_%.3g_%s", o.intensity, o.precision)
 }
 
 func (o OpLaParis) Precision() types.Precision {

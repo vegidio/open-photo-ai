@@ -175,6 +175,10 @@ func selectModel(operation types.Operation, onProgress types.DownloadProgress) (
 	case strings.HasPrefix(operation.Id(), "fr_santorini"):
 		model, err = santorini.New(operation, onProgress)
 
+	// Light Adjustment
+	case strings.HasPrefix(operation.Id(), "la_paris"):
+		model, err = paris.New(operation, onProgress)
+
 	// Upscale
 	case strings.HasPrefix(operation.Id(), "up_tokyo"):
 		model, err = tokyo.New(operation, onProgress)
@@ -182,10 +186,6 @@ func selectModel(operation types.Operation, onProgress types.DownloadProgress) (
 		model, err = kyoto.New(operation, onProgress)
 	case strings.HasPrefix(operation.Id(), "up_saitama"):
 		model, err = saitama.New(operation, onProgress)
-
-	// Light Adjustment
-	case strings.HasPrefix(operation.Id(), "la_paris"):
-		model, err = paris.New(operation, onProgress)
 
 	default:
 		err = fmt.Errorf("no model found with ID: %s", operation.Id())

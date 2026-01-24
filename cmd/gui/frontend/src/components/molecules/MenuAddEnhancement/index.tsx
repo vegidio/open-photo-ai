@@ -15,7 +15,7 @@ const options = [
         type: 'la',
         icon: <Icon option='light_adjustment' />,
         name: 'Light Adjustment',
-        op: new Paris('0.5', 'fp32'),
+        op: new Paris(0.5, 'fp32'),
     },
     {
         type: 'up',

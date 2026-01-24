@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"regexp"
 
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
@@ -23,7 +24,8 @@ type Paris struct {
 
 func New(operation types.Operation, onProgress types.DownloadProgress) (*Paris, error) {
 	op := operation.(OpLaParis)
-	modelFile := op.Id() + ".onnx"
+	id := regexp.MustCompile(`_-?(?:0(?:\.\d+)?|1(?:\.0+)?)`).ReplaceAllString(op.Id(), "")
+	modelFile := id + ".onnx"
 	name := fmt.Sprintf("Paris (%s)", cases.Upper(language.English).String(string(op.precision)))
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
 
