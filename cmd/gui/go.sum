@@ -120,10 +120,11 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/ulikunitz/xz v0.5.15 h1:9DNdB5s+SgV3bQ2ApL10xRc35ck0DuIX/isZvIk+ubY=
 github.com/ulikunitz/xz v0.5.15/go.mod h1:nbz6k7qbPmH4IRqmfOplQw/tblSgqTqBwxkY0oWt/14=
 github.com/vegidio/go-sak v0.0.0-20260122173904-429e26e71cc8 h1:AOPMfo4wUdUNdqS6QMoWaSV0aSIpoUbBM3wmsirze98=
+github.com/vegidio/go-sak v0.0.0-20260122173904-429e26e71cc8/go.mod h1:UlZVJKCyXZTW30FJtjiDUPGtgGqXUc/s0Y4JBeJVmjQ=
 github.com/wailsapp/go-webview2 v1.0.23 h1:jmv8qhz1lHibCc79bMM/a/FqOnnzOGEisLav+a0b9P0=
 github.com/wailsapp/go-webview2 v1.0.23/go.mod h1:qJmWAmAmaniuKGZPWwne+uor3AHMB5PFhqiK0Bbj8kc=
-github.com/wailsapp/wails/v3 v3.0.0-alpha.57 h1:E1CRTZgMZ3UKkbkMgycpOGbTG2UYjB+UHDOLiG7RN7o=
-github.com/wailsapp/wails/v3 v3.0.0-alpha.57/go.mod h1:ynGPamjQDXoaWjOGKAHJ6vw94PUDbeIxtbapunWcDjk=
+github.com/wailsapp/wails/v3 v3.0.0-alpha.63 h1:ivAc4d6zuH+I/Ww9Am6RMATaItdypOkjlVbsNzhAyv0=
+github.com/wailsapp/wails/v3 v3.0.0-alpha.63/go.mod h1:ynGPamjQDXoaWjOGKAHJ6vw94PUDbeIxtbapunWcDjk=
 github.com/xanzy/ssh-agent v0.3.3 h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM=
 github.com/xanzy/ssh-agent v0.3.3/go.mod h1:6dzNDKs0J9rVPHPhaGCukekBHKqfl+L3KghI1Bc68Uw=
 github.com/zeebo/assert v1.3.0 h1:g7C04CbJuIDKNPFHmsk4hwZDO5O+kntRxzaUoNXj+IQ=

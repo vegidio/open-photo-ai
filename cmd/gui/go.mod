@@ -6,7 +6,7 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.52.0
 	github.com/vegidio/go-sak v0.0.0-20260122173904-429e26e71cc8
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.57
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.63
 )
 
 require (
