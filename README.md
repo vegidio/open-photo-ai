@@ -56,6 +56,10 @@ All enhancements available here come from open-source AI models that were adapte
 
 *Verdict*: if identity matters, start with **Athens**; if aesthetics matter more, use **Santorini**.
 
+### Light Adjustment
+
+- **Paris**: use when working with images affected by poor or uneven lighting, such as night scenes, backlit photos, shadows, or overexposed areas. It’s useful when you need to enhance visibility and contrast so that images look clearer.
+
 ### Upscale
 
 - **Tokyo**: use when you want a natural upscale without exaggeration. It focuses on preserving the original look and fine structures instead of "inventing" new details, making it ideal when realism and faithfulness matter more than sharpness.
@@ -70,8 +74,9 @@ These are the features I plan to implement in the future, in no particular order
 
 - [x] Model selection and enhancements customization.
 - [x] Support different preview layouts.
+- [x] Add new model for light adjustment.
 - [ ] Crop and rotate images in the GUI.
-- [ ] Add new models for denoise, sharpening, light, and color correction.
+- [ ] Add new models for denoise, sharpening, and color correction.
 - [ ] Simplify the app installation using packages and installers.
 - [ ] Add app preferences so you don't have to configure them every time.
 - [ ] Enable TensorRT acceleration when pre warm-up is implemented.

@@ -34,7 +34,7 @@ func SuggestEnhancements(input *types.ImageData) ([]types.Operation, error) {
 		return nil, err
 	}
 	operations = append(operations, upOp...)
-	
+
 	return operations, nil
 }
 
