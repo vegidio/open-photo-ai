@@ -1,6 +1,6 @@
 import { CancellablePromise } from '@wailsio/runtime';
 import { SuggestEnhancements } from '@/bindings/gui/services/imageservice.ts';
-import { Athens, Kyoto, type Operation, Saitama, Santorini, Tokyo } from '@/operations';
+import { Athens, Kyoto, type Operation, Paris, Saitama, Santorini, Tokyo } from '@/operations';
 
 export const suggestEnhancement = (filePath: string) => {
     let p: CancellablePromise<string[]>;
@@ -35,6 +35,11 @@ const idsToOperations = (opIds: string[]): Operation[] => {
 
             case 'santorini':
                 operations.push(new Santorini(values[2]));
+                break;
+
+            // Light Adjustment
+            case 'paris':
+                operations.push(new Paris(parseFloat(values[2]), values[3]));
                 break;
 
             // Upscale
