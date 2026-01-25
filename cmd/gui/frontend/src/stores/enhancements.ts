@@ -44,21 +44,22 @@ export const useEnhancementStore = create(
                 set((state) => {
                     const existingOps = state.enhancements.get(file) ?? [];
 
-                    // Check if there's already an upscale operation;
-                    // Upscale operations should always be the last to be processed
-                    const firstUpscaleIndex = existingOps.findIndex((op) => op.id.startsWith('up'));
+                    // Combine existing and new operations
+                    const allOps = [...existingOps, ...operations];
 
-                    // If there's an upscale operation, insert before it; otherwise add at the end
-                    if (firstUpscaleIndex !== -1) {
-                        const newOps = [
-                            ...existingOps.slice(0, firstUpscaleIndex),
-                            ...operations,
-                            ...existingOps.slice(firstUpscaleIndex),
-                        ];
-                        state.enhancements.set(file, newOps);
-                    } else {
-                        state.enhancements.set(file, [...existingOps, ...operations]);
-                    }
+                    // Sort operations by prefix priority: fr -> la -> up
+                    const sortedOps = allOps.sort((a, b) => {
+                        const getPriority = (op: Operation) => {
+                            if (op.id.startsWith('fr')) return 0;
+                            if (op.id.startsWith('la')) return 1;
+                            if (op.id.startsWith('up')) return 2;
+                            return 3; // Any other prefix goes last
+                        };
+
+                        return getPriority(a) - getPriority(b);
+                    });
+
+                    state.enhancements.set(file, sortedOps);
                 });
             },
 
