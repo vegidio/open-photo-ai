@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { AppBar, Toolbar, Typography } from '@mui/material';
 import { Browser } from '@wailsio/runtime';
-import { NavbarAbout } from './NavbarAbout.tsx';
 import { IsOutdated } from '@/bindings/gui/services/appservice.ts';
 import { Button } from '@/components/atoms/Button';
+import { NavbarAbout } from '@/components/molecules/NavbarAbout';
+import { NavbarCurrentFile } from '@/components/molecules/NavbarCurrentFile';
+import { useFileStore } from '@/stores';
 import { os, version } from '@/utils/constants.ts';
 
 export const Navbar = () => {
+    const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
+
     const [openAbout, setOpenAbout] = useState(false);
     const [updateAvailable, setUpdateAvailable] = useState(false);
 
@@ -26,7 +30,11 @@ export const Navbar = () => {
         <>
             <AppBar position='static'>
                 <Toolbar className={`min-h-12 ${os === 'darwin' ? 'pl-[86px]' : ''}`}>
-                    <Typography className='grow mt-1'>Open Photo AI</Typography>
+                    <div className='flex flex-row items-center mt-1 h-full grow'>
+                        <Typography>Open Photo AI</Typography>
+
+                        {currentFile && <NavbarCurrentFile file={currentFile} className='ml-4' />}
+                    </div>
 
                     <div className='mt-0.5 flex flex-row items-center gap-3'>
                         <Button option='text' size='small' onClick={onAboutClick}>

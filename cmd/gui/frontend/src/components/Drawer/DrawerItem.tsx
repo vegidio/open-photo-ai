@@ -1,12 +1,11 @@
 import { type ChangeEvent, type MouseEvent, useEffect, useState } from 'react';
-import { Checkbox, Divider, IconButton, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
+import { Checkbox, IconButton, Typography } from '@mui/material';
 import { basename } from 'pathe';
 import { IoIosMore } from 'react-icons/io';
 import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
-import { useDrawerStore, useFileStore } from '@/stores';
-import { os } from '@/utils/constants.ts';
+import { MenuFileOptions } from '@/components/molecules/MenuFileOptions';
+import { useFileStore } from '@/stores';
 import { getImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
@@ -99,75 +98,20 @@ const BottomBar = ({ file, selected = false, className = '' }: BottomBarProps) =
                 </IconButton>
             </div>
 
-            <OptionsMenu file={file} anchorEl={anchorEl} open={open} onMenuClose={onMenuClose} />
+            <MenuFileOptions
+                file={file}
+                anchorEl={anchorEl}
+                open={open}
+                anchorOrigin={{
+                    vertical: 'center',
+                    horizontal: 'center',
+                }}
+                transformOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                }}
+                onMenuClose={onMenuClose}
+            />
         </>
-    );
-};
-
-type OptionsMenuProps = {
-    file: File;
-    anchorEl: HTMLElement | null;
-    open: boolean;
-    onMenuClose: () => void;
-};
-
-const OptionsMenu = ({ file, anchorEl, open, onMenuClose }: OptionsMenuProps) => {
-    const removeFile = useFileStore((state) => state.removeFile);
-    const clear = useFileStore((state) => state.clear);
-    const setOpen = useDrawerStore((state) => state.setOpen);
-
-    const updateDrawer = () => {
-        onMenuClose();
-        if (useFileStore.getState().files.length === 0) setOpen(false);
-    };
-
-    const onCloseImage = () => {
-        removeFile(file);
-        updateDrawer();
-    };
-
-    const onCloseAllImages = () => {
-        clear();
-        updateDrawer();
-    };
-
-    const onReveal = () => {
-        RevealInFileManager(file.Path);
-        onMenuClose();
-    };
-
-    const fmName = os === 'darwin' ? 'Finder' : os === 'windows' ? 'Explorer' : 'File Manager';
-
-    const options = [
-        { name: 'Close image', action: onCloseImage },
-        { name: 'Close all images', action: onCloseAllImages },
-        { name: undefined },
-        { name: `Show in ${fmName}`, action: onReveal },
-    ];
-
-    return (
-        <Menu
-            anchorEl={anchorEl}
-            open={open}
-            onClose={onMenuClose}
-            anchorOrigin={{
-                vertical: 'center',
-                horizontal: 'center',
-            }}
-            transformOrigin={{
-                vertical: 'bottom',
-                horizontal: 'left',
-            }}
-        >
-            {options.map((option) =>
-                option.name ? (
-                    <MenuItem key={option.name} onClick={option.action}>
-                        <ListItemText slotProps={{ primary: { className: 'text-[13px]' } }}>{option.name}</ListItemText>
-                    </MenuItem>
-                ) : (
-                    <Divider key='divider' />
-                ),
-            )}
-        </Menu>
     );
 };
