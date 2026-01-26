@@ -5,6 +5,7 @@ import { IsOutdated } from '@/bindings/gui/services/appservice.ts';
 import { Button } from '@/components/atoms/Button';
 import { NavbarAbout } from '@/components/molecules/NavbarAbout';
 import { NavbarCurrentFile } from '@/components/molecules/NavbarCurrentFile';
+import { NavbarDimensions } from '@/components/molecules/NavbarDimensions';
 import { useFileStore } from '@/stores';
 import { os, version } from '@/utils/constants.ts';
 
@@ -30,18 +31,22 @@ export const Navbar = () => {
         <>
             <AppBar position='static'>
                 <Toolbar className={`min-h-12 ${os === 'darwin' ? 'pl-[86px]' : ''}`}>
+                    {/* Left side */}
                     <div className='flex flex-row items-center mt-1 h-full grow'>
                         <Typography>Open Photo AI</Typography>
 
                         {currentFile && <NavbarCurrentFile file={currentFile} className='ml-4' />}
                     </div>
 
-                    <div className='mt-0.5 flex flex-row items-center gap-3'>
+                    {/* Right side */}
+                    <div className='mt-1 flex flex-row h-full items-center gap-3'>
+                        {currentFile && <NavbarDimensions file={currentFile} />}
+
                         <Button option='text' size='small' onClick={onAboutClick}>
                             About
                         </Button>
 
-                        <Typography variant='caption' className='text-[#545454] mt-0.5'>
+                        <Typography variant='caption' className='text-[#545454]'>
                             v{version}
                         </Typography>
 

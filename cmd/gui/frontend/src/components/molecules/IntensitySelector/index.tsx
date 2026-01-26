@@ -57,7 +57,7 @@ export const IntensitySelector = ({ value, onChange }: IntensitySelectorProps) =
                     size='small'
                     min={-100}
                     max={100}
-                    step={1}
+                    step={5}
                     marks={[{ value: 0, label: '0' }]}
                     track={false}
                     valueLabelDisplay='auto'

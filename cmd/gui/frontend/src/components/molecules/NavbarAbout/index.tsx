@@ -56,7 +56,7 @@ export const NavbarAbout = ({ open, onClose }: NavbarAboutProps) => {
                 </div>
 
                 <div className='flex flex-col mt-2 gap-1 items-center text-[#b0b0b0]'>
-                    <Typography className='text-sm'>© 2025, Vinicius Egidio</Typography>
+                    <Typography className='text-sm'>© 2025-2026, Vinicius Egidio</Typography>
 
                     <div className='flex flex-row gap-2'>
                         <Link

@@ -105,7 +105,8 @@ const opToEnhancement = (op: Operation): { name: string; info: string; icon: Rea
 
         // Upscale
         case op.id.startsWith('up'): {
-            const info = `${titleCase(op.options.name)}, ${op.options.scale}x, ${quality}`;
+            const scale = parseFloat(parseFloat(op.options.scale).toFixed(3));
+            const info = `${titleCase(op.options.name)}, ${scale}x, ${quality}`;
             return { name: 'Upscale', info, icon: <Icon option='upscale' /> };
         }
     }
