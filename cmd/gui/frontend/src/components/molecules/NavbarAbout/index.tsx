@@ -1,7 +1,7 @@
-import { Dialog, DialogTitle, Divider, IconButton, Link, Typography } from '@mui/material';
+import { Dialog, Divider, Link, Typography } from '@mui/material';
 import { Browser } from '@wailsio/runtime';
-import { MdClose } from 'react-icons/md';
 import icon from '@/assets/icon.avif';
+import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { version } from '@/utils/constants.ts';
 
 type NavbarAboutProps = {
@@ -20,28 +20,11 @@ export const NavbarAbout = ({ open, onClose }: NavbarAboutProps) => {
             }}
             slotProps={{
                 paper: {
-                    className: 'bg-[#212121] w-96 max-w-full',
-                    sx: {
-                        backgroundImage: 'none',
-                    },
+                    className: 'bg-[#212121] w-96 max-w-full bg-none',
                 },
             }}
         >
-            <DialogTitle className='p-3 text-xs text-[#9e9e9e]'>About</DialogTitle>
-
-            <IconButton
-                onClick={onClose}
-                sx={(theme) => ({
-                    position: 'absolute',
-                    right: 4,
-                    top: 2,
-                    color: theme.palette.grey[500],
-                })}
-            >
-                <MdClose className='size-5' />
-            </IconButton>
-
-            <Divider />
+            <ModalTitle title='About' onClose={onClose} />
 
             <div className='flex flex-col p-6 pt-2.5 gap-4 items-center'>
                 <img src={icon} alt='App Icon' className='size-36' />
@@ -56,7 +39,7 @@ export const NavbarAbout = ({ open, onClose }: NavbarAboutProps) => {
                 </div>
 
                 <div className='flex flex-col mt-2 gap-1 items-center text-[#b0b0b0]'>
-                    <Typography className='text-sm'>© 2025-2026, Vinicius Egidio</Typography>
+                    <Typography className='text-sm'>© 2025—2026, Vinicius Egidio</Typography>
 
                     <div className='flex flex-row gap-2'>
                         <Link

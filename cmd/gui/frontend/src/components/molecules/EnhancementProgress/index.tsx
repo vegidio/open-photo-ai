@@ -32,10 +32,7 @@ export const EnhancementProgress = () => {
     return (
         <Paper
             elevation={8}
-            className='absolute flex top-4 right-4 w-32 h-7 items-center justify-center rounded-lg z-10'
-            sx={{
-                backgroundImage: 'none',
-            }}
+            className='bg-none absolute flex top-4 right-4 w-32 h-7 items-center justify-center rounded-lg z-10'
         >
             <LinearProgress variant='determinate' value={progress.value} className='size-full rounded-[5px]' />
             <Typography variant='subtitle2' className='absolute text-gray-700'>

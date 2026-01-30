@@ -6,18 +6,16 @@ import { Button } from '@/components/atoms/Button';
 import { NavbarAbout } from '@/components/molecules/NavbarAbout';
 import { NavbarCurrentFile } from '@/components/molecules/NavbarCurrentFile';
 import { NavbarDimensions } from '@/components/molecules/NavbarDimensions';
+import { Settings } from '@/components/template/Settings';
 import { useFileStore } from '@/stores';
 import { os, version } from '@/utils/constants.ts';
 
 export const Navbar = () => {
     const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
 
+    const [openSettings, setOpenSettings] = useState(false);
     const [openAbout, setOpenAbout] = useState(false);
     const [updateAvailable, setUpdateAvailable] = useState(false);
-
-    const onAboutClick = () => {
-        setOpenAbout(true);
-    };
 
     const onUpdateClick = () => {
         Browser.OpenURL('https://github.com/vegidio/open-photo-ai/releases');
@@ -42,7 +40,11 @@ export const Navbar = () => {
                     <div className='mt-1 flex flex-row h-full items-center gap-3'>
                         {currentFile && <NavbarDimensions file={currentFile} />}
 
-                        <Button option='text' size='small' onClick={onAboutClick}>
+                        <Button option='text' size='small' onClick={() => setOpenSettings(true)}>
+                            Settings
+                        </Button>
+
+                        <Button option='text' size='small' onClick={() => setOpenAbout(true)}>
                             About
                         </Button>
 
@@ -59,7 +61,9 @@ export const Navbar = () => {
                 </Toolbar>
             </AppBar>
 
-            <NavbarAbout open={openAbout} onClose={() => setOpenAbout(false)} />
+            {openAbout && <NavbarAbout open={true} onClose={() => setOpenAbout(false)} />}
+
+            {openSettings && <Settings section='application' open={true} onClose={() => setOpenSettings(false)} />}
         </>
     );
 };

@@ -1,9 +1,9 @@
-import { Dialog, DialogTitle, Divider, IconButton } from '@mui/material';
-import { MdClose } from 'react-icons/md';
+import { Dialog, Divider } from '@mui/material';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { ExportQueue } from '@/components/Export/ExportQueue.tsx';
 import { ExportSettings } from '@/components/Export/ExportSettings.tsx';
+import { ModalTitle } from '@/components/molecules/ModalTitle';
 
 type ExportProps = {
     enhancements: Map<File, Operation[]>;
@@ -22,28 +22,11 @@ export const Export = ({ enhancements, open, onClose }: ExportProps) => {
             }}
             slotProps={{
                 paper: {
-                    className: 'bg-[#212121] w-[70rem] h-[40rem] max-w-full',
-                    sx: {
-                        backgroundImage: 'none',
-                    },
+                    className: 'bg-[#212121] w-[70rem] h-[40rem] max-w-full bg-none',
                 },
             }}
         >
-            <DialogTitle className='p-3 text-xs text-[#9e9e9e]'>Export</DialogTitle>
-
-            <IconButton
-                onClick={onClose}
-                sx={(theme) => ({
-                    position: 'absolute',
-                    right: 4,
-                    top: 2,
-                    color: theme.palette.grey[500],
-                })}
-            >
-                <MdClose className='size-5' />
-            </IconButton>
-
-            <Divider />
+            <ModalTitle title='Export' onClose={onClose} />
 
             <div className='flex flex-row h-full overflow-hidden'>
                 <ExportQueue enhancements={enhancements} className='flex-1' />
