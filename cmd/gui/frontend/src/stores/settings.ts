@@ -1,14 +1,32 @@
 import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
+import type { SupportedEPs } from '@/bindings/gui/services';
+import type { SelectItem } from '@/components/atoms/Select';
+import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
+import { os } from '@/utils/constants';
+
+const {
+    ExecutionProviderCUDA,
+    ExecutionProviderDirectML,
+    ExecutionProviderTensorRT,
+    ExecutionProviderCoreML,
+    ExecutionProviderAuto,
+    ExecutionProviderCPU,
+} = ExecutionProvider;
 
 type SettingsStore = {
-    processor: string;
+    isFirstRun: boolean;
+    processorSelectItems: SelectItem[];
+    executionProvider: ExecutionProvider;
+
     frModel: string;
     laModel: string;
     upModel: string;
 
-    setProcessor: (processor: string) => void;
+    setIsFirstRun: (isFirstRun: boolean) => void;
+    setProcessorSelectItems: (supportedEps: SupportedEPs) => void;
+    setExecutionProvider: (epStr: string) => void;
     setFrModel: (model: string) => void;
     setLaModel: (model: string) => void;
     setUpModel: (model: string) => void;
@@ -23,14 +41,41 @@ export const useSettingsStore = create(
             let snapshot: Record<string, any> = {};
 
             return {
-                processor: 'cpu',
+                isFirstRun: true,
+                processorSelectItems: [],
+                executionProvider: ExecutionProviderAuto,
                 frModel: 'athens',
                 laModel: 'paris',
                 upModel: 'kyoto',
 
-                setProcessor: (processor: string) => {
+                setIsFirstRun: (isFirstRun: boolean) => {
                     set((state) => {
-                        state.processor = processor;
+                        state.isFirstRun = isFirstRun;
+                    });
+                },
+
+                setProcessorSelectItems: (supportedEps: SupportedEPs) => {
+                    const items: SelectItem[] = [{ label: 'Auto', value: ExecutionProviderAuto.toString() }];
+
+                    if (supportedEps.TensorRT)
+                        items.push({ label: 'TensorRT', value: ExecutionProviderTensorRT.toString() });
+                    if (supportedEps.CUDA) items.push({ label: 'CUDA', value: ExecutionProviderCUDA.toString() });
+                    if (supportedEps.CoreML) items.push({ label: 'CoreML', value: ExecutionProviderCoreML.toString() });
+                    if (os === 'windows')
+                        items.push({ label: 'DirectML', value: ExecutionProviderDirectML.toString() });
+
+                    items.push({ label: 'CPU', value: ExecutionProviderCPU.toString() });
+
+                    set((state) => {
+                        state.processorSelectItems = items;
+                    });
+                },
+
+                setExecutionProvider: (epStr: string) => {
+                    const ep: ExecutionProvider = parseInt(epStr, 10);
+
+                    set((state) => {
+                        state.executionProvider = ep;
                     });
                 },
 

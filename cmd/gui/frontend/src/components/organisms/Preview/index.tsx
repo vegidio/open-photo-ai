@@ -5,7 +5,7 @@ import { EnhancementProgress } from '@/components/molecules/EnhancementProgress'
 import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
 import { PreviewImage } from '@/components/organisms/PreviewImage';
 import { useNotify } from '@/hooks/useNotify.ts';
-import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
+import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 
@@ -26,6 +26,8 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         currentFile ? (state.enhancements.get(currentFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
     );
 
+    const ep = useSettingsStore((state) => state.executionProvider);
+
     const [isRunning, setIsRunning] = useState(false);
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: enqueueSnackbar
@@ -43,7 +45,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                     setIsRunning(true);
 
                     const opIds = operations.map((op) => op.id);
-                    p = getEnhancedImage(currentFile, ...opIds);
+                    p = getEnhancedImage(currentFile, ep, ...opIds);
 
                     try {
                         const enhancedImage = await p;

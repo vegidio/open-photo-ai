@@ -11,3 +11,7 @@ export {
     ImageService,
     OsService
 };
+
+export {
+    SupportedEPs
+} from "./models.js";

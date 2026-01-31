@@ -1,6 +1,6 @@
 import { CancellablePromise } from '@wailsio/runtime';
+import type { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import type { File } from '@/bindings/gui/types';
-import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { GetImage, ProcessImage } from '@/bindings/gui/services/imageservice.ts';
 
 export type ImageData = {
@@ -38,10 +38,11 @@ export const getImage = async (file: File, size: number) => {
  * Returns a cancellable promise that can be aborted if the operation is no longer needed.
  *
  * @param file - The file object containing the image path and hash.
+ * @param ep - The execution provider to use for image processing.
  * @param operations - The image processing operations to apply.
  * @returns A cancellable promise that resolves to the image data (url, width, height).
  */
-export const getEnhancedImage = (file: File, ...operations: string[]) => {
+export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operations: string[]) => {
     const opIds = operations.join('_');
     const cacheKey = `${file.Hash}_${opIds}`;
 
@@ -51,7 +52,7 @@ export const getEnhancedImage = (file: File, ...operations: string[]) => {
     return new CancellablePromise<ImageData>(
         async (resolve, reject) => {
             if (!image) {
-                p = ProcessImage(file.Path, ExecutionProvider.ExecutionProviderAuto, ...operations);
+                p = ProcessImage(file.Path, ep, ...operations);
 
                 try {
                     const [base64, width, height] = await p;

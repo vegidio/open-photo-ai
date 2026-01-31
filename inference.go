@@ -26,6 +26,7 @@ import (
 // # Parameters:
 //   - ctx: A context object that can be used to cancel the operation.
 //   - input: The input image data to be processed.
+//   - ep: The execution provider (CPU, CUDA, etc.) to use for inference.
 //   - onProgress: A callback function called with the progress of the current operation (0-1).
 //   - operations: A variable number of operations to apply sequentially.
 //
@@ -80,6 +81,7 @@ func Process(
 // # Parameters:
 //   - ctx: A context object that can be used to cancel the operation.
 //   - input: The input image data to be processed.
+//   - ep: The execution provider (CPU, CUDA, etc.) to use for inference.
 //   - onProgress: A callback function called with the progress of the current operation (0-1).
 //   - operation: The operation to apply to the image.
 //

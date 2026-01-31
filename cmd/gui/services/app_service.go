@@ -19,6 +19,7 @@ type AppService struct {
 type SupportedEPs struct {
 	CUDA     bool
 	TensorRT bool
+	CoreML   bool
 }
 
 func NewAppService(app *application.App, tel *o11y.Telemetry) *AppService {
@@ -28,7 +29,9 @@ func NewAppService(app *application.App, tel *o11y.Telemetry) *AppService {
 	}
 }
 
-func (s *AppService) Initialize() error {
+func (s *AppService) Initialize() (SupportedEPs, error) {
+	supportedEPs := SupportedEPs{}
+
 	onProgress := func(_, _ int64, percent float64) {
 		s.app.Event.Emit("app:download", "ONNX Runtime", percent)
 	}
@@ -37,27 +40,36 @@ func (s *AppService) Initialize() error {
 	if err := opai.Initialize(shared.AppName, onProgress); err != nil {
 		s.tel.LogError("Error initializing ONNX", nil, err)
 		s.app.Event.Emit("app:download:error")
-		return err
+		return supportedEPs, err
 	}
 
 	// Initialize CUDA and TensorRT if they are supported
 	if utils.IsCudaSupported() {
+		supportedEPs.CUDA = true
+
 		if err := s.initializeCuda(); err != nil {
 			s.tel.LogError("Error initializing CUDA", nil, err)
 			s.app.Event.Emit("app:download:error")
-			return err
+			return supportedEPs, err
 		}
 	}
 
-	//if utils.IsTensorRtSupported() {
-	//	if err := s.initializeTensorRT(); err != nil {
-	//		s.tel.LogError("Error initializing TensorRT", nil, err)
-	//		s.app.Event.Emit("app:download:error")
-	//		return err
-	//	}
-	//}
+	if utils.IsTensorRtSupported() {
+		supportedEPs.TensorRT = true
 
-	return nil
+		if err := s.initializeTensorRT(); err != nil {
+			s.tel.LogError("Error initializing TensorRT", nil, err)
+			s.app.Event.Emit("app:download:error")
+			return supportedEPs, err
+		}
+	}
+
+	// Check if CoreML is supported (macOS only)
+	if utils.IsCoreMLSupported() {
+		supportedEPs.CoreML = true
+	}
+
+	return supportedEPs, nil
 }
 
 func (s *AppService) Version() string {

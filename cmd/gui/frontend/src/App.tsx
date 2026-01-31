@@ -6,8 +6,11 @@ import { DownloadDialog } from '@/components/organisms/DownloadDialog';
 import { Navbar } from '@/components/organisms/Navbar';
 import { Preview } from '@/components/organisms/Preview';
 import { Sidebar } from '@/components/Sidebar';
+import { useSettingsStore } from '@/stores';
 
 export const App = () => {
+    const setProcessorSelectItems = useSettingsStore((state) => state.setProcessorSelectItems);
+
     const containerRef = useRef<HTMLDivElement>(null);
     const [isContainerReady, setIsContainerReady] = useState(false);
     const [openDownload, setOpenDownload] = useState(false);
@@ -24,7 +27,8 @@ export const App = () => {
 
         const initDependencies = async () => {
             try {
-                await Initialize();
+                const supportedEps = await Initialize();
+                setProcessorSelectItems(supportedEps);
                 setOpenDownload(false);
             } catch {
                 console.error('Failed to initialize the app');
@@ -37,7 +41,7 @@ export const App = () => {
             Events.Off('app:download');
             Events.Off('app:download:error');
         };
-    }, []);
+    }, [setProcessorSelectItems]);
 
     return (
         <div className='flex h-screen flex-col'>

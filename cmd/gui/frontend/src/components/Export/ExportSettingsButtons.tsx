@@ -3,7 +3,7 @@ import { Button } from '@mui/material';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { Operation } from '@/operations';
 import type { ExportSettingsProps } from './ExportSettings.tsx';
-import { useExportStore } from '@/stores';
+import { useExportStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { exportImage } from '@/utils/export.ts';
 
@@ -14,6 +14,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
     const location = useExportStore((state) => state.location);
     const overwrite = useExportStore((state) => state.overwrite);
     const resetKey = useExportStore((state) => state.resetKey);
+    const ep = useSettingsStore((state) => state.executionProvider);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | null>(null);
@@ -52,7 +53,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
                     operations.push(...suggestions);
                 }
 
-                exportRef.current = exportImage(file, operations, overwrite, format, prefix, suffix, location);
+                exportRef.current = exportImage(file, ep, operations, overwrite, format, prefix, suffix, location);
                 await exportRef.current;
             } catch (e) {
                 if (e instanceof CancelError) {

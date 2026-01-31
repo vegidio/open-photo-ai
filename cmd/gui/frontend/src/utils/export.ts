@@ -1,7 +1,7 @@
 import { basename, dirname, extname, join } from 'pathe';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
-import { ExecutionProvider, ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
+import { type ExecutionProvider, ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { ExportImage } from '@/bindings/gui/services/imageservice.ts';
 
 export const getExportEligible = (selectedFiles: File[], enhancements: Map<File, Operation[]>, autopilot: boolean) => {
@@ -29,6 +29,7 @@ export const getExportInfo = (file: File, format: string, prefix: string, suffix
 
 export const exportImage = (
     file: File,
+    ep: ExecutionProvider,
     operations: Operation[],
     overwrite: boolean,
     format: string,
@@ -40,7 +41,7 @@ export const exportImage = (
     const imgFormat = getImageFormat(ext);
     const opIds = operations.map((op) => op.id);
 
-    return ExportImage(file, filePath, ExecutionProvider.ExecutionProviderAuto, overwrite, imgFormat, ...opIds);
+    return ExportImage(file, filePath, ep, overwrite, imgFormat, ...opIds);
 };
 
 const getImageFormat = (ext: string) => {

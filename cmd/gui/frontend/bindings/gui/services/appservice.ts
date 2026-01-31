@@ -5,8 +5,14 @@
 // @ts-ignore: Unused imports
 import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
-export function Initialize(): $CancellablePromise<void> {
-    return $Call.ByID(3426585365);
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
+export function Initialize(): $CancellablePromise<$models.SupportedEPs> {
+    return $Call.ByID(3426585365).then(($result: any) => {
+        return $$createType0($result);
+    });
 }
 
 export function IsOutdated(): $CancellablePromise<boolean> {
@@ -16,3 +22,6 @@ export function IsOutdated(): $CancellablePromise<boolean> {
 export function Version(): $CancellablePromise<string> {
     return $Call.ByID(3408143585);
 }
+
+// Private type creation functions
+const $$createType0 = $models.SupportedEPs.createFrom;

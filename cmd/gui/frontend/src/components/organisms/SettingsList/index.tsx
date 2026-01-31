@@ -1,11 +1,11 @@
+import { useMemo } from 'react';
 import { List, ListSubheader } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps';
+import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { SettingsItemSelect } from '@/components/molecules/SettingsItemSelect';
 import { useSettingsStore } from '@/stores';
 
 export const SettingsList = ({ className = '' }: TailwindProps) => {
-    const processor = useSettingsStore((state) => state.processor);
-    const setProcessor = useSettingsStore((state) => state.setProcessor);
     const frModel = useSettingsStore((state) => state.frModel);
     const setFrModel = useSettingsStore((state) => state.setFrModel);
     const laModel = useSettingsStore((state) => state.laModel);
@@ -17,26 +17,7 @@ export const SettingsList = ({ className = '' }: TailwindProps) => {
         <List className={`${className} py-0 w-full`}>
             <ListSubheader className='bg-[#2b2b2b] text-[#f2f2f2]'>Application</ListSubheader>
 
-            <SettingsItemSelect
-                title='AI Processor'
-                description='Select the AI processor to use for the enhancements.'
-                items={[
-                    {
-                        value: 'tensorrt',
-                        label: 'TensorRT',
-                    },
-                    {
-                        value: 'cuda',
-                        label: 'CUDA',
-                    },
-                    {
-                        value: 'cpu',
-                        label: 'CPU',
-                    },
-                ]}
-                selected={processor}
-                onSelect={(value) => setProcessor(value)}
-            />
+            <ItemAiProcessor />
 
             <ListSubheader className='bg-[#2b2b2b] text-[#f2f2f2]'>Enhancements</ListSubheader>
 
@@ -91,5 +72,42 @@ export const SettingsList = ({ className = '' }: TailwindProps) => {
                 onSelect={(value) => setUpModel(value)}
             />
         </List>
+    );
+};
+
+const ItemAiProcessor = () => {
+    const processorSelectItems = useSettingsStore((state) => state.processorSelectItems);
+    const executionProvider = useSettingsStore((state) => state.executionProvider);
+    const setExecutionProvider = useSettingsStore((state) => state.setExecutionProvider);
+
+    const description = useMemo(() => {
+        const base = 'Select the AI processor that will orchestrate the models.';
+
+        switch (executionProvider) {
+            case ExecutionProvider.ExecutionProviderAuto:
+                return `${base} "Auto" will try to detect the best processor for your system.`;
+            case ExecutionProvider.ExecutionProviderTensorRT:
+                return `${base} TensorRT is very fast, but on the first run it will take some time to create the model graph; on subsequent runs it will be much faster.`;
+            case ExecutionProvider.ExecutionProviderCUDA:
+                return `${base} CUDA has strong performance and flexibility, good default if TensorRT is unavailable.`;
+            case ExecutionProvider.ExecutionProviderDirectML:
+                return `${base} DirectML is a good option when you don't have a dedicated GPU.`;
+            case ExecutionProvider.ExecutionProviderCoreML:
+                return `${base} CoreML is usually much faster than CPU, but it doesn't support all models.`;
+            case ExecutionProvider.ExecutionProviderCPU:
+                return `${base} CPU is the slowest option, but it supports all models.`;
+            default:
+                return base;
+        }
+    }, [executionProvider]);
+
+    return (
+        <SettingsItemSelect
+            title='AI Processor'
+            description={description}
+            items={processorSelectItems}
+            selected={executionProvider.toString()}
+            onSelect={(value) => setExecutionProvider(value)}
+        />
     );
 };
