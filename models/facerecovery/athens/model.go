@@ -26,8 +26,8 @@ type Athens struct {
 	fdModel   types.Model[[]facedetection.Face]
 }
 
-func New(operation types.Operation, onProgress types.DownloadProgress) (*Athens, error) {
-	fdModel, modelFile, err := facerecovery.LoadModel(operation, onProgress)
+func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Athens, error) {
+	fdModel, modelFile, err := facerecovery.LoadModel(operation, ep, onProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -36,6 +36,7 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Athens,
 		modelFile,
 		[]string{"input", "weight"},
 		[]string{"output"},
+		ep,
 	)
 	if err != nil {
 		return nil, err

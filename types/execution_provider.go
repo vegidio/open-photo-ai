@@ -28,7 +28,7 @@ const (
 	// Available on macOS and iOS devices with Apple Silicon or Intel processors.
 	ExecutionProviderCoreML
 
-	// ExecutionProviderBest automatically selects the best available execution provider
+	// ExecutionProviderAuto automatically selects the best available execution provider
 	// based on the current system's hardware and installed dependencies.
-	ExecutionProviderBest
+	ExecutionProviderAuto
 )

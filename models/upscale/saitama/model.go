@@ -21,7 +21,7 @@ type Saitama struct {
 	scales    []int
 }
 
-func New(operation types.Operation, onProgress types.DownloadProgress) (*Saitama, error) {
+func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Saitama, error) {
 	op := operation.(OpUpSaitama)
 	name := fmt.Sprintf("Upscale %.4gx (%s)",
 		op.scale,
@@ -50,6 +50,7 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Saitama
 			modelFile,
 			[]string{"input"},
 			[]string{"output"},
+			ep,
 		)
 		if err != nil {
 			return nil, err

@@ -16,6 +16,11 @@ type AppService struct {
 	tel *o11y.Telemetry
 }
 
+type SupportedEPs struct {
+	CUDA     bool
+	TensorRT bool
+}
+
 func NewAppService(app *application.App, tel *o11y.Telemetry) *AppService {
 	return &AppService{
 		app: app,

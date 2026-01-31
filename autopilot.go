@@ -43,7 +43,7 @@ func SuggestEnhancements(input *types.ImageData) ([]types.Operation, error) {
 func analyseFaceRecovery(input *types.ImageData) ([]types.Operation, error) {
 	operation := make([]types.Operation, 0)
 
-	model, err := facerecovery.GetFdModel()
+	model, err := facerecovery.GetFdModel(types.ExecutionProviderAuto)
 	if err != nil {
 		return nil, err
 	}

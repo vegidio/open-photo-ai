@@ -26,7 +26,7 @@ type NewYork struct {
 	session   *ort.DynamicAdvancedSession
 }
 
-func New(operation types.Operation, onProgress types.DownloadProgress) (*NewYork, error) {
+func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*NewYork, error) {
 	op := operation.(OpFdNewYork)
 	modelFile := op.Id() + ".onnx"
 	name := fmt.Sprintf("New York (%s)", cases.Upper(language.English).String(string(op.precision)))
@@ -45,6 +45,7 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*NewYork
 		modelFile,
 		[]string{"input"},
 		[]string{"loc", "conf", "landmarks"},
+		ep,
 	)
 	if err != nil {
 		return nil, err

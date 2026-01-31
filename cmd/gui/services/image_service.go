@@ -81,12 +81,17 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 //   - int: The width of the processed image.
 //   - int: The height of the processed image.
 //   - error: An error if the inference fails or the image cannot be processed.
-func (s *ImageService) ProcessImage(ctx context.Context, filePath string, opIds ...string) ([]byte, int, int, error) {
+func (s *ImageService) ProcessImage(
+	ctx context.Context,
+	filePath string,
+	ep types.ExecutionProvider,
+	opIds ...string,
+) ([]byte, int, int, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, 0, 0, err
 	}
 
-	outputData, err := s.runInference(ctx, filePath, opIds)
+	outputData, err := s.runInference(ctx, filePath, ep, opIds)
 	if err != nil {
 		s.tel.LogError("Error running inference", map[string]any{
 			"operations": strings.Join(opIds, ", "),
@@ -155,6 +160,7 @@ func (s *ImageService) ExportImage(
 	ctx context.Context,
 	file guitypes.File,
 	outputPath string,
+	ep types.ExecutionProvider,
 	overwrite bool,
 	format types.ImageFormat,
 	opIds ...string,
@@ -166,7 +172,7 @@ func (s *ImageService) ExportImage(
 	eventName := fmt.Sprintf("app:export:%s", file.Hash)
 	s.app.Event.Emit(eventName, "RUNNING", 0.1)
 
-	outputData, err := s.runInference(ctx, file.Path, opIds)
+	outputData, err := s.runInference(ctx, file.Path, ep, opIds)
 	if err != nil {
 		s.tel.LogError("Error running inference", map[string]any{
 			"operations": strings.Join(opIds, ", "),
@@ -196,7 +202,12 @@ func (s *ImageService) ExportImage(
 
 // region - Private methods
 
-func (s *ImageService) runInference(ctx context.Context, filePath string, opIds []string) (*types.ImageData, error) {
+func (s *ImageService) runInference(
+	ctx context.Context,
+	filePath string,
+	ep types.ExecutionProvider,
+	opIds []string,
+) (*types.ImageData, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -207,7 +218,7 @@ func (s *ImageService) runInference(ctx context.Context, filePath string, opIds 
 	}
 
 	operations := guiutils.IdsToOperations(opIds)
-	outputData, err := opai.Process(ctx, inputImage, func(name string, progress float64) {
+	outputData, err := opai.Process(ctx, inputImage, ep, func(name string, progress float64) {
 		s.app.Event.Emit("app:progress", name, progress)
 	}, operations...)
 

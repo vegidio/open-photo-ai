@@ -11,7 +11,7 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-func CreateSession(modelFile string, inputs, outputs []string) (*ort.DynamicAdvancedSession, error) {
+func CreateSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*ort.DynamicAdvancedSession, error) {
 	configDir, err := os.UserConfigDir()
 	cachePath := filepath.Join(configDir, internal.AppName, "models")
 	var options *ort.SessionOptions
@@ -19,11 +19,11 @@ func CreateSession(modelFile string, inputs, outputs []string) (*ort.DynamicAdva
 	// Check the computer's OS
 	switch runtime.GOOS {
 	case "windows":
-		options, err = createWindowsOptions(cachePath, types.ExecutionProviderBest)
+		options, err = createWindowsOptions(cachePath, ep)
 	case "linux":
-		options, err = createLinuxOptions(cachePath, types.ExecutionProviderBest)
+		options, err = createLinuxOptions(cachePath, ep)
 	case "darwin":
-		options, err = createMacOptions(cachePath, types.ExecutionProviderBest)
+		options, err = createMacOptions(cachePath, ep)
 	}
 
 	if err != nil {
@@ -68,7 +68,7 @@ func createWindowsOptions(cachePath string, ep types.ExecutionProvider) (*ort.Se
 		_ = getDirectMLEP(cachePath, options)
 	case types.ExecutionProviderOpenVINO:
 		_ = getOpenVINOEP(cachePath, options)
-	case types.ExecutionProviderBest:
+	case types.ExecutionProviderAuto:
 		_ = getTensorRTEP(cachePath, options)
 		_ = getCudaEP(cachePath, options)
 		_ = getDirectMLEP(cachePath, options)
@@ -95,7 +95,7 @@ func createLinuxOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sess
 		_ = getCudaEP(cachePath, options)
 	case types.ExecutionProviderOpenVINO:
 		_ = getOpenVINOEP(cachePath, options)
-	case types.ExecutionProviderBest:
+	case types.ExecutionProviderAuto:
 		_ = getTensorRTEP(cachePath, options)
 		_ = getCudaEP(cachePath, options)
 		_ = getOpenVINOEP(cachePath, options)
@@ -119,7 +119,7 @@ func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sessio
 		_ = getCoreMLEP(cachePath, options)
 	case types.ExecutionProviderOpenVINO:
 		_ = getOpenVINOEP(cachePath, options)
-	case types.ExecutionProviderBest:
+	case types.ExecutionProviderAuto:
 		_ = getCoreMLEP(cachePath, options)
 		_ = getOpenVINOEP(cachePath, options)
 	default:

@@ -12,13 +12,13 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-func GetFdModel() (types.Model[[]facedetection.Face], error) {
+func GetFdModel(ep types.ExecutionProvider) (types.Model[[]facedetection.Face], error) {
 	var err error
 	fdOp := newyork.Op(types.PrecisionFp32)
 
 	model, exists := internal.Registry[fdOp.Id()]
 	if !exists {
-		model, err = newyork.New(fdOp, nil)
+		model, err = newyork.New(fdOp, ep, nil)
 		if err != nil {
 			return nil, err
 		}

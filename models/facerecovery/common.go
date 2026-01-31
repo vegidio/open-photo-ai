@@ -13,9 +13,10 @@ import (
 
 func LoadModel(
 	operation types.Operation,
+	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
 ) (types.Model[[]facedetection.Face], string, error) {
-	fdModel, err := GetFdModel()
+	fdModel, err := GetFdModel(ep)
 	if err != nil {
 		return nil, "", err
 	}

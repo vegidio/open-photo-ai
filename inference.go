@@ -39,6 +39,7 @@ import (
 func Process(
 	ctx context.Context,
 	input *types.ImageData,
+	ep types.ExecutionProvider,
 	onProgress types.InferenceProgress,
 	operations ...types.Operation,
 ) (*types.ImageData, error) {
@@ -54,7 +55,7 @@ func Process(
 			continue
 		}
 
-		output, err = runInference(ctx, output, op, onProgress)
+		output, err = runInference(ctx, output, ep, onProgress, op)
 		if err != nil {
 			return nil, err
 		}
@@ -91,14 +92,15 @@ func Process(
 //	faces, err := Execute[[]types.Face](ctx, inputImage, progressCallback, faceDetectionOp)
 func Execute[T any](
 	ctx context.Context,
-	img image.Image,
+	input *types.ImageData,
+	ep types.ExecutionProvider,
 	onProgress types.InferenceProgress,
 	operation types.Operation,
 ) (T, error) {
 	// nil value for type T
 	var genericNil T
 
-	model, err := selectModel(operation, func(_, _ int64, percent float64) {
+	model, err := selectModel(operation, ep, func(_, _ int64, percent float64) {
 		if onProgress != nil {
 			onProgress("dl", percent)
 		}
@@ -113,7 +115,7 @@ func Execute[T any](
 		return genericNil, fmt.Errorf("operation type not supported: %s", operation.Id())
 	}
 
-	return dataModel.Run(ctx, img, onProgress)
+	return dataModel.Run(ctx, input.Pixels, onProgress)
 }
 
 // CleanRegistry releases all resources held by registered models. It iterates through all models in the registry and
@@ -134,10 +136,11 @@ func CleanRegistry() {
 func runInference(
 	ctx context.Context,
 	img image.Image,
-	operation types.Operation,
+	ep types.ExecutionProvider,
 	onProgress types.InferenceProgress,
+	operation types.Operation,
 ) (image.Image, error) {
-	model, err := selectModel(operation, func(_, _ int64, percent float64) {
+	model, err := selectModel(operation, ep, func(_, _ int64, percent float64) {
 		if onProgress != nil {
 			onProgress("dl", percent)
 		}
@@ -155,7 +158,11 @@ func runInference(
 	return imageModel.Run(ctx, img, onProgress)
 }
 
-func selectModel(operation types.Operation, onProgress types.DownloadProgress) (interface{}, error) {
+func selectModel(
+	operation types.Operation,
+	ep types.ExecutionProvider,
+	onProgress types.DownloadProgress,
+) (interface{}, error) {
 	var model interface{}
 	var err error
 
@@ -167,25 +174,25 @@ func selectModel(operation types.Operation, onProgress types.DownloadProgress) (
 	switch {
 	// Face Detection
 	case strings.HasPrefix(operation.Id(), "fd_newyork"):
-		model, err = newyork.New(operation, onProgress)
+		model, err = newyork.New(operation, ep, onProgress)
 
 	// Face Recovery
 	case strings.HasPrefix(operation.Id(), "fr_athens"):
-		model, err = athens.New(operation, onProgress)
+		model, err = athens.New(operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "fr_santorini"):
-		model, err = santorini.New(operation, onProgress)
+		model, err = santorini.New(operation, ep, onProgress)
 
 	// Light Adjustment
 	case strings.HasPrefix(operation.Id(), "la_paris"):
-		model, err = paris.New(operation, onProgress)
+		model, err = paris.New(operation, ep, onProgress)
 
 	// Upscale
 	case strings.HasPrefix(operation.Id(), "up_tokyo"):
-		model, err = tokyo.New(operation, onProgress)
+		model, err = tokyo.New(operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "up_kyoto"):
-		model, err = kyoto.New(operation, onProgress)
+		model, err = kyoto.New(operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "up_saitama"):
-		model, err = saitama.New(operation, onProgress)
+		model, err = saitama.New(operation, ep, onProgress)
 
 	default:
 		err = fmt.Errorf("no model found with ID: %s", operation.Id())

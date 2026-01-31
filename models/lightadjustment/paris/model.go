@@ -22,9 +22,12 @@ type Paris struct {
 	intensity float32
 }
 
-func New(operation types.Operation, onProgress types.DownloadProgress) (*Paris, error) {
+func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Paris, error) {
 	op := operation.(OpLaParis)
+
+	// Remove the intensity from the model ID since this information is irrelevant to the model name
 	id := regexp.MustCompile(`_-?(?:0(?:\.\d+)?|1(?:\.0+)?)`).ReplaceAllString(op.Id(), "")
+
 	modelFile := id + ".onnx"
 	name := fmt.Sprintf("Paris (%s)", cases.Upper(language.English).String(string(op.precision)))
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
@@ -42,6 +45,7 @@ func New(operation types.Operation, onProgress types.DownloadProgress) (*Paris, 
 		modelFile,
 		[]string{"input"},
 		[]string{"output"},
+		ep,
 	)
 	if err != nil {
 		return nil, err
