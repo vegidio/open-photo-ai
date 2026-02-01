@@ -1,29 +1,10 @@
+import { useMemo } from 'react';
 import { ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
+import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
-import { Athens, Kyoto, type Operation, Paris } from '@/operations';
-import { useEnhancementStore, useFileStore } from '@/stores';
+import { useEnhancementStore, useFileStore, useSettingsStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
-
-const options = [
-    {
-        type: 'fr',
-        icon: <Icon option='face_recovery' />,
-        name: 'Face Recovery',
-        op: new Athens('fp32'),
-    },
-    {
-        type: 'la',
-        icon: <Icon option='light_adjustment' />,
-        name: 'Light Adjustment',
-        op: new Paris(0.5, 'fp32'),
-    },
-    {
-        type: 'up',
-        icon: <Icon option='upscale' />,
-        name: 'Upscale',
-        op: new Kyoto(4, 'fp32'),
-    },
-];
+import { getFrOp, getLaOp, getUpOp } from '@/utils/enhancement';
 
 type MenuAddEnhancementProps = {
     anchorEl: HTMLElement | null;
@@ -32,6 +13,10 @@ type MenuAddEnhancementProps = {
 };
 
 export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhancementProps) => {
+    const frModel = useSettingsStore((state) => state.frModel);
+    const laModel = useSettingsStore((state) => state.laModel);
+    const upModel = useSettingsStore((state) => state.upModel);
+
     const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
     const operations = useEnhancementStore((state) =>
         currentFile ? (state.enhancements.get(currentFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
@@ -42,6 +27,33 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
         if (currentFile) addEnhancements(currentFile, [op]);
         onMenuClose();
     };
+
+    const defaultEnhancements = useMemo(() => {
+        const [width, height] = currentFile?.Dimensions ?? [0, 0];
+        const mp = width * height;
+        const scale = mp <= 1_048_576 ? 4 : mp <= 4_194_304 ? 2 : 1;
+
+        return [
+            {
+                type: 'fr',
+                icon: <Icon option='face_recovery' />,
+                name: 'Face Recovery',
+                op: getFrOp(frModel),
+            },
+            {
+                type: 'la',
+                icon: <Icon option='light_adjustment' />,
+                name: 'Light Adjustment',
+                op: getLaOp(laModel),
+            },
+            {
+                type: 'up',
+                icon: <Icon option='upscale' />,
+                name: 'Upscale',
+                op: getUpOp(upModel, scale),
+            },
+        ];
+    }, [frModel, laModel, upModel, currentFile?.Dimensions]);
 
     return (
         <Menu
@@ -64,7 +76,7 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
                 },
             }}
         >
-            {options.map((option) => {
+            {defaultEnhancements.map((option) => {
                 const exists = operations.some((op) => op.id.startsWith(option.type));
 
                 return (

@@ -26,7 +26,7 @@ type SettingsStore = {
 
     setIsFirstRun: (isFirstRun: boolean) => void;
     setProcessorSelectItems: (supportedEps: SupportedEPs) => void;
-    setExecutionProvider: (epStr: string) => void;
+    setExecutionProvider: (ep: ExecutionProvider) => void;
     setFrModel: (model: string) => void;
     setLaModel: (model: string) => void;
     setUpModel: (model: string) => void;
@@ -55,25 +55,24 @@ export const useSettingsStore = create(
                 },
 
                 setProcessorSelectItems: (supportedEps: SupportedEPs) => {
-                    const items: SelectItem[] = [{ label: 'Auto', value: ExecutionProviderAuto.toString() }];
+                    const items: SelectItem[] = [{ label: ExecutionProviderAuto, value: ExecutionProviderAuto }];
 
                     if (supportedEps.TensorRT)
-                        items.push({ label: 'TensorRT', value: ExecutionProviderTensorRT.toString() });
-                    if (supportedEps.CUDA) items.push({ label: 'CUDA', value: ExecutionProviderCUDA.toString() });
-                    if (supportedEps.CoreML) items.push({ label: 'CoreML', value: ExecutionProviderCoreML.toString() });
+                        items.push({ label: ExecutionProviderTensorRT, value: ExecutionProviderTensorRT });
+                    if (supportedEps.CUDA) items.push({ label: ExecutionProviderCUDA, value: ExecutionProviderCUDA });
+                    if (supportedEps.CoreML)
+                        items.push({ label: ExecutionProviderCoreML, value: ExecutionProviderCoreML });
                     if (os === 'windows')
-                        items.push({ label: 'DirectML', value: ExecutionProviderDirectML.toString() });
+                        items.push({ label: ExecutionProviderDirectML, value: ExecutionProviderDirectML });
 
-                    items.push({ label: 'CPU', value: ExecutionProviderCPU.toString() });
+                    items.push({ label: ExecutionProviderCPU, value: ExecutionProviderCPU });
 
                     set((state) => {
                         state.processorSelectItems = items;
                     });
                 },
 
-                setExecutionProvider: (epStr: string) => {
-                    const ep: ExecutionProvider = parseInt(epStr, 10);
-
+                setExecutionProvider: (ep: ExecutionProvider) => {
                     set((state) => {
                         state.executionProvider = ep;
                     });

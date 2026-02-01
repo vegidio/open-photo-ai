@@ -46,7 +46,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
                 // The list of operations for this file is empty; it means Autopilot added this file in the export list.
                 // We need to check if there are any suitable operations to apply to the file.
                 if (operations.length === 0) {
-                    suggestRef.current = suggestEnhancement(file.Path);
+                    suggestRef.current = suggestEnhancement(file);
                     const suggestions = await suggestRef.current;
 
                     if (suggestions.length === 0) continue;

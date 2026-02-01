@@ -106,8 +106,8 @@ const ItemAiProcessor = () => {
             title='AI Processor'
             description={description}
             items={processorSelectItems}
-            selected={executionProvider.toString()}
-            onSelect={(value) => setExecutionProvider(value)}
+            selected={executionProvider}
+            onSelect={(value) => setExecutionProvider(value as ExecutionProvider)}
         />
     );
 };

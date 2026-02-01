@@ -4,69 +4,53 @@ import (
 	"context"
 
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
-	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
-	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
-	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// SuggestEnhancements analyzes the input image and returns a list of recommended enhancement operations.
+// SuggestEnhancements analyzes the input image and returns a list of recommended enhancement.
 //
-// It evaluates the image for potential face recovery and upscaling improvements based on image characteristics such as
-// detected faces and resolution.
-func SuggestEnhancements(input *types.ImageData) ([]types.Operation, error) {
-	operations := make([]types.Operation, 0)
+// It evaluates the image for potential face recovery, light adjustment, and upscaling improvements based on image
+// characteristics such as detected faces and resolution.
+func SuggestEnhancements(input *types.ImageData) []types.ModelType {
+	enhancementTypes := make([]types.ModelType, 0)
 
-	frOp, err := analyseFaceRecovery(input)
-	if err != nil {
-		return nil, err
+	if yes := shouldFaceRecovery(input); yes {
+		enhancementTypes = append(enhancementTypes, types.ModelTypeFaceRecovery)
 	}
-	operations = append(operations, frOp...)
 
-	frLa, err := analyseLightAdjustment(input)
-	if err != nil {
-		return nil, err
+	if yes := shouldLightAdjustment(input); yes {
+		enhancementTypes = append(enhancementTypes, types.ModelTypeLightAdjustment)
 	}
-	operations = append(operations, frLa...)
 
-	upOp, err := analyseUpscale(input)
-	if err != nil {
-		return nil, err
+	if yes := shouldUpscale(input); yes {
+		enhancementTypes = append(enhancementTypes, types.ModelTypeUpscale)
 	}
-	operations = append(operations, upOp...)
 
-	return operations, nil
+	return enhancementTypes
 }
 
 // region - Private functions
 
-func analyseFaceRecovery(input *types.ImageData) ([]types.Operation, error) {
-	operation := make([]types.Operation, 0)
-
+func shouldFaceRecovery(input *types.ImageData) bool {
 	model, err := facerecovery.GetFdModel(types.ExecutionProviderAuto)
 	if err != nil {
-		return nil, err
+		return false
 	}
 
 	faces, err := facerecovery.ExtractFaces(context.Background(), model, input.Pixels, nil)
 	if err != nil {
-		return nil, err
+		return false
 	}
 
-	if len(faces) > 0 {
-		operation = append(operation, athens.Op(types.PrecisionFp32))
-	}
-
-	return operation, nil
+	return len(faces) > 0
 }
 
-func analyseLightAdjustment(input *types.ImageData) ([]types.Operation, error) {
-	operation := make([]types.Operation, 0)
+func shouldLightAdjustment(input *types.ImageData) bool {
 	bounds := input.Pixels.Bounds()
 	totalPixels := float64(bounds.Dx() * bounds.Dy())
 
 	if totalPixels == 0 {
-		return operation, nil
+		return false
 	}
 
 	var sumLuminance float64
@@ -109,33 +93,24 @@ func analyseLightAdjustment(input *types.ImageData) ([]types.Operation, error) {
 
 	// Too dark
 	if meanLuminance < meanDarkLimit && darkRatio > clippingRatio {
-		operation = append(operation, paris.Op(0.5, types.PrecisionFp32))
+		return true
 	}
 
 	// Too bright
 	if meanLuminance > meanBrightLimit && brightRatio > clippingRatio {
-		operation = append(operation, paris.Op(0.5, types.PrecisionFp32))
+		return true
 	}
 
-	return operation, nil
+	return false
 }
 
-func analyseUpscale(input *types.ImageData) ([]types.Operation, error) {
-	const _1Mp = 1_048_576
+func shouldUpscale(input *types.ImageData) bool {
 	const _2Mp = 4_194_304
 
-	operation := make([]types.Operation, 0)
 	bounds := input.Pixels.Bounds()
 	mp := bounds.Dx() * bounds.Dy()
 
-	switch {
-	case mp <= _1Mp:
-		operation = append(operation, kyoto.Op(4, types.PrecisionFp32))
-	case mp <= _2Mp:
-		operation = append(operation, kyoto.Op(2, types.PrecisionFp32))
-	}
-
-	return operation, nil
+	return mp <= _2Mp
 }
 
 // endregion

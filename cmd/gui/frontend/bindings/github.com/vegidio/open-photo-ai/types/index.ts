@@ -3,5 +3,6 @@
 
 export {
     ExecutionProvider,
-    ImageFormat
+    ImageFormat,
+    ModelType
 } from "./models.js";

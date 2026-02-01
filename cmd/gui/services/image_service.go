@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/disintegration/imaging"
-	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
@@ -125,24 +124,16 @@ func (s *ImageService) ProcessImage(
 //   - filePath: The path to the image file to analyze
 //
 // # Returns:
-//   - []string: A slice of operation IDs representing suggested enhancements (e.g., "up_athens_4x_fp32").
-//   - error: An error if the image cannot be loaded or the AI analysis fails.
-func (s *ImageService) SuggestEnhancements(filePath string) ([]string, error) {
+//   - []types.ModelType: A list of suggested enhancement types to apply to the image.
+//   - error: An error if the image cannot be loaded.
+func (s *ImageService) SuggestEnhancements(filePath string) ([]types.ModelType, error) {
 	inputImage, err := utils.LoadImage(filePath)
 	if err != nil {
 		s.tel.LogError("Error loading image", nil, err)
 		return nil, err
 	}
 
-	operations, err := opai.SuggestEnhancements(inputImage)
-	if err != nil {
-		s.tel.LogError("Error suggesting enhancements", nil, err)
-		return nil, err
-	}
-
-	return lo.Map(operations, func(op types.Operation, _ int) string {
-		return op.Id()
-	}), nil
+	return opai.SuggestEnhancements(inputImage), nil
 }
 
 // ExportImage runs inference operations on an image and saves the result to disk.

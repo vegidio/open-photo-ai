@@ -79,10 +79,10 @@ export function ProcessImage(filePath: string, ep: types$1.ExecutionProvider, ..
  *   - filePath: The path to the image file to analyze
  * 
  * # Returns:
- *   - []string: A slice of operation IDs representing suggested enhancements (e.g., "up_athens_4x_fp32").
- *   - error: An error if the image cannot be loaded or the AI analysis fails.
+ *   - []types.ModelType: A list of suggested enhancement types to apply to the image.
+ *   - error: An error if the image cannot be loaded.
  */
-export function SuggestEnhancements(filePath: string): $CancellablePromise<string[]> {
+export function SuggestEnhancements(filePath: string): $CancellablePromise<types$1.ModelType[]> {
     return $Call.ByID(808798930, filePath).then(($result: any) => {
         return $$createType0($result);
     });

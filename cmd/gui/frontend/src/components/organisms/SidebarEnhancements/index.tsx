@@ -32,7 +32,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
             setIsAnalysing(true);
 
             try {
-                const suggestions = await suggestEnhancement(file.Path);
+                const suggestions = await suggestEnhancement(file);
                 addEnhancements(file, suggestions);
             } catch (e) {
                 const msg = userFriendlyErrorMessage(e);

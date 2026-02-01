@@ -1,17 +1,20 @@
 import { CancellablePromise } from '@wailsio/runtime';
+import type { File } from '@/bindings/gui/types';
+import { ModelType } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { SuggestEnhancements } from '@/bindings/gui/services/imageservice.ts';
 import { Athens, Kyoto, type Operation, Paris, Saitama, Santorini, Tokyo } from '@/operations';
+import { useSettingsStore } from '@/stores';
 
-export const suggestEnhancement = (filePath: string) => {
-    let p: CancellablePromise<string[]>;
+export const suggestEnhancement = (file: File) => {
+    let p: CancellablePromise<ModelType[]>;
 
     return new CancellablePromise<Operation[]>(
         async (resolve, reject) => {
-            p = SuggestEnhancements(filePath);
+            p = SuggestEnhancements(file.Path);
 
             try {
                 const opIds = await p;
-                resolve(idsToOperations(opIds));
+                resolve(modelTypesToOps(opIds, file));
             } catch (e) {
                 reject(e);
             }
@@ -20,44 +23,56 @@ export const suggestEnhancement = (filePath: string) => {
     );
 };
 
-const idsToOperations = (opIds: string[]): Operation[] => {
+export const getFrOp = (model: string) => {
+    switch (model) {
+        case 'santorini':
+            return new Santorini('fp32');
+        default:
+            return new Athens('fp32');
+    }
+};
+
+export const getLaOp = (model: string) => {
+    switch (model) {
+        default:
+            return new Paris(0.5, 'fp32');
+    }
+};
+
+export const getUpOp = (model: string, scale: number) => {
+    switch (model) {
+        case 'tokyo':
+            return new Tokyo(scale, 'fp32');
+        case 'saitama':
+            return new Saitama(scale, 'fp32');
+        default:
+            return new Kyoto(scale, 'fp32');
+    }
+};
+
+const modelTypesToOps = (modelTypes: ModelType[], file: File): Operation[] => {
     const operations: Operation[] = [];
 
-    for (const opId of opIds) {
-        const values = opId.split('_');
-        const name = values[1];
+    const frModel = useSettingsStore.getState().frModel;
+    const laModel = useSettingsStore.getState().laModel;
+    const upModel = useSettingsStore.getState().upModel;
 
-        switch (name) {
-            // Face Recovery
-            case 'athens':
-                operations.push(new Athens(values[2]));
+    for (const modelType of modelTypes) {
+        switch (modelType) {
+            case ModelType.ModelTypeFaceRecovery:
+                operations.push(getFrOp(frModel));
                 break;
 
-            case 'santorini':
-                operations.push(new Santorini(values[2]));
+            case ModelType.ModelTypeLightAdjustment:
+                operations.push(getLaOp(laModel));
                 break;
 
-            // Light Adjustment
-            case 'paris':
-                operations.push(new Paris(parseFloat(values[2]), values[3]));
-                break;
+            case ModelType.ModelTypeUpscale: {
+                const [width, height] = file.Dimensions;
+                const mp = width * height;
+                const scale = mp <= 1_048_576 ? 4 : mp <= 4_194_304 ? 2 : 1;
 
-            // Upscale
-            case 'tokyo': {
-                const scale = parseFloat(values[2].replace('x', ''));
-                operations.push(new Tokyo(scale, values[3]));
-                break;
-            }
-
-            case 'kyoto': {
-                const scale = parseFloat(values[2].replace('x', ''));
-                operations.push(new Kyoto(scale, values[3]));
-                break;
-            }
-
-            case 'saitama': {
-                const scale = parseFloat(values[2].replace('x', ''));
-                operations.push(new Saitama(scale, values[3]));
+                operations.push(getUpOp(upModel, scale));
                 break;
             }
         }
