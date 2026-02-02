@@ -5,12 +5,12 @@ import { Initialize } from '@/bindings/gui/services/appservice.ts';
 import { DownloadAnimation } from '@/components/molecules/DownloadAnimation';
 import { DownloadProgress } from '@/components/molecules/DownloadProgress';
 
-type DownloadDialogProps = {
+type DialogDownloadProps = {
     open: boolean;
     onClose: () => void;
 };
 
-export const DownloadDialog = ({ open, onClose }: DownloadDialogProps) => {
+export const DialogDownload = ({ open, onClose }: DialogDownloadProps) => {
     const [downloads, setDownloads] = useState<Record<string, number>>({});
     const [error, setError] = useState(false);
 

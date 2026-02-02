@@ -1,31 +1,17 @@
-import { Dialog, Divider, Link, Typography } from '@mui/material';
+import { Divider, Link, Typography } from '@mui/material';
 import { Browser } from '@wailsio/runtime';
 import icon from '@/assets/icon.avif';
-import { ModalTitle } from '@/components/molecules/ModalTitle';
-import { version } from '@/utils/constants.ts';
+import { DialogGeneral } from '@/components/molecules/DialogGeneral';
+import { version } from '@/utils/constants';
 
-type NavbarAboutProps = {
+type DialogAboutProps = {
     open: boolean;
     onClose: () => void;
 };
 
-export const NavbarAbout = ({ open, onClose }: NavbarAboutProps) => {
+export const DialogAbout = ({ open, onClose }: DialogAboutProps) => {
     return (
-        <Dialog
-            open={open}
-            onClose={(_, reason) => {
-                if (reason !== 'backdropClick') {
-                    onClose();
-                }
-            }}
-            slotProps={{
-                paper: {
-                    className: 'bg-[#212121] w-96 max-w-full bg-none',
-                },
-            }}
-        >
-            <ModalTitle title='About' onClose={onClose} />
-
+        <DialogGeneral title='About' open={open} onClose={onClose} className='w-96'>
             <div className='flex flex-col p-6 pt-2.5 gap-4 items-center'>
                 <img src={icon} alt='App Icon' className='size-36' />
 
@@ -58,6 +44,6 @@ export const NavbarAbout = ({ open, onClose }: NavbarAboutProps) => {
                     </div>
                 </div>
             </div>
-        </Dialog>
+        </DialogGeneral>
     );
 };

@@ -4,6 +4,7 @@ import type { TailwindProps } from '@/utils/TailwindProps';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { SettingsItemSelect } from '@/components/molecules/SettingsItemSelect';
 import { useSettingsStore } from '@/stores';
+import { os } from '@/utils/constants';
 
 export const SettingsList = ({ className = '' }: TailwindProps) => {
     const frModel = useSettingsStore((state) => state.frModel);
@@ -58,6 +59,7 @@ export const SettingsList = ({ className = '' }: TailwindProps) => {
                     {
                         value: 'tokyo',
                         label: 'Tokyo',
+                        disabled: os === 'darwin',
                     },
                     {
                         value: 'kyoto',

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { AppBar, Toolbar, Typography } from '@mui/material';
 import { Browser } from '@wailsio/runtime';
-import { IsOutdated } from '@/bindings/gui/services/appservice.ts';
+import { IsOutdated } from '@/bindings/gui/services/appservice';
 import { Button } from '@/components/atoms/Button';
-import { NavbarAbout } from '@/components/molecules/NavbarAbout';
+import { DialogAbout } from '@/components/molecules/DialogAbout';
 import { NavbarCurrentFile } from '@/components/molecules/NavbarCurrentFile';
 import { NavbarDimensions } from '@/components/molecules/NavbarDimensions';
 import { Settings } from '@/components/template/Settings';
@@ -61,7 +61,7 @@ export const Navbar = () => {
                 </Toolbar>
             </AppBar>
 
-            {openAbout && <NavbarAbout open={true} onClose={() => setOpenAbout(false)} />}
+            {openAbout && <DialogAbout open={true} onClose={() => setOpenAbout(false)} />}
 
             {openSettings && <Settings section='application' open={true} onClose={() => setOpenSettings(false)} />}
         </>

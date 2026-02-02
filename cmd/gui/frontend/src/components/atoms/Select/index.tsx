@@ -9,6 +9,7 @@ import type { TailwindProps } from '@/utils/TailwindProps';
 export type SelectItem = {
     value: string;
     label: string;
+    disabled?: boolean;
 };
 
 type SelectProps = MuiSelectProps<string> &
@@ -33,8 +34,8 @@ export const Select = ({ items, onValueChange, ...props }: SelectProps) => {
             }}
             {...props}
         >
-            {items.map(({ value, label }) => (
-                <MenuItem key={value} value={value} className='text-sm'>
+            {items.map(({ value, label, disabled = false }) => (
+                <MenuItem key={value} value={value} disabled={disabled} className='text-sm'>
                     {label}
                 </MenuItem>
             ))}

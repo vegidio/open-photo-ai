@@ -16,7 +16,7 @@ const {
 } = ExecutionProvider;
 
 type SettingsStore = {
-    isFirstRun: boolean;
+    isFirstTensorRT: boolean;
     processorSelectItems: SelectItem[];
     executionProvider: ExecutionProvider;
 
@@ -24,7 +24,7 @@ type SettingsStore = {
     laModel: string;
     upModel: string;
 
-    setIsFirstRun: (isFirstRun: boolean) => void;
+    setIsFirstTensorRT: (isFirstRun: boolean) => void;
     setProcessorSelectItems: (supportedEps: SupportedEPs) => void;
     setExecutionProvider: (ep: ExecutionProvider) => void;
     setFrModel: (model: string) => void;
@@ -41,16 +41,16 @@ export const useSettingsStore = create(
             let snapshot: Record<string, any> = {};
 
             return {
-                isFirstRun: true,
+                isFirstTensorRT: true,
                 processorSelectItems: [],
                 executionProvider: ExecutionProviderAuto,
                 frModel: 'athens',
                 laModel: 'paris',
                 upModel: 'kyoto',
 
-                setIsFirstRun: (isFirstRun: boolean) => {
+                setIsFirstTensorRT: (isFirst: boolean) => {
                     set((state) => {
-                        state.isFirstRun = isFirstRun;
+                        state.isFirstTensorRT = isFirst;
                     });
                 },
 
