@@ -75,11 +75,13 @@ These are the features I plan to implement in the future, in no particular order
 - [x] Model selection and enhancements customization.
 - [x] Support different preview layouts.
 - [x] Add new model for light adjustment.
+- [x] Add app preferences so you don't have to configure them every time.
+- [x] Enable TensorRT acceleration when pre warm-up is implemented.
 - [ ] Crop and rotate images in the GUI.
 - [ ] Add new models for denoise, sharpening, and color correction.
+- [ ] Add new model to colorize black and white photos.
+- [ ] Add new model to fix imperfections and remove objects from photos.
 - [ ] Simplify the app installation using packages and installers.
-- [ ] Add app preferences so you don't have to configure them every time.
-- [ ] Enable TensorRT acceleration when pre warm-up is implemented.
 - [ ] Attempt to include diffusion-based models (this will be hard!)
 - [ ] CLI implementation.
 - [ ] Improve documentation for the library.
@@ -106,6 +108,14 @@ To run the GUI version of the app on Linux, you will need to install the followi
 - Fedora 40+: `sudo dnf install gtk3 webkit2gtk4.1`
 - Arch Linux: `sudo pacman -S gtk3 webkit2gtk-4.1`
 - openSUSE: `sudo zypper install libgtk-3-0 libwebkit2gtk-4_1-0`
+
+### The app is taking too long to download dependencies
+
+This app has some important dependencies that can't be bundled with the app itself because they are rather big, like ONNX Runtime, CUDA and TensorRT (if supported by your system). They are hosted on Github and the app will download them the first time it opens.
+
+Unfortunately, Github has a rate limit that will throttle the download speed if these files are downloaded too frequently. Since this is an open-source and free project I can't afford to pay for a hosted solution where we wouldn't have this problem.
+
+If someday this project receives enough funds/donations then I will pay for a better hosting solution. Meanwhile, bare with me on this one.
 
 ## 🐞 Known Issues
 
