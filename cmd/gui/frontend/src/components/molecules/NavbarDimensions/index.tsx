@@ -18,8 +18,8 @@ export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps
     const scaleStr = operations.find((op) => op.id.startsWith('up'))?.options?.scale ?? '1';
     const scale = parseFloat(scaleStr);
 
-    const originalDims = `${file.Dimensions[0]} x ${file.Dimensions[0]}`;
-    const outputDims = `${(file.Dimensions[0] * scale).toFixed(0)} x ${(file.Dimensions[0] * scale).toFixed(0)}`;
+    const originalDims = `${file.Dimensions[0]} x ${file.Dimensions[1]}`;
+    const outputDims = `${(file.Dimensions[0] * scale).toFixed(0)} x ${(file.Dimensions[1] * scale).toFixed(0)}`;
 
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
     const open = Boolean(anchorEl);
@@ -56,8 +56,8 @@ export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps
 
             {open && (
                 <DimensionsPopover
-                    outputDims={outputDims}
                     originalDims={originalDims}
+                    outputDims={outputDims}
                     anchorEl={anchorEl}
                     open={true}
                     onClose={onPopoverClose}
