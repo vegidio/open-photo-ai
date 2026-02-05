@@ -87,7 +87,7 @@ These are the features I plan to implement in the future, in no particular order
 - [ ] Improve documentation for the library.
 - [ ] Internationalization to other languages.
 
-## 💬 FAQ
+## 💣 Troubleshooting
 
 ### "App Is Damaged/Blocked..." (Windows & macOS only)
 
@@ -116,6 +116,14 @@ This app has some important dependencies that can't be bundled with the app itse
 Unfortunately, Github has a rate limit that will throttle the download speed if these files are downloaded too frequently. Since this is an open-source and free project I can't afford to pay for a hosted solution where we wouldn't have this problem.
 
 If someday this project receives enough funds/donations then I will pay for a better hosting solution. Meanwhile, bare with me on this one.
+
+### The model is taking too long to load (TensorRT only)
+
+When you open the app for the first time, if it detects that TensorRT is available on your system, it will prompt you to enable it or not. If you choose to enable it, all models will run with TensorRT acceleration.
+
+This is one of the fastest ways to run the models, however TensorRT needs to optimize the model graphs the first time it's used, which can take a few minutes. This is why it seems to be taking too long or even stuck when you run the models for the first time. But on subsequent runs, when the TensorRT optimization is already done, all enhancements will run much faster.
+
+If you don't want to use TensorRT acceleration, you can disable it in the app Settings.
 
 ## 🐞 Known Issues
 
