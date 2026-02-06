@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/os"
@@ -80,12 +81,12 @@ func InitializeNvidiaLib(libName, libTag string, fileCheck *types.FileCheck, onP
 	destination := filepath.Join("libs", libName)
 
 	if err := utils.PrepareDependency(url, destination, fileCheck, onProgress); err != nil {
-		return err
+		return errors.Wrap(err, "failed to prepare NVIDIA library")
 	}
 
 	libPath, err := fs.MkUserConfigDir(internal.AppName, "libs", libName)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create NVIDIA library directory")
 	}
 
 	os.AppendEnvPath("PATH", libPath)

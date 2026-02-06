@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
@@ -18,7 +19,7 @@ func LoadModel(
 ) (types.Model[[]facedetection.Face], string, error) {
 	fdModel, err := GetFdModel(ep)
 	if err != nil {
-		return nil, "", err
+		return nil, "", errors.Wrap(err, "failed to load Face Detection model")
 	}
 
 	modelFile := operation.Id() + ".onnx"
@@ -30,7 +31,7 @@ func LoadModel(
 	}
 
 	if err = utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
-		return nil, "", err
+		return nil, "", errors.Wrapf(err, "failed to prepare Face Recovery model %s", operation.Id())
 	}
 
 	return fdModel, modelFile, nil
@@ -48,7 +49,7 @@ func ExtractFaces(
 
 	faces, err := fdModel.Run(ctx, img, nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to run Face Detection model")
 	}
 
 	if onProgress != nil {

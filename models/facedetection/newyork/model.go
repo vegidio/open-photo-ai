@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
@@ -38,7 +39,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 	}
 
 	if err := utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to prepare New York model")
 	}
 
 	session, err := utils.CreateSession(
@@ -48,7 +49,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 		ep,
 	)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create New York session")
 	}
 
 	return &NewYork{
@@ -77,7 +78,7 @@ func (m *NewYork) Run(
 	onProgress types.InferenceProgress,
 ) ([]facedetection.Face, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "context cancelled")
 	}
 	if onProgress != nil {
 		onProgress("fd", 0)
@@ -90,31 +91,31 @@ func (m *NewYork) Run(
 	inputShape := ort.NewShape(1, 3, int64(targetSize), int64(targetSize))
 	inputTensor, err := ort.NewTensor(inputShape, inputData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create input tensor: %w", err)
+		return nil, errors.Wrap(err, "failed to create input tensor")
 	}
 	defer inputTensor.Destroy()
 
 	// Create output tensors
 	locTensor, err := ort.NewEmptyTensor[float32](ort.NewShape(1, numAnchors, 4))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create loc tensor: %w", err)
+		return nil, errors.Wrap(err, "failed to create loc tensor")
 	}
 	defer locTensor.Destroy()
 
 	confTensor, err := ort.NewEmptyTensor[float32](ort.NewShape(1, numAnchors, 2))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create conf tensor: %w", err)
+		return nil, errors.Wrap(err, "failed to create conf tensor")
 	}
 	defer confTensor.Destroy()
 
 	landmarksTensor, err := ort.NewEmptyTensor[float32](ort.NewShape(1, numAnchors, 10))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create landmarks tensor: %w", err)
+		return nil, errors.Wrap(err, "failed to create landmarks tensor")
 	}
 	defer landmarksTensor.Destroy()
 
 	if err = ctx.Err(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "context cancelled")
 	}
 	if onProgress != nil {
 		onProgress("fd", 0.2)
@@ -123,7 +124,7 @@ func (m *NewYork) Run(
 	// Run inference
 	err = m.session.Run([]ort.Value{inputTensor}, []ort.Value{locTensor, confTensor, landmarksTensor})
 	if err != nil {
-		return nil, fmt.Errorf("failed to run inference: %w", err)
+		return nil, errors.Wrap(err, "failed to run inference")
 	}
 
 	// Post-process results
@@ -132,7 +133,7 @@ func (m *NewYork) Run(
 	landmarksData := landmarksTensor.GetData()
 
 	if err = ctx.Err(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "context cancelled")
 	}
 	if onProgress != nil {
 		onProgress("fd", 0.6)

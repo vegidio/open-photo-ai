@@ -5,6 +5,7 @@ import (
 	"image"
 	"math"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
@@ -32,7 +33,7 @@ func RunPipeline(
 	for i, session := range sessions {
 		processedImg, err := process(ctx, session, resultImg, scales[i], onProgress)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to process image")
 		}
 
 		resultImg = processedImg
@@ -50,7 +51,7 @@ func process(
 	onProgress types.InferenceProgress,
 ) (*image.RGBA, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "context cancelled")
 	}
 
 	// Get image dimensions
@@ -73,7 +74,7 @@ func process(
 	for y := 0; y < height; y += stride {
 		for x := 0; x < width; x += stride {
 			if err := ctx.Err(); err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "context cancelled")
 			}
 
 			tileX, tileY, tileW, tileH := calculateTileBounds(x, y, width, height, tileSize)
@@ -82,7 +83,7 @@ func process(
 
 			upscaledTile, err := upscaleTile(session, paddedTile, tileW, tileH, scaleFactor)
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "failed to upscale tile")
 			}
 
 			outputX := tileX * scaleFactor

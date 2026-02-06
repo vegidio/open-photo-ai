@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Dialog, Divider } from '@mui/material';
+import { CleanRegistry } from '@/bindings/gui/services/appservice.ts';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { SettingsButtons } from '@/components/molecules/SettingsButtons';
 import { SettingsList } from '@/components/organisms/SettingsList';
@@ -18,6 +19,11 @@ export const Settings = ({ section, open, onClose }: SettingsProps) => {
 
     const onCancel = () => {
         restoreSnapshot();
+        onClose();
+    };
+
+    const onSave = async () => {
+        await CleanRegistry();
         onClose();
     };
 
@@ -46,7 +52,7 @@ export const Settings = ({ section, open, onClose }: SettingsProps) => {
                 <div className='flex flex-col flex-1'>
                     <SettingsList className='flex-1 overflow-y-auto scrollbar-thin' />
 
-                    <SettingsButtons onCancel={onCancel} onClose={onClose} className='p-3 justify-end' />
+                    <SettingsButtons onCancel={onCancel} onSave={onSave} className='p-3 justify-end' />
                 </div>
             </div>
         </Dialog>

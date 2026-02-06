@@ -1,13 +1,14 @@
 package utils
 
 import (
+	"github.com/cockroachdb/errors"
 	ort "github.com/yalue/onnxruntime_go"
 )
 
 func getTensorRTEP(cachePath string, options *ort.SessionOptions) error {
 	trtOptions, err := ort.NewTensorRTProviderOptions()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create TensorRT EP options")
 	}
 	defer trtOptions.Destroy()
 
@@ -31,7 +32,7 @@ func getTensorRTEP(cachePath string, options *ort.SessionOptions) error {
 func getCudaEP(_ string, options *ort.SessionOptions) error {
 	cudaOptions, err := ort.NewCUDAProviderOptions()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create CUDA EP options")
 	}
 	defer cudaOptions.Destroy()
 

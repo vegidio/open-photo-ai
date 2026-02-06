@@ -1,9 +1,9 @@
 package upscale
 
 import (
-	"fmt"
 	"image"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	ort "github.com/yalue/onnxruntime_go"
 )
@@ -18,20 +18,20 @@ func runInference(session *ort.DynamicAdvancedSession, tile image.Image, upscale
 	inputShape := ort.NewShape(1, 3, int64(h), int64(w))
 	inputTensor, err := ort.NewTensor(inputShape, inputData)
 	if err != nil {
-		return nil, fmt.Errorf("create input tensor: %w", err)
+		return nil, errors.Wrap(err, "failed to create input tensor")
 	}
 	defer inputTensor.Destroy()
 
 	outputShape := ort.NewShape(1, 3, int64(h*upscale), int64(w*upscale))
 	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
 	if err != nil {
-		return nil, fmt.Errorf("create output tensor: %w", err)
+		return nil, errors.Wrap(err, "failed to create output tensor")
 	}
 	defer outputTensor.Destroy()
 
 	err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor})
 	if err != nil {
-		return nil, fmt.Errorf("run inference: %w", err)
+		return nil, errors.Wrap(err, "failed to run inference")
 	}
 
 	outputData := outputTensor.GetData()

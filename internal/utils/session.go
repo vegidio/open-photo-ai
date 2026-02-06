@@ -1,11 +1,11 @@
 package utils
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
@@ -27,23 +27,23 @@ func CreateSession(modelFile string, inputs, outputs []string, ep types.Executio
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create session options")
 	}
 	defer options.Destroy()
 
 	// Extra session options
 	if err = options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to set graph optimization level")
 	}
 
 	if err = options.SetExecutionMode(ort.ExecutionModeParallel); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to set execution mode")
 	}
 
 	modelPath := filepath.Join(configDir, internal.AppName, "models", modelFile)
 	session, err := ort.NewDynamicAdvancedSession(modelPath, inputs, outputs, options)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create session")
 	}
 
 	return session, nil
@@ -54,7 +54,7 @@ func CreateSession(modelFile string, inputs, outputs []string, ep types.Executio
 func createWindowsOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
 	options, err := ort.NewSessionOptions()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create Windows session options")
 	}
 
 	switch ep {
@@ -74,7 +74,7 @@ func createWindowsOptions(cachePath string, ep types.ExecutionProvider) (*ort.Se
 		_ = getDirectMLEP(cachePath, options)
 		_ = getOpenVINOEP(cachePath, options)
 	default:
-		return nil, fmt.Errorf("unsupported execution provider: %x", ep)
+		return nil, errors.Errorf("unsupported execution provider: %x", ep)
 	}
 
 	return options, nil
@@ -83,7 +83,7 @@ func createWindowsOptions(cachePath string, ep types.ExecutionProvider) (*ort.Se
 func createLinuxOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
 	options, err := ort.NewSessionOptions()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create Linux session options")
 	}
 
 	switch ep {
@@ -100,7 +100,7 @@ func createLinuxOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sess
 		_ = getCudaEP(cachePath, options)
 		_ = getOpenVINOEP(cachePath, options)
 	default:
-		return nil, fmt.Errorf("unsupported execution provider: %x", ep)
+		return nil, errors.Errorf("unsupported execution provider: %x", ep)
 	}
 
 	return options, nil
@@ -109,7 +109,7 @@ func createLinuxOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sess
 func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
 	options, err := ort.NewSessionOptions()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create macOS session options")
 	}
 
 	switch ep {
@@ -123,7 +123,7 @@ func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sessio
 		_ = getCoreMLEP(cachePath, options)
 		_ = getOpenVINOEP(cachePath, options)
 	default:
-		return nil, fmt.Errorf("unsupported execution provider: %x", ep)
+		return nil, errors.Errorf("unsupported execution provider: %x", ep)
 	}
 
 	return options, nil

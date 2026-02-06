@@ -3,12 +3,12 @@ package internal
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"image"
 	"image/png"
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/memo"
@@ -22,14 +22,14 @@ type Cache struct {
 func NewCache(maxEntries int64) (*Cache, error) {
 	cachePath, err := fs.MkUserConfigDir("open-photo-ai", "cache")
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create cache directory")
 	}
 
 	const capacity = 1024 * 1024 * 1000 // 1 GB
 	opts := memo.CacheOpts{MaxEntries: maxEntries, MaxCapacity: capacity}
 	diskCache, err := memo.NewDiskOnly(cachePath, opts)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create disk cache")
 	}
 
 	return &Cache{
@@ -44,13 +44,13 @@ func (c *Cache) GetImage(hash string, operations ...types.Operation) (image.Imag
 	key := memo.KeyFrom(hash, strings.Join(ops, "|"))
 
 	data, found, err := c.diskCache.Store.Get(context.Background(), key)
-	if err != nil || !found {
-		return nil, fmt.Errorf("cache miss for key: %s, %w", key, err)
+	if !found || err != nil {
+		return nil, errors.Errorf("cache miss for key: %s", key)
 	}
 
 	img, err := dataToImage(data)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to decode image")
 	}
 
 	return img, nil
@@ -83,7 +83,7 @@ func imageToData(img image.Image) ([]byte, error) {
 
 	encoder := &png.Encoder{CompressionLevel: png.BestSpeed}
 	if err := encoder.Encode(&buf, img); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to encode image")
 	}
 
 	return buf.Bytes(), nil

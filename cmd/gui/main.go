@@ -69,7 +69,7 @@ func main() {
 	destroyServices, err := services.RegisterServices(app, tel)
 	if err != nil {
 		tel.LogError("Error starting the services", nil, err)
-		log.Fatal(err)
+		log.Fatalf("%+v", err)
 	}
 	defer destroyServices()
 
@@ -79,7 +79,7 @@ func main() {
 	// If an error occurred while running the application, log it and exit.
 	if err != nil {
 		tel.LogError("Error running the app", nil, err)
-		log.Fatal(err)
+		log.Fatalf("%+v", err)
 	}
 }
 

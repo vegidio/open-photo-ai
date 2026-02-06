@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/o11y"
@@ -46,7 +47,7 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 	inputData, err := utils.LoadImage(filePath)
 	if err != nil {
 		s.tel.LogError("Error loading image", nil, err)
-		return nil, 0, 0, err
+		return nil, 0, 0, errors.Wrap(err, "failed to load image")
 	}
 
 	if size > 0 {
@@ -61,7 +62,7 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 	data, err := utils.EncodeImage(inputData.Pixels, types.FormatJpeg, 90)
 	if err != nil {
 		s.tel.LogError("Error encoding image", nil, err)
-		return nil, 0, 0, err
+		return nil, 0, 0, errors.Wrap(err, "failed to encode image")
 	}
 
 	bounds := inputData.Pixels.Bounds()
@@ -87,7 +88,7 @@ func (s *ImageService) ProcessImage(
 	opIds ...string,
 ) ([]byte, int, int, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, 0, 0, err
+		return nil, 0, 0, errors.Wrap(err, "context cancelled")
 	}
 
 	outputData, err := s.runInference(ctx, filePath, ep, opIds)
@@ -96,21 +97,21 @@ func (s *ImageService) ProcessImage(
 			"operations": strings.Join(opIds, ", "),
 		}, err)
 
-		return nil, 0, 0, err
+		return nil, 0, 0, errors.Wrap(err, "failed to run inference")
 	}
 
 	if err = ctx.Err(); err != nil {
-		return nil, 0, 0, err
+		return nil, 0, 0, errors.Wrap(err, "context cancelled")
 	}
 
 	data, err := utils.EncodeImage(outputData.Pixels, types.FormatJpeg, 90)
 	if err != nil {
 		s.tel.LogError("Error encoding image", nil, err)
-		return nil, 0, 0, err
+		return nil, 0, 0, errors.Wrap(err, "failed to encode image")
 	}
 
 	if err = ctx.Err(); err != nil {
-		return nil, 0, 0, err
+		return nil, 0, 0, errors.Wrap(err, "context cancelled")
 	}
 
 	// Return a version of the image as JPG for presentation purposes
@@ -130,7 +131,7 @@ func (s *ImageService) SuggestEnhancements(filePath string) ([]types.ModelType, 
 	inputImage, err := utils.LoadImage(filePath)
 	if err != nil {
 		s.tel.LogError("Error loading image", nil, err)
-		return nil, err
+		return nil, errors.Wrap(err, "failed to load image")
 	}
 
 	return opai.SuggestEnhancements(inputImage), nil
@@ -157,7 +158,7 @@ func (s *ImageService) ExportImage(
 	opIds ...string,
 ) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return errors.Wrap(err, "context cancelled")
 	}
 
 	eventName := fmt.Sprintf("app:export:%s", file.Hash)
@@ -169,12 +170,12 @@ func (s *ImageService) ExportImage(
 			"operations": strings.Join(opIds, ", "),
 		}, err)
 
-		return err
+		return errors.Wrap(err, "failed to run inference")
 	}
 
 	s.app.Event.Emit(eventName, "RUNNING", 0.9)
 	if err = ctx.Err(); err != nil {
-		return err
+		return errors.Wrap(err, "context cancelled")
 	}
 
 	size, err := utils.SaveImage(&types.ImageData{
@@ -184,7 +185,7 @@ func (s *ImageService) ExportImage(
 
 	if err != nil {
 		s.tel.LogError("Error saving image", nil, err)
-		return err
+		return errors.Wrap(err, "failed to save image")
 	}
 
 	s.app.Event.Emit(eventName, "COMPLETED", size)
@@ -200,12 +201,12 @@ func (s *ImageService) runInference(
 	opIds []string,
 ) (*types.ImageData, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "context cancelled")
 	}
 
 	inputImage, err := utils.LoadImage(filePath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to load image")
 	}
 
 	operations := guiutils.IdsToOperations(opIds)
@@ -214,7 +215,7 @@ func (s *ImageService) runInference(
 	}, operations...)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to run inference")
 	}
 
 	return outputData, nil

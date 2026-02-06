@@ -6,6 +6,7 @@ import (
 	"time"
 
 	opai "github.com/vegidio/open-photo-ai"
+	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 )
@@ -25,16 +26,14 @@ func main() {
 		return
 	}
 
-	ops, err := opai.SuggestEnhancements(inputData)
-	if err != nil {
-		fmt.Printf("Failed to get enhancement suggestions: %v\n", err)
-		return
+	ops := []types.Operation{
+		kyoto.Op(4, types.PrecisionFp32),
 	}
 
 	ctx := context.Background()
 	now := time.Now()
 
-	outputData, err := opai.Process(ctx, inputData, func(name string, progress float64) {
+	outputData, err := opai.Process(ctx, inputData, types.ExecutionProviderAuto, func(name string, progress float64) {
 		fmt.Printf("%s - Progress: %.1f%%\n", name, progress*100)
 	}, ops...)
 

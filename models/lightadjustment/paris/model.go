@@ -6,6 +6,7 @@ import (
 	"image"
 	"regexp"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment"
@@ -38,7 +39,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 	}
 
 	if err := utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to prepare Paris model")
 	}
 
 	session, err := utils.CreateSession(
@@ -48,7 +49,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 		ep,
 	)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create Paris session")
 	}
 
 	return &Paris{
@@ -80,19 +81,19 @@ func (m *Paris) Run(
 		onProgress("la", 0)
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "context cancelled")
 	}
 
 	result, err := lightadjustment.Process(ctx, m.session, img)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to process image")
 	}
 
 	if onProgress != nil {
 		onProgress("la", 0.9)
 	}
 	if err = ctx.Err(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "context cancelled")
 	}
 
 	blendedImg := lightadjustment.BlendWithIntensity(img, result, m.operation.intensity)

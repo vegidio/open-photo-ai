@@ -4,6 +4,7 @@ import (
 	"image"
 	"math"
 
+	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
 	ort "github.com/yalue/onnxruntime_go"
 )
@@ -65,7 +66,7 @@ func upscaleTile(session *ort.DynamicAdvancedSession, tile image.Image, tileW, t
 	// Run inference
 	upscaledTile, err := runInference(session, tile, scaleFactor)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to run inference")
 	}
 
 	// Remove padding by cropping to the actual content size

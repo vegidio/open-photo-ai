@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/async"
 	"github.com/vegidio/go-sak/crypto"
@@ -59,14 +60,14 @@ func CreateFileTypes(paths []string) []types.File {
 func getImageDimensions(path string) ([]int, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to open image file")
 	}
 	defer file.Close()
 
 	// DecodeConfig only reads the image header, not the full image
 	config, _, err := image.DecodeConfig(file)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to decode image config")
 	}
 
 	return []int{config.Width, config.Height}, nil

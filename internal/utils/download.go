@@ -1,12 +1,12 @@
 package utils
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/crypto"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
@@ -37,13 +37,13 @@ func PrepareDependency(
 	fileName := filepath.Base(url)
 	file, err := fs.MkUserConfigFile(internal.AppName, destination, fileName)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create config file")
 	}
 	defer file.Close()
 
 	err = downloadFile(url, file, onProgress)
 	if err != nil {
-		return fmt.Errorf("[download] %w", err)
+		return errors.Wrap(err, "failed to [download] dependency")
 	}
 
 	ext := filepath.Ext(fileName)
@@ -57,7 +57,7 @@ func PrepareDependency(
 		targetDir := filepath.Dir(file.Name())
 		err = fs.Unzip(file.Name(), targetDir)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to unzip dependency")
 		}
 	}
 
@@ -119,12 +119,12 @@ func shouldDownload(destination string, fileCheck *types.FileCheck) bool {
 func downloadFile(url string, dstFile *os.File, onProgress types.DownloadProgress) error {
 	resp, err := http.Get(url)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to download file")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
+		return errors.Newf("bad status: %s", resp.Status)
 	}
 
 	// Get the total file size from the Content-Length header
@@ -139,7 +139,7 @@ func downloadFile(url string, dstFile *os.File, onProgress types.DownloadProgres
 
 	_, err = io.Copy(dstFile, reader)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to write file")
 	}
 
 	return nil

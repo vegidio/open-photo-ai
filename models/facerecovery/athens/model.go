@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
@@ -29,7 +30,7 @@ type Athens struct {
 func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Athens, error) {
 	fdModel, modelFile, err := facerecovery.LoadModel(operation, ep, onProgress)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to load Athens model")
 	}
 
 	session, err := utils.CreateSession(
@@ -39,7 +40,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 		ep,
 	)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create Athens session")
 	}
 
 	modelName := fmt.Sprintf("Athens (%s)", cases.Upper(language.English).String(string(operation.Precision())))
@@ -72,7 +73,7 @@ func (m *Athens) Run(
 ) (image.Image, error) {
 	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, img, onProgress)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to extract faces")
 	}
 
 	if len(faces) == 0 {
@@ -81,7 +82,7 @@ func (m *Athens) Run(
 
 	result, err := facerecovery.RestoreFaces(ctx, m.session, img, faces, tileSize, fidelity, onProgress)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to restore faces")
 	}
 
 	return result, nil

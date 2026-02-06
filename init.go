@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
@@ -42,7 +43,7 @@ func Initialize(name string, onProgress types.DownloadProgress) error {
 
 	cache, err := internal.NewCache(500)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create image cache")
 	}
 	internal.ImageCache = cache
 
@@ -56,7 +57,7 @@ func Initialize(name string, onProgress types.DownloadProgress) error {
 		onnxRuntimeTag, runtime.GOOS, runtime.GOARCH)
 
 	if err = utils.PrepareDependency(url, "", fileCheck, onProgress); err != nil {
-		return err
+		return errors.Wrap(err, "failed to prepare ONNX Runtime")
 	}
 
 	// Load model data
@@ -93,13 +94,13 @@ func Destroy() {
 func startRuntime() error {
 	configDir, err := fs.MkUserConfigDir(internal.AppName)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create config directory")
 	}
 
 	runtimePath := filepath.Join(configDir, internal.OnnxRuntimeName)
 	ort.SetSharedLibraryPath(runtimePath)
 	if err = ort.InitializeEnvironment(); err != nil {
-		return err
+		return errors.Wrap(err, "failed to initialize ONNX Runtime")
 	}
 
 	// Disable ONNX runtime logging

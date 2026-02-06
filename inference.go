@@ -2,10 +2,10 @@ package opai
 
 import (
 	"context"
-	"fmt"
 	"image"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
@@ -58,11 +58,11 @@ func Process(
 
 		output, err = runInference(ctx, output, ep, onProgress, op)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "error running inference")
 		}
 
 		if err = internal.ImageCache.SetImage(output, input.Hash, operations[:i+1]...); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "error caching image")
 		}
 	}
 
@@ -109,12 +109,12 @@ func Execute[T any](
 	})
 
 	if err != nil {
-		return genericNil, err
+		return genericNil, errors.Wrap(err, "error selecting model")
 	}
 
 	dataModel, ok := model.(types.Model[T])
 	if !ok {
-		return genericNil, fmt.Errorf("operation type not supported: %s", operation.Id())
+		return genericNil, errors.Errorf("operation type not supported: %s", operation.Id())
 	}
 
 	return dataModel.Run(ctx, input.Pixels, onProgress)
@@ -126,10 +126,12 @@ func Execute[T any](
 // This function should be called when the application is shutting down or when all model instances are no longer needed
 // to prevent resource leaks.
 func CleanRegistry() {
-	for _, model := range internal.Registry {
+	for key, model := range internal.Registry {
 		if destroyable, ok := model.(types.Destroyable); ok {
 			destroyable.Destroy()
 		}
+
+		delete(internal.Registry, key)
 	}
 }
 
@@ -149,12 +151,12 @@ func runInference(
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error selecting model")
 	}
 
 	imageModel, ok := model.(types.Model[image.Image])
 	if !ok {
-		return nil, fmt.Errorf("operation type not supported: %s", operation.Id())
+		return nil, errors.Errorf("operation type not supported: %s", operation.Id())
 	}
 
 	return imageModel.Run(ctx, img, onProgress)
@@ -197,7 +199,7 @@ func selectModel(
 		model, err = saitama.New(operation, ep, onProgress)
 
 	default:
-		err = fmt.Errorf("no model found with ID: %s", operation.Id())
+		err = errors.Errorf("no model found with ID: %s", operation.Id())
 	}
 
 	// We can't check `model != nil` here because model is an interface and in Go a variable is only nil if both its

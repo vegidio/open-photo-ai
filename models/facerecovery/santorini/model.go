@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
@@ -28,7 +29,7 @@ type Santorini struct {
 func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Santorini, error) {
 	fdModel, modelFile, err := facerecovery.LoadModel(operation, ep, onProgress)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to load Santorini model")
 	}
 
 	session, err := utils.CreateSession(
@@ -38,7 +39,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 		ep,
 	)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create Santorini session")
 	}
 
 	modelName := fmt.Sprintf("Santorini (%s)", cases.Upper(language.English).String(string(operation.Precision())))
@@ -71,7 +72,7 @@ func (m *Santorini) Run(
 ) (image.Image, error) {
 	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, img, onProgress)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to extract faces")
 	}
 
 	if len(faces) == 0 {
@@ -80,7 +81,7 @@ func (m *Santorini) Run(
 
 	result, err := facerecovery.RestoreFaces(ctx, m.session, img, faces, tileSize, -1, onProgress)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to restore faces")
 	}
 
 	return result, nil

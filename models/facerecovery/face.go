@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"math"
 
+	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
@@ -20,7 +21,7 @@ func GetFdModel(ep types.ExecutionProvider) (types.Model[[]facedetection.Face], 
 	if !exists {
 		model, err = newyork.New(fdOp, ep, nil)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to create Face Detection model")
 		}
 
 		internal.Registry[fdOp.Id()] = model

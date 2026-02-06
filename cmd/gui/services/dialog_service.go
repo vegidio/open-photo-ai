@@ -5,6 +5,7 @@ import (
 	guiutils "gui/utils"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/o11y"
 	"github.com/vegidio/open-photo-ai/utils"
@@ -33,7 +34,7 @@ func (s *DialogService) OpenFileDialog() ([]types.File, error) {
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {
 		s.tel.LogError("Error opening file dialog", nil, err)
-		return nil, err
+		return nil, errors.Wrap(err, "failed to open file dialog")
 	}
 
 	files := guiutils.CreateFileTypes(paths)
@@ -50,7 +51,7 @@ func (s *DialogService) OpenDirDialog() (string, error) {
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
 		s.tel.LogError("Error opening directory dialog", nil, err)
-		return "", err
+		return "", errors.Wrap(err, "failed to open directory dialog")
 	}
 
 	return path, nil

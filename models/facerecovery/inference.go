@@ -2,9 +2,9 @@ package facerecovery
 
 import (
 	"context"
-	"fmt"
 	"image"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facedetection"
 	"github.com/vegidio/open-photo-ai/types"
@@ -23,7 +23,7 @@ func RestoreFaces(
 	mask := createCircularMask(tileSize, tileSize, 15.0)
 
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "context cancelled")
 	}
 	if onProgress != nil {
 		onProgress("fr", 0.2)
@@ -38,16 +38,16 @@ func RestoreFaces(
 
 	for _, face := range faces {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "context cancelled")
 		}
 
 		restored, transform, err := restoreSingleFace(session, img, face, tileSize, fidelity)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to restore face")
 		}
 
 		if err = ctx.Err(); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "context cancelled")
 		}
 		if onProgress != nil {
 			total += step
@@ -76,7 +76,7 @@ func restoreSingleFace(
 
 	restored, err := runInference(session, aligned, tileSize, fidelity)
 	if err != nil {
-		return nil, transform, err
+		return nil, transform, errors.Wrap(err, "failed to run inference")
 	}
 
 	return restored, transform, nil
@@ -91,13 +91,13 @@ func runInference(session *ort.DynamicAdvancedSession, aligned image.Image, tile
 
 	inputTensor, err := ort.NewTensor(ort.NewShape(1, 3, int64(tileSize), int64(tileSize)), inputData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create input tensor: %v", err)
+		return nil, errors.Wrap(err, "failed to create input tensor")
 	}
 	defer inputTensor.Destroy()
 
 	outputTensor, err := ort.NewEmptyTensor[float32](ort.NewShape(1, 3, int64(tileSize), int64(tileSize)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create output tensor: %v", err)
+		return nil, errors.Wrap(err, "failed to create output tensor")
 	}
 	defer outputTensor.Destroy()
 
@@ -105,18 +105,18 @@ func runInference(session *ort.DynamicAdvancedSession, aligned image.Image, tile
 	if fidelity >= 0 {
 		weightTensor, err := ort.NewTensor(ort.NewShape(1), []float32{fidelity})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create weight tensor: %v", err)
+			return nil, errors.Wrap(err, "failed to create weight tensor")
 		}
 		defer weightTensor.Destroy()
 
 		err = session.Run([]ort.Value{inputTensor, weightTensor}, []ort.Value{outputTensor})
 		if err != nil {
-			return nil, fmt.Errorf("inference failed: %v", err)
+			return nil, errors.Wrap(err, "failed to run inference")
 		}
 	} else {
 		err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor})
 		if err != nil {
-			return nil, fmt.Errorf("inference failed: %v", err)
+			return nil, errors.Wrap(err, "failed to run inference")
 		}
 	}
 

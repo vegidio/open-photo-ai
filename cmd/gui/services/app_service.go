@@ -3,6 +3,7 @@ package services
 import (
 	"shared"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/github"
 	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
@@ -40,7 +41,7 @@ func (s *AppService) Initialize() (SupportedEPs, error) {
 	if err := opai.Initialize(shared.AppName, onProgress); err != nil {
 		s.tel.LogError("Error initializing ONNX", nil, err)
 		s.app.Event.Emit("app:download:error")
-		return supportedEPs, err
+		return supportedEPs, errors.Wrap(err, "failed to initialize ONNX Runtime")
 	}
 
 	// Initialize CUDA and TensorRT if they are supported
@@ -50,7 +51,7 @@ func (s *AppService) Initialize() (SupportedEPs, error) {
 		if err := s.initializeCuda(); err != nil {
 			s.tel.LogError("Error initializing CUDA", nil, err)
 			s.app.Event.Emit("app:download:error")
-			return supportedEPs, err
+			return supportedEPs, errors.Wrap(err, "failed to initialize CUDA")
 		}
 	}
 
@@ -60,7 +61,7 @@ func (s *AppService) Initialize() (SupportedEPs, error) {
 		if err := s.initializeTensorRT(); err != nil {
 			s.tel.LogError("Error initializing TensorRT", nil, err)
 			s.app.Event.Emit("app:download:error")
-			return supportedEPs, err
+			return supportedEPs, errors.Wrap(err, "failed to initialize TensorRT")
 		}
 	}
 
@@ -70,6 +71,10 @@ func (s *AppService) Initialize() (SupportedEPs, error) {
 	}
 
 	return supportedEPs, nil
+}
+
+func (s *AppService) CleanRegistry() {
+	opai.CleanRegistry()
 }
 
 func (s *AppService) Version() string {
@@ -91,14 +96,14 @@ func (s *AppService) initializeCuda() error {
 		func(_, _ int64, percent float64) {
 			s.app.Event.Emit("app:download", "NVIDIA CUDA", percent)
 		}); err != nil {
-		return err
+		return errors.Wrap(err, "failed to download CUDA dependency")
 	}
 
 	if err := utils.InitializeNvidiaLib("cudnn", utils.CudnnTag, &types.FileCheck{Path: "LICENSE.txt"},
 		func(_, _ int64, percent float64) {
 			s.app.Event.Emit("app:download", "NVIDIA cuDNN", percent)
 		}); err != nil {
-		return err
+		return errors.Wrap(err, "failed to download cuDNN dependency")
 	}
 
 	return nil
@@ -109,7 +114,7 @@ func (s *AppService) initializeTensorRT() error {
 		func(_, _ int64, percent float64) {
 			s.app.Event.Emit("app:download", "NVIDIA TensorRT", percent)
 		}); err != nil {
-		return err
+		return errors.Wrap(err, "failed to download TensorRT dependency")
 	}
 
 	return nil

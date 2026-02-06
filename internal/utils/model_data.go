@@ -3,13 +3,13 @@ package utils
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"github.com/vegidio/open-photo-ai/internal"
 )
@@ -39,27 +39,27 @@ func LoadModelData() ([]internal.RemoteModelData, error) {
 	url := "https://huggingface.co/api/models/vegidio/open-photo-ai/tree/main/models"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, errors.Wrapf(err, "failed to create request to %s", url)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch model data: %w", err)
+		return nil, errors.Wrapf(err, "failed to send request to %s", url)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, errors.Wrapf(err, "bad status code: %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, errors.Wrap(err, "failed to read response body")
 	}
 
 	var files []huggingFaceFile
 	if err = json.Unmarshal(body, &files); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+		return nil, errors.Wrap(err, "failed to unmarshal JSON")
 	}
 
 	return lo.Map(files, func(file huggingFaceFile, _ int) internal.RemoteModelData {

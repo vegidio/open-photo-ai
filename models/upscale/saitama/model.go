@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/upscale"
@@ -43,7 +44,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 		}
 
 		if err := utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to prepare Saitama model")
 		}
 
 		session, err := utils.CreateSession(
@@ -53,7 +54,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 			ep,
 		)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to create Saitama session")
 		}
 
 		sessions = append(sessions, session)

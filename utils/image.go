@@ -2,7 +2,6 @@ package utils
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	"image/gif"
 	_ "image/gif"
@@ -13,6 +12,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/avif-go"
 	_ "github.com/vegidio/avif-go"
 	"github.com/vegidio/go-sak/crypto"
@@ -42,24 +42,24 @@ import (
 func LoadImage(path string) (*types.ImageData, error) {
 	inputFile, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to open image file")
 	}
 	defer inputFile.Close()
 
 	img, _, err := image.Decode(inputFile)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to decode image")
 	}
 
 	// Reset file pointer to the beginning
 	_, err = inputFile.Seek(0, io.SeekStart)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to reset file pointer")
 	}
 
 	hash, err := crypto.Xxh3Reader(inputFile)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to compute image hash")
 	}
 
 	return &types.ImageData{
@@ -102,11 +102,11 @@ func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte
 	case types.FormatWebp:
 		err = webp.Encode(&buf, img, &webp.Options{Quality: 75})
 	default:
-		err = fmt.Errorf("unsupported image format: %d", format)
+		err = errors.Errorf("unsupported image format: %d", format)
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to encode image")
 	}
 
 	return buf.Bytes(), nil
@@ -125,17 +125,17 @@ func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte
 //   - error: An error if the quality is out of range, the file cannot be created, or encoding fails.
 func SaveImage(data *types.ImageData, format types.ImageFormat, quality int) (int, error) {
 	if quality < 0 || quality > 100 {
-		return 0, fmt.Errorf("invalid quality: %d, must be between 0 and 100", quality)
+		return 0, errors.Errorf("invalid quality: %d, must be between 0 and 100", quality)
 	}
 
 	imageBytes, err := EncodeImage(data.Pixels, format, quality)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "failed to encode image")
 	}
 
 	err = os.WriteFile(data.FilePath, imageBytes, 0644)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "failed to write image file")
 	}
 
 	return len(imageBytes), nil
