@@ -19,14 +19,14 @@ import (
 )
 
 type ImageService struct {
-	app *application.App
-	tel *o11y.Telemetry
+	app  *application.App
+	otel *o11y.Telemetry
 }
 
-func NewImageService(app *application.App, tel *o11y.Telemetry) *ImageService {
+func NewImageService(app *application.App, otel *o11y.Telemetry) *ImageService {
 	return &ImageService{
-		app: app,
-		tel: tel,
+		app:  app,
+		otel: otel,
 	}
 }
 
@@ -46,7 +46,7 @@ func NewImageService(app *application.App, tel *o11y.Telemetry) *ImageService {
 func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, error) {
 	inputData, err := utils.LoadImage(filePath)
 	if err != nil {
-		s.tel.LogError("Error loading image", nil, err)
+		s.otel.LogError("Error loading image", nil, err)
 		return nil, 0, 0, errors.Wrap(err, "failed to load image")
 	}
 
@@ -61,7 +61,7 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 
 	data, err := utils.EncodeImage(inputData.Pixels, types.FormatJpeg, 90)
 	if err != nil {
-		s.tel.LogError("Error encoding image", nil, err)
+		s.otel.LogError("Error encoding image", nil, err)
 		return nil, 0, 0, errors.Wrap(err, "failed to encode image")
 	}
 
@@ -93,7 +93,7 @@ func (s *ImageService) ProcessImage(
 
 	outputData, err := s.runInference(ctx, filePath, ep, opIds)
 	if err != nil {
-		s.tel.LogError("Error running inference", map[string]any{
+		s.otel.LogError("Error running inference", map[string]any{
 			"operations": strings.Join(opIds, ", "),
 		}, err)
 
@@ -106,7 +106,7 @@ func (s *ImageService) ProcessImage(
 
 	data, err := utils.EncodeImage(outputData.Pixels, types.FormatJpeg, 90)
 	if err != nil {
-		s.tel.LogError("Error encoding image", nil, err)
+		s.otel.LogError("Error encoding image", nil, err)
 		return nil, 0, 0, errors.Wrap(err, "failed to encode image")
 	}
 
@@ -130,7 +130,7 @@ func (s *ImageService) ProcessImage(
 func (s *ImageService) SuggestEnhancements(filePath string) ([]types.ModelType, error) {
 	inputImage, err := utils.LoadImage(filePath)
 	if err != nil {
-		s.tel.LogError("Error loading image", nil, err)
+		s.otel.LogError("Error loading image", nil, err)
 		return nil, errors.Wrap(err, "failed to load image")
 	}
 
@@ -166,7 +166,7 @@ func (s *ImageService) ExportImage(
 
 	outputData, err := s.runInference(ctx, file.Path, ep, opIds)
 	if err != nil {
-		s.tel.LogError("Error running inference", map[string]any{
+		s.otel.LogError("Error running inference", map[string]any{
 			"operations": strings.Join(opIds, ", "),
 		}, err)
 
@@ -184,7 +184,7 @@ func (s *ImageService) ExportImage(
 	}, format, 100)
 
 	if err != nil {
-		s.tel.LogError("Error saving image", nil, err)
+		s.otel.LogError("Error saving image", nil, err)
 		return errors.Wrap(err, "failed to save image")
 	}
 

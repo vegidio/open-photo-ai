@@ -13,12 +13,12 @@ import (
 )
 
 type DialogService struct {
-	app *application.App
-	tel *o11y.Telemetry
+	app  *application.App
+	otel *o11y.Telemetry
 }
 
-func NewDialogService(app *application.App, tel *o11y.Telemetry) *DialogService {
-	return &DialogService{app: app, tel: tel}
+func NewDialogService(app *application.App, otel *o11y.Telemetry) *DialogService {
+	return &DialogService{app: app, otel: otel}
 }
 
 func (s *DialogService) OpenFileDialog() ([]types.File, error) {
@@ -33,7 +33,7 @@ func (s *DialogService) OpenFileDialog() ([]types.File, error) {
 
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {
-		s.tel.LogError("Error opening file dialog", nil, err)
+		s.otel.LogError("Error opening file dialog", nil, err)
 		return nil, errors.Wrap(err, "failed to open file dialog")
 	}
 
@@ -50,7 +50,7 @@ func (s *DialogService) OpenDirDialog() (string, error) {
 
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
-		s.tel.LogError("Error opening directory dialog", nil, err)
+		s.otel.LogError("Error opening directory dialog", nil, err)
 		return "", errors.Wrap(err, "failed to open directory dialog")
 	}
 

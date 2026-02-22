@@ -28,11 +28,19 @@ func main() {
 		setLibPathAndRestart()
 	}
 
-	tel := o11y.NewTelemetry(shared.OtelEndpoint, "opai", shared.Version, shared.OtelEnvironment, true)
-	defer tel.Close()
+	otel := o11y.NewTelemetry(
+		shared.OtelEndpoint,
+		"opai",
+		shared.Version,
+		map[string]string{"Authorization": shared.OtelAuth},
+		shared.OtelEnvironment,
+		true,
+	)
+
+	defer otel.Close()
 
 	// Track of system info
-	shared.ReportSystemInfo(tel)
+	shared.ReportSystemInfo(otel)
 
 	// Create a new Wails application by providing the necessary options.
 	app := application.New(application.Options{
@@ -66,9 +74,9 @@ func main() {
 	eventDragAndDrop(app, win)
 
 	// Services
-	destroyServices, err := services.RegisterServices(app, tel)
+	destroyServices, err := services.RegisterServices(app, otel)
 	if err != nil {
-		tel.LogError("Error starting the services", nil, err)
+		otel.LogError("Error starting the services", nil, err)
 		log.Fatalf("%+v", err)
 	}
 	defer destroyServices()
@@ -78,7 +86,7 @@ func main() {
 
 	// If an error occurred while running the application, log it and exit.
 	if err != nil {
-		tel.LogError("Error running the app", nil, err)
+		otel.LogError("Error running the app", nil, err)
 		log.Fatalf("%+v", err)
 	}
 }

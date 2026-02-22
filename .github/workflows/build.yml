@@ -28,6 +28,7 @@ jobs:
     needs: [version]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
+      OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}
     steps:
       - name: Code checkout
         uses: actions/checkout@v5
@@ -55,7 +56,8 @@ jobs:
       - name: Build Linux binaries
         run: |
           node scripts/replace.mjs cmd/shared/constants.go "<version>=>${{ needs.version.outputs.VERSION }}"
-          node scripts/replace.mjs cmd/shared/constants.go "<otel>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_endpoint>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_auth>=>$OTEL_HEADER_AUTH"
           node scripts/replace.mjs cmd/shared/constants.go "EnvDevelopment=>EnvProduction"
           task package archs=amd64
 
@@ -70,6 +72,7 @@ jobs:
     needs: [version]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
+      OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}
     steps:
       - name: Code checkout
         uses: actions/checkout@v5
@@ -97,7 +100,8 @@ jobs:
       - name: Build Linux binaries
         run: |
           node scripts/replace.mjs cmd/shared/constants.go "<version>=>${{ needs.version.outputs.VERSION }}"
-          node scripts/replace.mjs cmd/shared/constants.go "<otel>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_endpoint>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_auth>=>$OTEL_HEADER_AUTH"
           node scripts/replace.mjs cmd/shared/constants.go "EnvDevelopment=>EnvProduction"
           task package archs=arm64
 
@@ -112,6 +116,7 @@ jobs:
     needs: [version]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
+      OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}
     steps:
       - name: Code checkout
         uses: actions/checkout@v5
@@ -134,7 +139,8 @@ jobs:
       - name: Build MacOS binaries
         run: |
           node scripts/replace.mjs cmd/shared/constants.go "<version>=>${{ needs.version.outputs.VERSION }}"
-          node scripts/replace.mjs cmd/shared/constants.go "<otel>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_endpoint>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_auth>=>$OTEL_HEADER_AUTH"
           node scripts/replace.mjs cmd/shared/constants.go "EnvDevelopment=>EnvProduction"
           task package archs='amd64 arm64'
 
@@ -149,6 +155,7 @@ jobs:
     needs: [version]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
+      OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}
     steps:
       - name: Code checkout
         uses: actions/checkout@v5
@@ -174,7 +181,8 @@ jobs:
       - name: Build Windows binaries
         run: |
           node scripts/replace.mjs cmd/shared/constants.go "<version>=>${{ needs.version.outputs.VERSION }}"
-          node scripts/replace.mjs cmd/shared/constants.go "<otel>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_endpoint>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_auth>=>$OTEL_HEADER_AUTH"
           node scripts/replace.mjs cmd/shared/constants.go "EnvDevelopment=>EnvProduction"
           task package archs=amd64
 
@@ -189,6 +197,7 @@ jobs:
     needs: [version]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
+      OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}
     steps:
       - name: Code checkout
         uses: actions/checkout@v5
@@ -228,7 +237,8 @@ jobs:
           CXX: aarch64-w64-mingw32-g++
         run: |
           node scripts/replace.mjs cmd/shared/constants.go "<version>=>${{ needs.version.outputs.VERSION }}"
-          node scripts/replace.mjs cmd/shared/constants.go "<otel>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_endpoint>=>$OTEL_ENDPOINT"
+          node scripts/replace.mjs cmd/shared/constants.go "<otel_auth>=>$OTEL_HEADER_AUTH"
           node scripts/replace.mjs cmd/shared/constants.go "EnvDevelopment=>EnvProduction"
           task package archs=arm64
 

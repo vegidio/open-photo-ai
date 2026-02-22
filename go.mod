@@ -7,7 +7,7 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.52.0
 	github.com/vegidio/avif-go v0.0.0-20260201182506-481b88104109
-	github.com/vegidio/go-sak v0.0.0-20260122173904-429e26e71cc8
+	github.com/vegidio/go-sak v0.0.0-20260222095309-3fc413b07da0
 	github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84
 	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6
 	github.com/yalue/onnxruntime_go v1.21.0

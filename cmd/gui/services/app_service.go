@@ -13,8 +13,8 @@ import (
 )
 
 type AppService struct {
-	app *application.App
-	tel *o11y.Telemetry
+	app  *application.App
+	otel *o11y.Telemetry
 }
 
 type SupportedEPs struct {
@@ -23,10 +23,10 @@ type SupportedEPs struct {
 	CoreML   bool
 }
 
-func NewAppService(app *application.App, tel *o11y.Telemetry) *AppService {
+func NewAppService(app *application.App, otel *o11y.Telemetry) *AppService {
 	return &AppService{
-		app: app,
-		tel: tel,
+		app:  app,
+		otel: otel,
 	}
 }
 
@@ -39,7 +39,7 @@ func (s *AppService) Initialize() (SupportedEPs, error) {
 
 	// Initialize the model runtime
 	if err := opai.Initialize(shared.AppName, onProgress); err != nil {
-		s.tel.LogError("Error initializing ONNX", nil, err)
+		s.otel.LogError("Error initializing ONNX", nil, err)
 		s.app.Event.Emit("app:download:error")
 		return supportedEPs, errors.Wrap(err, "failed to initialize ONNX Runtime")
 	}
@@ -49,7 +49,7 @@ func (s *AppService) Initialize() (SupportedEPs, error) {
 		supportedEPs.CUDA = true
 
 		if err := s.initializeCuda(); err != nil {
-			s.tel.LogError("Error initializing CUDA", nil, err)
+			s.otel.LogError("Error initializing CUDA", nil, err)
 			s.app.Event.Emit("app:download:error")
 			return supportedEPs, errors.Wrap(err, "failed to initialize CUDA")
 		}
@@ -59,7 +59,7 @@ func (s *AppService) Initialize() (SupportedEPs, error) {
 		supportedEPs.TensorRT = true
 
 		if err := s.initializeTensorRT(); err != nil {
-			s.tel.LogError("Error initializing TensorRT", nil, err)
+			s.otel.LogError("Error initializing TensorRT", nil, err)
 			s.app.Event.Emit("app:download:error")
 			return supportedEPs, errors.Wrap(err, "failed to initialize TensorRT")
 		}

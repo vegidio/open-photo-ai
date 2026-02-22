@@ -5,14 +5,14 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-func RegisterServices(app *application.App, tel *o11y.Telemetry) (func(), error) {
-	appService := NewAppService(app, tel)
+func RegisterServices(app *application.App, otel *o11y.Telemetry) (func(), error) {
+	appService := NewAppService(app, otel)
 	app.RegisterService(application.NewService(appService))
 
-	imageService := NewImageService(app, tel)
+	imageService := NewImageService(app, otel)
 	app.RegisterService(application.NewService(imageService))
 
-	dialogService := NewDialogService(app, tel)
+	dialogService := NewDialogService(app, otel)
 	app.RegisterService(application.NewService(dialogService))
 
 	osService := NewOsService(app)

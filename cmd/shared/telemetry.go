@@ -7,7 +7,7 @@ import (
 	"github.com/vegidio/go-sak/sysinfo"
 )
 
-func ReportSystemInfo(tel *o11y.Telemetry) {
+func ReportSystemInfo(otel *o11y.Telemetry) {
 	info := make(map[string]any)
 
 	if cpu, err := sysinfo.GetCPUInfo(); err == nil {
@@ -27,5 +27,5 @@ func ReportSystemInfo(tel *o11y.Telemetry) {
 		}
 	}
 
-	tel.LogInfo("System info", info)
+	otel.LogInfo("System info", info)
 }
