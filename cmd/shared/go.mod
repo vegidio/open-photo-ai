@@ -1,6 +1,6 @@
 module shared
 
-go 1.25.5
+go 1.26.1
 
 require github.com/vegidio/go-sak v0.0.0-20260222095309-3fc413b07da0
 

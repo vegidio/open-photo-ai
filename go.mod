@@ -1,6 +1,6 @@
 module github.com/vegidio/open-photo-ai
 
-go 1.25.3
+go 1.26.1
 
 require (
 	github.com/cockroachdb/errors v1.12.0

@@ -93,9 +93,12 @@ func (s *ImageService) ProcessImage(
 
 	outputData, err := s.runInference(ctx, filePath, ep, opIds)
 	if err != nil {
-		s.otel.LogError("Error running inference", map[string]any{
-			"operations": strings.Join(opIds, ", "),
-		}, err)
+		// Cancellation errors are not reported
+		if !errors.Is(err, context.Canceled) {
+			s.otel.LogError("Error running inference", map[string]any{
+				"operations": strings.Join(opIds, ", "),
+			}, err)
+		}
 
 		return nil, 0, 0, errors.Wrap(err, "failed to run inference")
 	}
@@ -166,9 +169,12 @@ func (s *ImageService) ExportImage(
 
 	outputData, err := s.runInference(ctx, file.Path, ep, opIds)
 	if err != nil {
-		s.otel.LogError("Error running inference", map[string]any{
-			"operations": strings.Join(opIds, ", "),
-		}, err)
+		// Cancellation errors are not reported
+		if !errors.Is(err, context.Canceled) {
+			s.otel.LogError("Error running inference", map[string]any{
+				"operations": strings.Join(opIds, ", "),
+			}, err)
+		}
 
 		return errors.Wrap(err, "failed to run inference")
 	}
