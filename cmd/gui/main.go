@@ -10,12 +10,12 @@ import (
 	"log/slog"
 	stdos "os"
 	"runtime"
-	"shared"
 	"strings"
 
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/o11y"
 	"github.com/vegidio/go-sak/os"
+	"github.com/vegidio/open-photo-ai/shared"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )

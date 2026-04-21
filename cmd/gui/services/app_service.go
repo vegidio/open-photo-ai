@@ -2,12 +2,12 @@ package services
 
 import (
 	"context"
-	"shared"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/github"
 	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
+	"github.com/vegidio/open-photo-ai/shared"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 	"github.com/wailsapp/wails/v3/pkg/application"

@@ -5,5 +5,4 @@ use (
 	./cmd/cli
 	./cmd/gui
 	./cmd/perf
-	./cmd/shared
 )
