@@ -2,7 +2,7 @@ module perf
 
 go 1.25.3
 
-require github.com/vegidio/go-sak v0.0.0-20260222095309-3fc413b07da0
+require github.com/vegidio/go-sak v0.0.0-20260421203251-f2842cdc8299
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -11,7 +11,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/samber/lo v1.52.0 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 )

@@ -83,8 +83,8 @@ func (s *AppService) Version() string {
 	return shared.Version
 }
 
-func (s *AppService) IsOutdated() bool {
-	return github.IsOutdatedRelease("vegidio", "open-photo-ai", shared.Version)
+func (s *AppService) IsOutdated(ctx context.Context) bool {
+	return github.IsOutdatedRelease(ctx, "vegidio", "open-photo-ai", shared.Version)
 }
 
 // region - Private methods
