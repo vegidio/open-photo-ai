@@ -12,15 +12,6 @@ It currently supports the following enhancements:
 <img src="https://img.shields.io/badge/Upscale-984E7D?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjZTNlM2UzIj48cGF0aCBkPSJNMTIwLTEyMHYtMzIwaDgwdjE4NGw1MDQtNTA0SDUyMHYtODBoMzIwdjMyMGgtODB2LTE4NEwyNTYtMjAwaDE4NHY4MEgxMjBaIi8+PC9zdmc+"/>
 </p>
 
-## 🚀 Campaign
-
-<p align="center">
-We're on Kickstarter! Help us build a sustainable open source alternative to Topaz Photo AI.
-<a href="https://www.kickstarter.com/projects/vegidio/open-photo-ai-prosumer-photo-ai-enhancement-100-local">Back the campaign →
-<br/><br/>
-<img src="https://i.imgur.com/rKEyDPj.png" width="80%" alt="Open Photo AI - Kickstarter"/></a>
-</p>
-
 ## 💡 Motivation
 
 There are many excellent AI-based photo editing tools available today, ranging from open-source solutions – often powerful but complex to set up and use, such as ComfyUI – to commercial products that favor ease of use over deep customization, like those from Topaz Labs.
