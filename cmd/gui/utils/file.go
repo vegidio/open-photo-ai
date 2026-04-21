@@ -28,9 +28,11 @@ func CreateFileTypes(paths []string) []types.File {
 			ext = ext[1:]
 		}
 
-		// Size
-		fileInfo, _ := os.Stat(path)
-		size := int(fileInfo.Size())
+		// Size — tolerate a missing/unreadable file; surrounding fields still carry useful info.
+		var size int
+		if fileInfo, err := os.Stat(path); err == nil {
+			size = int(fileInfo.Size())
+		}
 
 		return types.File{
 			Path:       path,

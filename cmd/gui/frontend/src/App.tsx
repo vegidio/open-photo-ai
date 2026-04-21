@@ -16,6 +16,7 @@ export const App = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [isContainerReady, setIsContainerReady] = useState(false);
     const [openDownload, setOpenDownload] = useState(false);
+    const [downloadError, setDownloadError] = useState(false);
     const [openTensorRT, setOpenTensorRT] = useState(false);
 
     useEffect(() => {
@@ -25,7 +26,6 @@ export const App = () => {
     // biome-ignore lint/correctness/useExhaustiveDependencies: N/A
     useEffect(() => {
         Events.Once('app:download', (_) => setOpenDownload(true));
-        Events.Once('app:download:error', (_) => setOpenDownload(true));
 
         const initDependencies = async () => {
             try {
@@ -37,6 +37,8 @@ export const App = () => {
                 if (supportedEps.TensorRT && isFirstTensorRT) setOpenTensorRT(true);
             } catch {
                 console.error('Failed to initialize the app');
+                setOpenDownload(true);
+                setDownloadError(true);
             }
         };
 
@@ -44,7 +46,6 @@ export const App = () => {
 
         return () => {
             Events.Off('app:download');
-            Events.Off('app:download:error');
         };
     }, []);
 
@@ -62,7 +63,14 @@ export const App = () => {
                 <Sidebar className='w-64 h-full' />
             </main>
 
-            <DialogDownload open={openDownload} onClose={() => setOpenDownload(false)} />
+            <DialogDownload
+                open={openDownload}
+                hasError={downloadError}
+                onClose={() => {
+                    setOpenDownload(false);
+                    setDownloadError(false);
+                }}
+            />
 
             <DialogTensorRT open={openTensorRT} onClose={() => setOpenTensorRT(false)} />
         </div>

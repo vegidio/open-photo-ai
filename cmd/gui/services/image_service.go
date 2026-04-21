@@ -130,14 +130,14 @@ func (s *ImageService) ProcessImage(
 // # Returns:
 //   - []types.ModelType: A list of suggested enhancement types to apply to the image.
 //   - error: An error if the image cannot be loaded.
-func (s *ImageService) SuggestEnhancements(filePath string) ([]types.ModelType, error) {
+func (s *ImageService) SuggestEnhancements(ctx context.Context, filePath string) ([]types.ModelType, error) {
 	inputImage, err := utils.LoadImage(filePath)
 	if err != nil {
 		s.otel.LogError("Error loading image", nil, err)
 		return nil, errors.Wrap(err, "failed to load image")
 	}
 
-	return opai.SuggestEnhancements(inputImage), nil
+	return opai.SuggestEnhancements(ctx, inputImage), nil
 }
 
 // ExportImage runs inference operations on an image and saves the result to disk.
@@ -215,7 +215,11 @@ func (s *ImageService) runInference(
 		return nil, errors.Wrap(err, "failed to load image")
 	}
 
-	operations := guiutils.IdsToOperations(opIds)
+	operations, err := guiutils.IdsToOperations(opIds)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse operation IDs")
+	}
+
 	outputData, err := opai.Process(ctx, inputImage, ep, func(name string, progress float64) {
 		s.app.Event.Emit("app:progress", name, progress)
 	}, operations...)
@@ -243,16 +247,18 @@ func getOutputPath(filePath string, overwrite bool) string {
 	ext := filepath.Ext(filePath)
 	basePath := filePath[:len(filePath)-len(ext)]
 	outputPath := basePath + ext
-	count := 1
 
-	for {
-		if exists := fs.FileExists(outputPath); !exists {
+	const maxAttempts = 999
+	for count := 1; count <= maxAttempts; count++ {
+		if !fs.FileExists(outputPath) {
 			return outputPath
 		}
-
 		outputPath = fmt.Sprintf("%s_%d%s", basePath, count, ext)
-		count++
 	}
+
+	// Exhausted the dedup suffix range; fall back to the last candidate and let the caller's
+	// write fail loudly rather than looping forever.
+	return outputPath
 }
 
 // endregion

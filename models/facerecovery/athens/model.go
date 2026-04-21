@@ -27,8 +27,8 @@ type Athens struct {
 	fdModel   types.Model[[]facedetection.Face]
 }
 
-func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Athens, error) {
-	fdModel, modelFile, err := facerecovery.LoadModel(operation, ep, onProgress)
+func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Athens, error) {
+	fdModel, modelFile, err := facerecovery.LoadModel(ctx, operation, ep, onProgress)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load Athens model")
 	}

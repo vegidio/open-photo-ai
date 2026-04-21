@@ -18,7 +18,7 @@ export const DrawerBody = ({ drawerHeight }: FileListBodyProps) => {
         <div style={{ height: drawerHeight }} className='flex flex-row px-4 py-3 gap-4 overflow-x-auto scrollbar-thin'>
             {files.map((file, index) => (
                 <DrawerItem
-                    key={`img-${index}`}
+                    key={file.Hash}
                     file={file}
                     current={index === currentIndex}
                     onClick={() => onImageClicked(index)}

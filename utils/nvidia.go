@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -71,16 +72,21 @@ func IsTensorRtSupported() bool {
 // # Parameters:
 //   - libName: The name of the NVIDIA library (e.g., "cuda", "cudnn", "tensorrt").
 //   - libTag: The version tag used in the download URL (e.g., "cuda/12.9.1").
-//   - checkFile: A file path used to verify if the library is already installed.
+//   - checkFile: A filepath used to verify if the library is already installed.
 //   - onProgress: A callback function to report download progress.
 //
 // Returns an error if the download, extraction, or path configuration fails.
-func InitializeNvidiaLib(libName, libTag string, fileCheck *types.FileCheck, onProgress types.DownloadProgress) error {
+func InitializeNvidiaLib(
+	ctx context.Context,
+	libName, libTag string,
+	fileCheck *types.FileCheck,
+	onProgress types.DownloadProgress,
+) error {
 	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/%s_%s_%s.zip",
 		libTag, libName, runtime.GOOS, runtime.GOARCH)
 	destination := filepath.Join("libs", libName)
 
-	if err := utils.PrepareDependency(url, destination, fileCheck, onProgress); err != nil {
+	if err := utils.PrepareDependency(ctx, url, destination, fileCheck, onProgress); err != nil {
 		return errors.Wrap(err, "failed to prepare NVIDIA library")
 	}
 

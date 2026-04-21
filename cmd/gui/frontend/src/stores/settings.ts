@@ -38,7 +38,7 @@ type SettingsStore = {
 export const useSettingsStore = create(
     persist(
         immer<SettingsStore>((set, get) => {
-            let snapshot: Record<string, any> = {};
+            let snapshot: Record<string, unknown> = {};
 
             return {
                 isFirstTensorRT: true,
@@ -109,8 +109,9 @@ export const useSettingsStore = create(
 
                 restoreSnapshot: () => {
                     set((state) => {
+                        const target = state as unknown as Record<string, unknown>;
                         Object.keys(snapshot).forEach((key) => {
-                            (state as any)[key] = snapshot[key];
+                            target[key] = snapshot[key];
                         });
                     });
                 },

@@ -2,17 +2,12 @@ package kyoto
 
 import (
 	"context"
-	"fmt"
 	"image"
 
 	"github.com/cockroachdb/errors"
-	"github.com/vegidio/open-photo-ai/internal"
-	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 type Kyoto struct {
@@ -22,46 +17,17 @@ type Kyoto struct {
 	scales    []int
 }
 
-func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Kyoto, error) {
+func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Kyoto, error) {
 	op := operation.(OpUpKyoto)
-	name := fmt.Sprintf("Upscale %.4gx (%s)",
-		op.scale,
-		cases.Upper(language.English).String(string(op.precision)),
-	)
-
-	sessions := make([]*ort.DynamicAdvancedSession, 0)
 	scales := selectScaleMatrix(op.scale)
 
-	for _, scale := range scales {
-		clonedOp := op
-		clonedOp.scale = float64(scale)
-
-		modelFile := clonedOp.Id() + ".onnx"
-		url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-		fileCheck := &types.FileCheck{
-			Path: modelFile,
-			Hash: clonedOp.Hash(),
-		}
-
-		if err := utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
-			return nil, errors.Wrap(err, "failed to prepare Kyoto model")
-		}
-
-		session, err := utils.CreateSession(
-			modelFile,
-			[]string{"input"},
-			[]string{"output"},
-			ep,
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to create Kyoto session")
-		}
-
-		sessions = append(sessions, session)
+	sessions, err := upscale.LoadSessions(ctx, "kyoto", op.precision, scales, ep, onProgress)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load Kyoto sessions")
 	}
 
 	return &Kyoto{
-		name:      name,
+		name:      upscale.FormatUpscaleName(op.scale, op.precision),
 		operation: op,
 		sessions:  sessions,
 		scales:    scales,

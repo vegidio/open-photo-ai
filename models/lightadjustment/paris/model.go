@@ -23,7 +23,7 @@ type Paris struct {
 	intensity float32
 }
 
-func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Paris, error) {
+func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Paris, error) {
 	op := operation.(OpLaParis)
 
 	// Remove the intensity from the model ID since this information is irrelevant to the model name
@@ -38,7 +38,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 		Hash: op.Hash(),
 	}
 
-	if err := utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
+	if err := utils.PrepareDependency(ctx, url, "models", fileCheck, onProgress); err != nil {
 		return nil, errors.Wrap(err, "failed to prepare Paris model")
 	}
 

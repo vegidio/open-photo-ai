@@ -51,7 +51,7 @@ func Process(
 
 	for i, op := range operations {
 		// Check first if there's a cached image for this operation
-		if cachedImg, err := internal.ImageCache.GetImage(input.Hash, operations[:i+1]...); err == nil {
+		if cachedImg, err := internal.ImageCache.GetImage(ctx, input.Hash, operations[:i+1]...); err == nil {
 			output = cachedImg
 			continue
 		}
@@ -61,7 +61,7 @@ func Process(
 			return nil, errors.Wrap(err, "error running inference")
 		}
 
-		if err = internal.ImageCache.SetImage(output, input.Hash, operations[:i+1]...); err != nil {
+		if err = internal.ImageCache.SetImage(ctx, output, input.Hash, operations[:i+1]...); err != nil {
 			return nil, errors.Wrap(err, "error caching image")
 		}
 	}
@@ -102,7 +102,7 @@ func Execute[T any](
 	// nil value for type T
 	var genericNil T
 
-	model, err := selectModel(operation, ep, func(_, _ int64, percent float64) {
+	model, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
 		if onProgress != nil {
 			onProgress("dl", percent)
 		}
@@ -126,12 +126,10 @@ func Execute[T any](
 // This function should be called when the application is shutting down or when all model instances are no longer needed
 // to prevent resource leaks.
 func CleanRegistry() {
-	for key, model := range internal.Registry {
+	for _, model := range internal.Registry.Drain() {
 		if destroyable, ok := model.(types.Destroyable); ok {
 			destroyable.Destroy()
 		}
-
-		delete(internal.Registry, key)
 	}
 }
 
@@ -144,7 +142,7 @@ func runInference(
 	onProgress types.InferenceProgress,
 	operation types.Operation,
 ) (image.Image, error) {
-	model, err := selectModel(operation, ep, func(_, _ int64, percent float64) {
+	model, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
 		if onProgress != nil {
 			onProgress("dl", percent)
 		}
@@ -163,6 +161,7 @@ func runInference(
 }
 
 func selectModel(
+	ctx context.Context,
 	operation types.Operation,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
@@ -170,7 +169,7 @@ func selectModel(
 	var model interface{}
 	var err error
 
-	model, exists := internal.Registry[operation.Id()]
+	model, exists := internal.Registry.Get(operation.Id())
 	if exists {
 		return model, nil
 	}
@@ -178,25 +177,25 @@ func selectModel(
 	switch {
 	// Face Detection
 	case strings.HasPrefix(operation.Id(), "fd_newyork"):
-		model, err = newyork.New(operation, ep, onProgress)
+		model, err = newyork.New(ctx, operation, ep, onProgress)
 
 	// Face Recovery
 	case strings.HasPrefix(operation.Id(), "fr_athens"):
-		model, err = athens.New(operation, ep, onProgress)
+		model, err = athens.New(ctx, operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "fr_santorini"):
-		model, err = santorini.New(operation, ep, onProgress)
+		model, err = santorini.New(ctx, operation, ep, onProgress)
 
 	// Light Adjustment
 	case strings.HasPrefix(operation.Id(), "la_paris"):
-		model, err = paris.New(operation, ep, onProgress)
+		model, err = paris.New(ctx, operation, ep, onProgress)
 
 	// Upscale
 	case strings.HasPrefix(operation.Id(), "up_tokyo"):
-		model, err = tokyo.New(operation, ep, onProgress)
+		model, err = tokyo.New(ctx, operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "up_kyoto"):
-		model, err = kyoto.New(operation, ep, onProgress)
+		model, err = kyoto.New(ctx, operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "up_saitama"):
-		model, err = saitama.New(operation, ep, onProgress)
+		model, err = saitama.New(ctx, operation, ep, onProgress)
 
 	default:
 		err = errors.Errorf("no model found with ID: %s", operation.Id())
@@ -204,9 +203,8 @@ func selectModel(
 
 	// We can't check `model != nil` here because model is an interface and in Go a variable is only nil if both its
 	// type and value are nil. In this case, even though the value is nil, the variable has a concrete type.
-	// In other words, Go is stupid!
 	if err == nil {
-		internal.Registry[operation.Id()] = model
+		internal.Registry.Set(operation.Id(), model)
 	}
 
 	return model, err

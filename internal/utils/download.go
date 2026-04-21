@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"context"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/crypto"
@@ -12,6 +15,21 @@ import (
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/types"
 )
+
+// downloadClient has bounded connect + header timeouts so a stalled server can't hang Initialize
+// indefinitely. Body reads are left unbounded because model zips can be hundreds of MB on slow links.
+var downloadClient = &http.Client{
+	Transport: &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   30 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		ExpectContinueTimeout: 5 * time.Second,
+	},
+}
 
 // PrepareDependency downloads a file from the given URL to the destination directory if it doesn't already exist.
 //
@@ -26,6 +44,7 @@ import (
 //
 // Returns an error if the download or extraction fails, nil otherwise.
 func PrepareDependency(
+	ctx context.Context,
 	url, destination string,
 	fileCheck *types.FileCheck,
 	onProgress types.DownloadProgress,
@@ -41,7 +60,7 @@ func PrepareDependency(
 	}
 	defer file.Close()
 
-	err = downloadFile(url, file, onProgress)
+	err = downloadFile(ctx, url, file, onProgress)
 	if err != nil {
 		return errors.Wrap(err, "failed to [download] dependency")
 	}
@@ -116,8 +135,13 @@ func shouldDownload(destination string, fileCheck *types.FileCheck) bool {
 	return fileCheck.Hash != "" && fileCheck.Hash != hash
 }
 
-func downloadFile(url string, dstFile *os.File, onProgress types.DownloadProgress) error {
-	resp, err := http.Get(url)
+func downloadFile(ctx context.Context, url string, dstFile *os.File, onProgress types.DownloadProgress) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to build request")
+	}
+
+	resp, err := downloadClient.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "failed to download file")
 	}

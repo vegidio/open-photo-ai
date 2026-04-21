@@ -12,7 +12,9 @@ import (
 )
 
 func main() {
-	if err := opai.Initialize("open-photo-ai", nil); err != nil {
+	ctx := context.Background()
+
+	if err := opai.Initialize(ctx, "open-photo-ai", nil); err != nil {
 		fmt.Printf("Failed to initialize the AI runtime: %v\n", err)
 		return
 	}
@@ -30,7 +32,6 @@ func main() {
 		kyoto.Op(4, types.PrecisionFp32),
 	}
 
-	ctx := context.Background()
 	now := time.Now()
 
 	outputData, err := opai.Process(ctx, inputData, types.ExecutionProviderAuto, func(name string, progress float64) {

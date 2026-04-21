@@ -37,13 +37,10 @@ func NewCache(maxEntries int64) (*Cache, error) {
 	}, nil
 }
 
-func (c *Cache) GetImage(hash string, operations ...types.Operation) (image.Image, error) {
-	ops := lo.Map(operations, func(op types.Operation, _ int) string {
-		return op.Id()
-	})
-	key := memo.KeyFrom(hash, strings.Join(ops, "|"))
+func (c *Cache) GetImage(ctx context.Context, hash string, operations ...types.Operation) (image.Image, error) {
+	key := cacheKey(hash, operations)
 
-	data, found, err := c.diskCache.Store.Get(context.Background(), key)
+	data, found, err := c.diskCache.Store.Get(ctx, key)
 	if !found || err != nil {
 		return nil, errors.Errorf("cache miss for key: %s", key)
 	}
@@ -56,20 +53,23 @@ func (c *Cache) GetImage(hash string, operations ...types.Operation) (image.Imag
 	return img, nil
 }
 
-func (c *Cache) SetImage(img image.Image, hash string, operations ...types.Operation) error {
+func (c *Cache) SetImage(ctx context.Context, img image.Image, hash string, operations ...types.Operation) error {
 	data, err := imageToData(img)
 	if err != nil {
 		return err
 	}
 
+	key := cacheKey(hash, operations)
+	ttl := time.Hour * 24
+
+	return c.diskCache.Store.Set(ctx, key, data, ttl)
+}
+
+func cacheKey(hash string, operations []types.Operation) string {
 	ops := lo.Map(operations, func(op types.Operation, _ int) string {
 		return op.Id()
 	})
-	key := memo.KeyFrom(hash, strings.Join(ops, "|"))
-
-	ttl := time.Hour * 24
-
-	return c.diskCache.Store.Set(context.Background(), key, data, ttl)
+	return memo.KeyFrom(hash, strings.Join(ops, "|"))
 }
 
 func (c *Cache) Close() error {

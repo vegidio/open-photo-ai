@@ -7,26 +7,26 @@ import { DownloadProgress } from '@/components/molecules/DownloadProgress';
 
 type DialogDownloadProps = {
     open: boolean;
+    hasError?: boolean;
     onClose: () => void;
 };
 
-export const DialogDownload = ({ open, onClose }: DialogDownloadProps) => {
+export const DialogDownload = ({ open, hasError = false, onClose }: DialogDownloadProps) => {
     const [downloads, setDownloads] = useState<Record<string, number>>({});
     const [error, setError] = useState(false);
 
     useEffect(() => {
         Events.On('app:download', (event) => {
             const [dependency, progress] = event.data as [string, number];
-            setDownloads({ ...downloads, [dependency]: progress });
+            setDownloads((prev) => ({ ...prev, [dependency]: progress }));
         });
 
         return () => Events.Off('app:download');
-    }, [downloads]);
+    }, []);
 
     useEffect(() => {
-        Events.On('app:download:error', (_) => setError(true));
-        return () => Events.Off('app:download:error');
-    }, []);
+        if (hasError) setError(true);
+    }, [hasError]);
 
     const { message1, message2 } = useMemo(() => {
         if (error) {

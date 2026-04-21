@@ -27,7 +27,7 @@ type NewYork struct {
 	session   *ort.DynamicAdvancedSession
 }
 
-func New(operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*NewYork, error) {
+func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*NewYork, error) {
 	op := operation.(OpFdNewYork)
 	modelFile := op.Id() + ".onnx"
 	name := fmt.Sprintf("New York (%s)", cases.Upper(language.English).String(string(op.precision)))
@@ -38,7 +38,7 @@ func New(operation types.Operation, ep types.ExecutionProvider, onProgress types
 		Hash: op.Hash(),
 	}
 
-	if err := utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
+	if err := utils.PrepareDependency(ctx, url, "models", fileCheck, onProgress); err != nil {
 		return nil, errors.Wrap(err, "failed to prepare New York model")
 	}
 

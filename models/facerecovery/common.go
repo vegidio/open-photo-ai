@@ -13,11 +13,12 @@ import (
 )
 
 func LoadModel(
+	ctx context.Context,
 	operation types.Operation,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
 ) (types.Model[[]facedetection.Face], string, error) {
-	fdModel, err := GetFdModel(ep)
+	fdModel, err := GetFdModel(ctx, ep)
 	if err != nil {
 		return nil, "", errors.Wrap(err, "failed to load Face Detection model")
 	}
@@ -30,7 +31,7 @@ func LoadModel(
 		Hash: operation.Hash(),
 	}
 
-	if err = utils.PrepareDependency(url, "models", fileCheck, onProgress); err != nil {
+	if err = utils.PrepareDependency(ctx, url, "models", fileCheck, onProgress); err != nil {
 		return nil, "", errors.Wrapf(err, "failed to prepare Face Recovery model %s", operation.Id())
 	}
 

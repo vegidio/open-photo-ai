@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
@@ -13,43 +14,61 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-func IdsToOperations(opIds []string) []types.Operation {
-	operations := make([]types.Operation, 0)
+func IdsToOperations(opIds []string) ([]types.Operation, error) {
+	operations := make([]types.Operation, 0, len(opIds))
 
 	for _, opId := range opIds {
 		values := strings.Split(opId, "_")
+		if len(values) < 3 {
+			return nil, errors.Errorf("invalid operation ID: %q", opId)
+		}
+
 		name := values[1]
 
 		switch name {
 		// Face Recovery
 		case "athens":
-			precision := types.Precision(values[2])
-			operations = append(operations, athens.Op(precision))
+			operations = append(operations, athens.Op(types.Precision(values[2])))
 		case "santorini":
-			precision := types.Precision(values[2])
-			operations = append(operations, santorini.Op(precision))
+			operations = append(operations, santorini.Op(types.Precision(values[2])))
 
 		// Light Adjustment
 		case "paris":
-			intensity, _ := strconv.ParseFloat(values[2], 32)
-			precision := types.Precision(values[3])
-			operations = append(operations, paris.Op(float32(intensity), precision))
+			if len(values) < 4 {
+				return nil, errors.Errorf("invalid operation ID: %q", opId)
+			}
+			intensity, err := strconv.ParseFloat(values[2], 32)
+			if err != nil {
+				return nil, errors.Wrapf(err, "invalid intensity in %q", opId)
+			}
+			operations = append(operations, paris.Op(float32(intensity), types.Precision(values[3])))
 
 		// Upscale
-		case "tokyo":
-			scale, _ := strconv.ParseFloat(strings.Replace(values[2], "x", "", 1), 64)
+		case "tokyo", "kyoto", "saitama":
+			if len(values) < 4 {
+				return nil, errors.Errorf("invalid operation ID: %q", opId)
+			}
+
+			scale, err := strconv.ParseFloat(strings.TrimSuffix(values[2], "x"), 64)
+			if err != nil {
+				return nil, errors.Wrapf(err, "invalid scale in %q", opId)
+			}
+
 			precision := types.Precision(values[3])
-			operations = append(operations, tokyo.Op(scale, precision))
-		case "kyoto":
-			scale, _ := strconv.ParseFloat(strings.Replace(values[2], "x", "", 1), 64)
-			precision := types.Precision(values[3])
-			operations = append(operations, kyoto.Op(scale, precision))
-		case "saitama":
-			scale, _ := strconv.ParseFloat(strings.Replace(values[2], "x", "", 1), 64)
-			precision := types.Precision(values[3])
-			operations = append(operations, saitama.Op(scale, precision))
+
+			switch name {
+			case "tokyo":
+				operations = append(operations, tokyo.Op(scale, precision))
+			case "kyoto":
+				operations = append(operations, kyoto.Op(scale, precision))
+			case "saitama":
+				operations = append(operations, saitama.Op(scale, precision))
+			}
+
+		default:
+			return nil, errors.Errorf("unknown operation variant %q in ID %q", name, opId)
 		}
 	}
 
-	return operations
+	return operations, nil
 }

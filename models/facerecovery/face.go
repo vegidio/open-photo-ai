@@ -1,6 +1,7 @@
 package facerecovery
 
 import (
+	"context"
 	"image"
 	"image/color"
 	"math"
@@ -13,21 +14,20 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-func GetFdModel(ep types.ExecutionProvider) (types.Model[[]facedetection.Face], error) {
-	var err error
+func GetFdModel(ctx context.Context, ep types.ExecutionProvider) (types.Model[[]facedetection.Face], error) {
 	fdOp := newyork.Op(types.PrecisionFp32)
 
-	model, exists := internal.Registry[fdOp.Id()]
-	if !exists {
-		model, err = newyork.New(fdOp, ep, nil)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to create Face Detection model")
-		}
-
-		internal.Registry[fdOp.Id()] = model
+	if cached, exists := internal.Registry.Get(fdOp.Id()); exists {
+		return cached.(types.Model[[]facedetection.Face]), nil
 	}
 
-	return model.(types.Model[[]facedetection.Face]), nil
+	model, err := newyork.New(ctx, fdOp, ep, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create Face Detection model")
+	}
+
+	internal.Registry.Set(fdOp.Id(), model)
+	return model, nil
 }
 
 // alignFace aligns a face image using the provided landmarks and returns the aligned image and the affine

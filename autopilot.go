@@ -10,11 +10,12 @@ import (
 // SuggestEnhancements analyzes the input image and returns a list of recommended enhancement.
 //
 // It evaluates the image for potential face recovery, light adjustment, and upscaling improvements based on image
-// characteristics such as detected faces and resolution.
-func SuggestEnhancements(input *types.ImageData) []types.ModelType {
+// characteristics such as detected faces and resolution. The face-detection path may trigger a model download on first
+// use; pass a cancellable ctx to abort it.
+func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.ModelType {
 	enhancementTypes := make([]types.ModelType, 0)
 
-	if yes := shouldFaceRecovery(input); yes {
+	if yes := shouldFaceRecovery(ctx, input); yes {
 		enhancementTypes = append(enhancementTypes, types.ModelTypeFaceRecovery)
 	}
 
@@ -31,13 +32,13 @@ func SuggestEnhancements(input *types.ImageData) []types.ModelType {
 
 // region - Private functions
 
-func shouldFaceRecovery(input *types.ImageData) bool {
-	model, err := facerecovery.GetFdModel(types.ExecutionProviderAuto)
+func shouldFaceRecovery(ctx context.Context, input *types.ImageData) bool {
+	model, err := facerecovery.GetFdModel(ctx, types.ExecutionProviderAuto)
 	if err != nil {
 		return false
 	}
 
-	faces, err := facerecovery.ExtractFaces(context.Background(), model, input.Pixels, nil)
+	faces, err := facerecovery.ExtractFaces(ctx, model, input.Pixels, nil)
 	if err != nil {
 		return false
 	}

@@ -21,7 +21,7 @@ var testDataBinary []byte
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	if err := opai.Initialize(AppName, nil); err != nil {
+	if err := opai.Initialize(context.Background(), AppName, nil); err != nil {
 		log.Fatalf("Failed to initialize the model runtime: %v\n", err)
 	}
 	defer opai.Destroy()

@@ -1,9 +1,11 @@
 package opai
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/fs"
@@ -12,6 +14,8 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 )
+
+var destroyOnce sync.Once
 
 const (
 	onnxRuntimeTag = "runtime/1.22.0"
@@ -27,18 +31,20 @@ const (
 // standard configuration path (e.g., ~/.config/name on Linux). It's important that you reuse the same name on later
 // calls to Initialize() to ensure that the same config directory is used.
 //
+// Cancelling ctx aborts any in-flight download; already-downloaded files are kept for the next call.
+//
 // Returns an error if any step fails, including:
 //   - Unable to create config directories or files
 //   - ONNX runtime initialization failures
 //
 // # Example:
 //
-//	err := opai.Initialize("myapp",  nil)
+//	err := opai.Initialize(ctx, "myapp",  nil)
 //	if err != nil {
 //	    log.Fatal("Failed to initialize:", err)
 //	}
 //	defer opai.Destroy() // Clean up resources
-func Initialize(name string, onProgress types.DownloadProgress) error {
+func Initialize(ctx context.Context, name string, onProgress types.DownloadProgress) error {
 	internal.AppName = name
 
 	cache, err := internal.NewCache(500)
@@ -56,7 +62,7 @@ func Initialize(name string, onProgress types.DownloadProgress) error {
 	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
 		onnxRuntimeTag, runtime.GOOS, runtime.GOARCH)
 
-	if err = utils.PrepareDependency(url, "", fileCheck, onProgress); err != nil {
+	if err = utils.PrepareDependency(ctx, url, "", fileCheck, onProgress); err != nil {
 		return errors.Wrap(err, "failed to prepare ONNX Runtime")
 	}
 
@@ -83,10 +89,14 @@ func Initialize(name string, onProgress types.DownloadProgress) error {
 //	}
 //	defer opai.Destroy() // Ensure cleanup on exit
 func Destroy() {
-	internal.ImageCache.Close()
+	destroyOnce.Do(func() {
+		if internal.ImageCache != nil {
+			internal.ImageCache.Close()
+		}
 
-	CleanRegistry()
-	ort.DestroyEnvironment()
+		CleanRegistry()
+		ort.DestroyEnvironment()
+	})
 }
 
 // region - Private functions

@@ -8,6 +8,7 @@ import (
 	"gui/utils"
 	"log"
 	"log/slog"
+	stdos "os"
 	"runtime"
 	"shared"
 	"strings"
@@ -52,7 +53,7 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
-		LogLevel: slog.LevelError,
+		LogLevel: resolveLogLevel(),
 	})
 
 	// Create a new window with the necessary options.
@@ -88,6 +89,21 @@ func main() {
 	if err != nil {
 		otel.LogError("Error running the app", nil, err)
 		log.Fatalf("%+v", err)
+	}
+}
+
+// resolveLogLevel reads OPAI_LOG_LEVEL (debug|info|warn|error). Defaults to error so a
+// release build stays quiet; dev can opt into more by exporting the variable.
+func resolveLogLevel() slog.Level {
+	switch strings.ToLower(stdos.Getenv("OPAI_LOG_LEVEL")) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn", "warning":
+		return slog.LevelWarn
+	default:
+		return slog.LevelError
 	}
 }
 
