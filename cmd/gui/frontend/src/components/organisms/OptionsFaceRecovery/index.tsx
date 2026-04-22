@@ -1,6 +1,5 @@
-import { ClickAwayListener, Popover } from '@mui/material';
-import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
+import { OptionsPopover } from '@/components/molecules/OptionsPopover';
 import { Athens, Santorini } from '@/operations';
 import { useEnhancementStore, useFileStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
@@ -44,34 +43,10 @@ export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceReco
     };
 
     return (
-        <Popover
-            anchorEl={anchorEl}
-            open={open}
-            onClose={onClose}
-            anchorOrigin={{
-                vertical: 'center',
-                horizontal: 'left',
-            }}
-            transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-            }}
-            className='pointer-events-none'
-            slotProps={{
-                paper: {
-                    className: 'w-64 -ml-4 pointer-events-auto',
-                },
-            }}
-        >
-            <ClickAwayListener onClickAway={onClose}>
-                <div className='flex flex-col'>
-                    <ModalTitle title='Face Recovery' onClose={onClose} />
-
-                    <div className='mt-1 p-3'>
-                        <ModelSelector options={options} value={selectedModel} onChange={onModelChange} />
-                    </div>
-                </div>
-            </ClickAwayListener>
-        </Popover>
+        <OptionsPopover title='Face Recovery' anchorEl={anchorEl} open={open} onClose={onClose} hideBackdrop={false}>
+            <div className='mt-1 p-3'>
+                <ModelSelector options={options} value={selectedModel} onChange={onModelChange} />
+            </div>
+        </OptionsPopover>
     );
 };

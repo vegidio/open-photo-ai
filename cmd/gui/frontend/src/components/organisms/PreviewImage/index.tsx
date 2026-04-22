@@ -1,16 +1,8 @@
-import type { ImageData } from '@/utils/image.ts';
-import { PreviewImageFull } from '@/components/molecules/PreviewImageFull';
-import { PreviewImageSideBySide } from '@/components/molecules/PreviewImageSideBySide';
-import { PreviewImageSplit } from '@/components/molecules/PreviewImageSplit';
-import { type ImageTransform, useAppStore, useFileStore, useImageStore } from '@/stores';
+import { ReactCompareSlider } from 'react-compare-slider';
+import { ZoomImage } from '@/components/organisms/ZoomImage';
+import { useAppStore, useFileStore, useImageStore } from '@/stores';
 
 const INITIAL_TRANSFORM = { scale: 1, positionX: 0, positionY: 0 };
-
-export type PreviewImageProps = {
-    originalImage?: ImageData;
-    enhancedImage?: ImageData;
-    transform: ImageTransform;
-};
 
 export const PreviewImage = () => {
     const previewMode = useAppStore((state) => state.previewMode);
@@ -23,20 +15,30 @@ export const PreviewImage = () => {
 
     switch (previewMode) {
         case 'full':
-            return <PreviewImageFull enhancedImage={enhancedImage} transform={transform} />;
+            return (
+                <div id='preview_body' className='flex flex-row size-full p-0.5'>
+                    {enhancedImage && <ZoomImage image={enhancedImage} imageTransform={transform} />}
+                </div>
+            );
 
         case 'side':
             return (
-                <PreviewImageSideBySide
-                    originalImage={originalImage}
-                    enhancedImage={enhancedImage}
-                    transform={transform}
-                />
+                <div id='preview_body' className='flex flex-row size-full p-0.5 gap-0.5'>
+                    {originalImage && <ZoomImage image={originalImage} imageTransform={transform} />}
+                    {enhancedImage && <ZoomImage image={enhancedImage} imageTransform={transform} />}
+                </div>
             );
 
         case 'split':
             return (
-                <PreviewImageSplit originalImage={originalImage} enhancedImage={enhancedImage} transform={transform} />
+                <div className='size-full p-0.5'>
+                    <ReactCompareSlider
+                        onlyHandleDraggable={true}
+                        className='size-full'
+                        itemOne={originalImage && <ZoomImage image={originalImage} imageTransform={transform} />}
+                        itemTwo={enhancedImage && <ZoomImage image={enhancedImage} imageTransform={transform} />}
+                    />
+                </div>
             );
     }
 };

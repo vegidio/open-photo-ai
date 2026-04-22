@@ -1,8 +1,8 @@
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { SidebarAutopilot } from './SidebarAutopilot.tsx';
-import { SidebarExport } from './SidebarExport.tsx';
-import { AddEnhancement } from '@/components/molecules/AddEnhancement';
+import { AddEnhancement } from '@/components/organisms/AddEnhancement';
+import { SidebarAutopilot } from '@/components/organisms/SidebarAutopilot';
 import { SidebarEnhancements } from '@/components/organisms/SidebarEnhancements';
+import { SidebarExport } from '@/components/organisms/SidebarExport';
 import { useFileStore } from '@/stores';
 
 export const Sidebar = ({ className }: TailwindProps) => {

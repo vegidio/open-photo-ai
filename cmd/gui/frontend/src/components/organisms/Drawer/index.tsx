@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import { ClickAwayListener, SwipeableDrawer } from '@mui/material';
-import { DrawerBody } from '@/components/Drawer/DrawerBody.tsx';
+import { DrawerBody } from '@/components/organisms/DrawerBody';
 import { DrawerHeader } from '@/components/organisms/DrawerHeader';
 import { useDrawerStore } from '@/stores/drawer.ts';
 

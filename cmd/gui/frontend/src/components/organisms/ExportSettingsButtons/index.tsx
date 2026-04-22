@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Button } from '@mui/material';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { Operation } from '@/operations';
-import type { ExportSettingsProps } from './ExportSettings.tsx';
+import type { ExportSettingsProps } from '@/components/organisms/ExportSettings';
 import { useExportStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { exportImage } from '@/utils/export.ts';

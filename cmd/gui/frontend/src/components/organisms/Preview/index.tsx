@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CancelError, type CancellablePromise } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { EnhancementProgress } from '@/components/molecules/EnhancementProgress';
+import { EnhancementProgress } from '@/components/organisms/EnhancementProgress';
 import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
 import { PreviewImage } from '@/components/organisms/PreviewImage';
 import { useNotify } from '@/hooks/useNotify.ts';

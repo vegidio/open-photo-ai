@@ -4,7 +4,7 @@ import { CleanRegistry } from '@/bindings/gui/services/appservice.ts';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { SettingsButtons } from '@/components/molecules/SettingsButtons';
 import { SettingsList } from '@/components/organisms/SettingsList';
-import { SettingsMenu } from '@/components/organisms/SettingsMenu';
+import { SettingsMenu } from '@/components/molecules/SettingsMenu';
 import { useSettingsStore } from '@/stores';
 
 type SettingsProps = {

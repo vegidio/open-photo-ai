@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ClickAwayListener, Divider, Popover } from '@mui/material';
+import { Divider } from '@mui/material';
 import { IntensitySelector } from '@/components/molecules/IntensitySelector';
-import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
+import { OptionsPopover } from '@/components/molecules/OptionsPopover';
 import { Paris } from '@/operations';
 import { useEnhancementStore, useFileStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
@@ -39,39 +39,14 @@ export const OptionsLightAdjustment = ({ anchorEl, open, onClose }: OptionsLight
     }, [file, intensity, model, replaceEnhancement]);
 
     return (
-        <Popover
-            anchorEl={anchorEl}
-            open={open}
-            onClose={onClose}
-            hideBackdrop={true}
-            anchorOrigin={{
-                vertical: 'center',
-                horizontal: 'left',
-            }}
-            transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-            }}
-            className='pointer-events-none'
-            slotProps={{
-                paper: {
-                    className: 'w-64 -ml-4 pointer-events-auto',
-                },
-            }}
-        >
-            <ClickAwayListener onClickAway={onClose}>
-                <div className='flex flex-col'>
-                    <ModalTitle title='Light Adjustment' onClose={onClose} />
+        <OptionsPopover title='Light Adjustment' anchorEl={anchorEl} open={open} onClose={onClose}>
+            <div className='flex flex-col mt-1 p-3 gap-4'>
+                <ModelSelector options={options} value={model} onChange={setModel} />
 
-                    <div className='flex flex-col mt-1 p-3 gap-4'>
-                        <ModelSelector options={options} value={model} onChange={setModel} />
+                <Divider />
 
-                        <Divider />
-
-                        <IntensitySelector value={intensity} onChange={setIntensity} />
-                    </div>
-                </div>
-            </ClickAwayListener>
-        </Popover>
+                <IntensitySelector value={intensity} onChange={setIntensity} />
+            </div>
+        </OptionsPopover>
     );
 };

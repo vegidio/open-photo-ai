@@ -4,9 +4,9 @@ import { Browser } from '@wailsio/runtime';
 import { IsOutdated } from '@/bindings/gui/services/appservice';
 import { Button } from '@/components/atoms/Button';
 import { DialogAbout } from '@/components/molecules/DialogAbout';
-import { NavbarCurrentFile } from '@/components/molecules/NavbarCurrentFile';
-import { NavbarDimensions } from '@/components/molecules/NavbarDimensions';
-import { Settings } from '@/components/template/Settings';
+import { NavbarCurrentFile } from '@/components/organisms/NavbarCurrentFile';
+import { NavbarDimensions } from '@/components/organisms/NavbarDimensions';
+import { Settings } from '@/components/templates/Settings';
 import { useFileStore } from '@/stores';
 import { os, version } from '@/utils/constants.ts';
 

@@ -2,7 +2,7 @@ import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { ExportQueueRow } from './ExportQueueRow.tsx';
+import { ExportQueueRow } from '@/components/organisms/ExportQueueRow';
 
 type ExportQueueProps = TailwindProps & {
     enhancements: Map<File, Operation[]>;

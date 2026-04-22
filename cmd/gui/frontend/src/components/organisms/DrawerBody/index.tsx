@@ -1,4 +1,4 @@
-import { DrawerItem } from './DrawerItem';
+import { DrawerItem } from '@/components/organisms/DrawerItem';
 import { useFileStore } from '@/stores';
 
 type FileListBodyProps = {

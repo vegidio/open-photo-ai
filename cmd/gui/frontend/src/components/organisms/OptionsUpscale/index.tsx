@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ClickAwayListener, Divider, Popover } from '@mui/material';
-import { ModalTitle } from '@/components/molecules/ModalTitle';
+import { Divider } from '@mui/material';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
+import { OptionsPopover } from '@/components/molecules/OptionsPopover';
 import { ScaleSelector } from '@/components/molecules/ScaleSelector';
 import { Kyoto, Saitama, Tokyo } from '@/operations';
 import { useEnhancementStore, useFileStore } from '@/stores';
@@ -53,39 +53,14 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
     }, [file, replaceEnhancement, model, scale]);
 
     return (
-        <Popover
-            anchorEl={anchorEl}
-            open={open}
-            onClose={onClose}
-            hideBackdrop={true}
-            anchorOrigin={{
-                vertical: 'center',
-                horizontal: 'left',
-            }}
-            transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-            }}
-            className='pointer-events-none'
-            slotProps={{
-                paper: {
-                    className: 'w-64 -ml-4 pointer-events-auto',
-                },
-            }}
-        >
-            <ClickAwayListener onClickAway={onClose}>
-                <div className='flex flex-col'>
-                    <ModalTitle title='Upscale' onClose={onClose} />
+        <OptionsPopover title='Upscale' anchorEl={anchorEl} open={open} onClose={onClose}>
+            <div className='flex flex-col mt-1 p-3 gap-4'>
+                <ModelSelector options={options} value={model} onChange={setModel} />
 
-                    <div className='flex flex-col mt-1 p-3 gap-4'>
-                        <ModelSelector options={options} value={model} onChange={setModel} />
+                <Divider />
 
-                        <Divider />
-
-                        <ScaleSelector value={scale} onChange={setScale} />
-                    </div>
-                </div>
-            </ClickAwayListener>
-        </Popover>
+                <ScaleSelector value={scale} onChange={setScale} />
+            </div>
+        </OptionsPopover>
     );
 };

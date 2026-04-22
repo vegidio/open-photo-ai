@@ -1,10 +1,10 @@
 import { Divider } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { DrawerAddImages } from '@/components/Drawer/DrawerAddImages.tsx';
-import { DrawerSelectAll } from '@/components/Drawer/DrawerSelectAll.tsx';
-import { DrawerToggle } from '@/components/Drawer/DrawerToggle.tsx';
-import { DrawerZoom } from '@/components/Drawer/DrawerZoom.tsx';
-import { PreviewSelector } from '@/components/molecules/PreviewSelector';
+import { DrawerAddImages } from '@/components/organisms/DrawerAddImages';
+import { DrawerSelectAll } from '@/components/organisms/DrawerSelectAll';
+import { DrawerToggle } from '@/components/organisms/DrawerToggle';
+import { DrawerZoom } from '@/components/organisms/DrawerZoom';
+import { PreviewSelector } from '@/components/organisms/PreviewSelector';
 import { useFileStore } from '@/stores';
 
 type FileListHeaderProps = TailwindProps & {

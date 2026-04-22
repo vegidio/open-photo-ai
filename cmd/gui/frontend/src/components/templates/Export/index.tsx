@@ -1,9 +1,9 @@
 import { Dialog, Divider } from '@mui/material';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
-import { ExportQueue } from '@/components/Export/ExportQueue.tsx';
-import { ExportSettings } from '@/components/Export/ExportSettings.tsx';
+import { ExportQueue } from '@/components/molecules/ExportQueue';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
+import { ExportSettings } from '@/components/organisms/ExportSettings';
 
 type ExportProps = {
     enhancements: Map<File, Operation[]>;

@@ -4,7 +4,7 @@ import { basename } from 'pathe';
 import { IoIosMore } from 'react-icons/io';
 import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { MenuFileOptions } from '@/components/molecules/MenuFileOptions';
+import { MenuFileOptions } from '@/components/organisms/MenuFileOptions';
 import { useFileStore } from '@/stores';
 import { getImage } from '@/utils/image.ts';
 

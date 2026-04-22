@@ -1,7 +1,7 @@
 import { type MouseEvent, useState } from 'react';
 import { FiPlus } from 'react-icons/fi';
 import { Button } from '@/components/atoms/Button';
-import { MenuAddEnhancement } from '@/components/molecules/MenuAddEnhancement';
+import { MenuAddEnhancement } from '@/components/organisms/MenuAddEnhancement';
 
 type AddEnhancementProps = {
     disabled?: boolean;

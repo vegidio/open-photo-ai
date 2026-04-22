@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@mui/material';
 import { PiExport } from 'react-icons/pi';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
-import { Export } from '@/components/Export';
+import { Export } from '@/components/templates/Export';
 import { useEnhancementStore, useExportStore, useFileStore } from '@/stores';
 import { getExportEligible } from '@/utils/export.ts';
 
