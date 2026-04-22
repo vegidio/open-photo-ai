@@ -4,6 +4,31 @@ import type { Operation } from '@/operations';
 import { type ExecutionProvider, ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { ExportImage } from '@/bindings/gui/services/imageservice.ts';
 
+export type ExportOptions = {
+    file: File;
+    ep: ExecutionProvider;
+    operations: Operation[];
+    overwrite: boolean;
+    format: string;
+    prefix: string;
+    suffix: string;
+    location?: string;
+};
+
+const IMAGE_FORMAT_BY_EXT: Record<string, ImageFormat> = {
+    avif: ImageFormat.FormatAvif,
+    bmp: ImageFormat.FormatBmp,
+    gif: ImageFormat.FormatGif,
+    heic: ImageFormat.FormatHeic,
+    heif: ImageFormat.FormatHeic,
+    jpg: ImageFormat.FormatJpeg,
+    jpeg: ImageFormat.FormatJpeg,
+    png: ImageFormat.FormatPng,
+    tif: ImageFormat.FormatTiff,
+    tiff: ImageFormat.FormatTiff,
+    webp: ImageFormat.FormatWebp,
+};
+
 export const getExportEligible = (selectedFiles: File[], enhancements: Map<File, Operation[]>, autopilot: boolean) => {
     const allEnhancements = new Map<File, Operation[]>();
 
@@ -27,16 +52,8 @@ export const getExportInfo = (file: File, format: string, prefix: string, suffix
     return { fileName, filePath, ext };
 };
 
-export const exportImage = (
-    file: File,
-    ep: ExecutionProvider,
-    operations: Operation[],
-    overwrite: boolean,
-    format: string,
-    prefix: string,
-    suffix: string,
-    location?: string,
-) => {
+export const exportImage = (opts: ExportOptions) => {
+    const { file, ep, operations, overwrite, format, prefix, suffix, location } = opts;
     const { filePath, ext } = getExportInfo(file, format, prefix, suffix, location);
     const imgFormat = getImageFormat(ext);
     const opIds = operations.map((op) => op.id);
@@ -44,36 +61,10 @@ export const exportImage = (
     return ExportImage(file, filePath, ep, overwrite, imgFormat, ...opIds);
 };
 
-const getImageFormat = (ext: string) => {
-    switch (ext) {
-        case 'avif':
-            return ImageFormat.FormatAvif;
-
-        case 'bmp':
-            return ImageFormat.FormatBmp;
-
-        case 'gif':
-            return ImageFormat.FormatGif;
-
-        case 'heic':
-        case 'heif':
-            return ImageFormat.FormatHeic;
-
-        case 'jpg':
-        case 'jpeg':
-            return ImageFormat.FormatJpeg;
-
-        case 'png':
-            return ImageFormat.FormatPng;
-
-        case 'tif':
-        case 'tiff':
-            return ImageFormat.FormatTiff;
-
-        case 'webp':
-            return ImageFormat.FormatWebp;
-
-        default:
-            throw new Error(`Unsupported image format: ${ext}`);
+const getImageFormat = (ext: string): ImageFormat => {
+    const format = IMAGE_FORMAT_BY_EXT[ext];
+    if (format === undefined) {
+        throw new Error(`Unsupported image format: ${ext}`);
     }
+    return format;
 };

@@ -5,7 +5,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-func RegisterServices(app *application.App, otel *o11y.Telemetry) (func(), error) {
+func RegisterServices(app *application.App, otel *o11y.Telemetry) func() {
 	appService := NewAppService(app, otel)
 	app.RegisterService(application.NewService(appService))
 
@@ -23,5 +23,5 @@ func RegisterServices(app *application.App, otel *o11y.Telemetry) (func(), error
 		imageService.destroy()
 		dialogService.destroy()
 		osService.destroy()
-	}, nil
+	}
 }

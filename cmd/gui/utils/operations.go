@@ -14,6 +14,12 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
+// IdsToOperations parses operation IDs into concrete model operations.
+//
+// Operation ID format: "<type>_<name>_<paramA>[_<paramB>]" — e.g. "fr_athens_fp32",
+// "la_paris_0.5_fp32", "up_tokyo_4x_fp32". The "<type>" prefix is not consumed here
+// (selection happens by <name>); "<paramA>" is the scale for upscale (with a "x" suffix)
+// or the intensity for light adjustment; the final segment is always the precision.
 func IdsToOperations(opIds []string) ([]types.Operation, error) {
 	operations := make([]types.Operation, 0, len(opIds))
 
@@ -26,13 +32,13 @@ func IdsToOperations(opIds []string) ([]types.Operation, error) {
 		name := values[1]
 
 		switch name {
-		// Face Recovery
+		// Face Recovery — "_<name>_<precision>"
 		case "athens":
 			operations = append(operations, athens.Op(types.Precision(values[2])))
 		case "santorini":
 			operations = append(operations, santorini.Op(types.Precision(values[2])))
 
-		// Light Adjustment
+		// Light Adjustment — "_<name>_<intensity>_<precision>"
 		case "paris":
 			if len(values) < 4 {
 				return nil, errors.Errorf("invalid operation ID: %q", opId)
@@ -43,7 +49,7 @@ func IdsToOperations(opIds []string) ([]types.Operation, error) {
 			}
 			operations = append(operations, paris.Op(float32(intensity), types.Precision(values[3])))
 
-		// Upscale
+		// Upscale — "_<name>_<scale>x_<precision>"
 		case "tokyo", "kyoto", "saitama":
 			if len(values) < 4 {
 				return nil, errors.Errorf("invalid operation ID: %q", opId)

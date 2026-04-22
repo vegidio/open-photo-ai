@@ -1,6 +1,7 @@
 import { Divider, ListItemText, Menu, MenuItem, type PopoverOrigin } from '@mui/material';
 import type { File } from '@/bindings/gui/types';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
+import { useFileManager } from '@/hooks/useFileManager.ts';
 import { useDrawerStore, useFileStore } from '@/stores';
 import { os } from '@/utils/constants.ts';
 
@@ -21,8 +22,7 @@ export const MenuFileOptions = ({
     open,
     onMenuClose,
 }: MenuFileOptionsProps) => {
-    const removeFile = useFileStore((state) => state.removeFile);
-    const clear = useFileStore((state) => state.clear);
+    const { removeFile, clearAll } = useFileManager();
     const setOpen = useDrawerStore((state) => state.setOpen);
 
     const updateDrawer = () => {
@@ -36,7 +36,7 @@ export const MenuFileOptions = ({
     };
 
     const onCloseAllImages = () => {
-        clear();
+        clearAll();
         updateDrawer();
     };
 

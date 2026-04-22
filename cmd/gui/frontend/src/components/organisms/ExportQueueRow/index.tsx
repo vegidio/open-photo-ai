@@ -52,10 +52,9 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
     }, [file]);
 
     useEffect(() => {
-        const eventName = `app:export:${file.Hash}`;
-
-        Events.On(eventName, (event) => {
-            const [state, value] = event.data as [string, number];
+        return Events.On('app:export', (event) => {
+            const { hash, state, value } = event.data;
+            if (hash !== file.Hash) return;
 
             if (state === 'COMPLETED') {
                 setNewSize(
@@ -68,8 +67,6 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
 
             setState(state);
         });
-
-        return () => Events.Off(eventName);
     }, [file.Hash]);
 
     return (

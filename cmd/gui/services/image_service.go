@@ -5,6 +5,7 @@ import (
 	"fmt"
 	guitypes "gui/types"
 	guiutils "gui/utils"
+	"image"
 	"path/filepath"
 	"strings"
 
@@ -16,6 +17,14 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 	"github.com/wailsapp/wails/v3/pkg/application"
+)
+
+const (
+	previewJpegQuality  = 90
+	exportMaxQuality    = 100
+	progressInferStart  = 0.1
+	progressInferEnd    = 0.9
+	maxOutputDedupTries = 999
 )
 
 type ImageService struct {
@@ -59,7 +68,7 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 		}
 	}
 
-	data, err := utils.EncodeImage(inputData.Pixels, types.FormatJpeg, 90)
+	data, err := utils.EncodeImage(inputData.Pixels, types.FormatJpeg, previewJpegQuality)
 	if err != nil {
 		s.otel.LogError("Error encoding image", nil, err)
 		return nil, 0, 0, errors.Wrap(err, "failed to encode image")
@@ -107,14 +116,10 @@ func (s *ImageService) ProcessImage(
 		return nil, 0, 0, errors.Wrap(err, "context cancelled")
 	}
 
-	data, err := utils.EncodeImage(outputData.Pixels, types.FormatJpeg, 90)
+	data, err := utils.EncodeImage(outputData.Pixels, types.FormatJpeg, previewJpegQuality)
 	if err != nil {
 		s.otel.LogError("Error encoding image", nil, err)
 		return nil, 0, 0, errors.Wrap(err, "failed to encode image")
-	}
-
-	if err = ctx.Err(); err != nil {
-		return nil, 0, 0, errors.Wrap(err, "context cancelled")
 	}
 
 	// Return a version of the image as JPG for presentation purposes
@@ -164,8 +169,7 @@ func (s *ImageService) ExportImage(
 		return errors.Wrap(err, "context cancelled")
 	}
 
-	eventName := fmt.Sprintf("app:export:%s", file.Hash)
-	s.app.Event.Emit(eventName, "RUNNING", 0.1)
+	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: file.Hash, State: "RUNNING", Value: progressInferStart})
 
 	outputData, err := s.runInference(ctx, file.Path, ep, opIds)
 	if err != nil {
@@ -179,22 +183,32 @@ func (s *ImageService) ExportImage(
 		return errors.Wrap(err, "failed to run inference")
 	}
 
-	s.app.Event.Emit(eventName, "RUNNING", 0.9)
-	if err = ctx.Err(); err != nil {
+	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: file.Hash, State: "RUNNING", Value: progressInferEnd})
+	return s.saveAndEmit(ctx, outputData.Pixels, outputPath, overwrite, format, file.Hash)
+}
+
+func (s *ImageService) saveAndEmit(
+	ctx context.Context,
+	pixels image.Image,
+	outputPath string,
+	overwrite bool,
+	format types.ImageFormat,
+	fileHash string,
+) error {
+	if err := ctx.Err(); err != nil {
 		return errors.Wrap(err, "context cancelled")
 	}
 
 	size, err := utils.SaveImage(&types.ImageData{
 		FilePath: getOutputPath(outputPath, overwrite),
-		Pixels:   outputData.Pixels,
-	}, format, 100)
-
+		Pixels:   pixels,
+	}, format, exportMaxQuality)
 	if err != nil {
 		s.otel.LogError("Error saving image", nil, err)
 		return errors.Wrap(err, "failed to save image")
 	}
 
-	s.app.Event.Emit(eventName, "COMPLETED", size)
+	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: fileHash, State: "COMPLETED", Value: float64(size)})
 	return nil
 }
 
@@ -221,7 +235,7 @@ func (s *ImageService) runInference(
 	}
 
 	outputData, err := opai.Process(ctx, inputImage, ep, func(name string, progress float64) {
-		s.app.Event.Emit("app:progress", name, progress)
+		s.app.Event.Emit(EventAppProgress, InferenceProgress{Name: name, Progress: progress})
 	}, operations...)
 
 	if err != nil {
@@ -231,34 +245,30 @@ func (s *ImageService) runInference(
 	return outputData, nil
 }
 
-func (s *ImageService) destroy() {
-	// Nothing to do here
-}
+func (s *ImageService) destroy() {}
 
 // endregion
 
 // region - Private functions
 
 func getOutputPath(filePath string, overwrite bool) string {
-	if overwrite {
+	if overwrite || !fs.FileExists(filePath) {
 		return filePath
 	}
 
 	ext := filepath.Ext(filePath)
 	basePath := filePath[:len(filePath)-len(ext)]
-	outputPath := basePath + ext
 
-	const maxAttempts = 999
-	for count := 1; count <= maxAttempts; count++ {
-		if !fs.FileExists(outputPath) {
-			return outputPath
+	for count := 1; count <= maxOutputDedupTries; count++ {
+		candidate := fmt.Sprintf("%s_%d%s", basePath, count, ext)
+		if !fs.FileExists(candidate) {
+			return candidate
 		}
-		outputPath = fmt.Sprintf("%s_%d%s", basePath, count, ext)
 	}
 
 	// Exhausted the dedup suffix range; fall back to the last candidate and let the caller's
 	// write fail loudly rather than looping forever.
-	return outputPath
+	return fmt.Sprintf("%s_%d%s", basePath, maxOutputDedupTries, ext)
 }
 
 // endregion

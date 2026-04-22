@@ -6,4 +6,27 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-Object.freeze($Create.Events);
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as services$0 from "../../../../../gui/services/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as types$0 from "../../../../../gui/types/models.js";
+
+function configure() {
+    Object.freeze(Object.assign($Create.Events, {
+        "app:FilesDropped": $$createType1,
+        "app:download": $$createType2,
+        "app:export": $$createType3,
+        "app:progress": $$createType4,
+    }));
+}
+
+// Private type creation functions
+const $$createType0 = types$0.File.createFrom;
+const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = services$0.DownloadProgress.createFrom;
+const $$createType3 = services$0.ExportUpdate.createFrom;
+const $$createType4 = services$0.InferenceProgress.createFrom;
+
+configure();

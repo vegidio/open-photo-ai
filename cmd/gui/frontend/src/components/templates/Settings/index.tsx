@@ -13,7 +13,7 @@ type SettingsProps = {
     onClose: () => void;
 };
 
-export const Settings = ({ section, open, onClose }: SettingsProps) => {
+export const Settings = ({ section: _section, open, onClose }: SettingsProps) => {
     const saveSnapshot = useSettingsStore((state) => state.saveSnapshot);
     const restoreSnapshot = useSettingsStore((state) => state.restoreSnapshot);
 

@@ -22,8 +22,8 @@ export const EnhancementProgress = () => {
 
     useEffect(() => {
         Events.On('app:progress', (event) => {
-            const [id, value] = event.data as [string, number];
-            setProgress({ name: getOperationName(id), value: value * 100 });
+            const { name, progress } = event.data;
+            setProgress({ name: getOperationName(name), value: progress * 100 });
         });
 
         return () => Events.Off('app:progress');

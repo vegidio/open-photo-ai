@@ -5,8 +5,9 @@ import { EnhancementProgress } from '@/components/organisms/EnhancementProgress'
 import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
 import { PreviewImage } from '@/components/organisms/PreviewImage';
 import { useNotify } from '@/hooks/useNotify.ts';
-import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
+import { useEnhancementStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
+import { userFriendlyErrorMessage } from '@/utils/errors.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 
 export const Preview = ({ className = '' }: TailwindProps) => {
@@ -15,7 +16,6 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     // FileListStore
     const filesLength = useFileStore((state) => state.files.length);
     const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
-    const setOpen = useDrawerStore((state) => state.setOpen);
 
     // ImageStore
     const setOriginalImage = useImageStore((state) => state.setOriginalImage);
@@ -52,7 +52,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                         setEnhancedImage(enhancedImage);
                     } catch (e) {
                         if (!(e instanceof CancelError)) {
-                            const msg = userFriendlyErrorMessage(e);
+                            const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to enhance image.');
                             enqueueSnackbar(msg, { variant: 'error' });
                         }
                     } finally {
@@ -91,15 +91,4 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             {filesLength === 0 ? <PreviewEmpty /> : <PreviewImage />}
         </div>
     );
-};
-
-const userFriendlyErrorMessage = (error: unknown) => {
-    const msg = error instanceof Error ? error.message : String(error);
-
-    switch (true) {
-        case msg.includes('[download]'):
-            return 'Failed to download AI model. Check your internet connection and try again.';
-        default:
-            return 'Something went wrong. Failed to enhance image.';
-    }
 };

@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	_ "embed"
 	"fmt"
 	"gui/services"
 	"gui/utils"
@@ -75,15 +74,11 @@ func main() {
 	eventDragAndDrop(app, win)
 
 	// Services
-	destroyServices, err := services.RegisterServices(app, otel)
-	if err != nil {
-		otel.LogError("Error starting the services", nil, err)
-		log.Fatalf("%+v", err)
-	}
+	destroyServices := services.RegisterServices(app, otel)
 	defer destroyServices()
 
 	// Run the application. This blocks until the application exists
-	err = app.Run()
+	err := app.Run()
 
 	// If an error occurred while running the application, log it and exit.
 	if err != nil {
@@ -127,6 +122,6 @@ func eventDragAndDrop(app *application.App, win *application.WebviewWindow) {
 			paths := event.Context().DroppedFiles()
 			files := utils.CreateFileTypes(paths)
 
-			app.Event.Emit("app:FilesDropped", files)
+			app.Event.Emit(services.EventAppFilesDropped, files)
 		})
 }

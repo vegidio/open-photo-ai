@@ -17,8 +17,8 @@ export const DialogDownload = ({ open, hasError = false, onClose }: DialogDownlo
 
     useEffect(() => {
         Events.On('app:download', (event) => {
-            const [dependency, progress] = event.data as [string, number];
-            setDownloads((prev) => ({ ...prev, [dependency]: progress }));
+            const { dependency, percent } = event.data;
+            setDownloads((prev) => ({ ...prev, [dependency]: percent }));
         });
 
         return () => Events.Off('app:download');

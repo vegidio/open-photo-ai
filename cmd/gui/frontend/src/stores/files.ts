@@ -1,8 +1,6 @@
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 import type { File } from '@/bindings/gui/types';
-import { useEnhancementStore } from '@/stores/enhancements.ts';
-import { useImageStore } from '@/stores/image.ts';
 
 type FileStore = {
     files: File[];
@@ -62,10 +60,6 @@ export const useFileStore = create(
                     state.currentIndex = state.files.length - 1;
                 }
             });
-
-            // Remove any enhancements and image transforms associated with the removed file
-            useEnhancementStore.getState().removeKey(file);
-            useImageStore.getState().removeImageTransform(file.Hash);
         },
 
         addSelectedFile: (file: File) => {
@@ -102,10 +96,6 @@ export const useFileStore = create(
                 state.selectedFiles = [];
                 state.currentIndex = 0;
             });
-
-            // Clear all enhancements and image transforms as well
-            useEnhancementStore.getState().clear();
-            useImageStore.getState().clear();
         },
     })),
 );

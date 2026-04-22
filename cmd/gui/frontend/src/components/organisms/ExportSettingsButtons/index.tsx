@@ -15,6 +15,9 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
     const overwrite = useExportStore((state) => state.overwrite);
     const resetKey = useExportStore((state) => state.resetKey);
     const ep = useSettingsStore((state) => state.executionProvider);
+    const frModel = useSettingsStore((state) => state.frModel);
+    const laModel = useSettingsStore((state) => state.laModel);
+    const upModel = useSettingsStore((state) => state.upModel);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | null>(null);
@@ -46,22 +49,31 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
                 // The list of operations for this file is empty; it means Autopilot added this file in the export list.
                 // We need to check if there are any suitable operations to apply to the file.
                 if (operations.length === 0) {
-                    suggestRef.current = suggestEnhancement(file);
+                    suggestRef.current = suggestEnhancement(file, { fr: frModel, la: laModel, up: upModel });
                     const suggestions = await suggestRef.current;
 
                     if (suggestions.length === 0) continue;
                     operations.push(...suggestions);
                 }
 
-                exportRef.current = exportImage(file, ep, operations, overwrite, format, prefix, suffix, location);
+                exportRef.current = exportImage({
+                    file,
+                    ep,
+                    operations,
+                    overwrite,
+                    format,
+                    prefix,
+                    suffix,
+                    location,
+                });
                 await exportRef.current;
             } catch (e) {
                 if (e instanceof CancelError) {
-                    Events.Emit(`app:export:${file.Hash}`, ['IDLE', 0]);
+                    Events.Emit('app:export', { hash: file.Hash, state: 'IDLE', value: 0 });
                 } else {
                     const msg = e instanceof Error ? e.message : String(e);
                     const tag = msg.includes('[download]') ? 'ERROR_DOWNLOAD' : 'ERROR';
-                    Events.Emit(`app:export:${file.Hash}`, [tag, 0]);
+                    Events.Emit('app:export', { hash: file.Hash, state: tag, value: 0 });
                 }
 
                 setState('idle');

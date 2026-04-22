@@ -35,10 +35,24 @@ type SettingsStore = {
     restoreSnapshot: () => void;
 };
 
+// Keys of SettingsStore that hold data (not actions). Enumerated explicitly so the snapshot is
+// compile-time-safe: adding a new data field or renaming one forces this list to update.
+const SNAPSHOT_KEYS = [
+    'isFirstTensorRT',
+    'processorSelectItems',
+    'executionProvider',
+    'frModel',
+    'laModel',
+    'upModel',
+] as const satisfies readonly (keyof SettingsStore)[];
+
+type SnapshotKey = (typeof SNAPSHOT_KEYS)[number];
+type SettingsSnapshot = Pick<SettingsStore, SnapshotKey>;
+
 export const useSettingsStore = create(
     persist(
         immer<SettingsStore>((set, get) => {
-            let snapshot: Record<string, unknown> = {};
+            let snapshot: SettingsSnapshot | null = null;
 
             return {
                 isFirstTensorRT: true,
@@ -98,21 +112,24 @@ export const useSettingsStore = create(
 
                 saveSnapshot: () => {
                     const state = get();
-                    snapshot = {};
-
-                    Object.keys(state).forEach((key) => {
-                        if (typeof state[key as keyof SettingsStore] !== 'function') {
-                            snapshot[key] = state[key as keyof SettingsStore];
-                        }
-                    });
+                    snapshot = {
+                        isFirstTensorRT: state.isFirstTensorRT,
+                        processorSelectItems: [...state.processorSelectItems],
+                        executionProvider: state.executionProvider,
+                        frModel: state.frModel,
+                        laModel: state.laModel,
+                        upModel: state.upModel,
+                    };
                 },
 
                 restoreSnapshot: () => {
+                    if (!snapshot) return;
+                    const saved = snapshot;
                     set((state) => {
-                        const target = state as unknown as Record<string, unknown>;
-                        Object.keys(snapshot).forEach((key) => {
-                            target[key] = snapshot[key];
-                        });
+                        for (const key of SNAPSHOT_KEYS) {
+                            // biome-ignore lint/suspicious/noExplicitAny: typed key, runtime-safe
+                            (state as any)[key] = saved[key];
+                        }
                     });
                 },
             };

@@ -26,6 +26,4 @@ func (s *OsService) RevealInFileManager(path string) error {
 	return s.app.Env.OpenFileManager(path, true)
 }
 
-func (s *OsService) destroy() {
-	// Nothing to do here
-}
+func (s *OsService) destroy() {}

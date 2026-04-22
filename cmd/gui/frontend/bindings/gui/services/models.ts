@@ -5,6 +5,100 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+/**
+ * DownloadProgress is the payload of EventAppDownload. Emitted while a required runtime dependency
+ * (ONNX Runtime, CUDA, cuDNN, TensorRT) is being fetched.
+ */
+export class DownloadProgress {
+    "dependency": string;
+    "percent": number;
+
+    /** Creates a new DownloadProgress instance. */
+    constructor($$source: Partial<DownloadProgress> = {}) {
+        if (!("dependency" in $$source)) {
+            this["dependency"] = "";
+        }
+        if (!("percent" in $$source)) {
+            this["percent"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DownloadProgress instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DownloadProgress {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DownloadProgress($$parsedSource as Partial<DownloadProgress>);
+    }
+}
+
+/**
+ * ExportUpdate is the payload of EventAppExport. One event stream serves every file in the export
+ * queue; subscribers filter by Hash.
+ * 
+ * Value is overloaded by State: while RUNNING it is a 0.0–1.0 progress ratio; on COMPLETED it is
+ * the final file size in bytes. The frontend export row formats it accordingly.
+ */
+export class ExportUpdate {
+    "hash": string;
+    "state": string;
+    "value": number;
+
+    /** Creates a new ExportUpdate instance. */
+    constructor($$source: Partial<ExportUpdate> = {}) {
+        if (!("hash" in $$source)) {
+            this["hash"] = "";
+        }
+        if (!("state" in $$source)) {
+            this["state"] = "";
+        }
+        if (!("value" in $$source)) {
+            this["value"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ExportUpdate instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ExportUpdate {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ExportUpdate($$parsedSource as Partial<ExportUpdate>);
+    }
+}
+
+/**
+ * InferenceProgress is the payload of EventAppProgress. Emitted as each model step within a
+ * processing pipeline advances; Name identifies the sub-operation.
+ */
+export class InferenceProgress {
+    "name": string;
+    "progress": number;
+
+    /** Creates a new InferenceProgress instance. */
+    constructor($$source: Partial<InferenceProgress> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("progress" in $$source)) {
+            this["progress"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InferenceProgress instance from a string or object.
+     */
+    static createFrom($$source: any = {}): InferenceProgress {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new InferenceProgress($$parsedSource as Partial<InferenceProgress>);
+    }
+}
+
 export class SupportedEPs {
     "CUDA": boolean;
     "TensorRT": boolean;

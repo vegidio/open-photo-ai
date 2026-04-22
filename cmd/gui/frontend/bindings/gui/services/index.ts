@@ -13,5 +13,8 @@ export {
 };
 
 export {
+    DownloadProgress,
+    ExportUpdate,
+    InferenceProgress,
     SupportedEPs
 } from "./models.js";

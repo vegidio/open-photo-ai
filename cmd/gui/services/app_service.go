@@ -35,7 +35,7 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	supportedEPs := SupportedEPs{}
 
 	onProgress := func(_, _ int64, percent float64) {
-		s.app.Event.Emit("app:download", "ONNX Runtime", percent)
+		s.app.Event.Emit(EventAppDownload, DownloadProgress{Dependency: "ONNX Runtime", Percent: percent})
 	}
 
 	// Errors are surfaced through the returned error (the frontend awaits the promise and
@@ -96,14 +96,14 @@ func (s *AppService) destroy() {
 func (s *AppService) initializeCuda(ctx context.Context) error {
 	if err := utils.InitializeNvidiaLib(ctx, "cuda", utils.CudaTag, &types.FileCheck{Path: "LICENSE_CudaRT.txt"},
 		func(_, _ int64, percent float64) {
-			s.app.Event.Emit("app:download", "NVIDIA CUDA", percent)
+			s.app.Event.Emit(EventAppDownload, DownloadProgress{Dependency: "NVIDIA CUDA", Percent: percent})
 		}); err != nil {
 		return errors.Wrap(err, "failed to download CUDA dependency")
 	}
 
 	if err := utils.InitializeNvidiaLib(ctx, "cudnn", utils.CudnnTag, &types.FileCheck{Path: "LICENSE.txt"},
 		func(_, _ int64, percent float64) {
-			s.app.Event.Emit("app:download", "NVIDIA cuDNN", percent)
+			s.app.Event.Emit(EventAppDownload, DownloadProgress{Dependency: "NVIDIA cuDNN", Percent: percent})
 		}); err != nil {
 		return errors.Wrap(err, "failed to download cuDNN dependency")
 	}
@@ -114,7 +114,7 @@ func (s *AppService) initializeCuda(ctx context.Context) error {
 func (s *AppService) initializeTensorRT(ctx context.Context) error {
 	if err := utils.InitializeNvidiaLib(ctx, "tensorrt", utils.TensorrtTag, &types.FileCheck{Path: "LICENSE.txt"},
 		func(_, _ int64, percent float64) {
-			s.app.Event.Emit("app:download", "NVIDIA TensorRT", percent)
+			s.app.Event.Emit(EventAppDownload, DownloadProgress{Dependency: "NVIDIA TensorRT", Percent: percent})
 		}); err != nil {
 		return errors.Wrap(err, "failed to download TensorRT dependency")
 	}
