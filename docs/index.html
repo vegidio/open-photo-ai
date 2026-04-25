@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Open Photo AI — install</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 720px;
+            margin: 4rem auto;
+            padding: 0 1.25rem;
+            line-height: 1.55;
+        }
+        h1 { margin-bottom: 0.25rem; }
+        h2 { margin-top: 2rem; }
+        p.tagline { color: #666; margin-top: 0; }
+        pre {
+            background: rgba(127, 127, 127, 0.12);
+            padding: 0.9rem 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 0.95rem;
+        }
+        code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        a { color: #3068c0; }
+        footer { margin-top: 3rem; color: #888; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <h1>Open Photo AI</h1>
+    <p class="tagline">An open-source alternative to Topaz Photo AI.</p>
+
+    <h2>Install</h2>
+
+    <h3>macOS &amp; Linux</h3>
+    <pre><code>curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | sh</code></pre>
+
+    <h3>Windows (PowerShell)</h3>
+    <pre><code>irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex</code></pre>
+
+    <h2>Pin a version</h2>
+    <pre><code>curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | OPAI_VERSION=26.3.0 sh</code></pre>
+    <pre><code>$env:OPAI_VERSION='26.3.0'; irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex</code></pre>
+
+    <footer>
+        <a href="https://github.com/vegidio/open-photo-ai">Source on GitHub</a> ·
+        <a href="https://github.com/vegidio/open-photo-ai/releases">Releases</a>
+    </footer>
+</body>
+</html>

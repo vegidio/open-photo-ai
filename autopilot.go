@@ -15,15 +15,15 @@ import (
 func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.ModelType {
 	enhancementTypes := make([]types.ModelType, 0)
 
-	if yes := shouldFaceRecovery(ctx, input); yes {
+	if shouldFaceRecovery(ctx, input) {
 		enhancementTypes = append(enhancementTypes, types.ModelTypeFaceRecovery)
 	}
 
-	if yes := shouldLightAdjustment(input); yes {
+	if shouldLightAdjustment(input) {
 		enhancementTypes = append(enhancementTypes, types.ModelTypeLightAdjustment)
 	}
 
-	if yes := shouldUpscale(input); yes {
+	if shouldUpscale(input) {
 		enhancementTypes = append(enhancementTypes, types.ModelTypeUpscale)
 	}
 

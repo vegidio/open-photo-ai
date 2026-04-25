@@ -20,13 +20,29 @@ I have long used both ComfyUI and Topaz Labs solutions, choosing between them de
 
 That is why I created this project: an open-source alternative to Topaz Photo AI. It may never match the same level of polish or performance – Topaz has teams of full-time engineers, while this is a solo project built in my spare time – but I have ambitious goals and aim to reach feature parity with their product over time.
 
+## ⬇️ Installation
+
+This app has versions for Windows, macOS, and Linux. Download the [latest release](https://github.com/vegidio/open-photo-ai/releases) that matches your computer architecture and operating system and unzip it.
+
+However, the recommended (and easiest) way to install **Open Photo AI** is using one of the scripts below. The script auto-detects your operating system and CPU architecture, downloads the correct one, and automatically installs the app:
+
+### macOS & Linux
+
+```bash
+curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | sh
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex
+```
+
 ## 🖼️ Usage
 
 There are two ways to use **Open Photo AI**: using the GUI or the CLI.
 
 The GUI is the easiest way to use the app, with an intuitive interface that allows you to enhance images with just a few clicks. The CLI is more advanced and allows you to enhance images in a more automated way.
-
-Both versions are available for Windows, macOS, and Linux. Download the [latest release](https://github.com/vegidio/open-photo-ai/releases/) that matches your computer architecture and operating system and follow the instructions below:
 
 ### GUI ([video](https://www.youtube.com/watch?v=NdSfeyiXPf8) 🎥)
 
