@@ -22,9 +22,9 @@ That is why I created this project: an open-source alternative to Topaz Photo AI
 
 ## ⬇️ Installation
 
-This app has versions for Windows, macOS, and Linux. Download the [latest release](https://github.com/vegidio/open-photo-ai/releases) that matches your computer architecture and operating system and unzip it.
+This app has versions for Windows, macOS, and Linux. Download the [latest release](https://github.com/vegidio/open-photo-ai/releases) that matches your computer architecture and operating system.
 
-However, the recommended (and easiest) way to install **Open Photo AI** is using one of the scripts below. The script auto-detects your operating system and CPU architecture, downloads the correct one, and automatically installs the app:
+However, the recommended (and easiest) way to install **Open Photo AI** is using one of the following scripts; copy and paste the command below in the terminal, and the script will automatically detect and install the correct version of the app:
 
 ### macOS & Linux
 
@@ -93,11 +93,11 @@ These are the features I plan to implement in the future, in no particular order
 - [x] Add new model for light adjustment.
 - [x] Add app preferences so you don't have to configure them every time.
 - [x] Enable TensorRT acceleration when pre warm-up is implemented.
+- [x] Simplify the app installation using packages and installers.
 - [ ] Crop and rotate images in the GUI.
 - [ ] Add new models for denoise, sharpening, and color correction.
 - [ ] Add new model to colorize black and white photos.
 - [ ] Add new model to fix imperfections and remove objects from photos.
-- [ ] Simplify the app installation using packages and installers.
 - [ ] Attempt to include diffusion-based models (this will be hard!)
 - [ ] CLI implementation.
 - [ ] Improve documentation for the library.
@@ -167,7 +167,7 @@ If you want to build the GUI you will also need:
 With all the dependencies installed, in the project's root folder run the command:
 
 ```bash
-$ task <interface> arch=<architecture>
+task <interface> arch=<architecture>
 ```
 
 Where:
@@ -178,7 +178,7 @@ Where:
 For example, if I wanted to build a GUI version of the app, on architecture AMD64, I would run the command:
 
 ```bash
-$ task gui arch=amd64
+task gui arch=amd64
 ```
 
 ## 📝 License
