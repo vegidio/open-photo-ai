@@ -36,6 +36,7 @@ export const SettingsMenu = ({ className = '' }: TailwindProps) => {
             >
                 <TreeItem itemId='enh_face' label='Face Recovery' />
                 <TreeItem itemId='enh_light' label='Light Adjustment' />
+                <TreeItem itemId='enh_color' label='Color Balance' />
                 <TreeItem itemId='enh_upscale' label='Upscale' />
             </TreeItem>
         </SimpleTreeView>

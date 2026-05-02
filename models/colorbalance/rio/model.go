@@ -1,4 +1,4 @@
-package paris
+package rio
 
 import (
 	"context"
@@ -9,28 +9,28 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
-	"github.com/vegidio/open-photo-ai/models/lightadjustment"
+	"github.com/vegidio/open-photo-ai/models/colorbalance"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
 
-type Paris struct {
+type Rio struct {
 	name      string
-	operation OpLaParis
+	operation OpCbRio
 	session   *ort.DynamicAdvancedSession
 	intensity float32
 }
 
-func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Paris, error) {
-	op := operation.(OpLaParis)
+func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Rio, error) {
+	op := operation.(OpCbRio)
 
 	// Remove the intensity from the model ID since this information is irrelevant to the model name
 	id := regexp.MustCompile(`_-?(?:0(?:\.\d+)?|1(?:\.0+)?)`).ReplaceAllString(op.Id(), "")
 
 	modelFile := id + ".onnx"
-	name := fmt.Sprintf("Paris (%s)", cases.Upper(language.English).String(string(op.precision)))
+	name := fmt.Sprintf("Rio (%s)", cases.Upper(language.English).String(string(op.precision)))
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
 
 	fileCheck := &types.FileCheck{
@@ -39,7 +39,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	}
 
 	if err := utils.PrepareDependency(ctx, url, "models", fileCheck, onProgress); err != nil {
-		return nil, errors.Wrap(err, "failed to prepare Paris model")
+		return nil, errors.Wrap(err, "failed to prepare Rio model")
 	}
 
 	session, err := utils.CreateSession(
@@ -49,10 +49,10 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 		ep,
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create Paris session")
+		return nil, errors.Wrap(err, "failed to create Rio session")
 	}
 
-	return &Paris{
+	return &Rio{
 		name:      name,
 		operation: op,
 		session:   session,
@@ -60,37 +60,37 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 }
 
 // Compile-time assertion to ensure it conforms to the Model interface.
-var _ types.Model[image.Image] = (*Paris)(nil)
+var _ types.Model[image.Image] = (*Rio)(nil)
 
 // region - Model methods
 
-func (m *Paris) Id() string {
+func (m *Rio) Id() string {
 	return m.operation.Id()
 }
 
-func (m *Paris) Name() string {
+func (m *Rio) Name() string {
 	return m.name
 }
 
-func (m *Paris) Run(
+func (m *Rio) Run(
 	ctx context.Context,
 	img image.Image,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	if onProgress != nil {
-		onProgress("la", 0)
+		onProgress("cb", 0)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	result, err := lightadjustment.Process(ctx, m.session, img)
+	result, err := colorbalance.Process(ctx, m.session, img)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to process image")
 	}
 
 	if onProgress != nil {
-		onProgress("la", 0.9)
+		onProgress("cb", 0.9)
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
@@ -99,13 +99,13 @@ func (m *Paris) Run(
 	blendedImg := utils.BlendWithIntensity(img, result, m.operation.intensity)
 
 	if onProgress != nil {
-		onProgress("la", 1)
+		onProgress("cb", 1)
 	}
 
 	return blendedImg, nil
 }
 
-func (m *Paris) Destroy() {
+func (m *Rio) Destroy() {
 	m.session.Destroy()
 }
 

@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { Button } from '@mui/material';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
-import type { Operation } from '@/operations';
 import type { ExportSettingsProps } from '@/components/organisms/ExportSettings';
+import type { Operation } from '@/operations';
 import { useExportStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { exportImage } from '@/utils/export.ts';
@@ -17,6 +17,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
     const ep = useSettingsStore((state) => state.executionProvider);
     const frModel = useSettingsStore((state) => state.frModel);
     const laModel = useSettingsStore((state) => state.laModel);
+    const cbModel = useSettingsStore((state) => state.cbModel);
     const upModel = useSettingsStore((state) => state.upModel);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
@@ -49,7 +50,13 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsP
                 // The list of operations for this file is empty; it means Autopilot added this file in the export list.
                 // We need to check if there are any suitable operations to apply to the file.
                 if (operations.length === 0) {
-                    suggestRef.current = suggestEnhancement(file, { fr: frModel, la: laModel, up: upModel });
+                    suggestRef.current = suggestEnhancement(file, {
+                        fr: frModel,
+                        la: laModel,
+                        cb: cbModel,
+                        up: upModel,
+                    });
+
                     const suggestions = await suggestRef.current;
 
                     if (suggestions.length === 0) continue;

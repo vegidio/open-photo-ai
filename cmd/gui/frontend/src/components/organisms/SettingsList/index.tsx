@@ -53,6 +53,19 @@ export const SettingsList = ({ className = '' }: TailwindProps) => {
             />
 
             <SettingsItemSelect
+                title='Color Balance'
+                description='The default Color Balance model to use when adding this enhancement.'
+                items={[
+                    {
+                        value: 'rio',
+                        label: 'Rio',
+                    },
+                ]}
+                selected={laModel}
+                onSelect={(value) => setLaModel(value)}
+            />
+
+            <SettingsItemSelect
                 title='Upscale'
                 description='The default Upscale model to use when adding this enhancement.'
                 items={[

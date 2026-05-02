@@ -19,6 +19,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
     const addEnhancements = useEnhancementStore((state) => state.addEnhancements);
     const frModel = useSettingsStore((state) => state.frModel);
     const laModel = useSettingsStore((state) => state.laModel);
+    const cbModel = useSettingsStore((state) => state.cbModel);
     const upModel = useSettingsStore((state) => state.upModel);
 
     const [isAnalysing, setIsAnalysing] = useState(false);
@@ -36,7 +37,13 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
             setIsAnalysing(true);
 
             try {
-                const suggestions = await suggestEnhancement(file, { fr: frModel, la: laModel, up: upModel });
+                const suggestions = await suggestEnhancement(file, {
+                    fr: frModel,
+                    la: laModel,
+                    cb: cbModel,
+                    up: upModel,
+                });
+
                 addEnhancements(file, suggestions);
             } catch (e) {
                 const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to run autopilot.');

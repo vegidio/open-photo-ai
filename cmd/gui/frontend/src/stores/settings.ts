@@ -22,6 +22,7 @@ type SettingsStore = {
 
     frModel: string;
     laModel: string;
+    cbModel: string;
     upModel: string;
 
     setIsFirstTensorRT: (isFirstRun: boolean) => void;
@@ -29,6 +30,7 @@ type SettingsStore = {
     setExecutionProvider: (ep: ExecutionProvider) => void;
     setFrModel: (model: string) => void;
     setLaModel: (model: string) => void;
+    setCbModel: (model: string) => void;
     setUpModel: (model: string) => void;
 
     saveSnapshot: () => void;
@@ -43,6 +45,7 @@ const SNAPSHOT_KEYS = [
     'executionProvider',
     'frModel',
     'laModel',
+    'cbModel',
     'upModel',
 ] as const satisfies readonly (keyof SettingsStore)[];
 
@@ -60,6 +63,7 @@ export const useSettingsStore = create(
                 executionProvider: ExecutionProviderAuto,
                 frModel: 'athens',
                 laModel: 'paris',
+                cbModel: 'rio',
                 upModel: 'kyoto',
 
                 setIsFirstTensorRT: (isFirst: boolean) => {
@@ -104,6 +108,12 @@ export const useSettingsStore = create(
                     });
                 },
 
+                setCbModel: (model: string) => {
+                    set((state) => {
+                        state.cbModel = model;
+                    });
+                },
+
                 setUpModel: (model: string) => {
                     set((state) => {
                         state.upModel = model;
@@ -118,6 +128,7 @@ export const useSettingsStore = create(
                         executionProvider: state.executionProvider,
                         frModel: state.frModel,
                         laModel: state.laModel,
+                        cbModel: state.cbModel,
                         upModel: state.upModel,
                     };
                 },

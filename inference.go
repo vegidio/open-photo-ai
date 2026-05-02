@@ -7,6 +7,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
+	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
 	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
@@ -188,6 +189,10 @@ func selectModel(
 	// Light Adjustment
 	case strings.HasPrefix(operation.Id(), "la_paris"):
 		model, err = paris.New(ctx, operation, ep, onProgress)
+
+	// Color Balance
+	case strings.HasPrefix(operation.Id(), "cb_rio"):
+		model, err = rio.New(ctx, operation, ep, onProgress)
 
 	// Upscale
 	case strings.HasPrefix(operation.Id(), "up_tokyo"):

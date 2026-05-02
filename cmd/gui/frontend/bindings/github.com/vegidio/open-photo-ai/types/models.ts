@@ -88,5 +88,6 @@ export enum ModelType {
     ModelTypeFaceDetection = "fd",
     ModelTypeFaceRecovery = "fd",
     ModelTypeLightAdjustment = "la",
+    ModelTypeColorBalance = "cb",
     ModelTypeUpscale = "up",
 };

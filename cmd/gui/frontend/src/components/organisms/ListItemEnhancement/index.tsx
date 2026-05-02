@@ -2,6 +2,7 @@ import { type MouseEvent, type ReactNode, useState } from 'react';
 import { IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
+import { OptionsColorBalance } from '@/components/organisms/OptionsColorBalance';
 import { OptionsFaceRecovery } from '@/components/organisms/OptionsFaceRecovery';
 import { OptionsLightAdjustment } from '@/components/organisms/OptionsLightAdjustment';
 import { OptionsUpscale } from '@/components/organisms/OptionsUpscale';
@@ -81,6 +82,9 @@ const selectOptionsComponent = (operationId: string) => {
         case operationId.startsWith('la'):
             return OptionsLightAdjustment;
 
+        case operationId.startsWith('cb'):
+            return OptionsColorBalance;
+
         case operationId.startsWith('up'):
             return OptionsUpscale;
     }
@@ -101,6 +105,13 @@ const opToEnhancement = (op: Operation): { name: string; info: string; icon: Rea
             const intensity = parseFloat(op.options.intensity) * 100;
             const info = `${titleCase(op.options.name)}, ${intensity}%, ${quality}`;
             return { name: 'Light Adjustment', info, icon: <Icon option='light_adjustment' /> };
+        }
+
+        // Color Balance
+        case op.id.startsWith('cb'): {
+            const intensity = parseFloat(op.options.intensity) * 100;
+            const info = `${titleCase(op.options.name)}, ${intensity}%, ${quality}`;
+            return { name: 'Color Balance', info, icon: <Icon option='color_balance' /> };
         }
 
         // Upscale

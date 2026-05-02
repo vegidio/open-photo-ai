@@ -1,10 +1,8 @@
-package lightadjustment
+package utils
 
 import (
 	"image"
 	"image/color"
-
-	"github.com/vegidio/open-photo-ai/internal/utils"
 )
 
 // BlendWithIntensity blends the original image with the model output based on intensity.
@@ -39,9 +37,9 @@ func BlendWithIntensity(original, modelOutput image.Image, intensity float32) im
 			b := oB + intensity*(mB-oB)
 
 			result.Set(x, y, color.NRGBA{
-				R: uint8(utils.ClampFloat32(r)),
-				G: uint8(utils.ClampFloat32(g)),
-				B: uint8(utils.ClampFloat32(b)),
+				R: uint8(ClampFloat32(r)),
+				G: uint8(ClampFloat32(g)),
+				B: uint8(ClampFloat32(b)),
 				A: uint8(origA / 257),
 			})
 		}

@@ -4,7 +4,7 @@ import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
 import { useEnhancementStore, useFileStore, useSettingsStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
-import { getFrOp, getLaOp, getUpOp } from '@/utils/enhancement';
+import { getCbOp, getFrOp, getLaOp, getUpOp } from '@/utils/enhancement';
 
 type MenuAddEnhancementProps = {
     anchorEl: HTMLElement | null;
@@ -15,6 +15,7 @@ type MenuAddEnhancementProps = {
 export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhancementProps) => {
     const frModel = useSettingsStore((state) => state.frModel);
     const laModel = useSettingsStore((state) => state.laModel);
+    const cbModel = useSettingsStore((state) => state.cbModel);
     const upModel = useSettingsStore((state) => state.upModel);
 
     const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
@@ -45,6 +46,12 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
                 icon: <Icon option='light_adjustment' />,
                 name: 'Light Adjustment',
                 op: getLaOp(laModel),
+            },
+            {
+                type: 'cb',
+                icon: <Icon option='color_balance' />,
+                name: 'Color Balance',
+                op: getCbOp(cbModel),
             },
             {
                 type: 'up',

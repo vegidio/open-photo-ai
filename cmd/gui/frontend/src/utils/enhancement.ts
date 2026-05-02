@@ -2,11 +2,12 @@ import { CancellablePromise } from '@wailsio/runtime';
 import type { File } from '@/bindings/gui/types';
 import { ModelType } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { SuggestEnhancements } from '@/bindings/gui/services/imageservice.ts';
-import { Athens, Kyoto, type Operation, Paris, Saitama, Santorini, Tokyo } from '@/operations';
+import { Athens, Kyoto, type Operation, Paris, Rio, Saitama, Santorini, Tokyo } from '@/operations';
 
 export type ModelChoices = {
     fr: string;
     la: string;
+    cb: string;
     up: string;
 };
 
@@ -44,6 +45,13 @@ export const getLaOp = (model: string) => {
     }
 };
 
+export const getCbOp = (model: string) => {
+    switch (model) {
+        default:
+            return new Rio(0.5, 'fp32');
+    }
+};
+
 export const getUpOp = (model: string, scale: number) => {
     switch (model) {
         case 'tokyo':
@@ -66,6 +74,10 @@ const modelTypesToOps = (modelTypes: ModelType[], file: File, models: ModelChoic
 
             case ModelType.ModelTypeLightAdjustment:
                 operations.push(getLaOp(models.la));
+                break;
+
+            case ModelType.ModelTypeColorBalance:
+                operations.push(getCbOp(models.cb));
                 break;
 
             case ModelType.ModelTypeUpscale: {

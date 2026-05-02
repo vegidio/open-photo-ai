@@ -13,6 +13,8 @@ export const EnhancementProgress = () => {
                 return 'Face Recovery';
             case id.startsWith('la'):
                 return 'Light Adjust';
+            case id.startsWith('cb'):
+                return 'Color Balance';
             case id.startsWith('up'):
                 return 'Upscale';
             default:

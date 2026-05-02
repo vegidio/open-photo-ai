@@ -23,6 +23,10 @@ func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.Mo
 		enhancementTypes = append(enhancementTypes, types.ModelTypeLightAdjustment)
 	}
 
+	if shouldColorBalance(input) {
+		enhancementTypes = append(enhancementTypes, types.ModelTypeColorBalance)
+	}
+
 	if shouldUpscale(input) {
 		enhancementTypes = append(enhancementTypes, types.ModelTypeUpscale)
 	}
@@ -102,6 +106,10 @@ func shouldLightAdjustment(input *types.ImageData) bool {
 		return true
 	}
 
+	return false
+}
+
+func shouldColorBalance(input *types.ImageData) bool {
 	return false
 }
 
