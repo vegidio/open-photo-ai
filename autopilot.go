@@ -2,7 +2,9 @@ package opai
 
 import (
 	"context"
+	"math"
 
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -110,7 +112,98 @@ func shouldLightAdjustment(input *types.ImageData) bool {
 }
 
 func shouldColorBalance(input *types.ImageData) bool {
-	return false
+	bounds := input.Pixels.Bounds()
+	totalPixels := float64(bounds.Dx() * bounds.Dy())
+
+	if totalPixels == 0 {
+		return false
+	}
+
+	const (
+		grayWorldThreshold    = 15.0
+		hueBinCount           = 12
+		hueSkewThreshold      = 0.6
+		grayPixelSatCutoff    = 25.0
+		whiteBalanceThreshold = 0.3
+		lowSatBriThreshold    = 40.0
+		highSatBriThreshold   = 220.0
+	)
+
+	var sumR, sumG, sumB float64
+	var sumS, sumV float64
+	hueHistogram := make([]int, hueBinCount)
+	var coloredPixels int
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := input.Pixels.At(x, y).RGBA()
+
+			r8 := float64(r >> 8)
+			g8 := float64(g >> 8)
+			b8 := float64(b >> 8)
+
+			sumR += r8
+			sumG += g8
+			sumB += b8
+
+			h, s, v := utils.RgbToHsv(r8, g8, b8)
+			sumS += s
+			sumV += v
+
+			if s >= grayPixelSatCutoff {
+				bin := int(h / 360.0 * float64(hueBinCount))
+				if bin >= hueBinCount {
+					bin = hueBinCount - 1
+				}
+				hueHistogram[bin]++
+				coloredPixels++
+			}
+		}
+	}
+
+	meanR := sumR / totalPixels
+	meanG := sumG / totalPixels
+	meanB := sumB / totalPixels
+	meanS := sumS / totalPixels
+	meanV := sumV / totalPixels
+
+	flags := 0
+
+	// Gray World Assumption
+	gray := (meanR + meanG + meanB) / 3.0
+	maxDeviation := math.Max(math.Abs(meanR-gray), math.Max(math.Abs(meanG-gray), math.Abs(meanB-gray)))
+	if maxDeviation > grayWorldThreshold {
+		flags++
+	}
+
+	// Hue Histogram Skew
+	if coloredPixels > 0 {
+		maxBin := 0
+		for _, c := range hueHistogram {
+			if c > maxBin {
+				maxBin = c
+			}
+		}
+		if float64(maxBin)/float64(coloredPixels) > hueSkewThreshold {
+			flags++
+		}
+	}
+
+	// White Balance Score (von Kries)
+	if meanG > 0 {
+		deviation := math.Abs(meanR/meanG-1.0) + math.Abs(meanB/meanG-1.0)
+		if deviation > whiteBalanceThreshold {
+			flags++
+		}
+	}
+
+	// Saturation & Brightness Check
+	if meanS < lowSatBriThreshold || meanS > highSatBriThreshold ||
+		meanV < lowSatBriThreshold || meanV > highSatBriThreshold {
+		flags++
+	}
+
+	return flags >= 2
 }
 
 func shouldUpscale(input *types.ImageData) bool {
