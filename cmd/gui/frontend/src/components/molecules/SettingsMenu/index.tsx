@@ -1,11 +1,16 @@
 import { SimpleTreeView, TreeItem } from '@mui/x-tree-view';
 import type { TailwindProps } from '@/utils/TailwindProps';
 
-export const SettingsMenu = ({ className = '' }: TailwindProps) => {
+type SettingsMenuProps = TailwindProps & {
+    onItemClick?: (itemId: string) => void;
+};
+
+export const SettingsMenu = ({ className = '', onItemClick }: SettingsMenuProps) => {
     return (
         <SimpleTreeView
             className={`${className}`}
             expandedItems={['app', 'enhancements']}
+            onItemClick={(_, itemId) => onItemClick?.(itemId)}
             sx={{
                 '& .MuiTreeItem-label': {
                     fontSize: '0.875rem', // text-sm equivalent

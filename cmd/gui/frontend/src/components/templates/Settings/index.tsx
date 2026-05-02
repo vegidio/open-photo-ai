@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Dialog, Divider } from '@mui/material';
 import { CleanRegistry } from '@/bindings/gui/services/appservice.ts';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { SettingsButtons } from '@/components/molecules/SettingsButtons';
-import { SettingsList } from '@/components/organisms/SettingsList';
+import { SettingsList, type SettingsListHandle } from '@/components/organisms/SettingsList';
 import { SettingsMenu } from '@/components/molecules/SettingsMenu';
 import { useSettingsStore } from '@/stores';
 
@@ -16,6 +16,7 @@ type SettingsProps = {
 export const Settings = ({ section: _section, open, onClose }: SettingsProps) => {
     const saveSnapshot = useSettingsStore((state) => state.saveSnapshot);
     const restoreSnapshot = useSettingsStore((state) => state.restoreSnapshot);
+    const listRef = useRef<SettingsListHandle>(null);
 
     const onCancel = () => {
         restoreSnapshot();
@@ -45,12 +46,15 @@ export const Settings = ({ section: _section, open, onClose }: SettingsProps) =>
             <ModalTitle title='Settings' onClose={onCancel} />
 
             <div className='flex flex-row flex-1 overflow-hidden'>
-                <SettingsMenu className='w-52 px-2 pt-2' />
+                <SettingsMenu
+                    className='w-52 px-2 pt-2'
+                    onItemClick={(itemId) => listRef.current?.scrollToSection(itemId)}
+                />
 
                 <Divider orientation='vertical' flexItem className='border-[#171717] my-0.5' />
 
                 <div className='flex flex-col flex-1'>
-                    <SettingsList className='flex-1 overflow-y-auto scrollbar-thin' />
+                    <SettingsList ref={listRef} className='flex-1 overflow-y-auto scrollbar-thin' />
 
                     <SettingsButtons onCancel={onCancel} onSave={onSave} className='p-3 justify-end' />
                 </div>

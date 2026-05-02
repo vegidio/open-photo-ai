@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { List, ListSubheader } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
@@ -6,23 +6,43 @@ import { SettingsItemSelect } from '@/components/molecules/SettingsItemSelect';
 import { useSettingsStore } from '@/stores';
 import { os } from '@/utils/constants';
 
-export const SettingsList = ({ className = '' }: TailwindProps) => {
+export type SettingsListHandle = {
+    scrollToSection: (itemId: string) => void;
+};
+
+export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ className = '' }, ref) => {
+    const containerRef = useRef<HTMLUListElement>(null);
+
     const frModel = useSettingsStore((state) => state.frModel);
     const setFrModel = useSettingsStore((state) => state.setFrModel);
     const laModel = useSettingsStore((state) => state.laModel);
     const setLaModel = useSettingsStore((state) => state.setLaModel);
+    const cbModel = useSettingsStore((state) => state.cbModel);
+    const setCbModel = useSettingsStore((state) => state.setCbModel);
     const upModel = useSettingsStore((state) => state.upModel);
     const setUpModel = useSettingsStore((state) => state.setUpModel);
 
+    useImperativeHandle(ref, () => ({
+        scrollToSection: (itemId: string) => {
+            const target = containerRef.current?.querySelector(`#${CSS.escape(itemId)}`);
+            target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+    }));
+
     return (
-        <List className={`${className} py-0 w-full`}>
-            <ListSubheader className='bg-[#2b2b2b] text-[#f2f2f2]'>Application</ListSubheader>
+        <List ref={containerRef} className={`${className} py-0 w-full`}>
+            <ListSubheader id='app' className='bg-[#2b2b2b] text-[#f2f2f2]'>
+                Application
+            </ListSubheader>
 
-            <ItemAiProcessor />
+            <ItemAiProcessor id='app_processor' />
 
-            <ListSubheader className='bg-[#2b2b2b] text-[#f2f2f2]'>Enhancements</ListSubheader>
+            <ListSubheader id='enhancements' className='bg-[#2b2b2b] text-[#f2f2f2]'>
+                Enhancements
+            </ListSubheader>
 
             <SettingsItemSelect
+                id='enh_face'
                 title='Face Recovery'
                 description='The default Face Recovery model to use when adding this enhancement.'
                 items={[
@@ -40,6 +60,7 @@ export const SettingsList = ({ className = '' }: TailwindProps) => {
             />
 
             <SettingsItemSelect
+                id='enh_light'
                 title='Light Adjustment'
                 description='The default Light Adjustment model to use when adding this enhancement.'
                 items={[
@@ -53,6 +74,7 @@ export const SettingsList = ({ className = '' }: TailwindProps) => {
             />
 
             <SettingsItemSelect
+                id='enh_color'
                 title='Color Balance'
                 description='The default Color Balance model to use when adding this enhancement.'
                 items={[
@@ -61,11 +83,12 @@ export const SettingsList = ({ className = '' }: TailwindProps) => {
                         label: 'Rio',
                     },
                 ]}
-                selected={laModel}
-                onSelect={(value) => setLaModel(value)}
+                selected={cbModel}
+                onSelect={(value) => setCbModel(value)}
             />
 
             <SettingsItemSelect
+                id='enh_upscale'
                 title='Upscale'
                 description='The default Upscale model to use when adding this enhancement.'
                 items={[
@@ -88,9 +111,13 @@ export const SettingsList = ({ className = '' }: TailwindProps) => {
             />
         </List>
     );
+});
+
+type ItemAiProcessorProps = {
+    id?: string;
 };
 
-const ItemAiProcessor = () => {
+const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
     const processorSelectItems = useSettingsStore((state) => state.processorSelectItems);
     const executionProvider = useSettingsStore((state) => state.executionProvider);
     const setExecutionProvider = useSettingsStore((state) => state.setExecutionProvider);
@@ -118,6 +145,7 @@ const ItemAiProcessor = () => {
 
     return (
         <SettingsItemSelect
+            id={id}
             title='AI Processor'
             description={description}
             items={processorSelectItems}

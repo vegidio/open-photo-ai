@@ -60,7 +60,7 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
                 op: getUpOp(upModel, scale),
             },
         ];
-    }, [frModel, laModel, upModel, currentFile?.Dimensions]);
+    }, [frModel, laModel, upModel, currentFile?.Dimensions, cbModel]);
 
     return (
         <Menu
