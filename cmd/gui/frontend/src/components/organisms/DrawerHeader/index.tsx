@@ -16,8 +16,8 @@ export const DrawerHeader = ({ drawerBleeding, className = '' }: FileListHeaderP
 
     return (
         <div
-            style={{ height: drawerBleeding, top: -drawerBleeding }}
-            className={`flex items-center absolute visible pointer-events-auto pl-0.5 pr-3 gap-1 bg-[#272727] ${className}`}
+            style={{ height: drawerBleeding }}
+            className={`flex items-center pl-0.5 pr-3 gap-1 bg-[#272727] ${className}`}
         >
             <DrawerToggle disabled={fileCount === 0} />
 

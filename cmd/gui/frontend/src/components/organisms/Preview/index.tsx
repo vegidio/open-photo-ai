@@ -5,13 +5,16 @@ import { EnhancementProgress } from '@/components/organisms/EnhancementProgress'
 import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
 import { PreviewImage } from '@/components/organisms/PreviewImage';
 import { useNotify } from '@/hooks/useNotify.ts';
-import { useEnhancementStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
+import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
 import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
 import { userFriendlyErrorMessage } from '@/utils/errors.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 
 export const Preview = ({ className = '' }: TailwindProps) => {
     const { enqueueSnackbar } = useNotify();
+
+    // DrawerStore
+    const setOpen = useDrawerStore((state) => state.setOpen);
 
     // FileListStore
     const filesLength = useFileStore((state) => state.files.length);
@@ -77,10 +80,9 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         };
     }, [operations, currentFile, setEnhancedImage, setOriginalImage]);
 
-    // TODO: Fix bug that makes the drawer jump when it opens automatically
-    // useEffect(() => {
-    //     if (filesLength > 0) setOpen(true);
-    // }, [filesLength, setOpen]);
+    useEffect(() => {
+        if (filesLength > 0) setOpen(true);
+    }, [filesLength, setOpen]);
 
     return (
         <div
