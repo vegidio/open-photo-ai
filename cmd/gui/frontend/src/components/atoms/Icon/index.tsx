@@ -6,7 +6,7 @@ import {
     MdOpenInFull,
     MdOutlineFaceRetouchingNatural,
     MdOutlineLightMode,
-    MdPalette,
+    MdOutlinePalette,
     MdSplitscreen,
 } from 'react-icons/md';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
@@ -37,7 +37,7 @@ export const Icon = ({ option, className = '' }: IconProps) => {
         case 'light_adjustment':
             return <MdOutlineLightMode className={className} />;
         case 'color_balance':
-            return <MdPalette className={className} />;
+            return <MdOutlinePalette className={className} />;
         case 'upscale':
             return <MdOpenInFull className={className} />;
         case 'preview_full':

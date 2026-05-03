@@ -11,9 +11,9 @@ import (
 
 // SuggestEnhancements analyzes the input image and returns a list of recommended enhancement.
 //
-// It evaluates the image for potential face recovery, light adjustment, and upscaling improvements based on image
-// characteristics such as detected faces and resolution. The face-detection path may trigger a model download on first
-// use; pass a cancellable ctx to abort it.
+// It evaluates the image for potential face recovery, light adjustment, color balance, and upscaling improvements based
+// on image characteristics such as detected faces and resolution. The face-detection path may trigger a model download
+// on first use; pass a cancellable ctx to abort it.
 func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.ModelType {
 	enhancementTypes := make([]types.ModelType, 0)
 
@@ -120,19 +120,18 @@ func shouldColorBalance(input *types.ImageData) bool {
 	}
 
 	const (
-		grayWorldThreshold    = 15.0
-		hueBinCount           = 12
-		hueSkewThreshold      = 0.6
-		grayPixelSatCutoff    = 25.0
-		whiteBalanceThreshold = 0.3
-		lowSatBriThreshold    = 40.0
-		highSatBriThreshold   = 220.0
+		neutralSatCutoff        = 40.0
+		neutralPixelMinRatio    = 0.02
+		neutralCastThreshold    = 12.0
+		hueBinCount             = 12
+		neutralHueSkewThreshold = 0.45
+		whiteBalanceThreshold   = 0.5
 	)
 
 	var sumR, sumG, sumB float64
-	var sumS, sumV float64
-	hueHistogram := make([]int, hueBinCount)
-	var coloredPixels int
+	var neutralSumR, neutralSumG, neutralSumB float64
+	neutralHueHistogram := make([]int, hueBinCount)
+	var neutralPixels int
 
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
@@ -146,17 +145,19 @@ func shouldColorBalance(input *types.ImageData) bool {
 			sumG += g8
 			sumB += b8
 
-			h, s, v := utils.RgbToHsv(r8, g8, b8)
-			sumS += s
-			sumV += v
+			h, s, _ := utils.RgbToHsv(r8, g8, b8)
 
-			if s >= grayPixelSatCutoff {
+			if s < neutralSatCutoff {
+				neutralSumR += r8
+				neutralSumG += g8
+				neutralSumB += b8
+
 				bin := int(h / 360.0 * float64(hueBinCount))
 				if bin >= hueBinCount {
 					bin = hueBinCount - 1
 				}
-				hueHistogram[bin]++
-				coloredPixels++
+				neutralHueHistogram[bin]++
+				neutralPixels++
 			}
 		}
 	}
@@ -164,27 +165,31 @@ func shouldColorBalance(input *types.ImageData) bool {
 	meanR := sumR / totalPixels
 	meanG := sumG / totalPixels
 	meanB := sumB / totalPixels
-	meanS := sumS / totalPixels
-	meanV := sumV / totalPixels
 
 	flags := 0
+	hasEnoughNeutral := float64(neutralPixels)/totalPixels >= neutralPixelMinRatio
 
-	// Gray World Assumption
-	gray := (meanR + meanG + meanB) / 3.0
-	maxDeviation := math.Max(math.Abs(meanR-gray), math.Max(math.Abs(meanG-gray), math.Abs(meanB-gray)))
-	if maxDeviation > grayWorldThreshold {
-		flags++
+	// Neutral-pixel RGB cast: pixels that should be gray reveal a cast when their mean shifts off-gray.
+	if hasEnoughNeutral {
+		nR := neutralSumR / float64(neutralPixels)
+		nG := neutralSumG / float64(neutralPixels)
+		nB := neutralSumB / float64(neutralPixels)
+		gray := (nR + nG + nB) / 3.0
+		maxDeviation := math.Max(math.Abs(nR-gray), math.Max(math.Abs(nG-gray), math.Abs(nB-gray)))
+		if maxDeviation > neutralCastThreshold {
+			flags++
+		}
 	}
 
-	// Hue Histogram Skew
-	if coloredPixels > 0 {
+	// Neutral-pixel hue skew: balanced images distribute neutral-pixel hues uniformly; a cast concentrates them.
+	if hasEnoughNeutral {
 		maxBin := 0
-		for _, c := range hueHistogram {
+		for _, c := range neutralHueHistogram {
 			if c > maxBin {
 				maxBin = c
 			}
 		}
-		if float64(maxBin)/float64(coloredPixels) > hueSkewThreshold {
+		if float64(maxBin)/float64(neutralPixels) > neutralHueSkewThreshold {
 			flags++
 		}
 	}
@@ -195,12 +200,6 @@ func shouldColorBalance(input *types.ImageData) bool {
 		if deviation > whiteBalanceThreshold {
 			flags++
 		}
-	}
-
-	// Saturation & Brightness Check
-	if meanS < lowSatBriThreshold || meanS > highSatBriThreshold ||
-		meanV < lowSatBriThreshold || meanV > highSatBriThreshold {
-		flags++
 	}
 
 	return flags >= 2
