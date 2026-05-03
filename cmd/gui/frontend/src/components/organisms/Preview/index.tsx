@@ -81,7 +81,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     }, [operations, currentFile, setEnhancedImage, setOriginalImage]);
 
     useEffect(() => {
-        if (filesLength > 0) setOpen(true);
+        if (filesLength > 1) setOpen(true);
     }, [filesLength, setOpen]);
 
     return (

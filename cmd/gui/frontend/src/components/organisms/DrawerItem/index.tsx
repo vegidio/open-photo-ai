@@ -98,20 +98,26 @@ const BottomBar = ({ file, selected = false, className = '' }: BottomBarProps) =
                 </IconButton>
             </div>
 
-            <MenuFileOptions
-                file={file}
-                anchorEl={anchorEl}
-                open={open}
-                anchorOrigin={{
-                    vertical: 'center',
-                    horizontal: 'center',
-                }}
-                transformOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'left',
-                }}
-                onMenuClose={onMenuClose}
-            />
+            {/* Stop menu/backdrop clicks from bubbling through the React portal tree
+                to DrawerItem's onClick, which would change the selected image. */}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: N/A */}
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: N/A */}
+            <div onClick={(e) => e.stopPropagation()}>
+                <MenuFileOptions
+                    file={file}
+                    anchorEl={anchorEl}
+                    open={open}
+                    anchorOrigin={{
+                        vertical: 'center',
+                        horizontal: 'center',
+                    }}
+                    transformOrigin={{
+                        vertical: 'bottom',
+                        horizontal: 'left',
+                    }}
+                    onMenuClose={onMenuClose}
+                />
+            </div>
         </>
     );
 };
