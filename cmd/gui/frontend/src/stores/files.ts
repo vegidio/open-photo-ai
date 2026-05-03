@@ -56,6 +56,8 @@ export const useFileStore = create(
                 // Update currentIndex if necessary
                 if (state.files.length === 0) {
                     state.currentIndex = 0;
+                } else if (removedIndex < state.currentIndex) {
+                    state.currentIndex -= 1;
                 } else if (state.currentIndex >= state.files.length) {
                     state.currentIndex = state.files.length - 1;
                 }
