@@ -7,6 +7,7 @@ import { useEnhancementStore, useFileStore, useImageStore } from '@/stores';
 // stores to each other at module scope.
 export const useFileManager = () => {
     const removeFileFromList = useFileStore((state) => state.removeFile);
+    const removeSelectedFile = useFileStore((state) => state.removeSelectedFile);
     const clearFileList = useFileStore((state) => state.clear);
     const removeEnhancementsKey = useEnhancementStore((state) => state.removeKey);
     const clearEnhancements = useEnhancementStore((state) => state.clear);
@@ -16,10 +17,11 @@ export const useFileManager = () => {
     const removeFile = useCallback(
         (file: File) => {
             removeFileFromList(file);
+            removeSelectedFile(file.Path);
             removeEnhancementsKey(file);
             removeImageTransform(file.Hash);
         },
-        [removeFileFromList, removeEnhancementsKey, removeImageTransform],
+        [removeFileFromList, removeSelectedFile, removeEnhancementsKey, removeImageTransform],
     );
 
     const clearAll = useCallback(() => {
