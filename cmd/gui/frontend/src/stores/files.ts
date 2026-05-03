@@ -30,14 +30,19 @@ export const useFileStore = create(
         },
 
         addFiles: (files: File[]) => {
-            // Check if the list of files was empty before adding new ones
             const wasEmpty = get().files.length === 0;
+            const oldLength = get().files.length;
 
             set((state) => {
                 const uniqueFiles = files.filter(
                     (file) => !state.files.some((existingFile) => existingFile.Path === file.Path),
                 );
                 state.files.push(...uniqueFiles);
+
+                // Move the current selection to the first newly added file
+                if (state.files.length > oldLength) {
+                    state.currentIndex = oldLength;
+                }
             });
 
             // If the list was empty and now has files, select the first one
