@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react';
 import { List } from '@mui/material';
+import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { ListItemAutopilot } from '@/components/molecules/ListItemAutopilot';
 import { ListItemEnhancement } from '@/components/organisms/ListItemEnhancement';
-import { useNotify } from '@/hooks/useNotify.ts';
-import { useEnhancementStore, useFileStore, useSettingsStore } from '@/stores';
-import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
+import { useCurrentFile, useFileOperations, useNotify } from '@/hooks';
+import { useEnhancementStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { userFriendlyErrorMessage } from '@/utils/errors.ts';
 
 export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
     const { enqueueSnackbar } = useNotify();
 
-    const file = useFileStore((state) => state.files[state.currentIndex]);
+    const file = useCurrentFile();
     const autopilot = useEnhancementStore((state) => state.autopilot);
-    const hasEnhancement = useEnhancementStore((state) => state.enhancements.has(file));
-    const operations = useEnhancementStore((state) => state.enhancements.get(file) ?? EMPTY_OPERATIONS);
+    const hasEnhancement = useEnhancementStore((state) => (file ? state.enhancements.has(file) : false));
+    const operations = useFileOperations(file);
     const addEnhancements = useEnhancementStore((state) => state.addEnhancements);
     const frModel = useSettingsStore((state) => state.frModel);
     const laModel = useSettingsStore((state) => state.laModel);
@@ -31,20 +31,18 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
         //   2. Autopilot is enabled
         //   3. The file never had any enhancements applied to it; if any enhancements were applied before, even if
         //      they were removed later, autopilot will _not_ run again, unless the file is removed and re-added.
-        const shouldRunAutopilot = file && autopilot && !hasEnhancement;
-
-        async function runAutopilot() {
+        async function runAutopilot(currentFile: File) {
             setIsAnalysing(true);
 
             try {
-                const suggestions = await suggestEnhancement(file, {
+                const suggestions = await suggestEnhancement(currentFile, {
                     fr: frModel,
                     la: laModel,
                     cb: cbModel,
                     up: upModel,
                 });
 
-                addEnhancements(file, suggestions);
+                addEnhancements(currentFile, suggestions);
             } catch (e) {
                 const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to run autopilot.');
                 enqueueSnackbar(msg, { variant: 'error' });
@@ -53,7 +51,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
             }
         }
 
-        if (shouldRunAutopilot) runAutopilot();
+        if (file && autopilot && !hasEnhancement) runAutopilot(file);
     }, [autopilot, hasEnhancement, addEnhancements, file]);
 
     return (

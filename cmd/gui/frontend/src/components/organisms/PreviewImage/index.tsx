@@ -1,8 +1,7 @@
 import { ReactCompareSlider } from 'react-compare-slider';
 import { ZoomImage } from '@/components/organisms/ZoomImage';
-import { useAppStore, useFileStore, useImageStore } from '@/stores';
-
-const INITIAL_TRANSFORM = { scale: 1, positionX: 0, positionY: 0 };
+import { useCurrentFile, useImageTransform } from '@/hooks';
+import { useAppStore, useImageStore } from '@/stores';
 
 export const PreviewImage = () => {
     const previewMode = useAppStore((state) => state.previewMode);
@@ -10,8 +9,8 @@ export const PreviewImage = () => {
     const originalImage = useImageStore((state) => state.originalImage);
     const enhancedImage = useImageStore((state) => state.enhancedImage);
 
-    const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
-    const transform = useImageStore((state) => state.imageTransform.get(currentFile?.Hash ?? '')) ?? INITIAL_TRANSFORM;
+    const currentFile = useCurrentFile();
+    const transform = useImageTransform(currentFile);
 
     switch (previewMode) {
         case 'full':

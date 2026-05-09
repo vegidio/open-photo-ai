@@ -6,7 +6,8 @@ import { OptionsColorBalance } from '@/components/organisms/OptionsColorBalance'
 import { OptionsFaceRecovery } from '@/components/organisms/OptionsFaceRecovery';
 import { OptionsLightAdjustment } from '@/components/organisms/OptionsLightAdjustment';
 import { OptionsUpscale } from '@/components/organisms/OptionsUpscale';
-import { useEnhancementStore, useFileStore } from '@/stores';
+import { useCurrentFile } from '@/hooks';
+import { useEnhancementStore } from '@/stores';
 
 type ListItemEnhancementProps = {
     op: Operation;
@@ -14,7 +15,7 @@ type ListItemEnhancementProps = {
 
 export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const [isHovered, setIsHovered] = useState(false);
-    const file = useFileStore((state) => state.files.at(state.currentIndex));
+    const file = useCurrentFile();
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
 
     // Get enhancement details and options component menu

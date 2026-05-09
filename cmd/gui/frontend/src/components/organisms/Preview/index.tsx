@@ -4,9 +4,8 @@ import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { EnhancementProgress } from '@/components/organisms/EnhancementProgress';
 import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
 import { PreviewImage } from '@/components/organisms/PreviewImage';
-import { useNotify } from '@/hooks/useNotify.ts';
-import { useDrawerStore, useEnhancementStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
-import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
+import { useCurrentFile, useFileOperations, useNotify } from '@/hooks';
+import { useDrawerStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
 import { userFriendlyErrorMessage } from '@/utils/errors.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 
@@ -18,16 +17,14 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
     // FileListStore
     const filesLength = useFileStore((state) => state.files.length);
-    const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
+    const currentFile = useCurrentFile();
 
     // ImageStore
     const setOriginalImage = useImageStore((state) => state.setOriginalImage);
     const setEnhancedImage = useImageStore((state) => state.setEnhancedImage);
 
     // EnhancementStore
-    const operations = useEnhancementStore((state) =>
-        currentFile ? (state.enhancements.get(currentFile) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
-    );
+    const operations = useFileOperations(currentFile);
 
     const ep = useSettingsStore((state) => state.executionProvider);
 

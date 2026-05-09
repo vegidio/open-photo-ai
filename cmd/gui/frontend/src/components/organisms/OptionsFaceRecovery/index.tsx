@@ -1,8 +1,8 @@
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
+import { useCurrentFile, useFileOperations } from '@/hooks';
 import { Athens, Santorini } from '@/operations';
-import { useEnhancementStore, useFileStore } from '@/stores';
-import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
+import { useEnhancementStore } from '@/stores';
 
 type OptionsFaceRecoveryProps = {
     anchorEl: HTMLElement | null;
@@ -18,12 +18,12 @@ const options: ModelSelectorOption[] = [
 ];
 
 export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceRecoveryProps) => {
-    const file = useFileStore((state) => state.files[state.currentIndex]);
-    const operations = useEnhancementStore((state) => state.enhancements.get(file) ?? EMPTY_OPERATIONS);
+    const file = useCurrentFile();
+    const operations = useFileOperations(file);
     const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
 
     const currentOp = operations.find((op) => op.id.startsWith('fr'));
-    if (!currentOp) return null;
+    if (!file || !currentOp) return null;
 
     const selectedModel = `${currentOp.options.name}_${currentOp.options.precision}`;
 

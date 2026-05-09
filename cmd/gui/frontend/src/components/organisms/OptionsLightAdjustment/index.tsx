@@ -3,9 +3,9 @@ import { Divider } from '@mui/material';
 import { IntensitySelector } from '@/components/molecules/IntensitySelector';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
+import { useCurrentFile, useFileOperations } from '@/hooks';
 import { Paris } from '@/operations';
-import { useEnhancementStore, useFileStore } from '@/stores';
-import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
+import { useEnhancementStore } from '@/stores';
 
 type OptionsLightAdjustmentProps = {
     anchorEl: HTMLElement | null;
@@ -19,8 +19,8 @@ const options: ModelSelectorOption[] = [
 ];
 
 export const OptionsLightAdjustment = ({ anchorEl, open, onClose }: OptionsLightAdjustmentProps) => {
-    const file = useFileStore((state) => state.files[state.currentIndex]);
-    const operations = useEnhancementStore((state) => state.enhancements.get(file) ?? EMPTY_OPERATIONS);
+    const file = useCurrentFile();
+    const operations = useFileOperations(file);
     const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
 
     const currentOp = operations.find((op) => op.id.startsWith('la'));
@@ -28,6 +28,8 @@ export const OptionsLightAdjustment = ({ anchorEl, open, onClose }: OptionsLight
     const [intensity, setIntensity] = useState((Number(currentOp?.options.intensity) * 100).toString());
 
     useEffect(() => {
+        if (!file) return;
+
         const numIntensity = intensity !== '' && intensity !== '-' ? parseInt(intensity, 10) / 100 : 0;
         const values = model.split('_');
 

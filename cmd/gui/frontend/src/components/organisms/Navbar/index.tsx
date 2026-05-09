@@ -7,11 +7,11 @@ import { DialogAbout } from '@/components/molecules/DialogAbout';
 import { NavbarCurrentFile } from '@/components/organisms/NavbarCurrentFile';
 import { NavbarDimensions } from '@/components/organisms/NavbarDimensions';
 import { Settings } from '@/components/templates/Settings';
-import { useFileStore } from '@/stores';
+import { useCurrentFile } from '@/hooks';
 import { os, version } from '@/utils/constants.ts';
 
 export const Navbar = () => {
-    const currentFile = useFileStore((state) => state.files.at(state.currentIndex));
+    const currentFile = useCurrentFile();
 
     const [openSettings, setOpenSettings] = useState(false);
     const [openAbout, setOpenAbout] = useState(false);

@@ -4,17 +4,14 @@ import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Button } from '@/components/atoms/Button';
 import { DimensionsPopover } from '@/components/molecules/DimensionsPopover';
-import { useEnhancementStore } from '@/stores';
-import { EMPTY_OPERATIONS } from '@/utils/constants.ts';
+import { useFileOperations } from '@/hooks';
 
 type NavbarDimensionsProps = TailwindProps & {
     file: File;
 };
 
 export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps) => {
-    const operations = useEnhancementStore((state) =>
-        file ? (state.enhancements.get(file) ?? EMPTY_OPERATIONS) : EMPTY_OPERATIONS,
-    );
+    const operations = useFileOperations(file);
     const scaleStr = operations.find((op) => op.id.startsWith('up'))?.options?.scale ?? '1';
     const scale = parseFloat(scaleStr);
 

@@ -1,13 +1,18 @@
 import { useRef, useState } from 'react';
 import { Button } from '@mui/material';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
-import type { ExportSettingsProps } from '@/components/organisms/ExportSettings';
+import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { useExportStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { exportImage } from '@/utils/export.ts';
 
-export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsProps) => {
+type ExportSettingsButtonsProps = {
+    enhancements: Map<File, Operation[]>;
+    onClose: () => void;
+};
+
+export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsButtonsProps) => {
     const format = useExportStore((state) => state.format);
     const prefix = useExportStore((state) => state.prefix);
     const suffix = useExportStore((state) => state.suffix);

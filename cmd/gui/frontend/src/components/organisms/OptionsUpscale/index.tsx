@@ -3,9 +3,10 @@ import { Divider } from '@mui/material';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
 import { ScaleSelector } from '@/components/molecules/ScaleSelector';
+import { useCurrentFile, useFileOperations } from '@/hooks';
 import { Kyoto, Saitama, Tokyo } from '@/operations';
-import { useEnhancementStore, useFileStore } from '@/stores';
-import { EMPTY_OPERATIONS, os } from '@/utils/constants.ts';
+import { useEnhancementStore } from '@/stores';
+import { os } from '@/utils/constants.ts';
 
 type OptionsUpscaleProps = {
     anchorEl: HTMLElement | null;
@@ -23,8 +24,8 @@ const options: ModelSelectorOption[] = [
 ];
 
 export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps) => {
-    const file = useFileStore((state) => state.files[state.currentIndex]);
-    const operations = useEnhancementStore((state) => state.enhancements.get(file) ?? EMPTY_OPERATIONS);
+    const file = useCurrentFile();
+    const operations = useFileOperations(file);
     const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
 
     const currentOp = operations.find((op) => op.id.startsWith('up'));
@@ -32,7 +33,7 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
     const [scale, setScale] = useState(currentOp?.options.scale ?? '1');
 
     useEffect(() => {
-        if (scale !== '') {
+        if (file && scale !== '') {
             const numScale = parseFloat(scale);
             const values = model.split('_');
 
