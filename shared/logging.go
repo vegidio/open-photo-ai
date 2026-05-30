@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/DeRuina/timberjack"
 	"github.com/vegidio/go-sak/fs"
@@ -27,8 +28,10 @@ func SetupLogging(appName string) (io.Closer, error) {
 		return nil, err
 	}
 
+	logPath := filepath.Join(logsDir, "opai.log")
+
 	writer := &timberjack.Logger{
-		Filename:    filepath.Join(logsDir, "opai.log"),
+		Filename:    logPath,
 		MaxBackups:  7,
 		MaxAge:      7, // days
 		LocalTime:   true,
@@ -36,6 +39,17 @@ func SetupLogging(appName string) (io.Closer, error) {
 		RotateAt:    []string{"00:00"}, // rotate daily at midnight
 		// BackupTimeFormat is left at timberjack's default (2006-01-02T15-04-05.000), which it
 		// requires to be a round-trippable layout; a date-only format is rejected at runtime.
+	}
+
+	// timberjack's RotateAt only fires while the process is alive across midnight. To bypass this limitation, we check
+	// if the existing log is stale (last written on an earlier day), force a rotation now so each day starts with a
+	// clean opai.log.
+	if info, err := os.Stat(logPath); err == nil && info.Size() > 0 {
+		now := time.Now()
+		mt := info.ModTime()
+		if mt.Year() != now.Year() || mt.YearDay() != now.YearDay() {
+			_ = writer.RotateWithReason("startup")
+		}
 	}
 
 	// Mark the start of a new session with a divider so consecutive runs are easy to tell apart in

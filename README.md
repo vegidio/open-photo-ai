@@ -153,6 +153,12 @@ If you don't want to use TensorRT acceleration, you can disable it in the app Se
 2. The ONNX Runtime has a [bug](https://github.com/microsoft/onnxruntime/pull/26443) when running half-precision (FP16) models on Apple's M-series chip; a bug fix for this is expected to be available in the next ONNX release. Meanwhile, all image processing on Macs will be done in full precision, which gives the best quality possible, but it's often unnecessarily slow.
 3. The **Tokyo** model doesn't work with Apple's CoreML. This is a limitation on CoreML's architecture, so any upscaling using this model on a Mac will be slow.
 
+## 🐛 Error Reporting
+
+If you encounter any issues while using the app, please report them by [creating a new issue](https://github.com/vegidio/open-photo-ai/issues) on our repository and give as much detail as possible, including steps to reproduce the issue, screenshots, and any error messages you receive.
+
+Errors reported by e-mail or other channels will not be tracked, so please make sure to report them on Github.
+
 ## 🛠️ Build
 
 ### Dependencies
