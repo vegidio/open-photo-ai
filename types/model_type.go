@@ -4,7 +4,7 @@ type ModelType string
 
 const (
 	ModelTypeFaceDetection   ModelType = "fd"
-	ModelTypeFaceRecovery    ModelType = "fd"
+	ModelTypeFaceRecovery    ModelType = "fr"
 	ModelTypeLightAdjustment ModelType = "la"
 	ModelTypeColorBalance    ModelType = "cb"
 	ModelTypeUpscale         ModelType = "up"

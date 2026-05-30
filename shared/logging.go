@@ -38,6 +38,10 @@ func SetupLogging(appName string) (io.Closer, error) {
 		// requires to be a round-trippable layout; a date-only format is rejected at runtime.
 	}
 
+	// Mark the start of a new session with a divider so consecutive runs are easy to tell apart in
+	// the append-only log file. Written raw (not via slog) to keep it a clean separator line.
+	_, _ = writer.Write([]byte("---\n"))
+
 	logger := slog.New(slog.NewTextHandler(writer, &slog.HandlerOptions{
 		Level: ResolveLogLevel(slog.LevelInfo),
 	}))

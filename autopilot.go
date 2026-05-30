@@ -34,7 +34,7 @@ func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.Mo
 		enhancementTypes = append(enhancementTypes, types.ModelTypeUpscale)
 	}
 
-	internal.Log().Info("suggested enhancements", "count", len(enhancementTypes))
+	internal.Log().Info("suggested enhancements", "count", len(enhancementTypes), "types", enhancementTypes)
 	return enhancementTypes
 }
 

@@ -155,7 +155,7 @@ func (s *ImageService) SuggestEnhancements(ctx context.Context, filePath string)
 	}
 
 	suggestions := opai.SuggestEnhancements(ctx, inputImage)
-	slog.Info("enhancements suggested", "file_path", filePath, "count", len(suggestions))
+	slog.Info("enhancements suggested", "file_path", filePath, "count", len(suggestions), "types", suggestions)
 	return suggestions, nil
 }
 

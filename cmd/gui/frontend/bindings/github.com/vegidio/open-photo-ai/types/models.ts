@@ -86,7 +86,7 @@ export enum ModelType {
     $zero = "",
 
     ModelTypeFaceDetection = "fd",
-    ModelTypeFaceRecovery = "fd",
+    ModelTypeFaceRecovery = "fr",
     ModelTypeLightAdjustment = "la",
     ModelTypeColorBalance = "cb",
     ModelTypeUpscale = "up",
