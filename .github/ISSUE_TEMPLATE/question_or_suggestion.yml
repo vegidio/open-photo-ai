@@ -1,0 +1,30 @@
+name: Question or suggestion
+description: Ask an open question or suggest an idea for the project
+title: "[Question/Suggestion]: "
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Please read before submitting.**
+
+        This template is **only** for general questions or suggestions that are **not** related to bugs in the project.
+
+        If you are reporting a problem, crash, or unexpected behavior, please use the **Bug report** template instead. Issues that use this template to report bugs will be **automatically closed and ignored**.
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Question or suggestion
+      description: Describe your question or your suggestion as clearly as possible.
+      placeholder: I was wondering whether... / It would be great if the app could...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any extra context, examples, or references that help explain your question or suggestion.
+    validations:
+      required: false

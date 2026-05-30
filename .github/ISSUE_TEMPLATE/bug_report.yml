@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a problem with Open Photo AI
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the sections below so we can reproduce and diagnose the issue as quickly as possible.
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce the problem? Step-by-step instructions help a lot.
+      placeholder: |
+        1. Open the app
+        2. Load image '...'
+        3. Apply '...'
+        4. See the error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What did you expect to happen instead?
+      placeholder: I expected the app to do Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: system-info
+    attributes:
+      label: System information
+      description: Details about the machine where the bug occurred. Execution-provider behavior is platform-specific, so this is important.
+      value: |
+        - OS / version:
+        - Processor (CPU):
+        - Memory (RAM):
+        - GPU:
+        - App version:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log file (opai.log)
+      description: |
+        Please attach your `opai.log` file.
+
+        You can find the logs by opening the app and going to **Settings > Logs**, then clicking the **"Show logs"** button — this opens the folder containing `opai.log`.
+      placeholder: Drag & drop the opai.log file here.
+    validations:
+      required: true
