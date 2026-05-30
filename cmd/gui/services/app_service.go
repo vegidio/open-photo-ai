@@ -3,8 +3,10 @@ package services
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/cockroachdb/errors"
+	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/github"
 	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
@@ -96,6 +98,17 @@ func (s *AppService) Version() string {
 
 func (s *AppService) IsOutdated(ctx context.Context) bool {
 	return github.IsOutdatedRelease(ctx, "vegidio", "open-photo-ai", shared.Version)
+}
+
+// GetLogsPath returns the absolute path to the application's log file. It mirrors how shared.SetupLogging builds the
+// path so the two stay in sync.
+func (s *AppService) GetLogsPath() (string, error) {
+	logsDir, err := fs.MkUserConfigDir(shared.AppName, "logs")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to resolve logs directory")
+	}
+
+	return filepath.Join(logsDir, "opai.log"), nil
 }
 
 // region - Private methods

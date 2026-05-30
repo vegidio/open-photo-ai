@@ -13,6 +13,14 @@ export function CleanRegistry(): $CancellablePromise<void> {
     return $Call.ByID(3767199187);
 }
 
+/**
+ * GetLogsPath returns the absolute path to the application's log file. It mirrors how shared.SetupLogging builds the
+ * path so the two stay in sync.
+ */
+export function GetLogsPath(): $CancellablePromise<string> {
+    return $Call.ByID(2055045473);
+}
+
 export function Initialize(): $CancellablePromise<$models.SupportedEPs> {
     return $Call.ByID(3426585365).then(($result: any) => {
         return $$createType0($result);

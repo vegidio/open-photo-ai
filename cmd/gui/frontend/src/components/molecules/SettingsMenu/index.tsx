@@ -28,6 +28,7 @@ export const SettingsMenu = ({ className = '', onItemClick }: SettingsMenuProps)
                 }}
             >
                 <TreeItem itemId='app_processor' label='AI Processor' />
+                <TreeItem itemId='app_logs' label='Logs' />
             </TreeItem>
 
             <TreeItem

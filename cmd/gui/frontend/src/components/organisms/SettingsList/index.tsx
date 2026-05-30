@@ -2,6 +2,9 @@ import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { List, ListSubheader } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
+import { GetLogsPath } from '@/bindings/gui/services/appservice.ts';
+import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
+import { SettingsItemButton } from '@/components/molecules/SettingsItemButton';
 import { SettingsItemSelect } from '@/components/molecules/SettingsItemSelect';
 import { useSettingsStore } from '@/stores';
 import { os } from '@/utils/constants';
@@ -30,12 +33,13 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
     }));
 
     return (
-        <List ref={containerRef} className={`${className} py-0 w-full`}>
+        <List ref={containerRef} className={`${className} py-0 w-full scroll-pt-12`}>
             <ListSubheader id='app' className='bg-[#2b2b2b] text-[#f2f2f2]'>
                 Application
             </ListSubheader>
 
             <ItemAiProcessor id='app_processor' />
+            <ItemLogs id='app_logs' />
 
             <ListSubheader id='enhancements' className='bg-[#2b2b2b] text-[#f2f2f2]'>
                 Enhancements
@@ -151,6 +155,27 @@ const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
             items={processorSelectItems}
             selected={executionProvider}
             onSelect={(value) => setExecutionProvider(value as ExecutionProvider)}
+        />
+    );
+};
+
+type ItemLogsProps = {
+    id?: string;
+};
+
+const ItemLogs = ({ id }: ItemLogsProps) => {
+    const onShowLogs = async () => {
+        const path = await GetLogsPath();
+        await RevealInFileManager(path);
+    };
+
+    return (
+        <SettingsItemButton
+            id={id}
+            title='Logs'
+            description='Open the location of the app logs, that can be used to investigate problems in the app.'
+            button='Show logs'
+            onClick={onShowLogs}
         />
     );
 };
