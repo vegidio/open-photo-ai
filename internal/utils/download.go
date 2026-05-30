@@ -50,8 +50,11 @@ func PrepareDependency(
 	onProgress types.DownloadProgress,
 ) error {
 	if !shouldDownload(destination, fileCheck) {
+		internal.Log().Debug("dependency present, skipping download", "destination", destination)
 		return nil
 	}
+
+	internal.Log().Info("downloading dependency", "url", url, "destination", destination)
 
 	fileName := filepath.Base(url)
 	file, err := fs.MkUserConfigFile(internal.AppName, destination, fileName)
@@ -73,6 +76,8 @@ func PrepareDependency(
 		file.Close()
 		defer os.Remove(file.Name())
 
+		internal.Log().Info("extracting archive", "file", fileName)
+
 		targetDir := filepath.Dir(file.Name())
 		err = fs.Unzip(file.Name(), targetDir)
 		if err != nil {
@@ -80,6 +85,7 @@ func PrepareDependency(
 		}
 	}
 
+	internal.Log().Info("dependency ready", "url", url)
 	return nil
 }
 

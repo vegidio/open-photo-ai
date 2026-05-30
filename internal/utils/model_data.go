@@ -49,7 +49,8 @@ func LoadModelData() ([]internal.RemoteModelData, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Wrapf(err, "bad status code: %d", resp.StatusCode)
+		internal.Log().Warn("model data request returned non-200", "status_code", resp.StatusCode, "url", url)
+		return nil, errors.Newf("bad status code: %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -61,6 +62,8 @@ func LoadModelData() ([]internal.RemoteModelData, error) {
 	if err = json.Unmarshal(body, &files); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal JSON")
 	}
+
+	internal.Log().Debug("loaded remote model data", "count", len(files))
 
 	return lo.Map(files, func(file huggingFaceFile, _ int) internal.RemoteModelData {
 		return internal.RemoteModelData{

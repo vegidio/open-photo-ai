@@ -3,6 +3,7 @@ module github.com/vegidio/open-photo-ai
 go 1.26.1
 
 require (
+	github.com/DeRuina/timberjack v1.4.5
 	github.com/cockroachdb/errors v1.12.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.52.0

@@ -3,6 +3,7 @@ package services
 import (
 	"gui/types"
 	guiutils "gui/utils"
+	"log/slog"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -34,10 +35,12 @@ func (s *DialogService) OpenFileDialog() ([]types.File, error) {
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {
 		s.otel.LogError("Error opening file dialog", nil, err)
+		slog.Warn("error opening file dialog", "err", err)
 		return nil, errors.Wrap(err, "failed to open file dialog")
 	}
 
 	files := guiutils.CreateFileTypes(paths)
+	slog.Info("files selected", "count", len(files))
 	return files, nil
 }
 
@@ -51,9 +54,11 @@ func (s *DialogService) OpenDirDialog() (string, error) {
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
 		s.otel.LogError("Error opening directory dialog", nil, err)
+		slog.Warn("error opening directory dialog", "err", err)
 		return "", errors.Wrap(err, "failed to open directory dialog")
 	}
 
+	slog.Info("directory selected", "path", path)
 	return path, nil
 }
 

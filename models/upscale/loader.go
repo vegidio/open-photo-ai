@@ -38,11 +38,14 @@ func LoadSessions(
 			return nil, errors.Wrapf(err, "failed to prepare %s model", variant)
 		}
 
+		internal.Log().Debug("loading model session", "model_id", modelId, "scale", scale)
+
 		session, err := utils.CreateSession(modelFile, []string{"input"}, []string{"output"}, ep)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create %s session", variant)
 		}
 
+		internal.Log().Debug("model session ready", "model_id", modelId)
 		sessions = append(sessions, session)
 	}
 

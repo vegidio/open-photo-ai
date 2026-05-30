@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/types"
@@ -33,6 +34,7 @@ func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.Mo
 		enhancementTypes = append(enhancementTypes, types.ModelTypeUpscale)
 	}
 
+	internal.Log().Info("suggested enhancements", "count", len(enhancementTypes))
 	return enhancementTypes
 }
 
@@ -41,11 +43,13 @@ func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.Mo
 func shouldFaceRecovery(ctx context.Context, input *types.ImageData) bool {
 	model, err := facerecovery.GetFdModel(ctx, types.ExecutionProviderAuto)
 	if err != nil {
+		internal.Log().Warn("face detection model unavailable; skipping face-recovery suggestion", "err", err)
 		return false
 	}
 
 	faces, err := facerecovery.ExtractFaces(ctx, model, input.Pixels, nil)
 	if err != nil {
+		internal.Log().Warn("face detection failed; skipping face-recovery suggestion", "err", err)
 		return false
 	}
 

@@ -108,7 +108,6 @@ These are the features I plan to implement in the future, in no particular order
 - [ ] CLI implementation.
 - [ ] Improve documentation for the library.
 - [ ] Internationalization to other languages.
-- [ ] Rewrite the project in Rust 🦀
 
 ## 💣 Troubleshooting
 

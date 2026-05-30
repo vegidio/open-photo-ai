@@ -4,6 +4,7 @@ import (
 	"context"
 	"image"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
@@ -47,15 +48,20 @@ func Process(
 ) (*types.ImageData, error) {
 	var err error
 
+	internal.Log().Info("processing image", "op_count", len(operations), "hash", input.Hash)
+
 	// Make a copy of the input img so the original input is not modified
 	output := input.Pixels
 
 	for i, op := range operations {
 		// Check first if there's a cached image for this operation
 		if cachedImg, err := internal.ImageCache.GetImage(ctx, input.Hash, operations[:i+1]...); err == nil {
+			internal.Log().Debug("cache hit", "op", op.Id(), "index", i)
 			output = cachedImg
 			continue
 		}
+
+		internal.Log().Debug("cache miss, running inference", "op", op.Id(), "index", i)
 
 		output, err = runInference(ctx, output, ep, onProgress, op)
 		if err != nil {
@@ -115,10 +121,14 @@ func Execute[T any](
 
 	dataModel, ok := model.(types.Model[T])
 	if !ok {
+		internal.Log().Warn("operation type not supported", "op", operation.Id())
 		return genericNil, errors.Errorf("operation type not supported: %s", operation.Id())
 	}
 
-	return dataModel.Run(ctx, input.Pixels, onProgress)
+	start := time.Now()
+	result, err := dataModel.Run(ctx, input.Pixels, onProgress)
+	logModelRun(operation, start)
+	return result, err
 }
 
 // CleanRegistry releases all resources held by registered models. It iterates through all models in the registry and
@@ -127,7 +137,10 @@ func Execute[T any](
 // This function should be called when the application is shutting down or when all model instances are no longer needed
 // to prevent resource leaks.
 func CleanRegistry() {
-	for _, model := range internal.Registry.Drain() {
+	drained := internal.Registry.Drain()
+	internal.Log().Debug("cleaning model registry", "count", len(drained))
+
+	for _, model := range drained {
 		if destroyable, ok := model.(types.Destroyable); ok {
 			destroyable.Destroy()
 		}
@@ -155,10 +168,19 @@ func runInference(
 
 	imageModel, ok := model.(types.Model[image.Image])
 	if !ok {
+		internal.Log().Warn("operation type not supported", "op", operation.Id())
 		return nil, errors.Errorf("operation type not supported: %s", operation.Id())
 	}
 
-	return imageModel.Run(ctx, img, onProgress)
+	start := time.Now()
+	result, err := imageModel.Run(ctx, img, onProgress)
+	logModelRun(operation, start)
+	return result, err
+}
+
+// logModelRun emits the per-run timing Debug log shared by Execute and runInference.
+func logModelRun(operation types.Operation, start time.Time) {
+	internal.Log().Debug("model run complete", "op", operation.Id(), "duration", time.Since(start))
 }
 
 func selectModel(
@@ -172,8 +194,11 @@ func selectModel(
 
 	model, exists := internal.Registry.Get(operation.Id())
 	if exists {
+		internal.Log().Debug("model registry hit", "op", operation.Id())
 		return model, nil
 	}
+
+	internal.Log().Info("creating model", "op", operation.Id(), "ep", ep)
 
 	switch {
 	// Face Detection
@@ -203,6 +228,7 @@ func selectModel(
 		model, err = saitama.New(ctx, operation, ep, onProgress)
 
 	default:
+		internal.Log().Warn("no model found for operation", "op", operation.Id())
 		err = errors.Errorf("no model found with ID: %s", operation.Id())
 	}
 

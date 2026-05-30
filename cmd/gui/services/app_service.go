@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/github"
@@ -34,6 +35,8 @@ func NewAppService(app *application.App, otel *o11y.Telemetry) *AppService {
 func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	supportedEPs := SupportedEPs{}
 
+	slog.Info("initializing app service")
+
 	onProgress := func(_, _ int64, percent float64) {
 		s.app.Event.Emit(EventAppDownload, DownloadProgress{Dependency: "ONNX Runtime", Percent: percent})
 	}
@@ -45,24 +48,29 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	// Initialize the model runtime
 	if err := opai.Initialize(ctx, shared.AppName, onProgress); err != nil {
 		s.otel.LogError("Error initializing ONNX", nil, err)
+		slog.Error("error initializing ONNX runtime", "err", err)
 		return supportedEPs, errors.Wrap(err, "failed to initialize ONNX Runtime")
 	}
 
 	// Initialize CUDA and TensorRT if they are supported
 	if utils.IsCudaSupported() {
 		supportedEPs.CUDA = true
+		slog.Info("CUDA supported")
 
 		if err := s.initializeCuda(ctx); err != nil {
 			s.otel.LogError("Error initializing CUDA", nil, err)
+			slog.Error("error initializing CUDA", "err", err)
 			return supportedEPs, errors.Wrap(err, "failed to initialize CUDA")
 		}
 	}
 
 	if utils.IsTensorRtSupported() {
 		supportedEPs.TensorRT = true
+		slog.Info("TensorRT supported")
 
 		if err := s.initializeTensorRT(ctx); err != nil {
 			s.otel.LogError("Error initializing TensorRT", nil, err)
+			slog.Error("error initializing TensorRT", "err", err)
 			return supportedEPs, errors.Wrap(err, "failed to initialize TensorRT")
 		}
 	}
@@ -70,8 +78,11 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	// Check if CoreML is supported (macOS only)
 	if utils.IsCoreMLSupported() {
 		supportedEPs.CoreML = true
+		slog.Info("CoreML supported")
 	}
 
+	slog.Info("app service initialized",
+		"cuda", supportedEPs.CUDA, "tensorrt", supportedEPs.TensorRT, "coreml", supportedEPs.CoreML)
 	return supportedEPs, nil
 }
 

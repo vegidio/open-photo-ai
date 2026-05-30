@@ -47,6 +47,9 @@ const (
 func Initialize(ctx context.Context, name string, onProgress types.DownloadProgress) error {
 	internal.AppName = name
 
+	internal.Log().Info("initializing opai",
+		"app_name", name, "onnx_tag", onnxRuntimeTag, "os", runtime.GOOS, "arch", runtime.GOARCH)
+
 	cache, err := internal.NewCache(500)
 	if err != nil {
 		return errors.Wrap(err, "failed to create image cache")
@@ -69,10 +72,17 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 	// Load model data
 	if modelData, err := utils.LoadModelData(); err == nil {
 		internal.ModelData = modelData
+	} else {
+		internal.Log().Warn("failed to load remote model data; continuing without it", "err", err)
 	}
 
 	// Initialize the ONNX runtime
-	return startRuntime()
+	if err = startRuntime(); err != nil {
+		return err
+	}
+
+	internal.Log().Info("opai initialized", "app_name", name)
+	return nil
 }
 
 // Destroy cleans up resources used by the model runtime.
@@ -90,6 +100,8 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 //	defer opai.Destroy() // Ensure cleanup on exit
 func Destroy() {
 	destroyOnce.Do(func() {
+		internal.Log().Info("destroying opai runtime")
+
 		if internal.ImageCache != nil {
 			internal.ImageCache.Close()
 		}
@@ -116,6 +128,7 @@ func startRuntime() error {
 	// Disable ONNX runtime logging
 	//ort.SetEnvironmentLogLevel(ort.LoggingLevelFatal)
 
+	internal.Log().Info("ONNX runtime started", "runtime_path", runtimePath)
 	return nil
 }
 

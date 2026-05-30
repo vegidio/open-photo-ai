@@ -7,7 +7,6 @@ import (
 	"gui/utils"
 	"log"
 	"log/slog"
-	stdos "os"
 	"runtime"
 	"strings"
 
@@ -27,6 +26,16 @@ func main() {
 	if runtime.GOOS == "linux" {
 		setLibPathAndRestart()
 	}
+
+	// Set up file-based logging (rotated daily, kept 7 days) before anything else, so all
+	// downstream events — including library internals via opai.SetLogger — land in the log file.
+	if logCloser, err := shared.SetupLogging(shared.AppName); err == nil {
+		defer logCloser.Close()
+	} else {
+		log.Printf("failed to set up file logging: %v", err)
+	}
+
+	slog.Info("starting Open Photo AI", "version", shared.Version, "os", runtime.GOOS, "arch", runtime.GOARCH)
 
 	otel := o11y.NewTelemetry(
 		shared.OtelEndpoint,
@@ -52,7 +61,7 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
-		LogLevel: resolveLogLevel(),
+		LogLevel: shared.ResolveLogLevel(slog.LevelError),
 	})
 
 	// Create a new window with the necessary options.
@@ -83,22 +92,8 @@ func main() {
 	// If an error occurred while running the application, log it and exit.
 	if err != nil {
 		otel.LogError("Error running the app", nil, err)
+		slog.Error("error running the app", "err", err)
 		log.Fatalf("%+v", err)
-	}
-}
-
-// resolveLogLevel reads OPAI_LOG_LEVEL (debug|info|warn|error). Defaults to error so a
-// release build stays quiet; dev can opt into more by exporting the variable.
-func resolveLogLevel() slog.Level {
-	switch strings.ToLower(stdos.Getenv("OPAI_LOG_LEVEL")) {
-	case "debug":
-		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
-	case "warn", "warning":
-		return slog.LevelWarn
-	default:
-		return slog.LevelError
 	}
 }
 
@@ -112,6 +107,7 @@ func setLibPathAndRestart() {
 		libPaths = append(libPaths, path)
 	}
 
+	slog.Info("re-executing with LD_LIBRARY_PATH", "paths", strings.Join(libPaths, ":"))
 	os.ReExec(fmt.Sprintf("LD_LIBRARY_PATH=%s", strings.Join(libPaths, ":")))
 }
 

@@ -7,6 +7,7 @@ import (
 
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/shared"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 )
@@ -14,7 +15,12 @@ import (
 func main() {
 	ctx := context.Background()
 
-	if err := opai.Initialize(ctx, "open-photo-ai", nil); err != nil {
+	// Set up file-based logging (rotated daily, kept 7 days); also activates the opai library logger.
+	if logCloser, err := shared.SetupLogging(shared.AppName); err == nil {
+		defer logCloser.Close()
+	}
+
+	if err := opai.Initialize(ctx, shared.AppName, nil); err != nil {
 		fmt.Printf("Failed to initialize the AI runtime: %v\n", err)
 		return
 	}

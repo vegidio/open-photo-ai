@@ -6,6 +6,7 @@ import (
 	guitypes "gui/types"
 	guiutils "gui/utils"
 	"image"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -56,6 +57,7 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 	inputData, err := utils.LoadImage(filePath)
 	if err != nil {
 		s.otel.LogError("Error loading image", nil, err)
+		slog.Error("error loading image", "file_path", filePath, "err", err)
 		return nil, 0, 0, errors.Wrap(err, "failed to load image")
 	}
 
@@ -71,6 +73,7 @@ func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, er
 	data, err := utils.EncodeImage(inputData.Pixels, types.FormatJpeg, previewJpegQuality)
 	if err != nil {
 		s.otel.LogError("Error encoding image", nil, err)
+		slog.Error("error encoding image", "file_path", filePath, "err", err)
 		return nil, 0, 0, errors.Wrap(err, "failed to encode image")
 	}
 
@@ -100,13 +103,20 @@ func (s *ImageService) ProcessImage(
 		return nil, 0, 0, errors.Wrap(err, "context cancelled")
 	}
 
+	ops := strings.Join(opIds, ", ")
+	slog.Info("processing image", "file_path", filePath, "ep", ep, "operations", ops)
+
 	outputData, err := s.runInference(ctx, filePath, ep, opIds)
 	if err != nil {
-		// Cancellation errors are not reported
-		if !errors.Is(err, context.Canceled) {
+		// Cancellation is expected (user navigated away / cancelled) — log it as info, not an error.
+		if errors.Is(err, context.Canceled) {
+			slog.Info("image processing cancelled", "file_path", filePath)
+		} else {
 			s.otel.LogError("Error running inference", map[string]any{
-				"operations": strings.Join(opIds, ", "),
+				"operations": ops,
 			}, err)
+			slog.Error("error running inference", "file_path", filePath,
+				"operations", ops, "err", err)
 		}
 
 		return nil, 0, 0, errors.Wrap(err, "failed to run inference")
@@ -119,6 +129,7 @@ func (s *ImageService) ProcessImage(
 	data, err := utils.EncodeImage(outputData.Pixels, types.FormatJpeg, previewJpegQuality)
 	if err != nil {
 		s.otel.LogError("Error encoding image", nil, err)
+		slog.Error("error encoding processed image", "file_path", filePath, "err", err)
 		return nil, 0, 0, errors.Wrap(err, "failed to encode image")
 	}
 
@@ -139,10 +150,13 @@ func (s *ImageService) SuggestEnhancements(ctx context.Context, filePath string)
 	inputImage, err := utils.LoadImage(filePath)
 	if err != nil {
 		s.otel.LogError("Error loading image", nil, err)
+		slog.Error("error loading image", "file_path", filePath, "err", err)
 		return nil, errors.Wrap(err, "failed to load image")
 	}
 
-	return opai.SuggestEnhancements(ctx, inputImage), nil
+	suggestions := opai.SuggestEnhancements(ctx, inputImage)
+	slog.Info("enhancements suggested", "file_path", filePath, "count", len(suggestions))
+	return suggestions, nil
 }
 
 // ExportImage runs inference operations on an image and saves the result to disk.
@@ -169,15 +183,23 @@ func (s *ImageService) ExportImage(
 		return errors.Wrap(err, "context cancelled")
 	}
 
+	ops := strings.Join(opIds, ", ")
+	slog.Info("exporting image", "input", file.Path, "output", outputPath,
+		"format", format, "operations", ops)
+
 	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: file.Hash, State: "RUNNING", Value: progressInferStart})
 
 	outputData, err := s.runInference(ctx, file.Path, ep, opIds)
 	if err != nil {
-		// Cancellation errors are not reported
-		if !errors.Is(err, context.Canceled) {
+		// Cancellation is expected (user cancelled the export) — log it as info, not an error.
+		if errors.Is(err, context.Canceled) {
+			slog.Info("export cancelled", "hash", file.Hash, "input", file.Path)
+		} else {
 			s.otel.LogError("Error running inference", map[string]any{
-				"operations": strings.Join(opIds, ", "),
+				"operations": ops,
 			}, err)
+			slog.Error("error running inference", "input", file.Path,
+				"operations", ops, "err", err)
 		}
 
 		return errors.Wrap(err, "failed to run inference")
@@ -196,18 +218,22 @@ func (s *ImageService) saveAndEmit(
 	fileHash string,
 ) error {
 	if err := ctx.Err(); err != nil {
+		slog.Info("export save cancelled", "hash", fileHash)
 		return errors.Wrap(err, "context cancelled")
 	}
 
+	finalPath := getOutputPath(outputPath, overwrite)
 	size, err := utils.SaveImage(&types.ImageData{
-		FilePath: getOutputPath(outputPath, overwrite),
+		FilePath: finalPath,
 		Pixels:   pixels,
 	}, format, exportMaxQuality)
 	if err != nil {
 		s.otel.LogError("Error saving image", nil, err)
+		slog.Error("error saving image", "output_path", finalPath, "err", err)
 		return errors.Wrap(err, "failed to save image")
 	}
 
+	slog.Info("image saved", "output_path", finalPath, "size", size)
 	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: fileHash, State: "COMPLETED", Value: float64(size)})
 	return nil
 }
