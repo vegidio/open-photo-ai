@@ -2,3 +2,26 @@
 @import "tailwindcss";
 @plugin "tailwind-scrollbar";
 @plugin "@midudev/tailwind-animations";
+
+/*
+ * Dark mode is forced app-wide (see main.tsx), but native UA controls such as scrollbars follow the document's
+ * color-scheme. Pinning it to dark keeps the scrollbar track dark across dev and release builds.
+ */
+:root {
+    color-scheme: dark;
+}
+
+/*
+ * The native dark-mode scrollbar thumb renders as a bright gray and varies between dev and release builds. The
+ * tailwind-scrollbar plugin already emits `background-color: var(--scrollbar-thumb)` / `var(--scrollbar-track)` for
+ * `.scrollbar-thin` but never defines those custom properties. Define them here with explicit dark values so the
+ * scrollbar looks identical everywhere instead of relying on the native appearance.
+ */
+.scrollbar-thin {
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: #424242;
+}
+
+.scrollbar-thin:hover {
+    --scrollbar-thumb: #555555;
+}
