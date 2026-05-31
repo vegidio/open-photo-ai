@@ -24,7 +24,7 @@ func Process(ctx context.Context, session *ort.DynamicAdvancedSession, img image
 	}
 
 	// Resize so the longest side equals maxSize, padded to a multiple of 16
-	newW, newH := targetSize(origW, origH)
+	newW, newH := utils.TargetSize(origW, origH, maxSize)
 	resized := imaging.Resize(img, newW, newH, imaging.Lanczos)
 
 	// Convert resized image to CHW [0,1] float32
@@ -70,26 +70,6 @@ func Process(ctx context.Context, session *ort.DynamicAdvancedSession, img image
 	w := fitPolynomialMapping(srcLR, dstLR)
 
 	return applyMapping(img, w), nil
-}
-
-// targetSize returns (newW, newH) such that the longest side equals maxSize
-// and both dimensions are rounded up to the next multiple of 16.
-func targetSize(w, h int) (int, int) {
-	longest := w
-	if h > longest {
-		longest = h
-	}
-	ratio := float64(maxSize) / float64(longest)
-	nw := int(math.Round(float64(w) * ratio))
-	nh := int(math.Round(float64(h) * ratio))
-	return roundUpTo16(nw), roundUpTo16(nh)
-}
-
-func roundUpTo16(v int) int {
-	if v%16 == 0 {
-		return v
-	}
-	return v + (16 - v%16)
 }
 
 // chwToHWC unpacks a [1, 3, H, W] CHW float32 tensor into a flat HWC slice of [3]float32.
