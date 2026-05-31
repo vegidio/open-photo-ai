@@ -13,3 +13,11 @@ type Operation interface {
 	// Hash returns a hash of the model used.
 	Hash() string
 }
+
+// Parameterized is an optional interface implemented by operations that carry per-run inputs which are not part of
+// their identity (and so are not encoded in Id()). The inference pipeline forwards the returned map to Model.Run on
+// every call. Operations whose inputs are fully described by their Id do not implement this.
+type Parameterized interface {
+	// Params returns the operation's per-run inputs, keyed by name.
+	Params() map[string]any
+}

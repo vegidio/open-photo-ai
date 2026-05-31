@@ -3,11 +3,13 @@
 
 import * as AppService from "./appservice.js";
 import * as DialogService from "./dialogservice.js";
+import * as FaceService from "./faceservice.js";
 import * as ImageService from "./imageservice.js";
 import * as OsService from "./osservice.js";
 export {
     AppService,
     DialogService,
+    FaceService,
     ImageService,
     OsService
 };

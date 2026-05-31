@@ -126,7 +126,7 @@ func Execute[T any](
 	}
 
 	start := time.Now()
-	result, err := dataModel.Run(ctx, input.Pixels, onProgress)
+	result, err := dataModel.Run(ctx, input.Pixels, paramsOf(operation), onProgress)
 	logModelRun(operation, start)
 	return result, err
 }
@@ -173,9 +173,19 @@ func runInference(
 	}
 
 	start := time.Now()
-	result, err := imageModel.Run(ctx, img, onProgress)
+	result, err := imageModel.Run(ctx, img, paramsOf(operation), onProgress)
 	logModelRun(operation, start)
 	return result, err
+}
+
+// paramsOf returns the operation's per-run inputs for Model.Run, or nil when the operation has none. It keeps the
+// inference pipeline agnostic of any concrete operation/model type.
+func paramsOf(operation types.Operation) map[string]any {
+	if p, ok := operation.(types.Parameterized); ok {
+		return p.Params()
+	}
+
+	return nil
 }
 
 // logModelRun emits the per-run timing Debug log shared by Execute and runInference.

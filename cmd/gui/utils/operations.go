@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 
+	guitypes "gui/types"
+
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
@@ -24,7 +26,10 @@ import (
 // The "<type>" prefix is not consumed here (selection happens by <name>);
 // "<paramA>" is the scale for upscale (with a "x" suffix) or the intensity for light adjustment; the final segment is
 // always the precision.
-func IdsToOperations(opIds []string) ([]types.Operation, error) {
+//
+// params carries the pre-detected faces forwarded to the face-recovery operations (athens/santorini); other operations
+// ignore it.
+func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.Operation, error) {
 	operations := make([]types.Operation, 0, len(opIds))
 
 	for _, opId := range opIds {
@@ -36,11 +41,11 @@ func IdsToOperations(opIds []string) ([]types.Operation, error) {
 		name := values[1]
 
 		switch name {
-		// Face Recovery — "_<name>_<precision>"
+		// Face Recovery — "_<name>_<precision>" (faces are detected independently and supplied by the caller)
 		case "athens":
-			operations = append(operations, athens.Op(types.Precision(values[2])))
+			operations = append(operations, athens.Op(types.Precision(values[2]), params.Faces))
 		case "santorini":
-			operations = append(operations, santorini.Op(types.Precision(values[2])))
+			operations = append(operations, santorini.Op(types.Precision(values[2]), params.Faces))
 
 		// Light Adjustment — "_<name>_<intensity>_<precision>"
 		case "paris":

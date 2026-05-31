@@ -1,8 +1,10 @@
+import { CancellablePromise } from '@wailsio/runtime';
 import { basename, dirname, extname, join } from 'pathe';
-import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { type ExecutionProvider, ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { ExportImage } from '@/bindings/gui/services/imageservice.ts';
+import { type File, InferenceParams } from '@/bindings/gui/types';
+import { detectFaces, hasFaceRecovery } from '@/utils/face.ts';
 
 export type ExportOptions = {
     file: File;
@@ -58,7 +60,33 @@ export const exportImage = (opts: ExportOptions) => {
     const imgFormat = getImageFormat(ext);
     const opIds = operations.map((op) => op.id);
 
-    return ExportImage(file, filePath, ep, overwrite, imgFormat, ...opIds);
+    let p: CancellablePromise<void>;
+
+    return new CancellablePromise<void>(
+        async (resolve, reject) => {
+            try {
+                // Face recovery no longer detects faces internally; detect them up front (cached by hash) and pass
+                // them along so the recovery operations receive them.
+                const faces = hasFaceRecovery(opIds) ? await detectFaces(file, ep) : [];
+
+                p = ExportImage(
+                    file,
+                    filePath,
+                    ep,
+                    overwrite,
+                    imgFormat,
+                    new InferenceParams({ Faces: faces }),
+                    ...opIds,
+                );
+                await p;
+
+                resolve();
+            } catch (e) {
+                reject(e);
+            }
+        },
+        () => p?.cancel(),
+    );
 };
 
 const getImageFormat = (ext: string): ImageFormat => {

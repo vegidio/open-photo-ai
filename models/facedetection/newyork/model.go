@@ -75,6 +75,7 @@ func (m *NewYork) Name() string {
 func (m *NewYork) Run(
 	ctx context.Context,
 	img image.Image,
+	_ map[string]any,
 	onProgress types.InferenceProgress,
 ) ([]facedetection.Face, error) {
 	if err := ctx.Err(); err != nil {

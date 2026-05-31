@@ -97,6 +97,7 @@ func (s *ImageService) ProcessImage(
 	ctx context.Context,
 	filePath string,
 	ep types.ExecutionProvider,
+	params guitypes.InferenceParams,
 	opIds ...string,
 ) ([]byte, int, int, error) {
 	if err := ctx.Err(); err != nil {
@@ -106,7 +107,7 @@ func (s *ImageService) ProcessImage(
 	ops := strings.Join(opIds, ", ")
 	slog.Info("processing image", "file_path", filePath, "ep", ep, "operations", ops)
 
-	outputData, err := s.runInference(ctx, filePath, ep, opIds)
+	outputData, err := s.runInference(ctx, filePath, ep, params, opIds)
 	if err != nil {
 		// Cancellation is expected (user navigated away / cancelled) — log it as info, not an error.
 		if errors.Is(err, context.Canceled) {
@@ -177,6 +178,7 @@ func (s *ImageService) ExportImage(
 	ep types.ExecutionProvider,
 	overwrite bool,
 	format types.ImageFormat,
+	params guitypes.InferenceParams,
 	opIds ...string,
 ) error {
 	if err := ctx.Err(); err != nil {
@@ -189,7 +191,7 @@ func (s *ImageService) ExportImage(
 
 	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: file.Hash, State: "RUNNING", Value: progressInferStart})
 
-	outputData, err := s.runInference(ctx, file.Path, ep, opIds)
+	outputData, err := s.runInference(ctx, file.Path, ep, params, opIds)
 	if err != nil {
 		// Cancellation is expected (user cancelled the export) — log it as info, not an error.
 		if errors.Is(err, context.Canceled) {
@@ -244,6 +246,7 @@ func (s *ImageService) runInference(
 	ctx context.Context,
 	filePath string,
 	ep types.ExecutionProvider,
+	params guitypes.InferenceParams,
 	opIds []string,
 ) (*types.ImageData, error) {
 	if err := ctx.Err(); err != nil {
@@ -255,7 +258,7 @@ func (s *ImageService) runInference(
 		return nil, errors.Wrap(err, "failed to load image")
 	}
 
-	operations, err := guiutils.IdsToOperations(opIds)
+	operations, err := guiutils.IdsToOperations(opIds, params)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse operation IDs")
 	}

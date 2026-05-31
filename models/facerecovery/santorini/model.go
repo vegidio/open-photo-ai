@@ -23,11 +23,10 @@ type Santorini struct {
 	name      string
 	operation OpFrSantorini
 	session   *ort.DynamicAdvancedSession
-	fdModel   types.Model[[]facedetection.Face]
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Santorini, error) {
-	fdModel, modelFile, err := facerecovery.LoadModel(ctx, operation, ep, onProgress)
+	modelFile, err := facerecovery.LoadModel(ctx, operation, ep, onProgress)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load Santorini model")
 	}
@@ -48,7 +47,6 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 		name:      modelName,
 		operation: operation.(OpFrSantorini),
 		session:   session,
-		fdModel:   fdModel,
 	}, nil
 }
 
@@ -68,13 +66,12 @@ func (m *Santorini) Name() string {
 func (m *Santorini) Run(
 	ctx context.Context,
 	img image.Image,
+	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
-	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, img, onProgress)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to extract faces")
-	}
-
+	// Faces are detected independently and passed in via params (see facerecovery.ParamFaces); the model no longer runs
+	// face detection itself.
+	faces, _ := params[facerecovery.ParamFaces].([]facedetection.Face)
 	if len(faces) == 0 {
 		return img, nil
 	}
@@ -89,10 +86,6 @@ func (m *Santorini) Run(
 
 func (m *Santorini) Destroy() {
 	m.session.Destroy()
-
-	if m.fdModel != nil {
-		m.fdModel.Destroy()
-	}
 }
 
 // endregion

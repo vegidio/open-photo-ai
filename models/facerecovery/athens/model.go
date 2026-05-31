@@ -24,11 +24,10 @@ type Athens struct {
 	name      string
 	operation OpFrAthens
 	session   *ort.DynamicAdvancedSession
-	fdModel   types.Model[[]facedetection.Face]
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Athens, error) {
-	fdModel, modelFile, err := facerecovery.LoadModel(ctx, operation, ep, onProgress)
+	modelFile, err := facerecovery.LoadModel(ctx, operation, ep, onProgress)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load Athens model")
 	}
@@ -49,7 +48,6 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 		name:      modelName,
 		operation: operation.(OpFrAthens),
 		session:   session,
-		fdModel:   fdModel,
 	}, nil
 }
 
@@ -69,13 +67,12 @@ func (m *Athens) Name() string {
 func (m *Athens) Run(
 	ctx context.Context,
 	img image.Image,
+	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
-	faces, err := facerecovery.ExtractFaces(ctx, m.fdModel, img, onProgress)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to extract faces")
-	}
-
+	// Faces are detected independently and passed in via params (see facerecovery.ParamFaces); the model no longer runs
+	// face detection itself.
+	faces, _ := params[facerecovery.ParamFaces].([]facedetection.Face)
 	if len(faces) == 0 {
 		return img, nil
 	}
@@ -90,10 +87,6 @@ func (m *Athens) Run(
 
 func (m *Athens) Destroy() {
 	m.session.Destroy()
-
-	if m.fdModel != nil {
-		m.fdModel.Destroy()
-	}
 }
 
 // endregion

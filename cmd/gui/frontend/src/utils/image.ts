@@ -1,7 +1,8 @@
 import { CancellablePromise } from '@wailsio/runtime';
 import type { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
-import type { File } from '@/bindings/gui/types';
 import { GetImage, ProcessImage } from '@/bindings/gui/services/imageservice.ts';
+import { type File, InferenceParams } from '@/bindings/gui/types';
+import { detectFaces, hasFaceRecovery } from '@/utils/face.ts';
 
 export type ImageData = {
     id: string;
@@ -52,9 +53,12 @@ export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operation
     return new CancellablePromise<ImageData>(
         async (resolve, reject) => {
             if (!image) {
-                p = ProcessImage(file.Path, ep, ...operations);
-
                 try {
+                    // Face recovery no longer detects faces internally; detect them up front (cached by hash) and pass
+                    // them along so the recovery operations receive them.
+                    const faces = hasFaceRecovery(operations) ? await detectFaces(file, ep) : [];
+
+                    p = ProcessImage(file.Path, ep, new InferenceParams({ Faces: faces }), ...operations);
                     const [base64, width, height] = await p;
                     image = await createImageData(file.Hash, base64, width, height);
                     imageCache.set(cacheKey, image);
@@ -67,7 +71,7 @@ export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operation
                 resolve(image);
             }
         },
-        () => p.cancel(),
+        () => p?.cancel(),
     );
 };
 

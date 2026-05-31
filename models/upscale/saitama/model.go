@@ -50,6 +50,7 @@ func (m *Saitama) Name() string {
 func (m *Saitama) Run(
 	ctx context.Context,
 	img image.Image,
+	_ map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	return upscale.RunPipeline(ctx, m.sessions, img, m.scales, m.operation.scale, onProgress)

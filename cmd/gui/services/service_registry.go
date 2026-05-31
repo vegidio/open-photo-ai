@@ -12,6 +12,9 @@ func RegisterServices(app *application.App, otel *o11y.Telemetry) func() {
 	imageService := NewImageService(app, otel)
 	app.RegisterService(application.NewService(imageService))
 
+	faceService := NewFaceService(app, otel)
+	app.RegisterService(application.NewService(faceService))
+
 	dialogService := NewDialogService(app, otel)
 	app.RegisterService(application.NewService(dialogService))
 
@@ -21,6 +24,7 @@ func RegisterServices(app *application.App, otel *o11y.Telemetry) func() {
 	return func() {
 		appService.destroy()
 		imageService.destroy()
+		faceService.destroy()
 		dialogService.destroy()
 		osService.destroy()
 	}

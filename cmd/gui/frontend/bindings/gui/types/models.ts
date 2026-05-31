@@ -5,6 +5,10 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as facedetection$0 from "../../github.com/vegidio/open-photo-ai/models/facedetection/models.js";
+
 export class File {
     "Path": string;
     "Hash": string;
@@ -46,5 +50,41 @@ export class File {
     }
 }
 
+/**
+ * InferenceParams carries the extra, per-operation inputs the frontend supplies to ProcessImage/ExportImage alongside
+ * the operation IDs. It is an extensible bag: new per-operation inputs (e.g. masks, palettes) are added as fields here
+ * without changing the service method signatures. A struct (rather than a map[string]any) keeps Wails' typed
+ * marshaling intact across the JS↔Go boundary.
+ */
+export class InferenceParams {
+    /**
+     * Faces are the pre-detected faces forwarded to the face-recovery operations (athens/santorini).
+     */
+    "Faces": facedetection$0.Face[];
+
+    /** Creates a new InferenceParams instance. */
+    constructor($$source: Partial<InferenceParams> = {}) {
+        if (!("Faces" in $$source)) {
+            this["Faces"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InferenceParams instance from a string or object.
+     */
+    static createFrom($$source: any = {}): InferenceParams {
+        const $$createField0_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("Faces" in $$parsedSource) {
+            $$parsedSource["Faces"] = $$createField0_0($$parsedSource["Faces"]);
+        }
+        return new InferenceParams($$parsedSource as Partial<InferenceParams>);
+    }
+}
+
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = facedetection$0.Face.createFrom;
+const $$createType2 = $Create.Array($$createType1);

@@ -75,6 +75,7 @@ func (m *Rio) Name() string {
 func (m *Rio) Run(
 	ctx context.Context,
 	img image.Image,
+	_ map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	if onProgress != nil {
