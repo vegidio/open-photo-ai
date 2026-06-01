@@ -55,38 +55,45 @@ func createInputTensorData(resized image.Image, newWidth, newHeight, targetSize 
 	gOffset := channelSize
 	rOffset := 2 * channelSize
 
-	// Process the actual image area
-	for y := 0; y < newHeight; y++ {
-		rowOffset := y * targetSize
-
-		for x := 0; x < newWidth; x++ {
-			r, g, b, _ := resized.At(x, y).RGBA()
-			idx := rowOffset + x
-
-			// Convert from 16-bit to 8-bit and subtract mean
-			inputData[bOffset+idx] = float32(b>>8) - meanB
-			inputData[gOffset+idx] = float32(g>>8) - meanG
-			inputData[rOffset+idx] = float32(r>>8) - meanR
-		}
-
-		// Fill the padding area in this row (if any) with negative mean values
-		for x := newWidth; x < targetSize; x++ {
-			idx := rowOffset + x
-			inputData[bOffset+idx] = -meanB
-			inputData[gOffset+idx] = -meanG
-			inputData[rOffset+idx] = -meanR
-		}
+	// Pre-fill every cell with the padding value (negative mean); the real image region is overwritten below. This
+	// keeps the padding logic in one place regardless of which pixel-access path is used.
+	for idx := 0; idx < channelSize; idx++ {
+		inputData[bOffset+idx] = -meanB
+		inputData[gOffset+idx] = -meanG
+		inputData[rOffset+idx] = -meanR
 	}
 
-	// Fill the remaining rows with padding (negative mean values)
-	for y := newHeight; y < targetSize; y++ {
-		rowOffset := y * targetSize
+	// Fill the actual image area with mean-subtracted BGR values. The fast path reads the resized *image.NRGBA pixel
+	// buffer directly (avoiding ~newWidth*newHeight color.Color allocations and 16-bit conversions from At().RGBA());
+	// the generic fallback covers any other image type. imaging.Resize returns *image.NRGBA, so the fast path is taken.
+	if nrgba, ok := resized.(*image.NRGBA); ok {
+		for y := 0; y < newHeight; y++ {
+			rowOffset := y * targetSize
+			pixRow := y * nrgba.Stride
 
-		for x := 0; x < targetSize; x++ {
-			idx := rowOffset + x
-			inputData[bOffset+idx] = -meanB
-			inputData[gOffset+idx] = -meanG
-			inputData[rOffset+idx] = -meanR
+			for x := 0; x < newWidth; x++ {
+				p := pixRow + x*4
+				idx := rowOffset + x
+
+				// NRGBA.Pix is laid out R, G, B, A (8-bit, non-premultiplied)
+				inputData[bOffset+idx] = float32(nrgba.Pix[p+2]) - meanB
+				inputData[gOffset+idx] = float32(nrgba.Pix[p+1]) - meanG
+				inputData[rOffset+idx] = float32(nrgba.Pix[p]) - meanR
+			}
+		}
+	} else {
+		for y := 0; y < newHeight; y++ {
+			rowOffset := y * targetSize
+
+			for x := 0; x < newWidth; x++ {
+				r, g, b, _ := resized.At(x, y).RGBA()
+				idx := rowOffset + x
+
+				// Convert from 16-bit to 8-bit and subtract mean
+				inputData[bOffset+idx] = float32(b>>8) - meanB
+				inputData[gOffset+idx] = float32(g>>8) - meanG
+				inputData[rOffset+idx] = float32(r>>8) - meanR
+			}
 		}
 	}
 

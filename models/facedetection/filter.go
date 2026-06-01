@@ -2,36 +2,21 @@ package facedetection
 
 import "sort"
 
+// nmsIoUThreshold is the intersection-over-union cutoff above which the lower-scored of two overlapping detections is
+// suppressed during non-maximum suppression.
+const nmsIoUThreshold = 0.4
+
 // PostProcessDetections processes the model outputs to extract face detections
 func PostProcessDetections(
 	loc, conf, landmarksRaw []float32,
 	origWidth, origHeight, threshold float32,
 ) []Face {
-	const targetSize = 640
+	// Anchors are memoized for TargetSize and shared (read-only) across calls.
+	priors := anchors()
 
-	// Calculate resized dimensions
-	imRatio := origHeight / origWidth
-	var resizedWidth, resizedHeight float32
-
-	if imRatio > 1.0 {
-		resizedHeight = targetSize
-		resizedWidth = resizedHeight / imRatio
-	} else {
-		resizedWidth = targetSize
-		resizedHeight = resizedWidth * imRatio
-	}
-
-	// Generate anchors
-	priors := generateAnchors(targetSize)
-
-	// Decode boxes and landmarks once
-	boxes := decodeBoxes(loc, priors)
-	landmarks := decodeLandmarks(landmarksRaw, priors)
-
-	// Filter and scale detections
-	targetSizeFloat := float32(targetSize)
+	// Filter by confidence first, decoding boxes/landmarks only for the surviving anchors, then scale to target size.
 	filteredBoxes, filteredLandmarks, filteredScores := filterAndScaleDetections(
-		boxes, landmarks, conf, threshold, targetSizeFloat)
+		loc, landmarksRaw, priors, conf, threshold, float32(TargetSize))
 
 	// Early exit if no detections
 	if len(filteredBoxes) == 0 {
@@ -39,20 +24,24 @@ func PostProcessDetections(
 	}
 
 	// Apply NMS
-	keep := nms(filteredBoxes, filteredScores, 0.4)
+	keep := nms(filteredBoxes, filteredScores, nmsIoUThreshold)
 
-	// Scale back to the original image size
-	scaleW := origWidth / resizedWidth
-	scaleH := origHeight / resizedHeight
+	// Scale back to the original image size using the same integer dimensions the image was actually resized to
+	// (see PreprocessImage/calculateResizeDimensions) so the scale factor matches the preprocessing exactly.
+	resizedWidth, resizedHeight := calculateResizeDimensions(origWidth, origHeight, TargetSize)
+	scaleW := origWidth / float32(resizedWidth)
+	scaleH := origHeight / float32(resizedHeight)
 
 	// Convert to Face structs with original dimensions
 	return scaleDetectionsToOriginal(filteredBoxes, filteredLandmarks, filteredScores, keep, scaleW, scaleH)
 }
 
-// filterAndScaleDetections filters detections by threshold and scales them to target size
+// filterAndScaleDetections selects anchors whose confidence exceeds threshold, decodes only those anchors' boxes and
+// landmarks, and scales them to target size. Decoding is deferred to the survivors so the expensive per-anchor decode
+// (notably math.Exp) is not paid for the vast majority of anchors that are discarded.
 func filterAndScaleDetections(
-	boxes []RectF,
-	landmarks [][5]PointF,
+	loc, landmarksRaw []float32,
+	priors []Prior,
 	conf []float32,
 	threshold, targetSize float32,
 ) ([]RectF, [][5]PointF, []float32) {
@@ -76,29 +65,30 @@ func filterAndScaleDetections(
 	filteredLandmarks := make([][5]PointF, 0, numFiltered)
 	filteredScores := make([]float32, 0, numFiltered)
 
-	// Scale to target size and filter in a single pass
+	// Second pass: decode and scale only the anchors that passed the threshold
 	for i := 0; i < numAnchors; i++ {
 		score := conf[i*2+1]
-
-		if score > threshold {
-			// Scale box to target size
-			box := boxes[i]
-			box.Min.X *= targetSize
-			box.Min.Y *= targetSize
-			box.Max.X *= targetSize
-			box.Max.Y *= targetSize
-
-			// Scale landmarks to target size
-			lm := landmarks[i]
-			for j := 0; j < 5; j++ {
-				lm[j].X *= targetSize
-				lm[j].Y *= targetSize
-			}
-
-			filteredBoxes = append(filteredBoxes, box)
-			filteredLandmarks = append(filteredLandmarks, lm)
-			filteredScores = append(filteredScores, score)
+		if score <= threshold {
+			continue
 		}
+
+		// Decode and scale the box to target size
+		box := decodeBox(loc, priors[i], i)
+		box.Min.X *= targetSize
+		box.Min.Y *= targetSize
+		box.Max.X *= targetSize
+		box.Max.Y *= targetSize
+
+		// Decode and scale the landmarks to target size
+		lm := decodeLandmark(landmarksRaw, priors[i], i)
+		for j := 0; j < 5; j++ {
+			lm[j].X *= targetSize
+			lm[j].Y *= targetSize
+		}
+
+		filteredBoxes = append(filteredBoxes, box)
+		filteredLandmarks = append(filteredLandmarks, lm)
+		filteredScores = append(filteredScores, score)
 	}
 
 	return filteredBoxes, filteredLandmarks, filteredScores
@@ -132,8 +122,8 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 		areas[i] = (box.Max.X - box.Min.X + 1) * (box.Max.Y - box.Min.Y + 1)
 	}
 
-	for _, si := range scoreIndexes {
-		i := si.index
+	for pos := 0; pos < len(scoreIndexes); pos++ {
+		i := scoreIndexes[pos].index
 		if suppressed[i] {
 			continue
 		}
@@ -147,10 +137,11 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 		x1Max := box1.Max.X
 		y1Max := box1.Max.Y
 
-		// Only check the remaining boxes in sorted order
-		for k := 0; k < len(scoreIndexes); k++ {
+		// Only check boxes ranked lower than this one. A higher-scored box is processed earlier; if it overlapped
+		// this one it would already have suppressed it, so this box can never suppress an un-suppressed higher box.
+		for k := pos + 1; k < len(scoreIndexes); k++ {
 			j := scoreIndexes[k].index
-			if i == j || suppressed[j] {
+			if suppressed[j] {
 				continue
 			}
 

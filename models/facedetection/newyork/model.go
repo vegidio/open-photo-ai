@@ -15,11 +15,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-const (
-	targetSize          = 640
-	numAnchors          = 16800
-	confidenceThreshold = 0.5
-)
+const confidenceThreshold = 0.5
 
 type NewYork struct {
 	name      string
@@ -86,17 +82,19 @@ func (m *NewYork) Run(
 	}
 
 	// Preprocess image
-	inputData, originalWidth, originalHeight := facedetection.PreprocessImage(img, targetSize)
+	inputData, originalWidth, originalHeight := facedetection.PreprocessImage(img, facedetection.TargetSize)
 
 	// Create input tensor
-	inputShape := ort.NewShape(1, 3, int64(targetSize), int64(targetSize))
+	inputShape := ort.NewShape(1, 3, int64(facedetection.TargetSize), int64(facedetection.TargetSize))
 	inputTensor, err := ort.NewTensor(inputShape, inputData)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create input tensor")
 	}
 	defer inputTensor.Destroy()
 
-	// Create output tensors
+	// Create output tensors. The anchor count is derived from the model's fixed input size so it stays in sync with
+	// the anchor grid in package facedetection.
+	numAnchors := int64(facedetection.AnchorCount())
 	locTensor, err := ort.NewEmptyTensor[float32](ort.NewShape(1, numAnchors, 4))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create loc tensor")

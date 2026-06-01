@@ -1,5 +1,31 @@
 package facedetection
 
+import "sync"
+
+// TargetSize is the fixed square input resolution the RetinaFace model expects. The anchor grid, output tensor shapes,
+// and pre- / post-processing are all derived from this value.
+const TargetSize = 640
+
+var (
+	anchorsOnce   sync.Once
+	cachedAnchors []Prior
+)
+
+// anchors returns the memoized prior boxes for the fixed TargetSize. Anchors depend only on TargetSize, so they are
+// generated once and reused. The returned slice is shared and must not be mutated by callers.
+func anchors() []Prior {
+	anchorsOnce.Do(func() {
+		cachedAnchors = generateAnchors(TargetSize)
+	})
+	return cachedAnchors
+}
+
+// AnchorCount returns the number of prior boxes generated for TargetSize. It is used to size the model's output tensors
+// so the count stays coupled to the anchor grid.
+func AnchorCount() int {
+	return len(anchors())
+}
+
 // Prior represents an anchor box (also called a prior box) used in the RetinaFace face detection model.
 //
 // Anchor boxes are predefined bounding boxes at various positions, scales, and aspect ratios across the image that

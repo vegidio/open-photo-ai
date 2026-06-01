@@ -53,7 +53,7 @@ export class Face {
 }
 
 /**
- * PointF represents a point with float64 coordinates
+ * PointF represents a point with float32 coordinates
  */
 export class PointF {
     "X": number;

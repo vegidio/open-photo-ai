@@ -9,7 +9,7 @@ var ArcfaceTemplate = []PointF{
 	{313.09, 371.15}, // Right mouth
 }
 
-// PointF represents a point with float64 coordinates
+// PointF represents a point with float32 coordinates
 type PointF struct {
 	X float32
 	Y float32
