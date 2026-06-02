@@ -20,6 +20,19 @@ const darkTheme = createTheme({
     palette: {
         mode: 'dark',
     },
+    components: {
+        MuiBackdrop: {
+            styleOverrides: {
+                // Only darken backdrops that belong to a Dialog (modals). Popovers, menus, and selects render their
+                // backdrop under a different root, so they stay untouched.
+                root: {
+                    '.MuiDialog-root &': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                    },
+                },
+            },
+        },
+    },
 });
 
 const Main = () => {
