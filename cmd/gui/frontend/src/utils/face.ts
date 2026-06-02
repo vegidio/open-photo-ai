@@ -2,6 +2,7 @@ import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/fa
 import type { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import type { File } from '@/bindings/gui/types';
 import { DetectFaces } from '@/bindings/gui/services/faceservice.ts';
+import { useEnhancementStore } from '@/stores/enhancements.ts';
 
 const facesCache = new Map<string, Face[]>();
 
@@ -32,3 +33,28 @@ export const detectFaces = async (file: File, ep: ExecutionProvider): Promise<Fa
  * @param opIds - The operation IDs to inspect.
  */
 export const hasFaceRecovery = (opIds: string[]): boolean => opIds.some((id) => id.startsWith('fr_'));
+
+/**
+ * Resolves the faces an inference run should receive: an empty array when no face-recovery operation is present,
+ * otherwise the detected faces (cached by hash) minus any the user has deselected.
+ *
+ * @param file - The file object containing the image path and hash.
+ * @param ep - The execution provider to use for detection.
+ * @param opIds - The operation IDs of the run (used to decide whether faces are needed at all).
+ * @param disabled - An already-read disabled-face selection to reuse (e.g. when the caller also needs it for a cache
+ *   key); when omitted, it is read from the enhancement store.
+ * @returns A promise that resolves to the enabled faces to pass to the inference call.
+ */
+export const getEnabledFaces = async (
+    file: File,
+    ep: ExecutionProvider,
+    opIds: string[],
+    disabled?: Set<number>,
+): Promise<Face[]> => {
+    if (!hasFaceRecovery(opIds)) return [];
+
+    const faces = await detectFaces(file, ep);
+    const d = disabled ?? useEnhancementStore.getState().disabledFaces.get(file);
+
+    return d?.size ? faces.filter((_, i) => !d.has(i)) : faces;
+};

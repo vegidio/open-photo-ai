@@ -21,3 +21,14 @@ type Parameterized interface {
 	// Params returns the operation's per-run inputs, keyed by name.
 	Params() map[string]any
 }
+
+// CacheKeyer is an optional interface implemented by operations whose per-run inputs (carried via Parameterized) change
+// the produced image and therefore must participate in the output cache key. Without it, two runs of the same Id with
+// different inputs (e.g. a different set of selected faces) would collide in the image cache and return stale output.
+//
+// The returned string only needs to be stable and distinct per distinct input set; return "" when there is nothing to
+// contribute (the key then falls back to Id() alone).
+type CacheKeyer interface {
+	// CacheKey returns a stable signature of the per-run inputs that affect the produced image.
+	CacheKey() string
+}

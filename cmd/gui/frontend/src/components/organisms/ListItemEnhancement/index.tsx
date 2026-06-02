@@ -6,7 +6,7 @@ import { OptionsColorBalance } from '@/components/organisms/OptionsColorBalance'
 import { OptionsFaceRecovery } from '@/components/organisms/OptionsFaceRecovery';
 import { OptionsLightAdjustment } from '@/components/organisms/OptionsLightAdjustment';
 import { OptionsUpscale } from '@/components/organisms/OptionsUpscale';
-import { useCurrentFile } from '@/hooks';
+import { useCurrentFile, useFileDisabledFaces, useFileFaces } from '@/hooks';
 import { useEnhancementStore } from '@/stores';
 
 type ListItemEnhancementProps = {
@@ -16,10 +16,12 @@ type ListItemEnhancementProps = {
 export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const [isHovered, setIsHovered] = useState(false);
     const file = useCurrentFile();
+    const faces = useFileFaces(file);
+    const disabledFaces = useFileDisabledFaces(file);
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
 
     // Get enhancement details and options component menu
-    const { name, info, icon } = opToEnhancement(op);
+    const { name, info, icon } = opToEnhancement(op, facesLabel(faces.length, disabledFaces.size));
     const OptionsComponent = selectOptionsComponent(op.id);
 
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
@@ -91,13 +93,13 @@ const selectOptionsComponent = (operationId: string) => {
     }
 };
 
-const opToEnhancement = (op: Operation): { name: string; info: string; icon: ReactNode } => {
-    const quality = `${op.options.precision === 'fp32' ? 'High' : 'Std.'} Quality`;
+const opToEnhancement = (op: Operation, faceText: string): { name: string; info: string; icon: ReactNode } => {
+    const quality = op.options.precision === 'fp32' ? 'High' : 'Std.';
 
     switch (true) {
         // Face Recovery
         case op.id.startsWith('fr'): {
-            const info = `${titleCase(op.options.name)}, ${quality}`;
+            const info = `${titleCase(op.options.name)}, ${faceText}, ${quality}`;
             return { name: 'Face Recovery', info, icon: <Icon option='face_recovery' /> };
         }
 
@@ -129,4 +131,10 @@ const opToEnhancement = (op: Operation): { name: string; info: string; icon: Rea
 const titleCase = (input: string): string => {
     if (!input) return input;
     return input[0].toUpperCase() + input.slice(1);
+};
+
+const facesLabel = (total: number, disabledCount: number): string => {
+    const enabled = Math.max(0, total - disabledCount);
+    const noun = total === 1 ? 'Face' : 'Faces';
+    return enabled === total ? `${total} ${noun}` : `${enabled}/${total} ${noun}`;
 };

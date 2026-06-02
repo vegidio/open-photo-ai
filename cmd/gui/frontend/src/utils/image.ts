@@ -2,7 +2,8 @@ import { CancellablePromise } from '@wailsio/runtime';
 import type { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { GetImage, ProcessImage } from '@/bindings/gui/services/imageservice.ts';
 import { type File, InferenceParams } from '@/bindings/gui/types';
-import { detectFaces, hasFaceRecovery } from '@/utils/face.ts';
+import { useEnhancementStore } from '@/stores/enhancements.ts';
+import { getEnabledFaces, hasFaceRecovery } from '@/utils/face.ts';
 
 export type ImageData = {
     id: string;
@@ -45,7 +46,13 @@ export const getImage = async (file: File, size: number) => {
  */
 export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operations: string[]) => {
     const opIds = operations.join('_');
-    const cacheKey = `${file.Hash}_${opIds}`;
+
+    // The user can deselect individual faces; that selection changes the recovery output, so it must be part of the
+    // cache key (otherwise a toggle would return a stale enhanced image).
+    const isFaceRecovery = hasFaceRecovery(operations);
+    const disabled = isFaceRecovery ? useEnhancementStore.getState().disabledFaces.get(file) : undefined;
+    const faceToken = disabled?.size ? `_d${[...disabled].sort((a, b) => a - b).join('-')}` : '';
+    const cacheKey = `${file.Hash}_${opIds}${faceToken}`;
 
     let image = imageCache.get(cacheKey);
     let p: CancellablePromise<[string, number, number]>;
@@ -55,8 +62,8 @@ export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operation
             if (!image) {
                 try {
                     // Face recovery no longer detects faces internally; detect them up front (cached by hash) and pass
-                    // them along so the recovery operations receive them.
-                    const faces = hasFaceRecovery(operations) ? await detectFaces(file, ep) : [];
+                    // them along so the recovery operations receive them — minus any faces the user has deselected.
+                    const faces = await getEnabledFaces(file, ep, operations, disabled);
 
                     p = ProcessImage(file.Path, ep, new InferenceParams({ Faces: faces }), ...operations);
                     const [base64, width, height] = await p;

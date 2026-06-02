@@ -9,3 +9,4 @@ export const arch = await GetArch();
 
 export const EMPTY_OPERATIONS: Operation[] = [];
 export const EMPTY_FACES: Face[] = [];
+export const EMPTY_DISABLED: ReadonlySet<number> = new Set();

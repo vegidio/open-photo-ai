@@ -4,7 +4,7 @@ import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { EnhancementProgress } from '@/components/organisms/EnhancementProgress';
 import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
 import { PreviewImage } from '@/components/organisms/PreviewImage';
-import { useCurrentFile, useFileOperations, useNotify } from '@/hooks';
+import { useCurrentFile, useFileDisabledFaces, useFileOperations, useNotify } from '@/hooks';
 import { useDrawerStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
 import { userFriendlyErrorMessage } from '@/utils/errors.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
@@ -25,6 +25,8 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
     // EnhancementStore
     const operations = useFileOperations(currentFile);
+    // Re-run the preview when the user toggles which faces are enhanced (the Set ref changes on toggle).
+    const disabledFaces = useFileDisabledFaces(currentFile);
 
     const ep = useSettingsStore((state) => state.executionProvider);
 
@@ -75,7 +77,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             isCancelled = true;
             p?.cancel();
         };
-    }, [operations, currentFile, setEnhancedImage, setOriginalImage]);
+    }, [operations, currentFile, disabledFaces, setEnhancedImage, setOriginalImage]);
 
     useEffect(() => {
         if (filesLength > 1) setOpen(true);

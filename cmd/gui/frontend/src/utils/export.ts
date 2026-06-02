@@ -4,7 +4,7 @@ import type { Operation } from '@/operations';
 import { type ExecutionProvider, ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { ExportImage } from '@/bindings/gui/services/imageservice.ts';
 import { type File, InferenceParams } from '@/bindings/gui/types';
-import { detectFaces, hasFaceRecovery } from '@/utils/face.ts';
+import { getEnabledFaces } from '@/utils/face.ts';
 
 export type ExportOptions = {
     file: File;
@@ -66,8 +66,8 @@ export const exportImage = (opts: ExportOptions) => {
         async (resolve, reject) => {
             try {
                 // Face recovery no longer detects faces internally; detect them up front (cached by hash) and pass
-                // them along so the recovery operations receive them.
-                const faces = hasFaceRecovery(opIds) ? await detectFaces(file, ep) : [];
+                // them along so the recovery operations receive them — minus any faces the user has deselected.
+                const faces = await getEnabledFaces(file, ep, opIds);
 
                 p = ExportImage(
                     file,

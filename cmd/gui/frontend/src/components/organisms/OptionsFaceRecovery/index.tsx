@@ -4,7 +4,7 @@ import { FaceSelector } from '@/components/molecules/FaceSelector';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
 import { FaceToggle } from '@/components/templates/FaceToggle';
-import { useCurrentFile, useFileOperations } from '@/hooks';
+import { useCurrentFile, useFileDisabledFaces, useFileFaces, useFileOperations } from '@/hooks';
 import { Athens, Santorini } from '@/operations';
 import { useEnhancementStore } from '@/stores';
 
@@ -25,6 +25,7 @@ export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceReco
     const file = useCurrentFile();
     const operations = useFileOperations(file);
     const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
+    const selectedCount = useFileFaces(file).length - useFileDisabledFaces(file).size;
     const [facesOpen, setFacesOpen] = useState(false);
 
     const currentOp = operations.find((op) => op.id.startsWith('fr'));
@@ -54,10 +55,10 @@ export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceReco
 
                 <Divider />
 
-                <FaceSelector onClick={() => setFacesOpen(true)} />
+                <FaceSelector selectedCount={selectedCount} onClick={() => setFacesOpen(true)} />
             </div>
 
-            <FaceToggle open={facesOpen} onClose={() => setFacesOpen(false)} />
+            <FaceToggle file={file} open={facesOpen} onClose={() => setFacesOpen(false)} />
         </OptionsPopover>
     );
 };

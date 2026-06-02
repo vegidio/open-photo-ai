@@ -67,7 +67,16 @@ func (c *Cache) SetImage(ctx context.Context, img image.Image, hash string, oper
 
 func cacheKey(hash string, operations []types.Operation) string {
 	ops := lo.Map(operations, func(op types.Operation, _ int) string {
-		return op.Id()
+		id := op.Id()
+
+		// Per-run inputs (e.g. the selected faces) are not encoded in Id() but change the output, so fold them in.
+		if ck, ok := op.(types.CacheKeyer); ok {
+			if extra := ck.CacheKey(); extra != "" {
+				id += "#" + extra
+			}
+		}
+
+		return id
 	})
 	return memo.KeyFrom(hash, strings.Join(ops, "|"))
 }

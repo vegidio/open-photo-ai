@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Dialog } from '@mui/material';
+import type { File } from '@/bindings/gui/types';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
+import { FaceBoxes } from '@/components/organisms/FaceBoxes';
+import { useFaceSelection } from '@/hooks';
 import { useImageStore } from '@/stores';
 
 type FaceToggleProps = {
+    file: File;
     open: boolean;
     onClose: () => void;
 };
@@ -13,9 +17,16 @@ const TITLE = 41;
 // Outer breathing room so the modal never touches the viewport edges.
 const MARGIN = 32;
 
-export const FaceToggle = ({ open, onClose }: FaceToggleProps) => {
+export const FaceToggle = ({ file, open, onClose }: FaceToggleProps) => {
     const originalImage = useImageStore((state) => state.originalImage);
+    const { disabled, toggle, commit } = useFaceSelection(file, open);
     const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
+
+    // Commit the working selection to the store only on close, so toggling many faces triggers a single inference.
+    const handleClose = () => {
+        commit();
+        onClose();
+    };
 
     useEffect(() => {
         const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
@@ -36,7 +47,7 @@ export const FaceToggle = ({ open, onClose }: FaceToggleProps) => {
         <Dialog
             open={open}
             onClose={(_, reason) => {
-                if (reason !== 'backdropClick') onClose();
+                if (reason !== 'backdropClick') handleClose();
             }}
             slotProps={{
                 paper: {
@@ -45,10 +56,20 @@ export const FaceToggle = ({ open, onClose }: FaceToggleProps) => {
                 },
             }}
         >
-            <ModalTitle title='Select faces' onClose={onClose} />
+            <ModalTitle title='Select faces' onClose={handleClose} />
 
-            <div className='flex-1 overflow-hidden'>
+            <div className='flex-1 overflow-hidden relative'>
                 <img alt='Original' src={originalImage.url} className='w-full h-full object-contain' />
+
+                <FaceBoxes
+                    file={file}
+                    displayWidth={imageW}
+                    displayHeight={imageH}
+                    originalWidth={originalImage.width}
+                    originalHeight={originalImage.height}
+                    disabled={disabled}
+                    onToggle={toggle}
+                />
             </div>
         </Dialog>
     );

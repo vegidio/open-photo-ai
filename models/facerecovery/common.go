@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
@@ -16,6 +17,24 @@ import (
 // Face detection runs independently (see opai.Execute with newyork.Op); the resulting []facedetection.Face is carried
 // on the face-recovery operation and forwarded to Run via this key.
 const ParamFaces = "faces"
+
+// FacesCacheKey builds a stable, order-sensitive signature of the faces' bounding boxes, used by the face-recovery
+// operations' CacheKey so that changing which faces are recovered invalidates the cached output. Bounding boxes
+// uniquely identify the deterministically detected faces within an image, so the signature distinguishes every distinct
+// selection while staying identical across re-runs of the same selection. Returns "" when there are no faces.
+func FacesCacheKey(faces []facedetection.Face) string {
+	if len(faces) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	for _, f := range faces {
+		bb := f.BoundingBox
+		fmt.Fprintf(&b, "%.2f,%.2f,%.2f,%.2f;", bb.Min.X, bb.Min.Y, bb.Max.X, bb.Max.Y)
+	}
+
+	return b.String()
+}
 
 func LoadModel(
 	ctx context.Context,

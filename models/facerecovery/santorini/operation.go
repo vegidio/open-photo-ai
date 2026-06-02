@@ -32,9 +32,15 @@ func (o OpFrSantorini) Params() map[string]any {
 	return map[string]any{facerecovery.ParamFaces: o.faces}
 }
 
+// CacheKey folds the selected faces into the image cache key — they are not in Id() but change the recovered output.
+func (o OpFrSantorini) CacheKey() string {
+	return facerecovery.FacesCacheKey(o.faces)
+}
+
 var (
 	_ types.Operation     = (*OpFrSantorini)(nil)
 	_ types.Parameterized = (*OpFrSantorini)(nil)
+	_ types.CacheKeyer    = (*OpFrSantorini)(nil)
 )
 
 func Op(precision types.Precision, faces []facedetection.Face) OpFrSantorini {

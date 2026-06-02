@@ -10,6 +10,8 @@ type EnhancementStore = {
     autopilot: boolean;
     enhancements: Map<File, Operation[]>;
     faces: Map<File, Face[]>;
+    // Indices (into `faces`) of the faces the user has disabled (deselected) per file. Absent/empty = all enabled.
+    disabledFaces: Map<File, Set<number>>;
 
     setAutopilot: (enable: boolean) => void;
     toggle: () => void;
@@ -17,6 +19,7 @@ type EnhancementStore = {
     replaceEnhancement: (file: File, operation: Operation) => void;
     removeEnhancement: (file: File, operationId: string) => void;
     setFaces: (file: File, faces: Face[]) => void;
+    setDisabledFaces: (file: File, disabled: Set<number>) => void;
 
     removeKey: (file: File) => void;
     clear: () => void;
@@ -31,6 +34,7 @@ export const useEnhancementStore = create(
             autopilot: true,
             enhancements: new Map(),
             faces: new Map(),
+            disabledFaces: new Map(),
 
             setAutopilot: (enable: boolean) => {
                 set((state) => {
@@ -85,13 +89,24 @@ export const useEnhancementStore = create(
                     state.enhancements.set(file, ops);
 
                     // Detected faces only matter while a face-recovery op exists; drop them when it's removed.
-                    if (operationId.startsWith('fr')) state.faces.delete(file);
+                    if (operationId.startsWith('fr')) {
+                        state.faces.delete(file);
+                        state.disabledFaces.delete(file);
+                    }
                 });
             },
 
             setFaces: (file: File, faces: Face[]) => {
                 set((state) => {
                     state.faces.set(file, faces);
+                    // Fresh detection re-numbers faces, so any prior selection is stale — reset to all-enabled.
+                    state.disabledFaces.delete(file);
+                });
+            },
+
+            setDisabledFaces: (file: File, disabled: Set<number>) => {
+                set((state) => {
+                    state.disabledFaces.set(file, disabled);
                 });
             },
 
@@ -99,6 +114,7 @@ export const useEnhancementStore = create(
                 set((state) => {
                     state.enhancements.delete(file);
                     state.faces.delete(file);
+                    state.disabledFaces.delete(file);
                 });
             },
 
@@ -106,6 +122,7 @@ export const useEnhancementStore = create(
                 set((state) => {
                     state.enhancements.clear();
                     state.faces.clear();
+                    state.disabledFaces.clear();
                 });
             },
         })),
