@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
 import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
-import { useCurrentFile, useFileOperations } from '@/hooks';
-import { useEnhancementStore, useSettingsStore } from '@/stores';
+import { useAddEnhancements, useCurrentFile, useFileOperations } from '@/hooks';
+import { useSettingsStore } from '@/stores';
 import { getCbOp, getFrOp, getLaOp, getUpOp } from '@/utils/enhancement';
 
 type MenuAddEnhancementProps = {
@@ -20,7 +20,7 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
 
     const currentFile = useCurrentFile();
     const operations = useFileOperations(currentFile);
-    const addEnhancements = useEnhancementStore((state) => state.addEnhancements);
+    const addEnhancements = useAddEnhancements();
 
     const onAddEnhancement = (op: Operation) => {
         if (currentFile) addEnhancements(currentFile, [op]);

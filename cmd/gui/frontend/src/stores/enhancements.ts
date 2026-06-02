@@ -2,18 +2,21 @@ import { enableMapSet } from 'immer';
 import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
+import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/facedetection';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 
 type EnhancementStore = {
     autopilot: boolean;
     enhancements: Map<File, Operation[]>;
+    faces: Map<File, Face[]>;
 
     setAutopilot: (enable: boolean) => void;
     toggle: () => void;
     addEnhancements: (file: File, operations: Operation[]) => void;
     replaceEnhancement: (file: File, operation: Operation) => void;
     removeEnhancement: (file: File, operationId: string) => void;
+    setFaces: (file: File, faces: Face[]) => void;
 
     removeKey: (file: File) => void;
     clear: () => void;
@@ -27,6 +30,7 @@ export const useEnhancementStore = create(
         immer<EnhancementStore>((set, _) => ({
             autopilot: true,
             enhancements: new Map(),
+            faces: new Map(),
 
             setAutopilot: (enable: boolean) => {
                 set((state) => {
@@ -47,7 +51,7 @@ export const useEnhancementStore = create(
                     // Combine existing and new operations
                     const allOps = [...existingOps, ...operations];
 
-                    // Sort operations by prefix priority: fr -> la -> up
+                    // Sort operations by prefix priority: fr -> la -> cb -> up
                     const sortedOps = allOps.sort((a, b) => {
                         const getPriority = (op: Operation) => {
                             if (op.id.startsWith('fr')) return 0;
@@ -79,18 +83,29 @@ export const useEnhancementStore = create(
                 set((state) => {
                     const ops = (state.enhancements.get(file) ?? []).filter((op) => op.id !== operationId);
                     state.enhancements.set(file, ops);
+
+                    // Detected faces only matter while a face-recovery op exists; drop them when it's removed.
+                    if (operationId.startsWith('fr')) state.faces.delete(file);
+                });
+            },
+
+            setFaces: (file: File, faces: Face[]) => {
+                set((state) => {
+                    state.faces.set(file, faces);
                 });
             },
 
             removeKey: (file: File) => {
                 set((state) => {
                     state.enhancements.delete(file);
+                    state.faces.delete(file);
                 });
             },
 
             clear: () => {
                 set((state) => {
                     state.enhancements.clear();
+                    state.faces.clear();
                 });
             },
         })),

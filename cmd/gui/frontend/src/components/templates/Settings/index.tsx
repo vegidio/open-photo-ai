@@ -3,8 +3,8 @@ import { Dialog, Divider } from '@mui/material';
 import { CleanRegistry } from '@/bindings/gui/services/appservice.ts';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { SettingsButtons } from '@/components/molecules/SettingsButtons';
-import { SettingsList, type SettingsListHandle } from '@/components/organisms/SettingsList';
 import { SettingsMenu } from '@/components/molecules/SettingsMenu';
+import { SettingsList, type SettingsListHandle } from '@/components/organisms/SettingsList';
 import { useSettingsStore } from '@/stores';
 
 type SettingsProps = {

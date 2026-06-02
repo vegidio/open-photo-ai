@@ -4,7 +4,7 @@ import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { ListItemAutopilot } from '@/components/molecules/ListItemAutopilot';
 import { ListItemEnhancement } from '@/components/organisms/ListItemEnhancement';
-import { useCurrentFile, useFileOperations, useNotify } from '@/hooks';
+import { useAddEnhancements, useCurrentFile, useFileOperations, useNotify } from '@/hooks';
 import { useEnhancementStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { userFriendlyErrorMessage } from '@/utils/errors.ts';
@@ -16,7 +16,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
     const autopilot = useEnhancementStore((state) => state.autopilot);
     const hasEnhancement = useEnhancementStore((state) => (file ? state.enhancements.has(file) : false));
     const operations = useFileOperations(file);
-    const addEnhancements = useEnhancementStore((state) => state.addEnhancements);
+    const addEnhancements = useAddEnhancements();
     const frModel = useSettingsStore((state) => state.frModel);
     const laModel = useSettingsStore((state) => state.laModel);
     const cbModel = useSettingsStore((state) => state.cbModel);
@@ -24,7 +24,10 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
 
     const [isAnalysing, setIsAnalysing] = useState(false);
 
-    // biome-ignore lint/correctness/useExhaustiveDependencies: enqueueSnackbar
+    // addEnhancements/enqueueSnackbar are called imperatively and are unstable references; keying the effect on them
+    // would re-run autopilot mid-flight (before hasEnhancement flips true) and add the suggestions twice. The model
+    // selections are read at run time only. Autopilot must run exactly once per file.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
     useEffect(() => {
         // Autopilot should run if all conditions are met:
         //   1. There's a file selected
@@ -42,7 +45,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
                     up: upModel,
                 });
 
-                addEnhancements(currentFile, suggestions);
+                await addEnhancements(currentFile, suggestions);
             } catch (e) {
                 const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to run autopilot.');
                 enqueueSnackbar(msg, { variant: 'error' });
@@ -52,7 +55,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
         }
 
         if (file && autopilot && !hasEnhancement) runAutopilot(file);
-    }, [autopilot, hasEnhancement, addEnhancements, file]);
+    }, [autopilot, hasEnhancement, file]);
 
     return (
         <List className={`${className}`} dense>
