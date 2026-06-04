@@ -9,6 +9,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
 	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
@@ -236,6 +237,10 @@ func selectModel(
 		model, err = kyoto.New(ctx, operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "up_saitama"):
 		model, err = saitama.New(ctx, operation, ep, onProgress)
+
+	// Denoise
+	case strings.HasPrefix(operation.Id(), "dn_stockholm"):
+		model, err = stockholm.New(ctx, operation, ep, onProgress)
 
 	default:
 		internal.Log().Warn("no model found for operation", "op", operation.Id())

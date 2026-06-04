@@ -6,7 +6,7 @@ import (
 	"time"
 
 	opai "github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
 	"github.com/vegidio/open-photo-ai/shared"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
@@ -35,7 +35,7 @@ func main() {
 	}
 
 	ops := []types.Operation{
-		kyoto.Op(4, types.PrecisionFp32),
+		stockholm.Op(types.PrecisionFp32),
 	}
 
 	now := time.Now()

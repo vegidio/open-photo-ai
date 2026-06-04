@@ -8,4 +8,5 @@ const (
 	ModelTypeLightAdjustment ModelType = "la"
 	ModelTypeColorBalance    ModelType = "cb"
 	ModelTypeUpscale         ModelType = "up"
+	ModelTypeDenoise         ModelType = "dn"
 )
