@@ -1,4 +1,4 @@
-package denoise
+package utils
 
 import (
 	"image"
