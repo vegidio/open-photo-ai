@@ -9,7 +9,10 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
+	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
+	"github.com/vegidio/open-photo-ai/models/denoise/uppsala"
 	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
@@ -241,6 +244,12 @@ func selectModel(
 	// Denoise
 	case strings.HasPrefix(operation.Id(), "dn_stockholm"):
 		model, err = stockholm.New(ctx, operation, ep, onProgress)
+	case strings.HasPrefix(operation.Id(), "dn_gothenburg"):
+		model, err = gothenburg.New(ctx, operation, ep, onProgress)
+	case strings.HasPrefix(operation.Id(), "dn_malmo"):
+		model, err = malmo.New(ctx, operation, ep, onProgress)
+	case strings.HasPrefix(operation.Id(), "dn_uppsala"):
+		model, err = uppsala.New(ctx, operation, ep, onProgress)
 
 	default:
 		internal.Log().Warn("no model found for operation", "op", operation.Id())
