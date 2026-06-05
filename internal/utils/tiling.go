@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"image"
+	"image/draw"
 	"math"
 
 	"github.com/cockroachdb/errors"
@@ -70,7 +71,7 @@ func RunTiledInference(
 
 			if onProgress != nil {
 				total += step
-				onProgress(opId, Ceiling(total))
+				onProgress(opId, ClampProgress(total))
 			}
 		}
 	}
@@ -202,11 +203,7 @@ func reflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 	}
 
 	// Copy original image to center
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			padded.Set(x+left, y+top, img.At(bounds.Min.X+x, bounds.Min.Y+y))
-		}
-	}
+	draw.Draw(padded, image.Rect(left, top, left+width, top+height), img, bounds.Min, draw.Src)
 
 	// Pad left and right edges
 	for y := 0; y < height; y++ {

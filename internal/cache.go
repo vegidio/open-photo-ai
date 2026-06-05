@@ -41,7 +41,14 @@ func (c *Cache) GetImage(ctx context.Context, hash string, operations ...types.O
 	key := cacheKey(hash, operations)
 
 	data, found, err := c.diskCache.Store.Get(ctx, key)
-	if !found || err != nil {
+	if err != nil {
+		// A real store error (e.g. disk failure) is reported as a miss so the caller re-runs inference, but it's logged
+		// so a failing cache doesn't degrade silently.
+		Log().Warn("cache lookup failed", "key", key, "err", err)
+		return nil, errors.Errorf("cache miss for key: %s", key)
+	}
+
+	if !found {
 		return nil, errors.Errorf("cache miss for key: %s", key)
 	}
 

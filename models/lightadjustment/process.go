@@ -34,7 +34,7 @@ func Process(ctx context.Context, session *ort.DynamicAdvancedSession, img image
 	// if the image already fits, run it natively.
 	resized := img
 	if fullW > maxSize || fullH > maxSize {
-		newW, newH := utils.TargetSize(fullW, fullH, maxSize)
+		newW, newH := utils.FitToMaxSize(fullW, fullH, maxSize)
 		resized = imaging.Resize(img, newW, newH, imaging.Lanczos)
 	}
 
@@ -121,5 +121,5 @@ func buildResult(img, resized, outLR image.Image) image.Image {
 // out/in ratio, so only full needs rescaling to [0,255].
 func applyGain(full, in, out float32) float32 {
 	gain := out / (in + eps*65535.0)
-	return utils.ClampFloat32(full / 257.0 * gain)
+	return utils.Clamp255(full / 257.0 * gain)
 }

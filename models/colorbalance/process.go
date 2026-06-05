@@ -24,7 +24,7 @@ func Process(ctx context.Context, session *ort.DynamicAdvancedSession, img image
 	}
 
 	// Resize so the longest side equals maxSize, padded to a multiple of 16
-	newW, newH := utils.TargetSize(origW, origH, maxSize)
+	newW, newH := utils.FitToMaxSize(origW, origH, maxSize)
 	resized := imaging.Resize(img, newW, newH, imaging.Lanczos)
 
 	// Convert resized image to CHW [0,1] float32
@@ -192,9 +192,9 @@ func applyMapping(img image.Image, w [11][3]float32) image.Image {
 			}
 
 			out.Set(x, y, color.RGBA{
-				R: uint8(utils.ClampFloat32(nr * 255.0)),
-				G: uint8(utils.ClampFloat32(ng * 255.0)),
-				B: uint8(utils.ClampFloat32(nb * 255.0)),
+				R: uint8(utils.Clamp255(nr * 255.0)),
+				G: uint8(utils.Clamp255(ng * 255.0)),
+				B: uint8(utils.Clamp255(nb * 255.0)),
 				A: 255,
 			})
 		}

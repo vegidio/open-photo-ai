@@ -6,6 +6,14 @@ import (
 	"github.com/disintegration/imaging"
 )
 
+// meanB/meanG/meanR are the RetinaFace per-channel BGR means subtracted from each pixel during normalization. They
+// are the model's training means (note: BGR order, not the ImageNet RGB means).
+const (
+	meanB = float32(104.0)
+	meanG = float32(117.0)
+	meanR = float32(123.0)
+)
+
 // PreprocessImage handles image resizing and tensor data preparation
 func PreprocessImage(img image.Image, targetSize int) ([]float32, float32, float32) {
 	bounds := img.Bounds()
@@ -42,12 +50,6 @@ func calculateResizeDimensions(width, height float32, targetSize int) (int, int)
 
 // createInputTensorData creates padded input data with mean subtraction (BGR format, CHW layout)
 func createInputTensorData(resized image.Image, newWidth, newHeight, targetSize int) []float32 {
-	const (
-		meanB = float32(104.0)
-		meanG = float32(117.0)
-		meanR = float32(123.0)
-	)
-
 	inputData := make([]float32, 3*targetSize*targetSize)
 
 	channelSize := targetSize * targetSize

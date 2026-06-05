@@ -24,7 +24,11 @@ type NewYork struct {
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*NewYork, error) {
-	op := operation.(OpFdNewYork)
+	op, ok := operation.(OpFdNewYork)
+	if !ok {
+		return nil, errors.Errorf("expected OpFdNewYork operation, got %T", operation)
+	}
+
 	modelFile := op.Id() + ".onnx"
 	name := fmt.Sprintf("New York (%s)", cases.Upper(language.English).String(string(op.precision)))
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)

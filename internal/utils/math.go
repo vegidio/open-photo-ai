@@ -13,8 +13,8 @@ func ClampInt(val, minVal, maxVal int) int {
 	return val
 }
 
-// ClampFloat32 clamps a float32 value to [0, 255]
-func ClampFloat32(val float32) float32 {
+// Clamp255 clamps a float32 value to the [0, 255] byte range (callers typically cast the result to uint8).
+func Clamp255(val float32) float32 {
 	if val < 0 {
 		return 0
 	}
@@ -24,16 +24,18 @@ func ClampFloat32(val float32) float32 {
 	return val
 }
 
-func Ceiling(val float64) float64 {
+// ClampProgress snaps a near-complete progress value (>0.999) to exactly 1.0, so the final
+// onProgress callback reports 100% instead of e.g. 0.9998.
+func ClampProgress(val float64) float64 {
 	if val > 0.999 {
 		return 1.0
 	}
 	return val
 }
 
-// TargetSize returns (newW, newH) such that the longest side equals maxSize and both dimensions are rounded up to the
+// FitToMaxSize returns (newW, newH) such that the longest side equals maxSize and both dimensions are rounded up to the
 // next multiple of 16.
-func TargetSize(w, h, maxSize int) (int, int) {
+func FitToMaxSize(w, h, maxSize int) (int, int) {
 	longest := w
 	if h > longest {
 		longest = h

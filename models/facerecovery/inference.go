@@ -58,7 +58,7 @@ func RestoreFaces(
 
 		if onProgress != nil {
 			total += step
-			onProgress("fr", utils.Ceiling(total))
+			onProgress("fr", utils.ClampProgress(total))
 		}
 	}
 

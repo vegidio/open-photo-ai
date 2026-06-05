@@ -8,6 +8,8 @@ import "math"
 // single anchor (rather than the whole array), so the caller can decode only the anchors that survive the confidence
 // threshold, avoiding the expensive math.Exp calls for the ~16,800 anchors that are otherwise discarded.
 func decodeBox(loc []float32, prior Prior, i int) RectF {
+	// variance0/variance1 are the RetinaFace prior box variances from the reference implementation: variance0 scales
+	// the center (cx, cy) offsets, variance1 scales the (logarithmic) width/height offsets fed through math.Exp.
 	const (
 		variance0 = 0.1
 		variance1 = 0.2
@@ -48,7 +50,9 @@ func decodeBox(loc []float32, prior Prior, i int) RectF {
 //
 // landmarksRaw is the flat per-anchor landmark output (10 values per anchor); `i` is the anchor index. As with
 // decodeBox, decoding is per-anchor, so it runs only for anchors that pass the confidence threshold.
-func decodeLandmark(landmarksRaw []float32, prior Prior, i int) [5]PointF {
+func decodeLandmark(landmarksRaw []float32, prior Prior, i int) [numLandmarks]PointF {
+	// variance is the RetinaFace prior box variance applied to the landmark coordinate offsets (same value used for the
+	// box center offsets in decodeBox).
 	const variance = 0.1
 
 	rawOffset := i * 10
@@ -56,8 +60,8 @@ func decodeLandmark(landmarksRaw []float32, prior Prior, i int) [5]PointF {
 	var0Sx := variance * prior.sx
 	var0Sy := variance * prior.sy
 
-	var landmarks [5]PointF
-	for j := 0; j < 5; j++ {
+	var landmarks [numLandmarks]PointF
+	for j := 0; j < numLandmarks; j++ {
 		landmarks[j] = PointF{
 			X: prior.cx + landmarksRaw[rawOffset+j*2]*var0Sx,
 			Y: prior.cy + landmarksRaw[rawOffset+j*2+1]*var0Sy,

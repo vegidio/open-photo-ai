@@ -1,5 +1,9 @@
 package facedetection
 
+// numLandmarks is the number of facial landmark points the RetinaFace model predicts per face
+// (left eye, right eye, nose, left mouth corner, right mouth corner).
+const numLandmarks = 5
+
 // ArcfaceTemplate is a template landmark at 512x512
 var ArcfaceTemplate = []PointF{
 	{192.98, 239.95}, // Left eye
@@ -23,7 +27,7 @@ type RectF struct {
 
 // Face represents a detected face with its properties
 type Face struct {
-	BoundingBox RectF     // Rectangle for face bounds
-	Landmarks   [5]PointF // 5 facial landmark points
+	BoundingBox RectF                // Rectangle for face bounds
+	Landmarks   [numLandmarks]PointF // 5 facial landmark points
 	Confidence  float32
 }

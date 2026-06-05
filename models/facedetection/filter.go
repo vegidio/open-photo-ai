@@ -44,7 +44,7 @@ func filterAndScaleDetections(
 	priors []Prior,
 	conf []float32,
 	threshold, targetSize float32,
-) ([]RectF, [][5]PointF, []float32) {
+) ([]RectF, [][numLandmarks]PointF, []float32) {
 	numAnchors := len(conf) / 2
 
 	// First pass: count detections above the threshold
@@ -57,12 +57,12 @@ func filterAndScaleDetections(
 
 	// Early exit if no detections
 	if numFiltered == 0 {
-		return []RectF{}, [][5]PointF{}, []float32{}
+		return []RectF{}, [][numLandmarks]PointF{}, []float32{}
 	}
 
 	// Pre-allocate slices with the exact capacity needed
 	filteredBoxes := make([]RectF, 0, numFiltered)
-	filteredLandmarks := make([][5]PointF, 0, numFiltered)
+	filteredLandmarks := make([][numLandmarks]PointF, 0, numFiltered)
 	filteredScores := make([]float32, 0, numFiltered)
 
 	// Second pass: decode and scale only the anchors that passed the threshold
@@ -81,7 +81,7 @@ func filterAndScaleDetections(
 
 		// Decode and scale the landmarks to target size
 		lm := decodeLandmark(landmarksRaw, priors[i], i)
-		for j := 0; j < 5; j++ {
+		for j := 0; j < numLandmarks; j++ {
 			lm[j].X *= targetSize
 			lm[j].Y *= targetSize
 		}
@@ -116,7 +116,9 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 	keep := make([]int, 0, n/2)
 	suppressed := make([]bool, n)
 
-	// Pre-compute all areas once
+	// Pre-compute all areas at once. The +1 on each dimension is the Pascal-VOC pixel convention carried over from the
+	// reference RetinaFace NMS; it is applied consistently here and to the intersection below, so the IoU ratio is
+	// unbiased.
 	areas := make([]float32, n)
 	for i, box := range boxes {
 		areas[i] = (box.Max.X - box.Min.X + 1) * (box.Max.Y - box.Min.Y + 1)
@@ -168,7 +170,7 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 				yy2 = box2.Max.Y
 			}
 
-			// Early exit if no intersection
+			// Early exit if no intersection (+1 matches the Pascal-VOC convention used for the areas above)
 			w := xx2 - xx1 + 1
 			h := yy2 - yy1 + 1
 			if w <= 0 || h <= 0 {
@@ -192,7 +194,7 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 // scaleDetectionsToOriginal scales filtered detections back to original image dimensions
 func scaleDetectionsToOriginal(
 	filteredBoxes []RectF,
-	filteredLandmarks [][5]PointF,
+	filteredLandmarks [][numLandmarks]PointF,
 	filteredScores []float32,
 	keep []int,
 	scaleW, scaleH float32,
@@ -216,8 +218,8 @@ func scaleDetectionsToOriginal(
 		}
 
 		// Create landmark points with float32 coordinates
-		var landmarkPoints [5]PointF
-		for j := 0; j < 5; j++ {
+		var landmarkPoints [numLandmarks]PointF
+		for j := 0; j < numLandmarks; j++ {
 			landmarkPoints[j] = PointF{
 				X: lm[j].X * scaleW,
 				Y: lm[j].Y * scaleH,

@@ -85,6 +85,12 @@ func PrepareDependency(
 		}
 	}
 
+	// Verify the freshly downloaded/extracted artifact so corruption is caught now, not on the next
+	// launch (shouldDownload only hashes a pre-existing file). A mismatch removes the bad artifact.
+	if err = verifyDownload(destination, fileCheck); err != nil {
+		return err
+	}
+
 	internal.Log().Info("dependency ready", "url", url)
 	return nil
 }
@@ -170,6 +176,35 @@ func downloadFile(ctx context.Context, url string, dstFile *os.File, onProgress 
 	_, err = io.Copy(dstFile, reader)
 	if err != nil {
 		return errors.Wrap(err, "failed to write file")
+	}
+
+	return nil
+}
+
+// verifyDownload re-hashes the checked file after a download/extract and fails (deleting the bad
+// artifact) if it doesn't match the expected hash. It is a no-op when there's nothing to verify.
+func verifyDownload(destination string, fileCheck *types.FileCheck) error {
+	if fileCheck == nil || fileCheck.Hash == "" {
+		return nil
+	}
+
+	configDir, err := fs.MkUserConfigDir(internal.AppName, destination)
+	if err != nil {
+		return errors.Wrap(err, "failed to resolve config dir for verification")
+	}
+
+	filePath := filepath.Join(configDir, fileCheck.Path)
+	hash, err := crypto.Sha256File(filePath)
+	if err != nil {
+		return errors.Wrap(err, "failed to hash downloaded file")
+	}
+
+	if hash != fileCheck.Hash {
+		if rmErr := os.Remove(filePath); rmErr != nil {
+			internal.Log().Warn("failed to remove corrupt download", "path", filePath, "err", rmErr)
+		}
+
+		return errors.Newf("hash mismatch for %s: expected %s, got %s", fileCheck.Path, fileCheck.Hash, hash)
 	}
 
 	return nil
