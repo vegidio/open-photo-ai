@@ -11,13 +11,33 @@ type OptionsDenoiseProps = {
 };
 
 const options: ModelSelectorOption[] = [
-    { value: 'stockholm_fp32', label: 'Stockholm High' },
+    {
+        value: 'stockholm_fp32',
+        label: 'Stockholm High',
+        description:
+            'Use this model for photos taken in challenging real-world conditions: low-light smartphone shots, high-ISO camera images, or surveillance footage. It handles the complex, signal-dependent noise patterns that actual sensors produce.',
+    },
     { value: 'stockholm_fp16', label: 'Stockholm Std.' },
-    { value: 'gothenburg_fp32', label: 'Gothenburg Hg.' },
+    {
+        value: 'gothenburg_fp32',
+        label: 'Gothenburg Hg.',
+        description:
+            'Use this model for portraits or close-up photos where the background (or foreground) is unintentionally out of focus. It recovers sharpness lost due to a narrow depth of field or an incorrectly set focus point on the camera.',
+    },
     { value: 'gothenburg_fp16', label: 'Gothenburg Std.' },
-    { value: 'malmo_fp32', label: 'Malmö High' },
+    {
+        value: 'malmo_fp32',
+        label: 'Malmö High',
+        description:
+            'Use this model when blur comes from camera shake or fast-moving subjects: handheld long exposures, action sports, or any scene where something moved during the shot. It reconstructs the sharp image behind the streak.',
+    },
     { value: 'malmo_fp16', label: 'Malmö Std.' },
-    { value: 'uppsala_fp32', label: 'Uppsala High' },
+    {
+        value: 'uppsala_fp32',
+        label: 'Uppsala High',
+        description:
+            "Use this model for outdoor images degraded by rain streaks. Whether it's dashcam footage in a storm or outdoor surveillance in bad weather, it strips away rain lines while preserving the underlying scene details.",
+    },
     { value: 'uppsala_fp16', label: 'Uppsala Std.' },
 ];
 

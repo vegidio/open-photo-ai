@@ -11,7 +11,14 @@ type OptionsPopoverProps = {
     children: ReactNode;
 };
 
-export const OptionsPopover = ({ title, anchorEl, open, onClose, hideBackdrop = true, children }: OptionsPopoverProps) => {
+export const OptionsPopover = ({
+    title,
+    anchorEl,
+    open,
+    onClose,
+    hideBackdrop = true,
+    children,
+}: OptionsPopoverProps) => {
     return (
         <Popover
             anchorEl={anchorEl}
@@ -29,7 +36,7 @@ export const OptionsPopover = ({ title, anchorEl, open, onClose, hideBackdrop = 
             className='pointer-events-none'
             slotProps={{
                 paper: {
-                    className: 'w-64 -ml-4 pointer-events-auto',
+                    className: 'w-[272px] -ml-4 pointer-events-auto',
                 },
             }}
         >

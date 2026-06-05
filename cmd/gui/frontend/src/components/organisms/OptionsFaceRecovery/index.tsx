@@ -15,9 +15,19 @@ type OptionsFaceRecoveryProps = {
 };
 
 const options: ModelSelectorOption[] = [
-    { value: 'athens_fp32', label: 'Athens High' },
+    {
+        value: 'athens_fp32',
+        label: 'Athens High',
+        description:
+            'Use this model when identity fidelity matters most. It lets you preserve facial structure while restoring details, even on heavily degraded faces. Best when you want restoration without changing the person.',
+    },
     { value: 'athens_fp16', label: 'Athens Std.' },
-    { value: 'santorini_fp32', label: 'Santorini High' },
+    {
+        value: 'santorini_fp32',
+        label: 'Santorini High',
+        description:
+            'Use this model when you want aggressive, fast enhancement and can tolerate identity drift. It produces sharp, visually pleasing faces on moderate degradation, but may hallucinate features and alter identity on very low-quality inputs.',
+    },
     { value: 'santorini_fp16', label: 'Santorini Std.' },
 ];
 

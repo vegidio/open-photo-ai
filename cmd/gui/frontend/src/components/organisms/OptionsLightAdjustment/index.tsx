@@ -14,7 +14,12 @@ type OptionsLightAdjustmentProps = {
 };
 
 const options: ModelSelectorOption[] = [
-    { value: 'paris_fp32', label: 'Paris High' },
+    {
+        value: 'paris_fp32',
+        label: 'Paris High',
+        description:
+            "Use this model when working with images affected by poor or uneven lighting, such as night scenes, backlit photos, shadows, or overexposed areas. It's useful when you need to enhance visibility and contrast so that images look clearer.",
+    },
     { value: 'paris_fp16', label: 'Paris Std.' },
 ];
 

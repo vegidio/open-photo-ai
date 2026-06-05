@@ -14,7 +14,12 @@ type OptionsColorBalanceProps = {
 };
 
 const options: ModelSelectorOption[] = [
-    { value: 'rio_fp32', label: 'Rio High' },
+    {
+        value: 'rio_fp32',
+        label: 'Rio High',
+        description:
+            "Use this model when your photos look too orange, too blue, or just have an off, unnatural tint, like indoor shots under warm lamps, cloudy outdoor scenes, or pictures taken in mixed lighting conditions where the colors simply don't look natural.",
+    },
     { value: 'rio_fp16', label: 'Rio Std.' },
 ];
 

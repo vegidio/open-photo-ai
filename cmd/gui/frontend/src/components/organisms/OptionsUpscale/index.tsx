@@ -6,7 +6,6 @@ import { ScaleSelector } from '@/components/molecules/ScaleSelector';
 import { useCurrentFile, useFileOperations } from '@/hooks';
 import { Kyoto, Saitama, Tokyo } from '@/operations';
 import { useEnhancementStore } from '@/stores';
-import { os } from '@/utils/constants.ts';
 
 type OptionsUpscaleProps = {
     anchorEl: HTMLElement | null;
@@ -15,11 +14,26 @@ type OptionsUpscaleProps = {
 };
 
 const options: ModelSelectorOption[] = [
-    { value: 'tokyo_fp32', label: 'Tokyo High', disabled: os === 'darwin' },
-    { value: 'tokyo_fp16', label: 'Tokyo Std.', disabled: os === 'darwin' },
-    { value: 'kyoto_fp32', label: 'Kyoto High' },
+    {
+        value: 'tokyo_fp32',
+        label: 'Tokyo High',
+        description:
+            'Use this model when you want a natural upscale without exaggeration. It focuses on preserving the original look and fine structures instead of "inventing" new details, making it ideal when realism and faithfulness matter more than sharpness.',
+    },
+    { value: 'tokyo_fp16', label: 'Tokyo Std.' },
+    {
+        value: 'kyoto_fp32',
+        label: 'Kyoto High',
+        description:
+            'Use this model for real-world photos (people, landscapes, products). It excels at restoring details while handling noise, blur, and compression artifacts. Ideal for practical applications where images are imperfect, and you want visually pleasing, robust results fast.',
+    },
     { value: 'kyoto_fp16', label: 'Kyoto Std.' },
-    { value: 'saitama_fp32', label: 'Saitama High' },
+    {
+        value: 'saitama_fp32',
+        label: 'Saitama High',
+        description:
+            'Use this model for cartoon, drawings, line art, and digital illustrations. It preserves clean lines, flat colors, and stylized shading without introducing photo-like textures. Best when sharp edges and stylistic consistency matter more than realism.',
+    },
     { value: 'saitama_fp16', label: 'Saitama Std.' },
 ];
 
