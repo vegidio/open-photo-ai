@@ -55,14 +55,15 @@ export const useEnhancementStore = create(
                     // Combine existing and new operations
                     const allOps = [...existingOps, ...operations];
 
-                    // Sort operations by prefix priority: fr -> la -> cb -> up
+                    // Sort operations by prefix priority: dn -> fr -> la -> cb -> up
                     const sortedOps = allOps.sort((a, b) => {
                         const getPriority = (op: Operation) => {
-                            if (op.id.startsWith('fr')) return 0;
-                            if (op.id.startsWith('la')) return 1;
-                            if (op.id.startsWith('cb')) return 2;
-                            if (op.id.startsWith('up')) return 3;
-                            return 4; // Any other prefix goes last
+                            if (op.id.startsWith('dn')) return 0;
+                            if (op.id.startsWith('fr')) return 1;
+                            if (op.id.startsWith('la')) return 2;
+                            if (op.id.startsWith('cb')) return 3;
+                            if (op.id.startsWith('up')) return 4;
+                            return 5; // Any other prefix goes last
                         };
 
                         return getPriority(a) - getPriority(b);

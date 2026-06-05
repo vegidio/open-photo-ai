@@ -53,10 +53,7 @@ func warpAffine(img image.Image, transform AffineMatrix, width, height int) imag
 			srcY := m10*float32(x) + m11*float32(y) + m12
 
 			// Bilinear interpolation with reflection padding
-			col := bilinearInterpolate(img, srcX, srcY, bounds, true)
-
-			// Convert to NRGBA - bilinearInterpolate returns color.Color
-			nrgba := col.(color.NRGBA)
+			nrgba := bilinearInterpolate(img, srcX, srcY, bounds, true)
 
 			// Write directly to the pixel buffer
 			i := y*stride + x*4
@@ -71,7 +68,7 @@ func warpAffine(img image.Image, transform AffineMatrix, width, height int) imag
 }
 
 // bilinearInterpolate performs bilinear interpolation at floating point coordinates
-func bilinearInterpolate(img image.Image, x, y float32, bounds image.Rectangle, reflect bool) color.Color {
+func bilinearInterpolate(img image.Image, x, y float32, bounds image.Rectangle, reflect bool) color.NRGBA {
 	// Calculate integer coordinates of the four surrounding pixels
 	x0 := int(math.Floor(float64(x)))
 	y0 := int(math.Floor(float64(y)))

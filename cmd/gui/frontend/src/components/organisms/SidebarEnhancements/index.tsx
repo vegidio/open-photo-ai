@@ -17,6 +17,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
     const hasEnhancement = useEnhancementStore((state) => (file ? state.enhancements.has(file) : false));
     const operations = useFileOperations(file);
     const addEnhancements = useAddEnhancements();
+    const dnModel = useSettingsStore((state) => state.dnModel);
     const frModel = useSettingsStore((state) => state.frModel);
     const laModel = useSettingsStore((state) => state.laModel);
     const cbModel = useSettingsStore((state) => state.cbModel);
@@ -39,6 +40,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
 
             try {
                 const suggestions = await suggestEnhancement(currentFile, {
+                    dn: dnModel,
                     fr: frModel,
                     la: laModel,
                     cb: cbModel,

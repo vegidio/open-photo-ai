@@ -1,4 +1,5 @@
 import {
+    MdBlurOn,
     MdClose,
     MdCropLandscape,
     MdFlip,
@@ -14,6 +15,7 @@ import type { TailwindProps } from '@/utils/TailwindProps.ts';
 export type IconName =
     | 'close'
     | 'info'
+    | 'denoise'
     | 'face_recovery'
     | 'light_adjustment'
     | 'color_balance'
@@ -32,6 +34,8 @@ export const Icon = ({ option, className = '' }: IconProps) => {
             return <MdClose className={className} />;
         case 'info':
             return <MdInfoOutline className={className} />;
+        case 'denoise':
+            return <MdBlurOn className={className} />;
         case 'face_recovery':
             return <MdOutlineFaceRetouchingNatural className={className} />;
         case 'light_adjustment':

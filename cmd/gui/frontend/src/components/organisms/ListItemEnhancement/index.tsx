@@ -3,6 +3,7 @@ import { IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from
 import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
 import { OptionsColorBalance } from '@/components/organisms/OptionsColorBalance';
+import { OptionsDenoise } from '@/components/organisms/OptionsDenoise';
 import { OptionsFaceRecovery } from '@/components/organisms/OptionsFaceRecovery';
 import { OptionsLightAdjustment } from '@/components/organisms/OptionsLightAdjustment';
 import { OptionsUpscale } from '@/components/organisms/OptionsUpscale';
@@ -79,6 +80,9 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
 
 const selectOptionsComponent = (operationId: string) => {
     switch (true) {
+        case operationId.startsWith('dn'):
+            return OptionsDenoise;
+
         case operationId.startsWith('fr'):
             return OptionsFaceRecovery;
 
@@ -97,6 +101,12 @@ const opToEnhancement = (op: Operation, faceText: string): { name: string; info:
     const quality = op.options.precision === 'fp32' ? 'High' : 'Std.';
 
     switch (true) {
+        // Denoise
+        case op.id.startsWith('dn'): {
+            const info = `${titleCase(op.options.name)}, ${quality}`;
+            return { name: 'Denoise', info, icon: <Icon option='denoise' /> };
+        }
+
         // Face Recovery
         case op.id.startsWith('fr'): {
             const info = `${titleCase(op.options.name)}, ${faceText}, ${quality}`;

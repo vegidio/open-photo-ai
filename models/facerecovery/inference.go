@@ -11,6 +11,9 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
+// maskBlurSigma is the Gaussian blur sigma applied to the feathered circular blend mask.
+const maskBlurSigma = 15.0
+
 func RestoreFaces(
 	ctx context.Context,
 	session *ort.DynamicAdvancedSession,
@@ -20,7 +23,12 @@ func RestoreFaces(
 	fidelity float32,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
-	mask := createCircularMask(tileSize, tileSize, 15.0)
+	// Nothing to restore; return the image untouched (also avoids a divide-by-zero in the progress step below).
+	if len(faces) == 0 {
+		return img, nil
+	}
+
+	mask := createCircularMask(tileSize, tileSize, maskBlurSigma)
 
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")

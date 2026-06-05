@@ -2,9 +2,23 @@ import { CancellablePromise } from '@wailsio/runtime';
 import type { File } from '@/bindings/gui/types';
 import { ModelType } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { SuggestEnhancements } from '@/bindings/gui/services/imageservice.ts';
-import { Athens, Kyoto, type Operation, Paris, Rio, Saitama, Santorini, Tokyo } from '@/operations';
+import {
+    Athens,
+    Gothenburg,
+    Kyoto,
+    Malmo,
+    type Operation,
+    Paris,
+    Rio,
+    Saitama,
+    Santorini,
+    Stockholm,
+    Tokyo,
+    Uppsala,
+} from '@/operations';
 
 export type ModelChoices = {
+    dn: string;
     fr: string;
     la: string;
     cb: string;
@@ -27,6 +41,19 @@ export const suggestEnhancement = (file: File, models: ModelChoices) => {
         },
         () => p.cancel(),
     );
+};
+
+export const getDnOp = (model: string) => {
+    switch (model) {
+        case 'gothenburg':
+            return new Gothenburg('fp32');
+        case 'malmo':
+            return new Malmo('fp32');
+        case 'uppsala':
+            return new Uppsala('fp32');
+        default:
+            return new Stockholm('fp32');
+    }
 };
 
 export const getFrOp = (model: string) => {

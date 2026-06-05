@@ -16,6 +16,8 @@ export type SettingsListHandle = {
 export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ className = '' }, ref) => {
     const containerRef = useRef<HTMLUListElement>(null);
 
+    const dnModel = useSettingsStore((state) => state.dnModel);
+    const setDnModel = useSettingsStore((state) => state.setDnModel);
     const frModel = useSettingsStore((state) => state.frModel);
     const setFrModel = useSettingsStore((state) => state.setFrModel);
     const laModel = useSettingsStore((state) => state.laModel);
@@ -44,6 +46,32 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
             <ListSubheader id='enhancements' className='bg-[#2b2b2b] text-[#f2f2f2]'>
                 Enhancements
             </ListSubheader>
+
+            <SettingsItemSelect
+                id='enh_denoise'
+                title='Denoise'
+                description='The default Denoise model to use when adding this enhancement.'
+                items={[
+                    {
+                        value: 'stockholm',
+                        label: 'Stockholm',
+                    },
+                    {
+                        value: 'gothenburg',
+                        label: 'Gothenburg',
+                    },
+                    {
+                        value: 'malmo',
+                        label: 'Malmö',
+                    },
+                    {
+                        value: 'uppsala',
+                        label: 'Uppsala',
+                    },
+                ]}
+                selected={dnModel}
+                onSelect={(value) => setDnModel(value)}
+            />
 
             <SettingsItemSelect
                 id='enh_face'

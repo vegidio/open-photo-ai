@@ -20,6 +20,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const overwrite = useExportStore((state) => state.overwrite);
     const resetKey = useExportStore((state) => state.resetKey);
     const ep = useSettingsStore((state) => state.executionProvider);
+    const dnModel = useSettingsStore((state) => state.dnModel);
     const frModel = useSettingsStore((state) => state.frModel);
     const laModel = useSettingsStore((state) => state.laModel);
     const cbModel = useSettingsStore((state) => state.cbModel);
@@ -56,6 +57,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
                 // We need to check if there are any suitable operations to apply to the file.
                 if (operations.length === 0) {
                     suggestRef.current = suggestEnhancement(file, {
+                        dn: dnModel,
                         fr: frModel,
                         la: laModel,
                         cb: cbModel,

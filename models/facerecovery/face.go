@@ -14,6 +14,14 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
+const (
+	// maskMarginFactor expands the face bbox (by this fraction of its longest side) so the blend window covers the
+	// entire feathered mask region, which extends beyond the face itself.
+	maskMarginFactor = 0.5
+	// minBlendAlpha is the lowest mask alpha still worth blending; below it the contribution is imperceptible.
+	minBlendAlpha = 0.001
+)
+
 func GetFdModel(ctx context.Context, ep types.ExecutionProvider) (types.Model[[]facedetection.Face], error) {
 	fdOp := newyork.Op(types.PrecisionFp32)
 
@@ -95,15 +103,11 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 	result := imaging.Clone(original)
 	origBounds := original.Bounds()
 
-	// Warp the mask to original image coordinates to get proper blur in original space
-	invTransform := invertAffine(transform)
-	warpedMask := warpAffine(mask, invTransform, origBounds.Dx(), origBounds.Dy())
-
 	// Expand bbox significantly to cover the entire feathered region
 	// The blurred mask extends well beyond the face, so we need a large margin
 	bboxWidth := bbox.Max.X - bbox.Min.X
 	bboxHeight := bbox.Max.Y - bbox.Min.Y
-	margin := max(bboxWidth, bboxHeight) * 0.5
+	margin := max(bboxWidth, bboxHeight) * maskMarginFactor
 
 	minX := max(0, int(bbox.Min.X-margin))
 	minY := max(0, int(bbox.Min.Y-margin))
@@ -116,12 +120,15 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 
 	tileSizeFloat := float32(tileSize)
 	restoredBounds := restored.Bounds()
+	maskBounds := mask.Bounds()
 
 	// Get direct access to pixel buffer for faster writes
 	stride := result.Stride
 	pixels := result.Pix
 
-	// Blend the restored face back using forward transform for face, warped mask for alpha
+	// Blend the restored face back using forward transform for both the face and its mask. The mask lives in aligned
+	// (tileSize x tileSize) space, which is exactly where the forward transform maps each destination pixel — so we
+	// sample it directly instead of pre-warping it across the whole image.
 	for y := minY; y < maxY; y++ {
 		// Precompute y-dependent transform components
 		transformXBase := a01*float32(y) + a02
@@ -131,19 +138,18 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 		rowOffset := y * stride
 
 		for x := minX; x < maxX; x++ {
-			// Get alpha from the warped mask
-			_, _, _, ma := warpedMask.At(x, y).RGBA()
-			alpha := float32(ma) / 65535.0
+			// Apply forward transform: original coords -> aligned coords
+			alignedX := a00*float32(x) + transformXBase
+			alignedY := a10*float32(x) + transformYBase
 
-			// Blend even very low alpha values for maximum smoothness
-			if alpha > 0.001 {
-				// Apply forward transform: original coords -> aligned coords
-				alignedX := a00*float32(x) + transformXBase
-				alignedY := a10*float32(x) + transformYBase
+			// Check if within the tileSize x tileSize aligned face
+			if alignedX >= 0 && alignedX < tileSizeFloat &&
+				alignedY >= 0 && alignedY < tileSizeFloat {
+				// Sample the mask directly at aligned coordinates to get the blend alpha
+				alpha := float32(bilinearInterpolate(mask, alignedX, alignedY, maskBounds, false).A) / 255.0
 
-				// Check if within the tileSize x tileSize aligned face
-				if alignedX >= 0 && alignedX < tileSizeFloat &&
-					alignedY >= 0 && alignedY < tileSizeFloat {
+				// Blend even very low alpha values for maximum smoothness
+				if alpha > minBlendAlpha {
 					// Sample from the restored face at aligned coordinates
 					restoredCol := bilinearInterpolate(restored, alignedX, alignedY, restoredBounds, false)
 					originalCol := original.At(x, y)
@@ -221,6 +227,15 @@ func calculateSimilarityTransform(src, dst []facedetection.PointF) AffineMatrix 
 	}
 
 	srcNorm := sXX + sYY
+
+	// Degenerate source (all landmarks coincide) → no scale/rotation can be fit; fall back to a pure translation that
+	// maps the source centroid onto the destination centroid, avoiding a NaN matrix from dividing by zero.
+	if srcNorm < 1e-10 {
+		return AffineMatrix{
+			{1, 0, dstMeanX - srcMeanX},
+			{0, 1, dstMeanY - srcMeanY},
+		}
+	}
 
 	// Compute rotation and scale components
 	a := (dXsX + dYsY) / srcNorm // cos(θ) * scale

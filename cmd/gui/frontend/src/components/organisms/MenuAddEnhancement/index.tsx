@@ -4,7 +4,7 @@ import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
 import { useAddEnhancements, useCurrentFile, useFileOperations } from '@/hooks';
 import { useSettingsStore } from '@/stores';
-import { getCbOp, getFrOp, getLaOp, getUpOp } from '@/utils/enhancement';
+import { getCbOp, getDnOp, getFrOp, getLaOp, getUpOp } from '@/utils/enhancement';
 
 type MenuAddEnhancementProps = {
     anchorEl: HTMLElement | null;
@@ -13,6 +13,7 @@ type MenuAddEnhancementProps = {
 };
 
 export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhancementProps) => {
+    const dnModel = useSettingsStore((state) => state.dnModel);
     const frModel = useSettingsStore((state) => state.frModel);
     const laModel = useSettingsStore((state) => state.laModel);
     const cbModel = useSettingsStore((state) => state.cbModel);
@@ -33,6 +34,12 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
         const scale = mp <= 1_048_576 ? 4 : mp <= 4_194_304 ? 2 : 1;
 
         return [
+            {
+                type: 'dn',
+                icon: <Icon option='denoise' />,
+                name: 'Denoise',
+                op: getDnOp(dnModel),
+            },
             {
                 type: 'fr',
                 icon: <Icon option='face_recovery' />,
@@ -58,7 +65,7 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
                 op: getUpOp(upModel, scale),
             },
         ];
-    }, [frModel, laModel, upModel, currentFile?.Dimensions, cbModel]);
+    }, [dnModel, frModel, laModel, upModel, currentFile?.Dimensions, cbModel]);
 
     return (
         <Menu

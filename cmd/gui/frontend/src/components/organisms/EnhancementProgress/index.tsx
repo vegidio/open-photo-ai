@@ -9,6 +9,8 @@ export const EnhancementProgress = () => {
         switch (true) {
             case id.startsWith('dl'):
                 return 'Downloading';
+            case id.startsWith('dn'):
+                return 'Denoise';
             case id.startsWith('fr'):
                 return 'Face Recovery';
             case id.startsWith('la'):

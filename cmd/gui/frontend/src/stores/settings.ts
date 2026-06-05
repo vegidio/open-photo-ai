@@ -20,6 +20,7 @@ type SettingsStore = {
     processorSelectItems: SelectItem[];
     executionProvider: ExecutionProvider;
 
+    dnModel: string;
     frModel: string;
     laModel: string;
     cbModel: string;
@@ -28,6 +29,7 @@ type SettingsStore = {
     setIsFirstTensorRT: (isFirstRun: boolean) => void;
     setProcessorSelectItems: (supportedEps: SupportedEPs) => void;
     setExecutionProvider: (ep: ExecutionProvider) => void;
+    setDnModel: (model: string) => void;
     setFrModel: (model: string) => void;
     setLaModel: (model: string) => void;
     setCbModel: (model: string) => void;
@@ -43,6 +45,7 @@ const SNAPSHOT_KEYS = [
     'isFirstTensorRT',
     'processorSelectItems',
     'executionProvider',
+    'dnModel',
     'frModel',
     'laModel',
     'cbModel',
@@ -61,6 +64,7 @@ export const useSettingsStore = create(
                 isFirstTensorRT: true,
                 processorSelectItems: [],
                 executionProvider: ExecutionProviderAuto,
+                dnModel: 'stockholm',
                 frModel: 'athens',
                 laModel: 'paris',
                 cbModel: 'rio',
@@ -96,6 +100,12 @@ export const useSettingsStore = create(
                     });
                 },
 
+                setDnModel: (model: string) => {
+                    set((state) => {
+                        state.dnModel = model;
+                    });
+                },
+
                 setFrModel: (model: string) => {
                     set((state) => {
                         state.frModel = model;
@@ -126,6 +136,7 @@ export const useSettingsStore = create(
                         isFirstTensorRT: state.isFirstTensorRT,
                         processorSelectItems: [...state.processorSelectItems],
                         executionProvider: state.executionProvider,
+                        dnModel: state.dnModel,
                         frModel: state.frModel,
                         laModel: state.laModel,
                         cbModel: state.cbModel,

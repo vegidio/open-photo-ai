@@ -8,6 +8,10 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
+	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
+	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
+	"github.com/vegidio/open-photo-ai/models/denoise/uppsala"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
@@ -59,6 +63,16 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 			}
 
 			operations = append(operations, paris.Op(float32(intensity), types.Precision(values[3])))
+
+		// Denoise — "_<name>_<precision>"
+		case "stockholm":
+			operations = append(operations, stockholm.Op(types.Precision(values[2])))
+		case "gothenburg":
+			operations = append(operations, gothenburg.Op(types.Precision(values[2])))
+		case "malmo":
+			operations = append(operations, malmo.Op(types.Precision(values[2])))
+		case "uppsala":
+			operations = append(operations, uppsala.Op(types.Precision(values[2])))
 
 		// Color Balance — "_<name>_<intensity>_<precision>"
 		case "rio":
