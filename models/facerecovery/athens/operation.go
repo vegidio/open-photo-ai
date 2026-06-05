@@ -4,14 +4,14 @@ import (
 	"fmt"
 
 	"github.com/vegidio/open-photo-ai/internal/utils"
-	"github.com/vegidio/open-photo-ai/models/facedetection"
+	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
 type OpFrAthens struct {
 	precision types.Precision
-	faces     []facedetection.Face
+	faces     []detection.Face
 }
 
 func (o OpFrAthens) Id() string {
@@ -43,7 +43,7 @@ var (
 	_ types.CacheKeyer    = (*OpFrAthens)(nil)
 )
 
-func Op(precision types.Precision, faces []facedetection.Face) OpFrAthens {
+func Op(precision types.Precision, faces []detection.Face) OpFrAthens {
 	return OpFrAthens{
 		precision: precision,
 		faces:     faces,

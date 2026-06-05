@@ -1,4 +1,4 @@
-package facedetection
+package detection
 
 // numLandmarks is the number of facial landmark points the RetinaFace model predicts per face
 // (left eye, right eye, nose, left mouth corner, right mouth corner).

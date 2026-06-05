@@ -2,7 +2,7 @@ import { enableMapSet } from 'immer';
 import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
-import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/facedetection';
+import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/detection';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 

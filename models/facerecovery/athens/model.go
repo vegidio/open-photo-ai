@@ -7,7 +7,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal/utils"
-	"github.com/vegidio/open-photo-ai/models/facedetection"
+	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
@@ -27,7 +27,7 @@ type Athens struct {
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Athens, error) {
-	modelFile, err := facerecovery.LoadModel(ctx, operation, ep, onProgress)
+	modelFile, err := facerecovery.LoadModel(ctx, operation, onProgress)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load Athens model")
 	}
@@ -72,7 +72,7 @@ func (m *Athens) Run(
 ) (image.Image, error) {
 	// Faces are detected independently and passed in via params (see facerecovery.ParamFaces); the model no longer runs
 	// face detection itself.
-	faces, _ := params[facerecovery.ParamFaces].([]facedetection.Face)
+	faces, _ := params[facerecovery.ParamFaces].([]detection.Face)
 	if len(faces) == 0 {
 		return img, nil
 	}

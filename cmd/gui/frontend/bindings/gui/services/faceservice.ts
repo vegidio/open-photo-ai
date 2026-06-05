@@ -7,7 +7,7 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as facedetection$0 from "../../github.com/vegidio/open-photo-ai/models/facedetection/models.js";
+import * as detection$0 from "../../github.com/vegidio/open-photo-ai/models/detection/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as types$0 from "../../github.com/vegidio/open-photo-ai/types/models.js";
@@ -24,15 +24,15 @@ import * as types$0 from "../../github.com/vegidio/open-photo-ai/types/models.js
  *   - ep: The execution provider (CPU, CUDA, etc.) to use for inference.
  * 
  * # Returns:
- *   - []facedetection.Face: The faces detected in the image (empty when none are found).
+ *   - []detection.Face: The faces detected in the image (empty when none are found).
  *   - error: An error if the image cannot be loaded or detection fails.
  */
-export function DetectFaces(filePath: string, ep: types$0.ExecutionProvider): $CancellablePromise<facedetection$0.Face[]> {
+export function DetectFaces(filePath: string, ep: types$0.ExecutionProvider): $CancellablePromise<detection$0.Face[]> {
     return $Call.ByID(347646086, filePath, ep).then(($result: any) => {
         return $$createType1($result);
     });
 }
 
 // Private type creation functions
-const $$createType0 = facedetection$0.Face.createFrom;
+const $$createType0 = detection$0.Face.createFrom;
 const $$createType1 = $Create.Array($$createType0);

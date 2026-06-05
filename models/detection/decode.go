@@ -1,4 +1,4 @@
-package facedetection
+package detection
 
 import "math"
 

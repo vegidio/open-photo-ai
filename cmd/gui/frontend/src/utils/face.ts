@@ -1,4 +1,4 @@
-import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/facedetection';
+import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/detection';
 import type { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import type { File } from '@/bindings/gui/types';
 import { DetectFaces } from '@/bindings/gui/services/faceservice.ts';

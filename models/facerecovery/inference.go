@@ -6,7 +6,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal/utils"
-	"github.com/vegidio/open-photo-ai/models/facedetection"
+	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 )
@@ -18,7 +18,7 @@ func RestoreFaces(
 	ctx context.Context,
 	session *ort.DynamicAdvancedSession,
 	img image.Image,
-	faces []facedetection.Face,
+	faces []detection.Face,
 	tileSize int,
 	fidelity float32,
 	onProgress types.InferenceProgress,
@@ -76,7 +76,7 @@ func RestoreFaces(
 func restoreSingleFace(
 	session *ort.DynamicAdvancedSession,
 	img image.Image,
-	face facedetection.Face,
+	face detection.Face,
 	tileSize int,
 	fidelity float32,
 ) (image.Image, AffineMatrix, error) {

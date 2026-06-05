@@ -3,7 +3,7 @@ package types
 type ModelType string
 
 const (
-	ModelTypeFaceDetection   ModelType = "fd"
+	ModelTypeDetection       ModelType = "dt"
 	ModelTypeDenoise         ModelType = "dn"
 	ModelTypeFaceRecovery    ModelType = "fr"
 	ModelTypeLightAdjustment ModelType = "la"

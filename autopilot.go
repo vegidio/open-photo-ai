@@ -41,7 +41,7 @@ func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.Mo
 // region - Private functions
 
 func shouldFaceRecovery(ctx context.Context, input *types.ImageData) bool {
-	model, err := facerecovery.GetFdModel(ctx, types.ExecutionProviderAuto)
+	model, err := facerecovery.GetDtModel(ctx, types.ExecutionProviderAuto)
 	if err != nil {
 		internal.Log().Warn("face detection model unavailable; skipping face-recovery suggestion", "err", err)
 		return false

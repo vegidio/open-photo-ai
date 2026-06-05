@@ -9,8 +9,8 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
 	"github.com/vegidio/open-photo-ai/internal"
-	"github.com/vegidio/open-photo-ai/models/facedetection"
-	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
+	"github.com/vegidio/open-photo-ai/models/detection"
+	"github.com/vegidio/open-photo-ai/models/detection/newyork"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -22,26 +22,26 @@ const (
 	minBlendAlpha = 0.001
 )
 
-func GetFdModel(ctx context.Context, ep types.ExecutionProvider) (types.Model[[]facedetection.Face], error) {
-	fdOp := newyork.Op(types.PrecisionFp32)
+func GetDtModel(ctx context.Context, ep types.ExecutionProvider) (types.Model[[]detection.Face], error) {
+	dtOp := newyork.Op(types.PrecisionFp32)
 
-	if cached, exists := internal.Registry.Get(fdOp.Id()); exists {
-		return cached.(types.Model[[]facedetection.Face]), nil
+	if cached, exists := internal.Registry.Get(dtOp.Id()); exists {
+		return cached.(types.Model[[]detection.Face]), nil
 	}
 
-	model, err := newyork.New(ctx, fdOp, ep, nil)
+	model, err := newyork.New(ctx, dtOp, ep, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create Face Detection model")
 	}
 
-	internal.Registry.Set(fdOp.Id(), model)
+	internal.Registry.Set(dtOp.Id(), model)
 	return model, nil
 }
 
 // alignFace aligns a face image using the provided landmarks and returns the aligned image and the affine
 // transformation matrix.
-func alignFace(img image.Image, landmarks [5]facedetection.PointF, tileSize int) (image.Image, AffineMatrix) {
-	transform := calculateSimilarityTransform(landmarks[:], facedetection.ArcfaceTemplate)
+func alignFace(img image.Image, landmarks [5]detection.PointF, tileSize int) (image.Image, AffineMatrix) {
+	transform := calculateSimilarityTransform(landmarks[:], detection.ArcfaceTemplate)
 	aligned := warpAffine(img, transform, tileSize, tileSize)
 	return aligned, transform
 }
@@ -99,7 +99,7 @@ func createCircularMask(width, height int, blurSigma float64) image.Image {
 }
 
 // blendFace blends a restored face back into the original image using forward affine transform
-func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbox facedetection.RectF, tileSize int) image.Image {
+func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbox detection.RectF, tileSize int) image.Image {
 	result := imaging.Clone(original)
 	origBounds := original.Bounds()
 
@@ -184,7 +184,7 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 //
 // This implementation uses a covariance-based approach that minimizes the sum of squared distances between transformed
 // source points and destination points.
-func calculateSimilarityTransform(src, dst []facedetection.PointF) AffineMatrix {
+func calculateSimilarityTransform(src, dst []detection.PointF) AffineMatrix {
 	numPoints := len(src)
 
 	// Compute means

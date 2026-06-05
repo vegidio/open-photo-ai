@@ -13,7 +13,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
 	"github.com/vegidio/open-photo-ai/models/denoise/uppsala"
-	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
+	"github.com/vegidio/open-photo-ai/models/detection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"

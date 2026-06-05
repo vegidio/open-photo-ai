@@ -1,4 +1,4 @@
-import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/facedetection';
+import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/detection';
 import type { Operation } from '@/operations';
 import { Version } from '@/bindings/gui/services/appservice.ts';
 import { GetArch, GetOS } from '@/bindings/gui/services/osservice.ts';

@@ -7,8 +7,8 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/models/facedetection"
-	"github.com/vegidio/open-photo-ai/models/facedetection/newyork"
+	"github.com/vegidio/open-photo-ai/models/detection"
+	"github.com/vegidio/open-photo-ai/models/detection/newyork"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -37,13 +37,13 @@ func NewFaceService(app *application.App, otel *o11y.Telemetry) *FaceService {
 //   - ep: The execution provider (CPU, CUDA, etc.) to use for inference.
 //
 // # Returns:
-//   - []facedetection.Face: The faces detected in the image (empty when none are found).
+//   - []detection.Face: The faces detected in the image (empty when none are found).
 //   - error: An error if the image cannot be loaded or detection fails.
 func (s *FaceService) DetectFaces(
 	ctx context.Context,
 	filePath string,
 	ep types.ExecutionProvider,
-) ([]facedetection.Face, error) {
+) ([]detection.Face, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
 	}
@@ -55,7 +55,7 @@ func (s *FaceService) DetectFaces(
 		return nil, errors.Wrap(err, "failed to load image")
 	}
 
-	faces, err := opai.Execute[[]facedetection.Face](ctx, inputImage, ep, nil, newyork.Op(types.PrecisionFp32))
+	faces, err := opai.Execute[[]detection.Face](ctx, inputImage, ep, nil, newyork.Op(types.PrecisionFp32))
 	if err != nil {
 		// Cancellation is expected (user navigated away / cancelled) — log it as info, not an error.
 		if errors.Is(err, context.Canceled) {
