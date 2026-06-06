@@ -4,7 +4,7 @@ import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
 import { useAddEnhancements, useCurrentFile, useFileOperations } from '@/hooks';
 import { useSettingsStore } from '@/stores';
-import { getCbOp, getDnOp, getFrOp, getLaOp, getUpOp } from '@/utils/enhancement';
+import { getCbOp, getDnOp, getFrOp, getLaOp, getShOp, getUpOp } from '@/utils/enhancement';
 
 type MenuAddEnhancementProps = {
     anchorEl: HTMLElement | null;
@@ -18,6 +18,7 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
     const laModel = useSettingsStore((state) => state.laModel);
     const cbModel = useSettingsStore((state) => state.cbModel);
     const upModel = useSettingsStore((state) => state.upModel);
+    const shModel = useSettingsStore((state) => state.shModel);
 
     const currentFile = useCurrentFile();
     const operations = useFileOperations(currentFile);
@@ -64,8 +65,14 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
                 name: 'Upscale',
                 op: getUpOp(upModel, scale),
             },
+            {
+                type: 'sh',
+                icon: <Icon option='sharpen' />,
+                name: 'Sharpen',
+                op: getShOp(shModel),
+            },
         ];
-    }, [dnModel, frModel, laModel, upModel, currentFile?.Dimensions, cbModel]);
+    }, [dnModel, frModel, laModel, upModel, currentFile?.Dimensions, cbModel, shModel]);
 
     return (
         <Menu

@@ -25,6 +25,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const laModel = useSettingsStore((state) => state.laModel);
     const cbModel = useSettingsStore((state) => state.cbModel);
     const upModel = useSettingsStore((state) => state.upModel);
+    const shModel = useSettingsStore((state) => state.shModel);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | null>(null);
@@ -62,6 +63,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
                         la: laModel,
                         cb: cbModel,
                         up: upModel,
+                        sh: shModel,
                     });
 
                     const suggestions = await suggestRef.current;

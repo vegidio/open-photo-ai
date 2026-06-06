@@ -19,6 +19,8 @@ export const EnhancementProgress = () => {
                 return 'Color Balance';
             case id.startsWith('up'):
                 return 'Upscale';
+            case id.startsWith('sh'):
+                return 'Sharpen';
             default:
                 return 'Enhancing';
         }

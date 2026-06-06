@@ -6,6 +6,7 @@ import { OptionsColorBalance } from '@/components/organisms/OptionsColorBalance'
 import { OptionsDenoise } from '@/components/organisms/OptionsDenoise';
 import { OptionsFaceRecovery } from '@/components/organisms/OptionsFaceRecovery';
 import { OptionsLightAdjustment } from '@/components/organisms/OptionsLightAdjustment';
+import { OptionsSharpen } from '@/components/organisms/OptionsSharpen';
 import { OptionsUpscale } from '@/components/organisms/OptionsUpscale';
 import { useCurrentFile, useFileDisabledFaces, useFileFaces } from '@/hooks';
 import { useEnhancementStore } from '@/stores';
@@ -94,6 +95,9 @@ const selectOptionsComponent = (operationId: string) => {
 
         case operationId.startsWith('up'):
             return OptionsUpscale;
+
+        case operationId.startsWith('sh'):
+            return OptionsSharpen;
     }
 };
 
@@ -132,6 +136,12 @@ const opToEnhancement = (op: Operation, faceText: string): { name: string; info:
             const scale = parseFloat(parseFloat(op.options.scale).toFixed(3));
             const info = `${titleCase(op.options.name)}, ${scale}x, ${quality}`;
             return { name: 'Upscale', info, icon: <Icon option='upscale' /> };
+        }
+
+        // Sharpen
+        case op.id.startsWith('sh'): {
+            const info = `${titleCase(op.options.name)}, ${quality}`;
+            return { name: 'Sharpen', info, icon: <Icon option='sharpen' /> };
         }
     }
 

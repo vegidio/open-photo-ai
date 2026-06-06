@@ -91,4 +91,5 @@ export enum ModelType {
     ModelTypeLightAdjustment = "la",
     ModelTypeColorBalance = "cb",
     ModelTypeUpscale = "up",
+    ModelTypeSharpen = "sh",
 };

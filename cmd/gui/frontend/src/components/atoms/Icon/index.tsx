@@ -1,5 +1,6 @@
 import {
     MdBlurOn,
+    MdChangeHistory,
     MdClose,
     MdCropLandscape,
     MdFlip,
@@ -20,6 +21,7 @@ export type IconName =
     | 'light_adjustment'
     | 'color_balance'
     | 'upscale'
+    | 'sharpen'
     | 'preview_full'
     | 'preview_side'
     | 'preview_split';
@@ -44,6 +46,8 @@ export const Icon = ({ option, className = '' }: IconProps) => {
             return <MdOutlinePalette className={className} />;
         case 'upscale':
             return <MdOpenInFull className={className} />;
+        case 'sharpen':
+            return <MdChangeHistory className={className} />;
         case 'preview_full':
             return <MdCropLandscape className={className} />;
         case 'preview_side':

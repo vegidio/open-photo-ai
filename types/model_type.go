@@ -9,4 +9,5 @@ const (
 	ModelTypeLightAdjustment ModelType = "la"
 	ModelTypeColorBalance    ModelType = "cb"
 	ModelTypeUpscale         ModelType = "up"
+	ModelTypeSharpen         ModelType = "sh"
 )

@@ -9,14 +9,14 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
-	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
-	"github.com/vegidio/open-photo-ai/models/denoise/uppsala"
 	"github.com/vegidio/open-photo-ai/models/detection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
+	"github.com/vegidio/open-photo-ai/models/sharpen/moscow"
+	"github.com/vegidio/open-photo-ai/models/sharpen/novgorod"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/models/upscale/saitama"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
@@ -244,12 +244,14 @@ func selectModel(
 	// Denoise
 	case strings.HasPrefix(operation.Id(), "dn_stockholm"):
 		model, err = stockholm.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "dn_gothenburg"):
-		model, err = gothenburg.New(ctx, operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "dn_malmo"):
 		model, err = malmo.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "dn_uppsala"):
-		model, err = uppsala.New(ctx, operation, ep, onProgress)
+
+	// Sharpen
+	case strings.HasPrefix(operation.Id(), "sh_moscow"):
+		model, err = moscow.New(ctx, operation, ep, onProgress)
+	case strings.HasPrefix(operation.Id(), "sh_novgorod"):
+		model, err = novgorod.New(ctx, operation, ep, onProgress)
 
 	default:
 		internal.Log().Warn("no model found for operation", "op", operation.Id())

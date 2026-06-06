@@ -25,6 +25,7 @@ type SettingsStore = {
     laModel: string;
     cbModel: string;
     upModel: string;
+    shModel: string;
 
     setIsFirstTensorRT: (isFirstRun: boolean) => void;
     setProcessorSelectItems: (supportedEps: SupportedEPs) => void;
@@ -34,6 +35,7 @@ type SettingsStore = {
     setLaModel: (model: string) => void;
     setCbModel: (model: string) => void;
     setUpModel: (model: string) => void;
+    setShModel: (model: string) => void;
 
     saveSnapshot: () => void;
     restoreSnapshot: () => void;
@@ -50,6 +52,7 @@ const SNAPSHOT_KEYS = [
     'laModel',
     'cbModel',
     'upModel',
+    'shModel',
 ] as const satisfies readonly (keyof SettingsStore)[];
 
 type SnapshotKey = (typeof SNAPSHOT_KEYS)[number];
@@ -69,6 +72,7 @@ export const useSettingsStore = create(
                 laModel: 'paris',
                 cbModel: 'rio',
                 upModel: 'kyoto',
+                shModel: 'moscow',
 
                 setIsFirstTensorRT: (isFirst: boolean) => {
                     set((state) => {
@@ -130,6 +134,12 @@ export const useSettingsStore = create(
                     });
                 },
 
+                setShModel: (model: string) => {
+                    set((state) => {
+                        state.shModel = model;
+                    });
+                },
+
                 saveSnapshot: () => {
                     const state = get();
                     snapshot = {
@@ -141,6 +151,7 @@ export const useSettingsStore = create(
                         laModel: state.laModel,
                         cbModel: state.cbModel,
                         upModel: state.upModel,
+                        shModel: state.shModel,
                     };
                 },
 

@@ -22,6 +22,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
     const laModel = useSettingsStore((state) => state.laModel);
     const cbModel = useSettingsStore((state) => state.cbModel);
     const upModel = useSettingsStore((state) => state.upModel);
+    const shModel = useSettingsStore((state) => state.shModel);
 
     const [isAnalysing, setIsAnalysing] = useState(false);
 
@@ -45,6 +46,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
                     la: laModel,
                     cb: cbModel,
                     up: upModel,
+                    sh: shModel,
                 });
 
                 await addEnhancements(currentFile, suggestions);

@@ -26,6 +26,8 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
     const setCbModel = useSettingsStore((state) => state.setCbModel);
     const upModel = useSettingsStore((state) => state.upModel);
     const setUpModel = useSettingsStore((state) => state.setUpModel);
+    const shModel = useSettingsStore((state) => state.shModel);
+    const setShModel = useSettingsStore((state) => state.setShModel);
 
     useImperativeHandle(ref, () => ({
         scrollToSection: (itemId: string) => {
@@ -57,16 +59,8 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
                         label: 'Stockholm',
                     },
                     {
-                        value: 'gothenburg',
-                        label: 'Gothenburg',
-                    },
-                    {
                         value: 'malmo',
                         label: 'Malmö',
-                    },
-                    {
-                        value: 'uppsala',
-                        label: 'Uppsala',
                     },
                 ]}
                 selected={dnModel}
@@ -140,6 +134,24 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
                 ]}
                 selected={upModel}
                 onSelect={(value) => setUpModel(value)}
+            />
+
+            <SettingsItemSelect
+                id='enh_sharpen'
+                title='Sharpen'
+                description='The default Sharpen model to use when adding this enhancement.'
+                items={[
+                    {
+                        value: 'moscow',
+                        label: 'Moscow',
+                    },
+                    {
+                        value: 'novgorod',
+                        label: 'Novgorod',
+                    },
+                ]}
+                selected={shModel}
+                onSelect={(value) => setShModel(value)}
             />
         </List>
     );

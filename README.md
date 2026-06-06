@@ -66,13 +66,6 @@ Coming soon...
 
 All enhancements available here come from open-source AI models that were adapted and converted to work on this project. The models and the credits to the original works can be found in the Hugging Face repository [vegidio/open-photo-ai](https://huggingface.co/vegidio/open-photo-ai):
 
-### Denoise
-
-- **Stockholm**: use for photos taken in challenging real-world conditions: low-light smartphone shots, high-ISO camera images, or surveillance footage. It handles the complex, signal-dependent noise patterns that actual sensors produce.
-- **Gothenburg**: use for portraits or close-up photos where the background (or foreground) is unintentionally out of focus. It recovers sharpness lost due to a narrow depth of field or an incorrectly set focus point on the camera.
-- **Malmö**: use when blur comes from camera shake or fast-moving subjects: handheld long exposures, action sports, or any scene where something moved during the shot. It reconstructs the sharp image behind the streak.
-- **Uppsala**: use for outdoor images degraded by rain streaks. Whether it's dashcam footage in a storm or outdoor surveillance in bad weather, it strips away rain lines while preserving the underlying scene details.
-
 ### Face Recovery
 
 - **Athens**: use when identity fidelity matters most. This model lets you preserve facial structure while restoring details, even on heavily degraded faces. Best when you want restoration without changing the person.
@@ -95,6 +88,16 @@ All enhancements available here come from open-source AI models that were adapte
 - **Saitama**: use for cartoon, drawings, line art, and digital illustrations. It preserves clean lines, flat colors, and stylized shading without introducing photo-like textures. Best when sharp edges and stylistic consistency matter more than realism.
 
 *Verdict*: start with **Tokyo**, then try **Kyoto** if the result looks too soft.
+
+### Denoise
+
+- **Stockholm**: use for photos taken in challenging real-world conditions: low-light smartphone shots, high-ISO camera images, or surveillance footage. It handles the complex, signal-dependent noise patterns that actual sensors produce.
+- **Malmö**: use for outdoor images degraded by rain streaks. Whether it's dashcam footage in a storm or outdoor surveillance in bad weather, it strips away rain lines while preserving the underlying scene details.
+
+### Sharpen
+
+- **Moscow**: use for portraits or close-up photos where the background (or foreground) is unintentionally out of focus. It recovers sharpness lost due to a narrow depth of field or an incorrectly set focus point on the camera.
+- **Novgorod**: use when blur comes from camera shake or fast-moving subjects: handheld long exposures, action sports, or any scene where something moved during the shot. It reconstructs the sharp image behind the streak.
 
 ## 🛣️ Roadmap
 
