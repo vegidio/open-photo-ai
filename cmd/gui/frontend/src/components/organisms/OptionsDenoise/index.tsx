@@ -1,7 +1,7 @@
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
 import { useCurrentFile, useFileOperations } from '@/hooks';
-import { Malmo, Stockholm } from '@/operations';
+import { Gothenburg, Malmo, Stockholm } from '@/operations';
 import { useEnhancementStore } from '@/stores';
 
 type OptionsDenoiseProps = {
@@ -13,16 +13,23 @@ type OptionsDenoiseProps = {
 const options: ModelSelectorOption[] = [
     {
         value: 'stockholm_fp32',
-        label: 'Stockholm Hg.',
+        label: 'Stockholm High',
         description:
-            'Use this model for photos taken in challenging real-world conditions: low-light smartphone shots, high-ISO camera images, or surveillance footage. It handles the complex, signal-dependent noise patterns that actual sensors produce.',
+            "Use this model when you need fast, high-quality denoising of real sensor noise and computational efficiency matters. It's a good choice when throughput and resource constraints are real concerns, keeping inference times low without sacrificing quality.",
     },
     { value: 'stockholm_fp16', label: 'Stockholm Std.' },
+    {
+        value: 'gothenburg_fp32',
+        label: 'Gothenburg High',
+        description:
+            'Use this model when your photos contain real-world sensor noise, the kind produced by shooting in low light or at high ISO with a smartphone or DSLR. It handles complex noise patterns that cameras produce, making it the right choice for photography.',
+    },
+    { value: 'gothenburg_fp16', label: 'Gothenburg Std.' },
     {
         value: 'malmo_fp32',
         label: 'Malmö High',
         description:
-            "Use this model for outdoor images degraded by rain streaks. Whether it's dashcam footage in a storm or outdoor surveillance in bad weather, it strips away rain lines while preserving the underlying scene details.",
+            'Use this model to remove rain streaks from outdoor images, whether captured in light drizzle or heavy downpour. It handles rain of varying scale, density, and direction, restoring fine details behind streaks. A good choice when weather artifacts obscure the scene.',
     },
     { value: 'malmo_fp16', label: 'Malmö Std.' },
 ];
@@ -44,6 +51,10 @@ export const OptionsDenoise = ({ anchorEl, open, onClose }: OptionsDenoiseProps)
         switch (values[0]) {
             case 'malmo':
                 replaceEnhancement(file, new Malmo(values[1]));
+                break;
+
+            case 'gothenburg':
+                replaceEnhancement(file, new Gothenburg(values[1]));
                 break;
 
             default:

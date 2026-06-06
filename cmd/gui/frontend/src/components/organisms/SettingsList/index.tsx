@@ -62,6 +62,10 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
                         value: 'malmo',
                         label: 'Malmö',
                     },
+                    {
+                        value: 'gothenburg',
+                        label: 'Gothenburg',
+                    },
                 ]}
                 selected={dnModel}
                 onSelect={(value) => setDnModel(value)}
@@ -114,6 +118,28 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
             />
 
             <SettingsItemSelect
+                id='enh_sharpen'
+                title='Sharpen'
+                description='The default Sharpen model to use when adding this enhancement.'
+                items={[
+                    {
+                        value: 'moscow',
+                        label: 'Moscow',
+                    },
+                    {
+                        value: 'novgorod',
+                        label: 'Novgorod',
+                    },
+                    {
+                        value: 'petersburg',
+                        label: 'St. Petersburg',
+                    },
+                ]}
+                selected={shModel}
+                onSelect={(value) => setShModel(value)}
+            />
+
+            <SettingsItemSelect
                 id='enh_upscale'
                 title='Upscale'
                 description='The default Upscale model to use when adding this enhancement.'
@@ -134,24 +160,6 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
                 ]}
                 selected={upModel}
                 onSelect={(value) => setUpModel(value)}
-            />
-
-            <SettingsItemSelect
-                id='enh_sharpen'
-                title='Sharpen'
-                description='The default Sharpen model to use when adding this enhancement.'
-                items={[
-                    {
-                        value: 'moscow',
-                        label: 'Moscow',
-                    },
-                    {
-                        value: 'novgorod',
-                        label: 'Novgorod',
-                    },
-                ]}
-                selected={shModel}
-                onSelect={(value) => setShModel(value)}
             />
         </List>
     );

@@ -4,12 +4,14 @@ import { ModelType } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { SuggestEnhancements } from '@/bindings/gui/services/imageservice.ts';
 import {
     Athens,
+    Gothenburg,
     Kyoto,
     Malmo,
     Moscow,
     Novgorod,
     type Operation,
     Paris,
+    Petersburg,
     Rio,
     Saitama,
     Santorini,
@@ -48,6 +50,8 @@ export const getDnOp = (model: string) => {
     switch (model) {
         case 'malmo':
             return new Malmo('fp32');
+        case 'gothenburg':
+            return new Gothenburg('fp32');
         default:
             return new Stockholm('fp32');
     }
@@ -57,6 +61,8 @@ export const getShOp = (model: string) => {
     switch (model) {
         case 'novgorod':
             return new Novgorod('fp32');
+        case 'petersburg':
+            return new Petersburg('fp32');
         default:
             return new Moscow('fp32');
     }

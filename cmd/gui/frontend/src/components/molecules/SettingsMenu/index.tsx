@@ -40,9 +40,11 @@ export const SettingsMenu = ({ className = '', onItemClick }: SettingsMenuProps)
                     },
                 }}
             >
+                <TreeItem itemId='enh_denoise' label='Denoise' />
                 <TreeItem itemId='enh_face' label='Face Recovery' />
                 <TreeItem itemId='enh_light' label='Light Adjustment' />
                 <TreeItem itemId='enh_color' label='Color Balance' />
+                <TreeItem itemId='enh_sharpen' label='Sharpen' />
                 <TreeItem itemId='enh_upscale' label='Upscale' />
             </TreeItem>
         </SimpleTreeView>

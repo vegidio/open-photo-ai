@@ -1,7 +1,7 @@
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
 import { useCurrentFile, useFileOperations } from '@/hooks';
-import { Moscow, Novgorod } from '@/operations';
+import { Moscow, Novgorod, Petersburg } from '@/operations';
 import { useEnhancementStore } from '@/stores';
 
 type OptionsSharpenProps = {
@@ -15,14 +15,21 @@ const options: ModelSelectorOption[] = [
         value: 'moscow_fp32',
         label: 'Moscow High',
         description:
-            'Use this model for portraits or close-up photos where the background (or foreground) is unintentionally out of focus. It recovers sharpness lost due to a narrow depth of field or an incorrectly set focus point on the camera.',
+            'Use this model when blur comes from the camera being out of focus rather than from movement — e.g. portraits with a blurry background or foreground, macro photography gone soft, or any scene where a lens failed to focus on the right plane.',
     },
     { value: 'moscow_fp16', label: 'Moscow Std.' },
+    {
+        value: 'petersburg_fp32',
+        label: 'Petersburg High',
+        description:
+            "Use this model when you need fast, lightweight motion deblurring and efficiency matters more than squeezing out every last bit of quality. It's well-suited for action footage and handheld camera shake, and it's a solid choice when running on limited hardware.",
+    },
+    { value: 'petersburg_fp16', label: 'Petersburg Std.' },
     {
         value: 'novgorod_fp32',
         label: 'Novgorod High',
         description:
-            'Use this model when blur comes from camera shake or fast-moving subjects: handheld long exposures, action sports, or any scene where something moved during the shot. It reconstructs the sharp image behind the streak.',
+            'Use this model when blur is caused by camera shake or fast-moving subjects — e.g. sports, handheld shots in low light, or any photo where something moved during exposure. It prioritizes maximum restoration quality over speed; good when results matter most.',
     },
     { value: 'novgorod_fp16', label: 'Novgorod Std.' },
 ];
@@ -44,6 +51,10 @@ export const OptionsSharpen = ({ anchorEl, open, onClose }: OptionsSharpenProps)
         switch (values[0]) {
             case 'novgorod':
                 replaceEnhancement(file, new Novgorod(values[1]));
+                break;
+
+            case 'petersburg':
+                replaceEnhancement(file, new Petersburg(values[1]));
                 break;
 
             default:

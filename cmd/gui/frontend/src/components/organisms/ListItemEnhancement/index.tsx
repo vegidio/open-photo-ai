@@ -93,11 +93,11 @@ const selectOptionsComponent = (operationId: string) => {
         case operationId.startsWith('cb'):
             return OptionsColorBalance;
 
-        case operationId.startsWith('up'):
-            return OptionsUpscale;
-
         case operationId.startsWith('sh'):
             return OptionsSharpen;
+
+        case operationId.startsWith('up'):
+            return OptionsUpscale;
     }
 };
 

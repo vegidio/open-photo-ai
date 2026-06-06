@@ -36,7 +36,7 @@ export const OptionsPopover = ({
             className='pointer-events-none'
             slotProps={{
                 paper: {
-                    className: 'w-[272px] -ml-4 pointer-events-auto',
+                    className: 'w-72 -ml-4 pointer-events-auto',
                 },
             }}
         >

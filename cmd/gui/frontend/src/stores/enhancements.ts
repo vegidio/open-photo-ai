@@ -62,8 +62,8 @@ export const useEnhancementStore = create(
                             if (op.id.startsWith('fr')) return 1;
                             if (op.id.startsWith('la')) return 2;
                             if (op.id.startsWith('cb')) return 3;
-                            if (op.id.startsWith('up')) return 4;
-                            if (op.id.startsWith('sh')) return 5;
+                            if (op.id.startsWith('sh')) return 4;
+                            if (op.id.startsWith('up')) return 5;
                             return 6; // Any other prefix goes last
                         };
 

@@ -45,8 +45,8 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
                     fr: frModel,
                     la: laModel,
                     cb: cbModel,
-                    up: upModel,
                     sh: shModel,
+                    up: upModel,
                 });
 
                 await addEnhancements(currentFile, suggestions);

@@ -12,7 +12,7 @@ type OpDtNewYork struct {
 }
 
 func (o OpDtNewYork) Id() string {
-	return fmt.Sprintf("fd_newyork_%s", o.precision)
+	return fmt.Sprintf("dt_newyork_%s", o.precision)
 }
 
 func (o OpDtNewYork) Precision() types.Precision {

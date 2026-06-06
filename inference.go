@@ -9,6 +9,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
 	"github.com/vegidio/open-photo-ai/models/detection/newyork"
@@ -17,6 +18,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
 	"github.com/vegidio/open-photo-ai/models/sharpen/moscow"
 	"github.com/vegidio/open-photo-ai/models/sharpen/novgorod"
+	"github.com/vegidio/open-photo-ai/models/sharpen/petersburg"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
 	"github.com/vegidio/open-photo-ai/models/upscale/saitama"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
@@ -216,7 +218,7 @@ func selectModel(
 
 	switch {
 	// Face Detection
-	case strings.HasPrefix(operation.Id(), "fd_newyork"):
+	case strings.HasPrefix(operation.Id(), "dt_newyork"):
 		model, err = newyork.New(ctx, operation, ep, onProgress)
 
 	// Face Recovery
@@ -246,12 +248,16 @@ func selectModel(
 		model, err = stockholm.New(ctx, operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "dn_malmo"):
 		model, err = malmo.New(ctx, operation, ep, onProgress)
+	case strings.HasPrefix(operation.Id(), "dn_gothenburg"):
+		model, err = gothenburg.New(ctx, operation, ep, onProgress)
 
 	// Sharpen
 	case strings.HasPrefix(operation.Id(), "sh_moscow"):
 		model, err = moscow.New(ctx, operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "sh_novgorod"):
 		model, err = novgorod.New(ctx, operation, ep, onProgress)
+	case strings.HasPrefix(operation.Id(), "sh_petersburg"):
+		model, err = petersburg.New(ctx, operation, ep, onProgress)
 
 	default:
 		internal.Log().Warn("no model found for operation", "op", operation.Id())

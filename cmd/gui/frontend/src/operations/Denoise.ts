@@ -19,3 +19,13 @@ export class Malmo implements Operation {
         this.options = { name: 'malmo', precision };
     }
 }
+
+export class Gothenburg implements Operation {
+    id = '';
+    options: Record<string, string> = {};
+
+    constructor(precision: string) {
+        this.id = `dn_gothenburg_${precision}`;
+        this.options = { name: 'gothenburg', precision };
+    }
+}

@@ -19,3 +19,13 @@ export class Novgorod implements Operation {
         this.options = { name: 'novgorod', precision };
     }
 }
+
+export class Petersburg implements Operation {
+    id = '';
+    options: Record<string, string> = {};
+
+    constructor(precision: string) {
+        this.id = `sh_petersburg_${precision}`;
+        this.options = { name: 'petersburg', precision };
+    }
+}

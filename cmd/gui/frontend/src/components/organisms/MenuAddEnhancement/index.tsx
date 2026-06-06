@@ -60,16 +60,16 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
                 op: getCbOp(cbModel),
             },
             {
-                type: 'up',
-                icon: <Icon option='upscale' />,
-                name: 'Upscale',
-                op: getUpOp(upModel, scale),
-            },
-            {
                 type: 'sh',
                 icon: <Icon option='sharpen' />,
                 name: 'Sharpen',
                 op: getShOp(shModel),
+            },
+            {
+                type: 'up',
+                icon: <Icon option='upscale' />,
+                name: 'Upscale',
+                op: getUpOp(upModel, scale),
             },
         ];
     }, [dnModel, frModel, laModel, upModel, currentFile?.Dimensions, cbModel, shModel]);
