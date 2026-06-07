@@ -7,7 +7,7 @@ require (
 	github.com/cockroachdb/errors v1.12.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.52.0
-	github.com/vegidio/avif-go v0.0.0-20260201182506-481b88104109
+	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5
 	github.com/vegidio/go-sak v0.0.0-20260421203251-f2842cdc8299
 	github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84
 	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6

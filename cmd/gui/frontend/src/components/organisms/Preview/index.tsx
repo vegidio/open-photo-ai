@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CancelError, type CancellablePromise } from '@wailsio/runtime';
+import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { EnhancementProgress } from '@/components/organisms/EnhancementProgress';
 import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
@@ -17,6 +17,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
     // FileListStore
     const filesLength = useFileStore((state) => state.files.length);
+    const addFiles = useFileStore((state) => state.addFiles);
     const currentFile = useCurrentFile();
 
     // ImageStore
@@ -83,9 +84,20 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         if (filesLength > 1) setOpen(true);
     }, [filesLength, setOpen]);
 
+    // Native file drops (any state) arrive via the Wails `app:FilesDropped` event; the drop zone is the
+    // always-mounted `#preview` div below, so this works whether or not an image is already loaded.
+    useEffect(() => {
+        Events.On('app:FilesDropped', (event) => {
+            addFiles(event.data);
+        });
+
+        return () => Events.Off('app:FilesDropped');
+    }, [addFiles]);
+
     return (
         <div
             id='preview'
+            data-file-drop-target
             className={`flex items-center justify-center bg-[#171717] [background-image:radial-gradient(#383838_1px,transparent_1px)] [background-size:3rem_3rem] ${className}`}
         >
             {isRunning && <EnhancementProgress />}

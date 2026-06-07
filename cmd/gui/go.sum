@@ -158,8 +158,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/ulikunitz/xz v0.5.15 h1:9DNdB5s+SgV3bQ2ApL10xRc35ck0DuIX/isZvIk+ubY=
 github.com/ulikunitz/xz v0.5.15/go.mod h1:nbz6k7qbPmH4IRqmfOplQw/tblSgqTqBwxkY0oWt/14=
-github.com/vegidio/avif-go v0.0.0-20260201182506-481b88104109 h1:wSaWWTqFdViGLGTZLP/nHqeTLmca/3Ypnr+60dJxME8=
-github.com/vegidio/avif-go v0.0.0-20260201182506-481b88104109/go.mod h1:/ITCFP53XCH3zFZZLLtPm3jRqsv5CMgefZl4UCuP1rs=
+github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5 h1:/C54x/gcnmppkzsmKcNOHtqDMSIQw+88OMkDe31mqVw=
+github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5/go.mod h1:/ITCFP53XCH3zFZZLLtPm3jRqsv5CMgefZl4UCuP1rs=
 github.com/vegidio/go-sak v0.0.0-20260421203251-f2842cdc8299 h1:pz48FYY8+gCVlEtaxQo0y4n2wrbxm8T548Y+0HEfKis=
 github.com/vegidio/go-sak v0.0.0-20260421203251-f2842cdc8299/go.mod h1:/sbWWkQX0f/fURTmVsktn51ChnWWrRWEK0SuyD3I1ZA=
 github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84 h1:5y7NDPlUO5tcWvKkbBxCMXbRzY6x6wBMKvg0NGP2ML4=

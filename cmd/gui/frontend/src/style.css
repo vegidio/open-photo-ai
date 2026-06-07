@@ -25,3 +25,13 @@
 .scrollbar-thin:hover {
     --scrollbar-thumb: #555555;
 }
+
+/*
+ * The Wails runtime toggles `file-drop-target-active` on the element flagged with `data-file-drop-target` while a
+ * file is dragged over it. Render the drop-zone border from this class so the hover state is driven by the runtime
+ * (robust against the spurious `dragleave` events native drag handling emits on macOS/WebKitGTK).
+ */
+.file-drop-target-active {
+    outline: 3px solid #3b82f6; /* matches Tailwind border-blue-500 */
+    outline-offset: -3px; /* draw inside the box so it never shifts layout */
+}
