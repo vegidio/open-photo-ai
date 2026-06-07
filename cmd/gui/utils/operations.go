@@ -67,7 +67,7 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 			operations = append(operations, paris.Op(float32(intensity), types.Precision(values[3])))
 
 		// Denoise — "_<name>_<strength>_<precision>" (older IDs without a strength segment default to 1.0)
-		case "stockholm", "malmo", "gothenburg":
+		case "stockholm", "gothenburg", "malmo":
 			strength, precision, err := parseStrength(values)
 			if err != nil {
 				return nil, errors.Wrapf(err, "invalid strength in %q", opId)
@@ -76,19 +76,27 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 			switch name {
 			case "stockholm":
 				operations = append(operations, stockholm.Op(strength, precision))
-			case "malmo":
-				operations = append(operations, malmo.Op(strength, precision))
 			case "gothenburg":
 				operations = append(operations, gothenburg.Op(strength, precision))
+			case "malmo":
+				operations = append(operations, malmo.Op(strength, precision))
 			}
 
-		// Sharpen — "_<name>_<precision>"
-		case "moscow":
-			operations = append(operations, moscow.Op(types.Precision(values[2])))
-		case "petersburg":
-			operations = append(operations, petersburg.Op(types.Precision(values[2])))
-		case "novgorod":
-			operations = append(operations, novgorod.Op(types.Precision(values[2])))
+		// Sharpen — "_<name>_<strength>_<precision>" (older IDs without a strength segment default to 1.0)
+		case "moscow", "petersburg", "novgorod":
+			strength, precision, err := parseStrength(values)
+			if err != nil {
+				return nil, errors.Wrapf(err, "invalid strength in %q", opId)
+			}
+
+			switch name {
+			case "moscow":
+				operations = append(operations, moscow.Op(strength, precision))
+			case "petersburg":
+				operations = append(operations, petersburg.Op(strength, precision))
+			case "novgorod":
+				operations = append(operations, novgorod.Op(strength, precision))
+			}
 
 		// Color Balance — "_<name>_<intensity>_<precision>"
 		case "rio":

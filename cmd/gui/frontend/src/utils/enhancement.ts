@@ -60,11 +60,11 @@ export const getDnOp = (model: string) => {
 export const getShOp = (model: string) => {
     switch (model) {
         case 'novgorod':
-            return new Novgorod('fp32');
+            return new Novgorod(1, 'fp32');
         case 'petersburg':
-            return new Petersburg('fp32');
+            return new Petersburg(1, 'fp32');
         default:
-            return new Moscow('fp32');
+            return new Moscow(1, 'fp32');
     }
 };
 

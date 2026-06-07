@@ -5,6 +5,7 @@ import (
 	"image"
 
 	"github.com/cockroachdb/errors"
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/sharpen"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
@@ -47,10 +48,17 @@ func (m *Novgorod) Name() string {
 func (m *Novgorod) Run(
 	ctx context.Context,
 	img image.Image,
-	_ map[string]any,
+	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
-	return sharpen.RunPipeline(ctx, m.session, img, onProgress)
+	result, err := sharpen.RunPipeline(ctx, m.session, img, onProgress)
+	if err != nil {
+		return nil, err
+	}
+
+	// Amplify (or soften) the sharpening by extrapolating the residual at the per-run intensity; intensity 1.0 returns
+	// the model output unchanged.
+	return utils.BlendWithIntensity(img, result, utils.IntensityFromParams(params)), nil
 }
 
 func (m *Novgorod) Destroy() {

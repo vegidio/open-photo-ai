@@ -8,6 +8,7 @@ import (
 )
 
 type OpShMoscow struct {
+	intensity float32
 	precision types.Precision
 }
 
@@ -23,10 +24,25 @@ func (o OpShMoscow) Hash() string {
 	return utils.GetModelHash(o.Id())
 }
 
-var _ types.Operation = (*OpShMoscow)(nil)
+// Params carries the per-run sharpen intensity, which is not part of the operation identity.
+func (o OpShMoscow) Params() map[string]any {
+	return map[string]any{utils.ParamIntensity: o.intensity}
+}
 
-func Op(precision types.Precision) OpShMoscow {
+// CacheKey folds the intensity into the image cache key so different intensities don't collide.
+func (o OpShMoscow) CacheKey() string {
+	return utils.IntensityCacheKey(o.intensity)
+}
+
+var (
+	_ types.Operation     = (*OpShMoscow)(nil)
+	_ types.Parameterized = (*OpShMoscow)(nil)
+	_ types.CacheKeyer    = (*OpShMoscow)(nil)
+)
+
+func Op(intensity float32, precision types.Precision) OpShMoscow {
 	return OpShMoscow{
+		intensity: intensity,
 		precision: precision,
 	}
 }
