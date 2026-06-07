@@ -49,11 +49,11 @@ export const suggestEnhancement = (file: File, models: ModelChoices) => {
 export const getDnOp = (model: string) => {
     switch (model) {
         case 'malmo':
-            return new Malmo('fp32');
+            return new Malmo(1, 'fp32');
         case 'gothenburg':
-            return new Gothenburg('fp32');
+            return new Gothenburg(1, 'fp32');
         default:
-            return new Stockholm('fp32');
+            return new Stockholm(1, 'fp32');
     }
 };
 

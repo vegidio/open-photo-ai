@@ -1,14 +1,32 @@
-import { type ChangeEvent, type MouseEvent, useState } from 'react';
+import { type ChangeEvent, type MouseEvent, useEffect, useState } from 'react';
 import { Slider, Typography } from '@mui/material';
 import { TextField } from '@/components/atoms/TextField';
 
 type IntensitySelectorProps = {
     value: string;
     onChange?: (value: string) => void;
+    min?: number;
+    max?: number;
+    step?: number;
+    marks?: { value: number; label: string }[];
 };
 
-export const IntensitySelector = ({ value, onChange }: IntensitySelectorProps) => {
+export const IntensitySelector = ({
+    value,
+    onChange,
+    min = -100,
+    max = 100,
+    step = 5,
+    marks = [{ value: 0, label: '0' }],
+}: IntensitySelectorProps) => {
     const [sliderValue, setSliderValue] = useState(value === '' || value === '-' ? 0 : parseFloat(value));
+
+    // Keep the slider in sync when the value changes externally (e.g. typed in the textfield).
+    useEffect(() => {
+        if (value === '' || value === '-') return;
+        const parsed = parseFloat(value);
+        if (!Number.isNaN(parsed)) setSliderValue(parsed);
+    }, [value]);
 
     const onTextChange = (e: ChangeEvent<HTMLInputElement>) => {
         const inputValue = e.target.value.trim();
@@ -21,9 +39,9 @@ export const IntensitySelector = ({ value, onChange }: IntensitySelectorProps) =
 
         const numValue = parseInt(inputValue, 10);
 
-        // Validate: must be a number between -100 and 100
+        // Validate: must be a number within the [min, max] range
         if (!Number.isNaN(numValue)) {
-            const clampedValue = Math.max(-100, Math.min(100, numValue));
+            const clampedValue = Math.max(min, Math.min(max, numValue));
             onChange?.(clampedValue.toString());
         }
     };
@@ -55,10 +73,10 @@ export const IntensitySelector = ({ value, onChange }: IntensitySelectorProps) =
             <div className='mx-1'>
                 <Slider
                     size='small'
-                    min={-100}
-                    max={100}
-                    step={5}
-                    marks={[{ value: 0, label: '0' }]}
+                    min={min}
+                    max={max}
+                    step={step}
+                    marks={marks}
                     track={false}
                     valueLabelDisplay='auto'
                     value={sliderValue}

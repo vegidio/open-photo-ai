@@ -13,7 +13,7 @@ type OpCbRio struct {
 }
 
 func (o OpCbRio) Id() string {
-	return fmt.Sprintf("cb_rio_%.3g_%s", o.intensity, o.precision)
+	return fmt.Sprintf("cb_rio_%s", o.precision)
 }
 
 func (o OpCbRio) Precision() types.Precision {
@@ -24,7 +24,21 @@ func (o OpCbRio) Hash() string {
 	return utils.GetModelHash(o.Id())
 }
 
-var _ types.Operation = (*OpCbRio)(nil)
+// Params carries the per-run blend intensity, which is not part of the operation identity.
+func (o OpCbRio) Params() map[string]any {
+	return map[string]any{utils.ParamIntensity: o.intensity}
+}
+
+// CacheKey folds the intensity into the image cache key so different intensities don't collide.
+func (o OpCbRio) CacheKey() string {
+	return utils.IntensityCacheKey(o.intensity)
+}
+
+var (
+	_ types.Operation     = (*OpCbRio)(nil)
+	_ types.Parameterized = (*OpCbRio)(nil)
+	_ types.CacheKeyer    = (*OpCbRio)(nil)
+)
 
 func Op(intensity float32, precision types.Precision) OpCbRio {
 	return OpCbRio{

@@ -1,9 +1,29 @@
 package utils
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 )
+
+// ParamIntensity is the map key used by operations to carry the per-run blend amount to Model.Run, decoupled from the
+// operation Id so the registry reuses a single session across all intensities.
+const ParamIntensity = "intensity"
+
+// IntensityFromParams reads the per-run blend amount from a params map; it defaults to 1.0 (full model output) when the
+// key is absent or has the wrong type.
+func IntensityFromParams(params map[string]any) float32 {
+	if v, ok := params[ParamIntensity].(float32); ok {
+		return v
+	}
+	return 1.0
+}
+
+// IntensityCacheKey is the stable per-run signature folded into the image cache key so that runs with the same Id but a
+// different blend amount do not collide.
+func IntensityCacheKey(intensity float32) string {
+	return fmt.Sprintf("i=%.3g", intensity)
+}
 
 // BlendWithIntensity blends the original image with the model output based on intensity.
 //

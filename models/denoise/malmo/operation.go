@@ -8,6 +8,7 @@ import (
 )
 
 type OpDnMalmo struct {
+	intensity float32
 	precision types.Precision
 }
 
@@ -23,10 +24,25 @@ func (o OpDnMalmo) Hash() string {
 	return utils.GetModelHash(o.Id())
 }
 
-var _ types.Operation = (*OpDnMalmo)(nil)
+// Params carries the per-run denoise strength, which is not part of the operation identity.
+func (o OpDnMalmo) Params() map[string]any {
+	return map[string]any{utils.ParamIntensity: o.intensity}
+}
 
-func Op(precision types.Precision) OpDnMalmo {
+// CacheKey folds the strength into the image cache key so different strengths don't collide.
+func (o OpDnMalmo) CacheKey() string {
+	return utils.IntensityCacheKey(o.intensity)
+}
+
+var (
+	_ types.Operation     = (*OpDnMalmo)(nil)
+	_ types.Parameterized = (*OpDnMalmo)(nil)
+	_ types.CacheKeyer    = (*OpDnMalmo)(nil)
+)
+
+func Op(intensity float32, precision types.Precision) OpDnMalmo {
 	return OpDnMalmo{
+		intensity: intensity,
 		precision: precision,
 	}
 }

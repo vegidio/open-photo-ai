@@ -5,6 +5,7 @@ import (
 	"image"
 
 	"github.com/cockroachdb/errors"
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/denoise"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
@@ -47,10 +48,17 @@ func (m *Gothenburg) Name() string {
 func (m *Gothenburg) Run(
 	ctx context.Context,
 	img image.Image,
-	_ map[string]any,
+	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
-	return denoise.RunPipeline(ctx, m.session, img, onProgress)
+	result, err := denoise.RunPipeline(ctx, m.session, img, onProgress)
+	if err != nil {
+		return nil, err
+	}
+
+	// Amplify (or soften) the denoising by extrapolating the residual at the per-run strength; strength 1.0 returns the
+	// model output unchanged.
+	return utils.BlendWithIntensity(img, result, utils.IntensityFromParams(params)), nil
 }
 
 func (m *Gothenburg) Destroy() {

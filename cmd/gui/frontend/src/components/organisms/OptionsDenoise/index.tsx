@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react';
+import { Divider } from '@mui/material';
+import { IntensitySelector } from '@/components/molecules/IntensitySelector';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
 import { useCurrentFile, useFileOperations } from '@/hooks';
@@ -40,33 +43,44 @@ export const OptionsDenoise = ({ anchorEl, open, onClose }: OptionsDenoiseProps)
     const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
 
     const currentOp = operations.find((op) => op.id.startsWith('dn'));
-    if (!file || !currentOp) return null;
+    const [model, setModel] = useState(`${currentOp?.options.name}_${currentOp?.options.precision}`);
+    const [strength, setStrength] = useState((Number(currentOp?.options.strength) * 100).toString());
 
-    const selectedModel = `${currentOp.options.name}_${currentOp.options.precision}`;
+    useEffect(() => {
+        if (!file) return;
 
-    const onModelChange = (value: string) => {
-        if (!value) return;
-        const values = value.split('_');
+        const numStrength = strength !== '' ? parseInt(strength, 10) / 100 : 1;
+        const values = model.split('_');
 
         switch (values[0]) {
             case 'malmo':
-                replaceEnhancement(file, new Malmo(values[1]));
+                replaceEnhancement(file, new Malmo(numStrength, values[1]));
                 break;
 
             case 'gothenburg':
-                replaceEnhancement(file, new Gothenburg(values[1]));
+                replaceEnhancement(file, new Gothenburg(numStrength, values[1]));
                 break;
 
             default:
-                replaceEnhancement(file, new Stockholm(values[1]));
+                replaceEnhancement(file, new Stockholm(numStrength, values[1]));
                 break;
         }
-    };
+    }, [file, strength, model, replaceEnhancement]);
 
     return (
         <OptionsPopover title='Denoise' anchorEl={anchorEl} open={open} onClose={onClose}>
             <div className='flex flex-col mt-1 p-3 gap-4'>
-                <ModelSelector options={options} value={selectedModel} onChange={onModelChange} />
+                <ModelSelector options={options} value={model} onChange={setModel} />
+
+                <Divider />
+
+                <IntensitySelector
+                    value={strength}
+                    onChange={setStrength}
+                    min={0}
+                    max={300}
+                    marks={[{ value: 100, label: '100' }]}
+                />
             </div>
         </OptionsPopover>
     );

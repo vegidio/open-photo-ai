@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"image"
-	"regexp"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
@@ -20,16 +19,14 @@ type Rio struct {
 	name      string
 	operation OpCbRio
 	session   *ort.DynamicAdvancedSession
-	intensity float32
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Rio, error) {
 	op := operation.(OpCbRio)
 
-	// Remove the intensity from the model ID since this information is irrelevant to the model name
-	id := regexp.MustCompile(`_-?(?:0(?:\.\d+)?|1(?:\.0+)?)`).ReplaceAllString(op.Id(), "")
-
-	modelFile := id + ".onnx"
+	// The intensity is a per-run input (carried via Params), not part of the model identity, so op.Id() already
+	// resolves directly to the model file name.
+	modelFile := op.Id() + ".onnx"
 	name := fmt.Sprintf("Rio (%s)", cases.Upper(language.English).String(string(op.precision)))
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
 
@@ -75,7 +72,7 @@ func (m *Rio) Name() string {
 func (m *Rio) Run(
 	ctx context.Context,
 	img image.Image,
-	_ map[string]any,
+	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	if onProgress != nil {
@@ -97,7 +94,9 @@ func (m *Rio) Run(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	blendedImg := utils.BlendWithIntensity(img, result, m.operation.intensity)
+	// Read the intensity from the per-run params, not the captured op: the registry caches one session per Id and the
+	// captured op's intensity would be stale across runs with different intensities.
+	blendedImg := utils.BlendWithIntensity(img, result, utils.IntensityFromParams(params))
 
 	if onProgress != nil {
 		onProgress("cb", 1)
