@@ -137,14 +137,14 @@ To bypass this, open the Terminal and run one of the commands below (depending o
 - Windows: `Unblock-File -Path <path-to-app>`
 - macOS: `xattr -d com.apple.quarantine <path-to-app>`
 
-### "Error loading libraries: libwebkit2gtk-4.1.so..." (Linux only)
+### "Error loading libraries: libwebkitgtk-6.0.so..." (Linux only)
 
-To run the GUI version of the app on Linux, you will need to install the following dependencies: `libgtk` and `libwebkit2gtk`. To do that, open your terminal and run the following command, depending on your distribution:
+To run the GUI version of the app on Linux, you will need to install the following dependencies: `libgtk` and `libwebkitgtk`. To do that, open your terminal and run the following command, depending on your distribution:
 
-- Debian/Ubuntu: `sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0`
-- Fedora 40+: `sudo dnf install gtk3 webkit2gtk4.1`
-- Arch Linux: `sudo pacman -S gtk3 webkit2gtk-4.1`
-- openSUSE: `sudo zypper install libgtk-3-0 libwebkit2gtk-4_1-0`
+- Debian/Ubuntu: `sudo apt install libgtk-4-1 libwebkitgtk-6.0-4`
+- Fedora 40+: `sudo dnf install gtk4 webkitgtk6.0`
+- Arch Linux: `sudo pacman -S gtk4 webkitgtk-6.0`
+- openSUSE: `sudo zypper install libgtk-4-1 libwebkitgtk-6_0-4`
 
 ### The app is taking too long to download dependencies
 

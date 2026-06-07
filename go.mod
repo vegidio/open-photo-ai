@@ -12,8 +12,8 @@ require (
 	github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84
 	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6
 	github.com/yalue/onnxruntime_go v1.21.0
-	golang.org/x/image v0.35.0
-	golang.org/x/text v0.36.0
+	golang.org/x/image v0.40.0
+	golang.org/x/text v0.37.0
 )
 
 require (
