@@ -7,7 +7,6 @@ import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { SettingsItemButton } from '@/components/molecules/SettingsItemButton';
 import { SettingsItemSelect } from '@/components/molecules/SettingsItemSelect';
 import { useSettingsStore } from '@/stores';
-import { os } from '@/utils/constants';
 
 export type SettingsListHandle = {
     scrollToSection: (itemId: string) => void;
@@ -127,12 +126,12 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
                         label: 'Moscow',
                     },
                     {
-                        value: 'novgorod',
-                        label: 'Novgorod',
-                    },
-                    {
                         value: 'petersburg',
                         label: 'St. Petersburg',
+                    },
+                    {
+                        value: 'novgorod',
+                        label: 'Novgorod',
                     },
                 ]}
                 selected={shModel}
@@ -147,7 +146,6 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
                     {
                         value: 'tokyo',
                         label: 'Tokyo',
-                        disabled: os === 'darwin',
                     },
                     {
                         value: 'kyoto',
