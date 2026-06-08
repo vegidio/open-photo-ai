@@ -44,28 +44,28 @@ export const OptionsSharpen = ({ anchorEl, open, onClose }: OptionsSharpenProps)
 
     const currentOp = operations.find((op) => op.id.startsWith('sh'));
     const [model, setModel] = useState(`${currentOp?.options.name}_${currentOp?.options.precision}`);
-    const [strength, setStrength] = useState((Number(currentOp?.options.strength) * 100).toString());
+    const [intensity, setIntensity] = useState((Number(currentOp?.options.intensity) * 100).toString());
 
     useEffect(() => {
         if (!file) return;
 
-        const numStrength = strength !== '' ? parseInt(strength, 10) / 100 : 1;
+        const numIntensity = intensity !== '' ? parseInt(intensity, 10) / 100 : 1;
         const values = model.split('_');
 
         switch (values[0]) {
             case 'novgorod':
-                replaceEnhancement(file, new Novgorod(numStrength, values[1]));
+                replaceEnhancement(file, new Novgorod(numIntensity, values[1]));
                 break;
 
             case 'petersburg':
-                replaceEnhancement(file, new Petersburg(numStrength, values[1]));
+                replaceEnhancement(file, new Petersburg(numIntensity, values[1]));
                 break;
 
             default:
-                replaceEnhancement(file, new Moscow(numStrength, values[1]));
+                replaceEnhancement(file, new Moscow(numIntensity, values[1]));
                 break;
         }
-    }, [file, strength, model, replaceEnhancement]);
+    }, [file, intensity, model, replaceEnhancement]);
 
     return (
         <OptionsPopover title='Sharpen' anchorEl={anchorEl} open={open} onClose={onClose}>
@@ -75,8 +75,8 @@ export const OptionsSharpen = ({ anchorEl, open, onClose }: OptionsSharpenProps)
                 <Divider />
 
                 <IntensitySelector
-                    value={strength}
-                    onChange={setStrength}
+                    value={intensity}
+                    onChange={setIntensity}
                     min={0}
                     max={300}
                     marks={[{ value: 100, label: '100' }]}

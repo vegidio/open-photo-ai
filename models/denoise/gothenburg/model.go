@@ -56,8 +56,8 @@ func (m *Gothenburg) Run(
 		return nil, err
 	}
 
-	// Amplify (or soften) the denoising by extrapolating the residual at the per-run strength; strength 1.0 returns the
-	// model output unchanged.
+	// Amplify (or soften) the denoising by extrapolating the residual at the per-run intensity; intensity 1.0 returns
+	// the model output unchanged.
 	return utils.BlendWithIntensity(img, result, utils.IntensityFromParams(params)), nil
 }
 

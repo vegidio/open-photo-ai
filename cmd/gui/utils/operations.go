@@ -66,36 +66,36 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 
 			operations = append(operations, paris.Op(float32(intensity), types.Precision(values[3])))
 
-		// Denoise — "_<name>_<strength>_<precision>" (older IDs without a strength segment default to 1.0)
+		// Denoise — "_<name>_<intensity>_<precision>" (older IDs without an intensity segment default to 1.0)
 		case "stockholm", "gothenburg", "malmo":
-			strength, precision, err := parseStrength(values)
+			intensity, precision, err := parseIntensity(values)
 			if err != nil {
-				return nil, errors.Wrapf(err, "invalid strength in %q", opId)
+				return nil, errors.Wrapf(err, "invalid intensity in %q", opId)
 			}
 
 			switch name {
 			case "stockholm":
-				operations = append(operations, stockholm.Op(strength, precision))
+				operations = append(operations, stockholm.Op(intensity, precision))
 			case "gothenburg":
-				operations = append(operations, gothenburg.Op(strength, precision))
+				operations = append(operations, gothenburg.Op(intensity, precision))
 			case "malmo":
-				operations = append(operations, malmo.Op(strength, precision))
+				operations = append(operations, malmo.Op(intensity, precision))
 			}
 
-		// Sharpen — "_<name>_<strength>_<precision>" (older IDs without a strength segment default to 1.0)
+		// Sharpen — "_<name>_<intensity>_<precision>" (older IDs without an intensity segment default to 1.0)
 		case "moscow", "petersburg", "novgorod":
-			strength, precision, err := parseStrength(values)
+			intensity, precision, err := parseIntensity(values)
 			if err != nil {
-				return nil, errors.Wrapf(err, "invalid strength in %q", opId)
+				return nil, errors.Wrapf(err, "invalid intensity in %q", opId)
 			}
 
 			switch name {
 			case "moscow":
-				operations = append(operations, moscow.Op(strength, precision))
+				operations = append(operations, moscow.Op(intensity, precision))
 			case "petersburg":
-				operations = append(operations, petersburg.Op(strength, precision))
+				operations = append(operations, petersburg.Op(intensity, precision))
 			case "novgorod":
-				operations = append(operations, novgorod.Op(strength, precision))
+				operations = append(operations, novgorod.Op(intensity, precision))
 			}
 
 		// Color Balance — "_<name>_<intensity>_<precision>"
@@ -141,17 +141,18 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 	return operations, nil
 }
 
-// parseStrength extracts the denoise strength and precision from a split operation ID. It accepts both the current
-// "_<name>_<strength>_<precision>" form and the older "_<name>_<precision>" form (which defaults the strength to 1.0).
-func parseStrength(values []string) (float32, types.Precision, error) {
+// parseIntensity extracts the denoise/sharpen intensity and precision from a split operation ID. It accepts both the
+// current "_<name>_<intensity>_<precision>" form and the older "_<name>_<precision>" form (which defaults the intensity
+// to 1.0).
+func parseIntensity(values []string) (float32, types.Precision, error) {
 	if len(values) < 4 {
 		return 1.0, types.Precision(values[2]), nil
 	}
 
-	strength, err := strconv.ParseFloat(values[2], 32)
+	intensity, err := strconv.ParseFloat(values[2], 32)
 	if err != nil {
 		return 0, "", err
 	}
 
-	return float32(strength), types.Precision(values[3]), nil
+	return float32(intensity), types.Precision(values[3]), nil
 }

@@ -24,12 +24,12 @@ func (o OpDnMalmo) Hash() string {
 	return utils.GetModelHash(o.Id())
 }
 
-// Params carries the per-run denoise strength, which is not part of the operation identity.
+// Params carries the per-run denoise intensity, which is not part of the operation identity.
 func (o OpDnMalmo) Params() map[string]any {
 	return map[string]any{utils.ParamIntensity: o.intensity}
 }
 
-// CacheKey folds the strength into the image cache key so different strengths don't collide.
+// CacheKey folds the intensity into the image cache key so different intensities don't collide.
 func (o OpDnMalmo) CacheKey() string {
 	return utils.IntensityCacheKey(o.intensity)
 }
