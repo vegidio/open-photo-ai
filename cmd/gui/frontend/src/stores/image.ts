@@ -9,6 +9,14 @@ export type ImageTransform = {
     positionY: number;
 };
 
+// Portion of the image currently visible in the Preview, as fractions [0..1] of the displayed image
+export type ImageViewport = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+
 // Enable MapSet support in Immer
 enableMapSet();
 
@@ -16,10 +24,12 @@ type ImageStore = {
     originalImage?: ImageData;
     enhancedImage?: ImageData;
     imageTransform: Map<string, ImageTransform>;
+    viewport?: ImageViewport;
 
     setOriginalImage: (image: ImageData | undefined) => void;
     setEnhancedImage: (image: ImageData | undefined) => void;
     setImageTransform: (id: string, imageState: ImageTransform) => void;
+    setViewport: (viewport: ImageViewport | undefined) => void;
 
     removeImageTransform: (id: string) => void;
     clear: () => void;
@@ -30,6 +40,7 @@ export const useImageStore = create(
         originalImage: undefined,
         enhancedImage: undefined,
         imageTransform: new Map(),
+        viewport: undefined,
 
         setOriginalImage: (image: ImageData | undefined) => {
             set((state) => {
@@ -49,6 +60,12 @@ export const useImageStore = create(
             });
         },
 
+        setViewport: (viewport: ImageViewport | undefined) => {
+            set((state) => {
+                state.viewport = viewport;
+            });
+        },
+
         removeImageTransform: (id: string) => {
             set((state) => {
                 state.imageTransform.delete(id);
@@ -58,6 +75,7 @@ export const useImageStore = create(
         clear: () => {
             set((state) => {
                 state.imageTransform.clear();
+                state.viewport = undefined;
             });
         },
     })),

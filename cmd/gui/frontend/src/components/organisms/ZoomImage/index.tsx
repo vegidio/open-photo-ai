@@ -11,6 +11,7 @@ type ZoomImageProps = {
 export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
     const tRef = useRef<ReactZoomPanPinchRef>(null);
     const setImageTransform = useImageStore((state) => state.setImageTransform);
+    const setViewport = useImageStore((state) => state.setViewport);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
     const onPanning = (ref: ReactZoomPanPinchRef) => {
@@ -71,7 +72,25 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
         }
 
         tRef.current.setTransform(newPosX, newPosY, newScale, 0);
-    }, [imageTransform, dimensions, constrainPosition]);
+
+        // Publish the portion of the image visible in this pane as fractions [0..1] of the displayed image.
+        // The container is each pane's own wrapper, so this is already half-width in "side" mode.
+        const visLeft = Math.max(0, newPosX);
+        const visTop = Math.max(0, newPosY);
+        const visRight = Math.min(containerWidth, newPosX + scaledWidth);
+        const visBottom = Math.min(containerHeight, newPosY + scaledHeight);
+
+        setViewport(
+            scaledWidth && scaledHeight
+                ? {
+                      x: (visLeft - newPosX) / scaledWidth,
+                      y: (visTop - newPosY) / scaledHeight,
+                      width: Math.max(0, visRight - visLeft) / scaledWidth,
+                      height: Math.max(0, visBottom - visTop) / scaledHeight,
+                  }
+                : { x: 0, y: 0, width: 1, height: 1 },
+        );
+    }, [imageTransform, dimensions, constrainPosition, setViewport]);
 
     return (
         <TransformWrapper
