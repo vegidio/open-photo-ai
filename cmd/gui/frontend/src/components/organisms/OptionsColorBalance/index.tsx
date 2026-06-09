@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Divider } from '@mui/material';
 import { IntensitySelector } from '@/components/molecules/IntensitySelector';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
-import { useCurrentFile, useFileOperations } from '@/hooks';
+import { useOptionEnhancement } from '@/hooks';
 import { Rio } from '@/operations';
-import { useEnhancementStore } from '@/stores';
 
 type OptionsColorBalanceProps = {
     anchorEl: HTMLElement | null;
@@ -24,35 +22,28 @@ const options: ModelSelectorOption[] = [
 ];
 
 export const OptionsColorBalance = ({ anchorEl, open, onClose }: OptionsColorBalanceProps) => {
-    const file = useCurrentFile();
-    const operations = useFileOperations(file);
-    const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
+    const { model, amount, onModelChange, onAmountChange } = useOptionEnhancement(
+        'cb',
+        (op) => (Number(op?.options.intensity) * 100).toString(),
+        (nextModel, nextIntensity) => {
+            const intensity = nextIntensity !== '' && nextIntensity !== '-' ? parseInt(nextIntensity, 10) / 100 : 0;
+            const [name, precision] = nextModel.split('_');
 
-    const currentOp = operations.find((op) => op.id.startsWith('cb'));
-    const [model, setModel] = useState(`${currentOp?.options.name}_${currentOp?.options.precision}`);
-    const [intensity, setIntensity] = useState((Number(currentOp?.options.intensity) * 100).toString());
-
-    useEffect(() => {
-        if (!file) return;
-
-        const numIntensity = intensity !== '' && intensity !== '-' ? parseInt(intensity, 10) / 100 : 0;
-        const values = model.split('_');
-
-        switch (values[0]) {
-            case 'rio':
-                replaceEnhancement(file, new Rio(numIntensity, values[1]));
-                break;
-        }
-    }, [file, intensity, model, replaceEnhancement]);
+            switch (name) {
+                case 'rio':
+                    return new Rio(intensity, precision);
+            }
+        },
+    );
 
     return (
         <OptionsPopover title='Color Balance' anchorEl={anchorEl} open={open} onClose={onClose}>
             <div className='flex flex-col mt-1 p-3 gap-4'>
-                <ModelSelector options={options} value={model} onChange={setModel} />
+                <ModelSelector options={options} value={model} onChange={onModelChange} />
 
                 <Divider />
 
-                <IntensitySelector value={intensity} onChange={setIntensity} />
+                <IntensitySelector value={amount} onChange={onAmountChange} />
             </div>
         </OptionsPopover>
     );

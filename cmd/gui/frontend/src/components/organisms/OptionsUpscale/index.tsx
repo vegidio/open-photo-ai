@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Divider } from '@mui/material';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
 import { ScaleSelector } from '@/components/molecules/ScaleSelector';
-import { useCurrentFile, useFileOperations } from '@/hooks';
+import { useOptionEnhancement } from '@/hooks';
 import { Kyoto, Saitama, Tokyo } from '@/operations';
-import { useEnhancementStore } from '@/stores';
 
 type OptionsUpscaleProps = {
     anchorEl: HTMLElement | null;
@@ -38,43 +36,33 @@ const options: ModelSelectorOption[] = [
 ];
 
 export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps) => {
-    const file = useCurrentFile();
-    const operations = useFileOperations(file);
-    const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
+    const { model, amount, onModelChange, onAmountChange } = useOptionEnhancement(
+        'up',
+        (op) => op?.options.scale ?? '1',
+        (nextModel, nextScale) => {
+            if (nextScale === '') return;
+            const scale = parseFloat(nextScale);
+            const [name, precision] = nextModel.split('_');
 
-    const currentOp = operations.find((op) => op.id.startsWith('up'));
-    const [model, setModel] = useState(`${currentOp?.options.name}_${currentOp?.options.precision}`);
-    const [scale, setScale] = useState(currentOp?.options.scale ?? '1');
-
-    useEffect(() => {
-        if (file && scale !== '') {
-            const numScale = parseFloat(scale);
-            const values = model.split('_');
-
-            switch (values[0]) {
+            switch (name) {
                 case 'tokyo':
-                    replaceEnhancement(file, new Tokyo(numScale, values[1]));
-                    break;
-
+                    return new Tokyo(scale, precision);
                 case 'kyoto':
-                    replaceEnhancement(file, new Kyoto(numScale, values[1]));
-                    break;
-
+                    return new Kyoto(scale, precision);
                 case 'saitama':
-                    replaceEnhancement(file, new Saitama(numScale, values[1]));
-                    break;
+                    return new Saitama(scale, precision);
             }
-        }
-    }, [file, replaceEnhancement, model, scale]);
+        },
+    );
 
     return (
         <OptionsPopover title='Upscale' anchorEl={anchorEl} open={open} onClose={onClose}>
             <div className='flex flex-col mt-1 p-3 gap-4'>
-                <ModelSelector options={options} value={model} onChange={setModel} />
+                <ModelSelector options={options} value={model} onChange={onModelChange} />
 
                 <Divider />
 
-                <ScaleSelector value={scale} onChange={setScale} />
+                <ScaleSelector value={amount} onChange={onAmountChange} />
             </div>
         </OptionsPopover>
     );

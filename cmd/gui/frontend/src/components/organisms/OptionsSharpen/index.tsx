@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Divider } from '@mui/material';
 import { IntensitySelector } from '@/components/molecules/IntensitySelector';
 import { ModelSelector, type ModelSelectorOption } from '@/components/molecules/ModelSelector';
 import { OptionsPopover } from '@/components/molecules/OptionsPopover';
-import { useCurrentFile, useFileOperations } from '@/hooks';
+import { useOptionEnhancement } from '@/hooks';
 import { Moscow, Novgorod, Petersburg } from '@/operations';
-import { useEnhancementStore } from '@/stores';
 
 type OptionsSharpenProps = {
     anchorEl: HTMLElement | null;
@@ -38,45 +36,34 @@ const options: ModelSelectorOption[] = [
 ];
 
 export const OptionsSharpen = ({ anchorEl, open, onClose }: OptionsSharpenProps) => {
-    const file = useCurrentFile();
-    const operations = useFileOperations(file);
-    const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
+    const { model, amount, onModelChange, onAmountChange } = useOptionEnhancement(
+        'sh',
+        (op) => (Number(op?.options.intensity) * 100).toString(),
+        (nextModel, nextIntensity) => {
+            const intensity = nextIntensity !== '' ? parseInt(nextIntensity, 10) / 100 : 1;
+            const [name, precision] = nextModel.split('_');
 
-    const currentOp = operations.find((op) => op.id.startsWith('sh'));
-    const [model, setModel] = useState(`${currentOp?.options.name}_${currentOp?.options.precision}`);
-    const [intensity, setIntensity] = useState((Number(currentOp?.options.intensity) * 100).toString());
-
-    useEffect(() => {
-        if (!file) return;
-
-        const numIntensity = intensity !== '' ? parseInt(intensity, 10) / 100 : 1;
-        const values = model.split('_');
-
-        switch (values[0]) {
-            case 'novgorod':
-                replaceEnhancement(file, new Novgorod(numIntensity, values[1]));
-                break;
-
-            case 'petersburg':
-                replaceEnhancement(file, new Petersburg(numIntensity, values[1]));
-                break;
-
-            default:
-                replaceEnhancement(file, new Moscow(numIntensity, values[1]));
-                break;
-        }
-    }, [file, intensity, model, replaceEnhancement]);
+            switch (name) {
+                case 'novgorod':
+                    return new Novgorod(intensity, precision);
+                case 'petersburg':
+                    return new Petersburg(intensity, precision);
+                default:
+                    return new Moscow(intensity, precision);
+            }
+        },
+    );
 
     return (
         <OptionsPopover title='Sharpen' anchorEl={anchorEl} open={open} onClose={onClose}>
             <div className='flex flex-col mt-1 p-3 gap-4'>
-                <ModelSelector options={options} value={model} onChange={setModel} />
+                <ModelSelector options={options} value={model} onChange={onModelChange} />
 
                 <Divider />
 
                 <IntensitySelector
-                    value={intensity}
-                    onChange={setIntensity}
+                    value={amount}
+                    onChange={onAmountChange}
                     min={0}
                     max={300}
                     marks={[{ value: 100, label: '100' }]}
