@@ -6,6 +6,7 @@ import { PreviewEmpty } from '@/components/organisms/PreviewEmpty';
 import { PreviewImage } from '@/components/organisms/PreviewImage';
 import { useCurrentFile, useFileDisabledFaces, useFileOperations, useNotify } from '@/hooks';
 import { useDrawerStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
+import { DOTTED_BACKGROUND } from '@/utils/constants.ts';
 import { userFriendlyErrorMessage } from '@/utils/errors.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 
@@ -98,7 +99,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         <div
             id='preview'
             data-file-drop-target
-            className={`flex items-center justify-center bg-[#171717] [background-image:radial-gradient(#383838_1px,transparent_1px)] [background-size:3rem_3rem] ${className}`}
+            className={`flex items-center justify-center ${DOTTED_BACKGROUND} ${className}`}
         >
             {isRunning && <EnhancementProgress />}
             {filesLength === 0 ? <PreviewEmpty /> : <PreviewImage />}

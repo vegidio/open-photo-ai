@@ -2,6 +2,7 @@ import {
     MdBlurOn,
     MdChangeHistory,
     MdClose,
+    MdCrop,
     MdCropLandscape,
     MdFlip,
     MdInfoOutline,
@@ -9,6 +10,7 @@ import {
     MdOutlineFaceRetouchingNatural,
     MdOutlineLightMode,
     MdOutlinePalette,
+    MdRotate90DegreesCcw,
     MdSplitscreen,
 } from 'react-icons/md';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
@@ -22,6 +24,10 @@ export type IconName =
     | 'color_balance'
     | 'upscale'
     | 'sharpen'
+    | 'crop'
+    | 'rotate'
+    | 'flip_horizontal'
+    | 'flip_vertical'
     | 'preview_full'
     | 'preview_side'
     | 'preview_split';
@@ -48,11 +54,19 @@ export const Icon = ({ option, className = '' }: IconProps) => {
             return <MdOpenInFull className={className} />;
         case 'sharpen':
             return <MdChangeHistory className={className} />;
+        case 'crop':
+            return <MdCrop className={className} />;
+        case 'rotate':
+            return <MdRotate90DegreesCcw className={`-scale-x-100 ${className}`} />;
+        case 'flip_horizontal':
+            return <MdFlip className={className} />;
+        case 'flip_vertical':
+            return <MdFlip className={`rotate-90 ${className}`} />;
         case 'preview_full':
             return <MdCropLandscape className={className} />;
         case 'preview_side':
             return <MdSplitscreen className={`rotate-90 ${className}`} />;
         case 'preview_split':
-            return <MdFlip className={`transform -scale-x-100 ${className}`} />;
+            return <MdFlip className={`-scale-x-100 ${className}`} />;
     }
 };
