@@ -38,7 +38,7 @@ export const PreviewSelector = ({ disabled = false, className = '' }: PreviewSel
 
             <Tooltip title='Split'>
                 <ToggleButton value='split' className='w-12 border-0 rounded-none'>
-                    <Icon option='preview_split' className='size-4.5' />
+                    <Icon option='preview_split' className='size-5' />
                 </ToggleButton>
             </Tooltip>
         </ToggleButtonGroup>

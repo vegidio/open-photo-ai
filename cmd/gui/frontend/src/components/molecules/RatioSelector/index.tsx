@@ -1,5 +1,7 @@
+import { Divider, Typography } from '@mui/material';
 import type { IconType } from 'react-icons';
 import { MdCropFree, MdCropLandscape, MdCropPortrait, MdCropSquare } from 'react-icons/md';
+import { CropDimensions } from '@/components/molecules/CropDimensions';
 import { RatioButton } from '@/components/molecules/RatioButton';
 
 type RatioOption = {
@@ -25,12 +27,27 @@ const RATIOS: RatioOption[] = [
 type RatioSelectorProps = {
     selected: string;
     onSelect: (key: string, aspectRatio?: number) => void;
+    width: string;
+    height: string;
+    onWidthCommit: (value: number) => void;
+    onHeightCommit: (value: number) => void;
+    onSwap: () => void;
 };
 
-export const RatioSelector = ({ selected, onSelect }: RatioSelectorProps) => {
+export const RatioSelector = ({
+    selected,
+    onSelect,
+    width,
+    height,
+    onWidthCommit,
+    onHeightCommit,
+    onSwap,
+}: RatioSelectorProps) => {
     return (
-        <div className='w-64 shrink-0 overflow-y-auto bg-[#212121] p-4'>
-            <div className='grid grid-cols-2 gap-x-2 gap-y-4'>
+        <div className='flex flex-col w-64 shrink-0 overflow-y-auto bg-[#212121] p-4 gap-2'>
+            <Typography variant='body2'>Aspect Ratio</Typography>
+
+            <div className='grid grid-cols-2 my-1 gap-x-2 gap-y-4'>
                 {RATIOS.map(({ key, label, icon, value }) => (
                     <RatioButton
                         key={key}
@@ -41,6 +58,18 @@ export const RatioSelector = ({ selected, onSelect }: RatioSelectorProps) => {
                     />
                 ))}
             </div>
+
+            <Divider className='my-2' />
+
+            <Typography variant='body2'>Dimensions</Typography>
+
+            <CropDimensions
+                width={width}
+                height={height}
+                onWidthCommit={onWidthCommit}
+                onHeightCommit={onHeightCommit}
+                onSwap={onSwap}
+            />
         </div>
     );
 };

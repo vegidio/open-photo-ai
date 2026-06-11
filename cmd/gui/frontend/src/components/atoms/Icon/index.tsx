@@ -1,3 +1,4 @@
+import { LuSquareSplitHorizontal } from 'react-icons/lu';
 import {
     MdBlurOn,
     MdChangeHistory,
@@ -12,6 +13,7 @@ import {
     MdOutlinePalette,
     MdRotate90DegreesCcw,
     MdSplitscreen,
+    MdSwapHoriz,
 } from 'react-icons/md';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 
@@ -30,7 +32,8 @@ export type IconName =
     | 'flip_vertical'
     | 'preview_full'
     | 'preview_side'
-    | 'preview_split';
+    | 'preview_split'
+    | 'swap';
 
 type IconProps = TailwindProps & {
     option: IconName;
@@ -67,6 +70,8 @@ export const Icon = ({ option, className = '' }: IconProps) => {
         case 'preview_side':
             return <MdSplitscreen className={`rotate-90 ${className}`} />;
         case 'preview_split':
-            return <MdFlip className={`-scale-x-100 ${className}`} />;
+            return <LuSquareSplitHorizontal className={className} />;
+        case 'swap':
+            return <MdSwapHoriz className={className} />;
     }
 };

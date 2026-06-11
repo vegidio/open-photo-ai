@@ -21,6 +21,9 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
     const [baseRotation, setBaseRotation] = useState(0);
     const [fineRotation, setFineRotation] = useState(0);
     const [pendingReset, setPendingReset] = useState(false);
+    const [cropWidth, setCropWidth] = useState(0);
+    const [cropHeight, setCropHeight] = useState(0);
+    const [pendingSwap, setPendingSwap] = useState<{ width: number; height: number } | null>(null);
 
     useEffect(() => {
         if (open) {
@@ -28,19 +31,72 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
             setAspectRatio(undefined);
             setBaseRotation(0);
             setFineRotation(0);
+            setCropWidth(originalImage?.width ?? 0);
+            setCropHeight(originalImage?.height ?? 0);
         }
-    }, [open]);
+    }, [open, originalImage]);
+
+    // Apply a swapped crop only after the cleared aspect ratio has propagated to the <Cropper> stencil; doing it
+    // synchronously in onSwap would re-constrain the box to the previous ratio (same deferral as pendingReset).
+    useEffect(() => {
+        if (!pendingSwap) return;
+        cropperRef.current?.setCoordinates((state) => ({
+            left: state.coordinates?.left ?? 0,
+            top: state.coordinates?.top ?? 0,
+            width: pendingSwap.width,
+            height: pendingSwap.height,
+        }));
+        setPendingSwap(null);
+    }, [pendingSwap]);
+
+    // Reshape the crop box to a newly selected aspect ratio and sync the W/H fields. The work is deferred to the next
+    // frame because on the render that sets the ratio, the <Cropper> instance may not be mounted yet, and the new
+    // aspectRatio still needs to reach the stencil. By then we resize the box to the largest box of that ratio that
+    // fits inside the current box (centered) and push the applied size into the fields directly — the cropper
+    // does not fire onChange for a ratio-driven reshape, so the fields would not update otherwise. 'free' is a no-op.
+    useEffect(() => {
+        if (!open || aspectRatio === undefined) return;
+        const frame = requestAnimationFrame(() => {
+            const cropper = cropperRef.current;
+            if (!cropper) return;
+
+            cropper.setCoordinates((state) => {
+                const coords = state.coordinates ?? {
+                    left: 0,
+                    top: 0,
+                    width: state.imageSize.width,
+                    height: state.imageSize.height,
+                };
+                const centerX = coords.left + coords.width / 2;
+                const centerY = coords.top + coords.height / 2;
+                const width = coords.width / coords.height > aspectRatio ? coords.height * aspectRatio : coords.width;
+                const height = width / aspectRatio;
+
+                return { width, height, left: centerX - width / 2, top: centerY - height / 2 };
+            });
+
+            const applied = cropper.getCoordinates({ round: true });
+            if (applied) {
+                setCropWidth(applied.width);
+                setCropHeight(applied.height);
+            }
+        });
+
+        return () => cancelAnimationFrame(frame);
+    }, [aspectRatio, open]);
 
     // Reset the crop coordinates to the full image only after the cleared aspect ratio has propagated to the
     // <Cropper> stencil; doing it synchronously in onReset would re-constrain the box to the previous ratio.
     useEffect(() => {
         if (!pendingReset) return;
+
         cropperRef.current?.setCoordinates((state) => ({
             left: 0,
             top: 0,
             width: state.imageSize.width,
             height: state.imageSize.height,
         }));
+
         setPendingReset(false);
     }, [pendingReset]);
 
@@ -88,6 +144,52 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
         setPendingReset(true);
     };
 
+    const clampWidth = (value: number) => Math.max(1, Math.min(originalImage.width, Math.round(value)));
+    const clampHeight = (value: number) => Math.max(1, Math.min(originalImage.height, Math.round(value)));
+
+    // Mirror the live stencil size into the W/H fields on every drag/resize and after programmatic changes.
+    const syncDims = (cropper: CropperRef) => {
+        const coords = cropper.getCoordinates({ round: true });
+        if (!coords) return;
+        setCropWidth(coords.width);
+        setCropHeight(coords.height);
+    };
+
+    const applyDimensions = (width: number, height: number) => {
+        cropperRef.current?.setCoordinates((state) => ({
+            left: state.coordinates?.left ?? 0,
+            top: state.coordinates?.top ?? 0,
+            width,
+            height,
+        }));
+    };
+
+    const onWidthCommit = (value: number) => {
+        const width = clampWidth(value);
+        const height = aspectRatio
+            ? clampHeight(width / aspectRatio)
+            : (cropperRef.current?.getCoordinates()?.height ?? width);
+        applyDimensions(width, height);
+    };
+
+    const onHeightCommit = (value: number) => {
+        const height = clampHeight(value);
+        const width = aspectRatio
+            ? clampWidth(height * aspectRatio)
+            : (cropperRef.current?.getCoordinates()?.width ?? height);
+        applyDimensions(width, height);
+    };
+
+    // Swap W↔H and drop any locked ratio; the actual resize is deferred to the pendingSwap effect, so it runs after
+    // the cleared aspect ratio reaches the stencil.
+    const onSwap = () => {
+        const coords = cropperRef.current?.getCoordinates();
+        if (!coords) return;
+        setRatio('free');
+        setAspectRatio(undefined);
+        setPendingSwap({ width: clampWidth(coords.height), height: clampHeight(coords.width) });
+    };
+
     return (
         <Dialog
             open={open}
@@ -106,7 +208,7 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
             <div className={`flex-1 flex flex-row overflow-hidden ${DOTTED_BACKGROUND}`}>
                 {/* Left */}
                 <div className='flex-1 flex flex-col overflow-hidden p-8 gap-4'>
-                    <ImageCropper ref={cropperRef} aspectRatio={aspectRatio} />
+                    <ImageCropper ref={cropperRef} aspectRatio={aspectRatio} onChange={syncDims} />
 
                     <RotateControls
                         rotation={fineRotation}
@@ -126,6 +228,11 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
                         setRatio(key);
                         setAspectRatio(value);
                     }}
+                    width={String(cropWidth)}
+                    height={String(cropHeight)}
+                    onWidthCommit={onWidthCommit}
+                    onHeightCommit={onHeightCommit}
+                    onSwap={onSwap}
                 />
             </div>
         </Dialog>

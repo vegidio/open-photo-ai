@@ -6,6 +6,7 @@ import { useImageStore } from '@/stores';
 
 type ImageCropperProps = TailwindProps & {
     aspectRatio?: number;
+    onChange?: (cropper: CropperRef) => void;
 };
 
 const defaultSize = ({ imageSize }: CropperState) => ({
@@ -13,7 +14,7 @@ const defaultSize = ({ imageSize }: CropperState) => ({
     height: imageSize.height,
 });
 
-export const ImageCropper = forwardRef<CropperRef, ImageCropperProps>(({ aspectRatio, className }, ref) => {
+export const ImageCropper = forwardRef<CropperRef, ImageCropperProps>(({ aspectRatio, onChange, className }, ref) => {
     const originalImage = useImageStore((state) => state.originalImage);
 
     if (!originalImage) return null;
@@ -23,6 +24,7 @@ export const ImageCropper = forwardRef<CropperRef, ImageCropperProps>(({ aspectR
             ref={ref}
             src={originalImage.url}
             defaultSize={defaultSize}
+            onChange={onChange}
             stencilProps={{ grid: true, aspectRatio, overlayClassName: 'text-transparent!' }}
             className={`size-full bg-transparent! object-contain p-1.5! ${className}`}
         />
