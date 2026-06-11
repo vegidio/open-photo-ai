@@ -25,7 +25,7 @@ export const ImageCropper = forwardRef<CropperRef, ImageCropperProps>(({ aspectR
             src={originalImage.url}
             defaultSize={defaultSize}
             onChange={onChange}
-            stencilProps={{ grid: true, aspectRatio, overlayClassName: 'text-transparent!' }}
+            stencilProps={{ grid: true, aspectRatio, overlayClassName: 'text-transparent!', gridClassName: 'opacity-100!' }}
             className={`size-full bg-transparent! object-contain p-1.5! ${className}`}
         />
     );

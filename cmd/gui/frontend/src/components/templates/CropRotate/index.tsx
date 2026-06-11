@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Dialog } from '@mui/material';
 import type { CropperRef } from 'react-advanced-cropper';
+import { AspectRatioSelector } from '@/components/molecules/AspectRatioSelector';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
-import { RatioSelector } from '@/components/molecules/RatioSelector';
 import { RotateControls } from '@/components/molecules/RotateControls';
 import { ImageCropper } from '@/components/organisms/ImageCropper';
 import { useImageStore } from '@/stores';
-import { DOTTED_BACKGROUND } from '@/utils/constants.ts';
+import { DOTTED_BACKGROUND, MIN_CROP_SIZE } from '@/utils/constants.ts';
 
 type CropRotateProps = {
     open: boolean;
@@ -144,8 +144,8 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
         setPendingReset(true);
     };
 
-    const clampWidth = (value: number) => Math.max(1, Math.min(originalImage.width, Math.round(value)));
-    const clampHeight = (value: number) => Math.max(1, Math.min(originalImage.height, Math.round(value)));
+    const clampWidth = (value: number) => Math.max(MIN_CROP_SIZE, Math.min(originalImage.width, Math.round(value)));
+    const clampHeight = (value: number) => Math.max(MIN_CROP_SIZE, Math.min(originalImage.height, Math.round(value)));
 
     // Mirror the live stencil size into the W/H fields on every drag/resize and after programmatic changes.
     const syncDims = (cropper: CropperRef) => {
@@ -222,7 +222,7 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
                 </div>
 
                 {/* Right */}
-                <RatioSelector
+                <AspectRatioSelector
                     selected={ratio}
                     onSelect={(key, value) => {
                         setRatio(key);

@@ -3,6 +3,9 @@ import { Typography } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { IconButton } from '@/components/atoms/IconButton';
 import { TextField } from '@/components/atoms/TextField';
+import { MIN_CROP_SIZE } from '@/utils/constants.ts';
+
+const toInt = (value: string) => parseInt(value.trim(), 10);
 
 type DimensionFieldProps = {
     label: string;
@@ -13,18 +16,35 @@ type DimensionFieldProps = {
 const DimensionField = ({ label, value, onCommit }: DimensionFieldProps) => {
     // Local state so partial/empty typing isn't clobbered by the live stencil sync coming from the parent.
     const [input, setInput] = useState(value);
-    useEffect(() => setInput(value), [value]);
+    const [focused, setFocused] = useState(false);
 
-    const commit = () => {
-        const parsed = parseInt(input.trim(), 10);
+    // Mirror the parent value only while not editing: keeps live commits / drag syncs from overwriting partial
+    // typing, and snaps the display back to the clamped value once the field loses focus.
+    useEffect(() => {
+        if (!focused) setInput(value);
+    }, [value, focused]);
+
+    // Commit on every keystroke for an immediate resize; skip non-numbers so a mid-edit empty field doesn't fight
+    // the user. The parent clamps to [MIN_CROP_SIZE, imageDimension].
+    const onChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setInput(e.target.value);
+        const parsed = toInt(e.target.value);
         if (!Number.isNaN(parsed)) onCommit(parsed);
+    };
+
+    // On blur, an empty/invalid field falls back to the smallest allowed size; clearing focus re-runs the sync
+    // effect, which snaps the display to the final clamped value.
+    const onBlur = () => {
+        if (Number.isNaN(toInt(input))) onCommit(MIN_CROP_SIZE);
+        setFocused(false);
     };
 
     return (
         <TextField
             value={input}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-            onBlur={commit}
+            onFocus={() => setFocused(true)}
+            onChange={onChange}
+            onBlur={onBlur}
             onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
             }}
