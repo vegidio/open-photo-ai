@@ -11,24 +11,30 @@ import * as detection$0 from "../../github.com/vegidio/open-photo-ai/models/dete
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as types$0 from "../../github.com/vegidio/open-photo-ai/types/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as types$1 from "../types/models.js";
 
 /**
  * DetectFaces runs the face-detection model on an image and returns the detected faces.
  * 
  * The frontend calls this independently and then passes the result back to ProcessImage/ExportImage so that face
- * recovery no longer triggers detection internally. Results are deterministic for a given image, so the frontend caches
- * them by file hash.
+ * recovery no longer triggers detection internally. The crop is applied (flip→rotate→crop) before detection so the
+ * resulting bounding boxes live in the cropped image's coordinate space — matching the cropped source that face
+ * recovery and the preview operate on. Results are deterministic for a given image+crop, so the frontend caches them
+ * by file hash plus a crop token.
  * 
  * # Parameters:
  *   - filePath: The path to the image file to analyze.
  *   - ep: The execution provider (CPU, CUDA, etc.) to use for inference.
+ *   - crop: The flip/rotate/crop to apply before detection (zero value = no crop).
  * 
  * # Returns:
  *   - []detection.Face: The faces detected in the image (empty when none are found).
  *   - error: An error if the image cannot be loaded or detection fails.
  */
-export function DetectFaces(filePath: string, ep: types$0.ExecutionProvider): $CancellablePromise<detection$0.Face[]> {
-    return $Call.ByID(347646086, filePath, ep).then(($result: any) => {
+export function DetectFaces(filePath: string, ep: types$0.ExecutionProvider, crop: types$1.CropInfo): $CancellablePromise<detection$0.Face[]> {
+    return $Call.ByID(347646086, filePath, ep, crop).then(($result: any) => {
         return $$createType1($result);
     });
 }

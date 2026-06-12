@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Typography } from '@mui/material';
-import { IconButton } from '@/components/atoms/IconButton';
+import { Button } from '@/components/atoms/Button';
+import { Icon } from '@/components/atoms/Icon';
 import { CropRotate } from '@/features/crop';
 import { useImageStore } from '@/stores';
 
@@ -11,7 +12,7 @@ export const SidebarImage = () => {
 
     return (
         <div className='h-36 flex items-center justify-center relative'>
-            {!originalImage && <Typography className='text-[#545454]'>No preview available</Typography>}
+            {!originalImage && <Typography className='text-[#545454] text-sm'>No preview available</Typography>}
 
             {originalImage && (
                 <div className='relative'>
@@ -31,12 +32,13 @@ export const SidebarImage = () => {
             )}
 
             {originalImage && (
-                <IconButton
-                    option='crop'
-                    size='small'
-                    className='absolute bottom-1 right-1 text-[#9e9e9e]'
+                <Button
+                    option='secondary'
                     onClick={() => setCropOpen(true)}
-                />
+                    className='min-w-0 absolute bottom-3 right-3 h-8 aspect-square p-2'
+                >
+                    <Icon option='crop' className='size-full' />
+                </Button>
             )}
 
             <CropRotate open={cropOpen} onClose={() => setCropOpen(false)} />

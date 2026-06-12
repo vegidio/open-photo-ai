@@ -9,3 +9,4 @@ export * from './useFileOperations.ts';
 export * from './useImageTransform.ts';
 export * from './useNotify.ts';
 export * from './useOptionEnhancement.ts';
+export * from './useSyncFaces.ts';

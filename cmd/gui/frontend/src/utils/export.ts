@@ -67,10 +67,10 @@ export const exportImage = (opts: ExportOptions) => {
     return new CancellablePromise<void>(
         async (resolve, reject) => {
             try {
-                // Face recovery no longer detects faces internally; detect them up front (cached by hash) and pass
-                // them along so the recovery operations receive them — minus any faces the user has deselected.
-                const faces = await getEnabledFaces(file, ep, opIds);
+                // Face recovery no longer detects faces internally; detect them up front (cached by hash+crop, so the
+                // boxes match the cropped source) and pass them along — minus any faces the user has deselected.
                 const crop = useCropStore.getState().crops.get(file);
+                const faces = await getEnabledFaces(file, ep, opIds, undefined, crop);
 
                 p = ExportImage(
                     file,
