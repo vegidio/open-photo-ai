@@ -193,7 +193,7 @@ func (s *ImageService) ExportImage(
 
 	outputData, err := s.runInference(ctx, file.Path, ep, params, opIds)
 	if err != nil {
-		// Cancellation is expected (user cancelled the export) — log it as info, not an error.
+		// Cancellation is expected (user canceled the export) — log it as info, not an error.
 		if errors.Is(err, context.Canceled) {
 			slog.Info("export cancelled", "hash", file.Hash, "input", file.Path)
 		} else {

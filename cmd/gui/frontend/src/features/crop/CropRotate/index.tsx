@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Dialog } from '@mui/material';
 import type { CropperRef } from 'react-advanced-cropper';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
-import { AspectRatioSelector } from '@/features/crop/AspectRatioSelector';
+import { CropSettings } from '@/features/crop/CropSettings';
 import { ImageCropper } from '@/features/crop/ImageCropper';
 import { RotateControls } from '@/features/crop/RotateControls';
 import { useImageStore } from '@/stores';
@@ -180,6 +180,16 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
         applyDimensions(width, height);
     };
 
+    const onApply = () => {
+        const coords = cropperRef.current?.getCoordinates({ round: true });
+        const rotation = (((baseRotation + fineRotation) % 360) + 360) % 360; // normalize to [0, 360)
+        const flip = cropperRef.current?.getState()?.transforms.flip;
+
+        console.log('Crop dimensions:', coords); // { left, top, width, height }
+        if (rotation !== 0) console.log('Rotation:', rotation);
+        if (flip?.horizontal || flip?.vertical) console.log('Flips:', flip);
+    };
+
     // Swap W↔H and drop any locked ratio; the actual resize is deferred to the pendingSwap effect, so it runs after
     // the cleared aspect ratio reaches the stencil.
     const onSwap = () => {
@@ -222,7 +232,7 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
                 </div>
 
                 {/* Right */}
-                <AspectRatioSelector
+                <CropSettings
                     selected={ratio}
                     onSelect={(key, value) => {
                         setRatio(key);
@@ -233,6 +243,8 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
                     onWidthCommit={onWidthCommit}
                     onHeightCommit={onHeightCommit}
                     onSwap={onSwap}
+                    onCancel={onClose}
+                    onApply={onApply}
                 />
             </div>
         </Dialog>

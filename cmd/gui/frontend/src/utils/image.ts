@@ -1,4 +1,5 @@
 import { CancellablePromise } from '@wailsio/runtime';
+import { LRUCache } from 'lru-cache';
 import type { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { GetImage, ProcessImage } from '@/bindings/gui/services/imageservice.ts';
 import { type File, InferenceParams } from '@/bindings/gui/types';
@@ -12,7 +13,7 @@ export type ImageData = {
     height: number;
 };
 
-const imageCache = new Map<string, ImageData>();
+const imageCache = new LRUCache<string, ImageData>({ max: 1000 });
 
 /**
  * Retrieves an image with the specified size, using a cache to avoid redundant processing.
