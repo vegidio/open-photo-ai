@@ -9,7 +9,7 @@ require (
 	github.com/samber/lo v1.52.0
 	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5
 	github.com/vegidio/go-sak v0.0.0-20260421203251-f2842cdc8299
-	github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84
+	github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5
 	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6
 	github.com/yalue/onnxruntime_go v1.21.0
 	golang.org/x/image v0.40.0

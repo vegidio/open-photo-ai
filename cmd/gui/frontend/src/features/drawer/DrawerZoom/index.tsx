@@ -3,6 +3,7 @@ import { FiMinus, FiPlus } from 'react-icons/fi';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { useCurrentFile, useImageTransform } from '@/hooks';
 import { useImageStore } from '@/stores';
+import { ZOOM_MAX, ZOOM_MIN } from '@/utils/constants.ts';
 
 type DrawerZoomProps = TailwindProps & {
     disabled?: boolean;
@@ -27,7 +28,7 @@ export const DrawerZoom = ({ disabled = false, className = '' }: DrawerZoomProps
         if (!currentFile) return;
 
         const initialScale = imageTransform.scale;
-        const value = op === 'plus' ? Math.min(initialScale + 0.5, 8) : Math.max(initialScale - 0.5, 1);
+        const value = op === 'plus' ? Math.min(initialScale + 0.5, ZOOM_MAX) : Math.max(initialScale - 0.5, ZOOM_MIN);
         if (value === initialScale) return;
 
         setImageTransform(currentFile.Hash, {
@@ -56,8 +57,8 @@ export const DrawerZoom = ({ disabled = false, className = '' }: DrawerZoomProps
 
             <Slider
                 size='small'
-                min={1}
-                max={8}
+                min={ZOOM_MIN}
+                max={ZOOM_MAX}
                 step={0.1}
                 shiftStep={0.1}
                 defaultValue={1}

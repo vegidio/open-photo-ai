@@ -162,8 +162,7 @@ github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5 h1:/C54x/gcnmppkzs
 github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5/go.mod h1:/ITCFP53XCH3zFZZLLtPm3jRqsv5CMgefZl4UCuP1rs=
 github.com/vegidio/go-sak v0.0.0-20260421203251-f2842cdc8299 h1:pz48FYY8+gCVlEtaxQo0y4n2wrbxm8T548Y+0HEfKis=
 github.com/vegidio/go-sak v0.0.0-20260421203251-f2842cdc8299/go.mod h1:/sbWWkQX0f/fURTmVsktn51ChnWWrRWEK0SuyD3I1ZA=
-github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84 h1:5y7NDPlUO5tcWvKkbBxCMXbRzY6x6wBMKvg0NGP2ML4=
-github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84/go.mod h1:LIuf1LAlIL2EsPYMJgchx9xAXK6hjfhVZtAUGYHdaQ8=
+github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5 h1:YCwDwYnp35h/5B6I2ON4PLXkojttYeDYlw5AuTxKht0=
 github.com/vegidio/open-photo-ai v0.0.0-20260607083020-ddc25793bc45 h1:GMeqRs59fe04BdsAJ68Jzmy5afpIB9bCVWSpDSLnRnU=
 github.com/vegidio/open-photo-ai v0.0.0-20260607083020-ddc25793bc45/go.mod h1:o+LhwCM76XrzVKEqcEBkjdXCiHCwdb7nsE2yEOwsOrM=
 github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6 h1:hevKFPyGBS6Ccf8dF+ltUjYv3wHDsIF3VbQisFJGVew=

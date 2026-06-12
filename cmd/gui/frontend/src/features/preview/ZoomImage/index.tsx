@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { type ReactZoomPanPinchRef, TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
 import type { ImageData } from '@/utils/image.ts';
 import { type ImageTransform, useImageStore } from '@/stores';
+import { ZOOM_MAX, ZOOM_MIN, ZOOM_WHEEL_STEP } from '@/utils/constants.ts';
 
 type ZoomImageProps = {
     image: ImageData;
@@ -40,6 +41,30 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
             height: image.height * scale,
         });
     }, [image]);
+
+    // Zoom in/out with the mouse wheel while hovering the preview. We update only the store scale
+    // (clamped to the slider's range) and let the transform effect below re-apply + re-center it, so
+    // the drawer slider stays in sync. A native, non-passive listener is required because React's
+    // synthetic onWheel is passive, making preventDefault() a no-op.
+    useEffect(() => {
+        const container = tRef.current?.instance.wrapperComponent;
+        if (!container) return;
+
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            const state = tRef.current?.instance.transformState;
+            if (!state) return;
+
+            const dir = e.deltaY < 0 ? 1 : -1; // wheel up = zoom in
+            const next = Math.min(Math.max(state.scale + dir * ZOOM_WHEEL_STEP, ZOOM_MIN), ZOOM_MAX);
+            if (next === state.scale) return;
+
+            setImageTransform(image.id, { scale: next, positionX: state.positionX, positionY: state.positionY });
+        };
+
+        container.addEventListener('wheel', onWheel, { passive: false });
+        return () => container.removeEventListener('wheel', onWheel);
+    }, [image.id, setImageTransform]);
 
     // Update the zoom level and position of the image
     useEffect(() => {

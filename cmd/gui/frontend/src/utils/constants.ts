@@ -19,3 +19,8 @@ export const DOTTED_BACKGROUND = 'bg-[#171717] bg-[radial-gradient(#383838_1px,t
 
 // Smallest allowed crop side (px), shared by the Crop/Rotate clamp and the dimension fields.
 export const MIN_CROP_SIZE = 16;
+
+// Preview zoom range, shared by the drawer slider and the mouse-wheel zoom in ZoomImage.
+export const ZOOM_MIN = 1;
+export const ZOOM_MAX = 8;
+export const ZOOM_WHEEL_STEP = 0.05; // scale change per wheel notch

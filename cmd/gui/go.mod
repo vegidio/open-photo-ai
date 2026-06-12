@@ -63,7 +63,7 @@ require (
 	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
 	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5 // indirect
-	github.com/vegidio/heif-go v0.0.0-20251219210713-e14a78e55c84 // indirect
+	github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5 // indirect
 	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6 // indirect
 	github.com/wailsapp/wails/webview2 v1.0.24 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
