@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Dialog } from '@mui/material';
 import type { CropperRef } from 'react-advanced-cropper';
+import { CropInfo } from '@/bindings/gui/types';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { CropSettings } from '@/features/crop/CropSettings';
 import { ImageCropper } from '@/features/crop/ImageCropper';
 import { RotateControls } from '@/features/crop/RotateControls';
-import { useImageStore } from '@/stores';
+import { useCurrentFile, useFileCrop } from '@/hooks';
+import { useCropStore } from '@/stores';
 import { DOTTED_BACKGROUND, MIN_CROP_SIZE } from '@/utils/constants.ts';
+import { getImage, type ImageData } from '@/utils/image.ts';
 
 type CropRotateProps = {
     open: boolean;
@@ -14,8 +17,16 @@ type CropRotateProps = {
 };
 
 export const CropRotate = ({ open, onClose }: CropRotateProps) => {
-    const originalImage = useImageStore((state) => state.originalImage);
+    const currentFile = useCurrentFile();
+    const savedCrop = useFileCrop(currentFile);
+    const setCrop = useCropStore((state) => state.setCrop);
+    const removeCrop = useCropStore((state) => state.removeKey);
+
     const cropperRef = useRef<CropperRef>(null);
+
+    // The Crop/Rotate modal always edits the *uncropped* original (the store's originalImage may already be cropped),
+    // so it fetches its own size=0 copy without any crop applied.
+    const [baseImage, setBaseImage] = useState<ImageData | undefined>(undefined);
     const [ratio, setRatio] = useState('free');
     const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined);
     const [baseRotation, setBaseRotation] = useState(0);
@@ -23,30 +34,47 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
     const [pendingReset, setPendingReset] = useState(false);
     const [cropWidth, setCropWidth] = useState(0);
     const [cropHeight, setCropHeight] = useState(0);
-    const [pendingSwap, setPendingSwap] = useState<{ width: number; height: number } | null>(null);
+    const [pendingSwap, setPendingSwap] = useState<{ width: number; height: number } | undefined>(undefined);
 
+    // Load the uncropped original whenever the modal opens for a file.
     useEffect(() => {
-        if (open) {
+        if (!open || !currentFile) return;
+        let cancelled = false;
+
+        getImage(currentFile, 0).then((img) => {
+            if (!cancelled) setBaseImage(img);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open, currentFile]);
+
+    // Reset the UI controls to defaults when (re)opening; the cropper itself is seeded from any saved crop in onReady.
+    useEffect(() => {
+        if (open && baseImage) {
             setRatio('free');
             setAspectRatio(undefined);
             setBaseRotation(0);
             setFineRotation(0);
-            setCropWidth(originalImage?.width ?? 0);
-            setCropHeight(originalImage?.height ?? 0);
+            setCropWidth(baseImage.width);
+            setCropHeight(baseImage.height);
         }
-    }, [open, originalImage]);
+    }, [open, baseImage]);
 
     // Apply a swapped crop only after the cleared aspect ratio has propagated to the <Cropper> stencil; doing it
     // synchronously in onSwap would re-constrain the box to the previous ratio (same deferral as pendingReset).
     useEffect(() => {
         if (!pendingSwap) return;
+
         cropperRef.current?.setCoordinates((state) => ({
             left: state.coordinates?.left ?? 0,
             top: state.coordinates?.top ?? 0,
             width: pendingSwap.width,
             height: pendingSwap.height,
         }));
-        setPendingSwap(null);
+
+        setPendingSwap(undefined);
     }, [pendingSwap]);
 
     // Reshape the crop box to a newly selected aspect ratio and sync the W/H fields. The work is deferred to the next
@@ -56,6 +84,7 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
     // does not fire onChange for a ratio-driven reshape, so the fields would not update otherwise. 'free' is a no-op.
     useEffect(() => {
         if (!open || aspectRatio === undefined) return;
+
         const frame = requestAnimationFrame(() => {
             const cropper = cropperRef.current;
             if (!cropper) return;
@@ -100,7 +129,28 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
         setPendingReset(false);
     }, [pendingReset]);
 
-    if (!originalImage) return null;
+    if (!baseImage) return undefined;
+
+    // Seed the cropper from a previously saved crop once the image is loaded, so re-opening shows the uncropped
+    // original with the prior flip/rotate/crop applied (and therefore editable/revertible).
+    const onReady = (cropper: CropperRef) => {
+        if (!savedCrop) return;
+        if (savedCrop.FlipH || savedCrop.FlipV) cropper.flipImage(savedCrop.FlipH, savedCrop.FlipV);
+        if (savedCrop.Rotation !== 0) cropper.rotateImage(savedCrop.Rotation, { transitions: false });
+
+        cropper.setCoordinates({
+            left: savedCrop.Left,
+            top: savedCrop.Top,
+            width: savedCrop.Width,
+            height: savedCrop.Height,
+        });
+
+        const base = Math.floor(savedCrop.Rotation / 90) * 90;
+        setBaseRotation(base);
+        setFineRotation(savedCrop.Rotation - base);
+        setCropWidth(savedCrop.Width);
+        setCropHeight(savedCrop.Height);
+    };
 
     // Rotate the cropper image to the given absolute angle by applying the delta from its current rotation.
     // The delta is normalized to the shortest path (-180, 180) so equivalent angles (e.g. 0 vs. 360) produce no
@@ -144,8 +194,8 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
         setPendingReset(true);
     };
 
-    const clampWidth = (value: number) => Math.max(MIN_CROP_SIZE, Math.min(originalImage.width, Math.round(value)));
-    const clampHeight = (value: number) => Math.max(MIN_CROP_SIZE, Math.min(originalImage.height, Math.round(value)));
+    const clampWidth = (value: number) => Math.max(MIN_CROP_SIZE, Math.min(baseImage.width, Math.round(value)));
+    const clampHeight = (value: number) => Math.max(MIN_CROP_SIZE, Math.min(baseImage.height, Math.round(value)));
 
     // Mirror the live stencil size into the W/H fields on every drag/resize and after programmatic changes.
     const syncDims = (cropper: CropperRef) => {
@@ -182,12 +232,41 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
 
     const onApply = () => {
         const coords = cropperRef.current?.getCoordinates({ round: true });
+        if (!coords || !currentFile) return;
+
         const rotation = (((baseRotation + fineRotation) % 360) + 360) % 360; // normalize to [0, 360)
         const flip = cropperRef.current?.getState()?.transforms.flip;
+        const flipH = flip?.horizontal ?? false;
+        const flipV = flip?.vertical ?? false;
 
-        console.log('Crop dimensions:', coords); // { left, top, width, height }
-        if (rotation !== 0) console.log('Rotation:', rotation);
-        if (flip?.horizontal || flip?.vertical) console.log('Flips:', flip);
+        // An unchanged crop (full box, no rotation, no flip) clears any stored crop so the preview reverts cleanly.
+        const isIdentity =
+            rotation === 0 &&
+            !flipH &&
+            !flipV &&
+            coords.left === 0 &&
+            coords.top === 0 &&
+            coords.width === baseImage.width &&
+            coords.height === baseImage.height;
+
+        if (isIdentity) {
+            removeCrop(currentFile);
+        } else {
+            setCrop(
+                currentFile,
+                new CropInfo({
+                    Rotation: rotation,
+                    FlipH: flipH,
+                    FlipV: flipV,
+                    Top: coords.top,
+                    Left: coords.left,
+                    Width: coords.width,
+                    Height: coords.height,
+                }),
+            );
+        }
+
+        onClose();
     };
 
     // Swap W↔H and drop any locked ratio; the actual resize is deferred to the pendingSwap effect, so it runs after
@@ -218,7 +297,13 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
             <div className={`flex-1 flex flex-row overflow-hidden ${DOTTED_BACKGROUND}`}>
                 {/* Left */}
                 <div className='flex-1 flex flex-col overflow-hidden p-8 gap-4'>
-                    <ImageCropper ref={cropperRef} aspectRatio={aspectRatio} onChange={syncDims} />
+                    <ImageCropper
+                        ref={cropperRef}
+                        src={baseImage.url}
+                        aspectRatio={aspectRatio}
+                        onChange={syncDims}
+                        onReady={onReady}
+                    />
 
                     <RotateControls
                         rotation={fineRotation}

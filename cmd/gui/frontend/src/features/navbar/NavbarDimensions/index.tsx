@@ -4,7 +4,8 @@ import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Button } from '@/components/atoms/Button';
 import { DimensionsPopover } from '@/features/navbar/DimensionsPopover';
-import { useFileOperations } from '@/hooks';
+import { useFileCrop, useFileOperations } from '@/hooks';
+import { cropDimensions } from '@/utils/image.ts';
 
 type NavbarDimensionsProps = TailwindProps & {
     file: File;
@@ -15,10 +16,14 @@ export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps
     const scaleStr = operations.find((op) => op.id.startsWith('up'))?.options?.scale ?? '1';
     const scale = parseFloat(scaleStr);
 
-    const originalDims = `${file.Dimensions[0]} x ${file.Dimensions[1]}`;
-    const outputDims = `${(file.Dimensions[0] * scale).toFixed(0)} x ${(file.Dimensions[1] * scale).toFixed(0)}`;
+    // A crop changes the source dimensions; the crop box (post-rotation) is the cropped image's size.
+    const crop = useFileCrop(file);
+    const [width, height] = cropDimensions(file, crop);
 
-    const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+    const originalDims = `${width} x ${height}`;
+    const outputDims = `${(width * scale).toFixed(0)} x ${(height * scale).toFixed(0)}`;
+
+    const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
     const open = Boolean(anchorEl);
 
     const onPopoverOpen = (event: MouseEvent<HTMLButtonElement>) => {
@@ -26,7 +31,7 @@ export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps
     };
 
     const onPopoverClose = () => {
-        setAnchorEl(null);
+        setAnchorEl(undefined);
     };
 
     return (

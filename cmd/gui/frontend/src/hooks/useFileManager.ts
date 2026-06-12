@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import type { File } from '@/bindings/gui/types';
-import { useEnhancementStore, useFileStore, useImageStore } from '@/stores';
+import { useCropStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
 
 // useFileManager is the single place callers should go to remove files or clear the workspace.
-// It keeps the file list, enhancements, and per-image transforms in sync without coupling the
+// It keeps the file list, enhancements, crops, and per-image transforms in sync without coupling the
 // stores to each other at module scope.
 export const useFileManager = () => {
     const removeFileFromList = useFileStore((state) => state.removeFile);
@@ -11,6 +11,8 @@ export const useFileManager = () => {
     const clearFileList = useFileStore((state) => state.clear);
     const removeEnhancementsKey = useEnhancementStore((state) => state.removeKey);
     const clearEnhancements = useEnhancementStore((state) => state.clear);
+    const removeCropKey = useCropStore((state) => state.removeKey);
+    const clearCrops = useCropStore((state) => state.clear);
     const removeImageTransform = useImageStore((state) => state.removeImageTransform);
     const clearImageState = useImageStore((state) => state.clear);
 
@@ -19,16 +21,18 @@ export const useFileManager = () => {
             removeFileFromList(file);
             removeSelectedFile(file.Path);
             removeEnhancementsKey(file);
+            removeCropKey(file);
             removeImageTransform(file.Hash);
         },
-        [removeFileFromList, removeSelectedFile, removeEnhancementsKey, removeImageTransform],
+        [removeFileFromList, removeSelectedFile, removeEnhancementsKey, removeCropKey, removeImageTransform],
     );
 
     const clearAll = useCallback(() => {
         clearFileList();
         clearEnhancements();
+        clearCrops();
         clearImageState();
-    }, [clearFileList, clearEnhancements, clearImageState]);
+    }, [clearFileList, clearEnhancements, clearCrops, clearImageState]);
 
     return { removeFile, clearAll };
 };

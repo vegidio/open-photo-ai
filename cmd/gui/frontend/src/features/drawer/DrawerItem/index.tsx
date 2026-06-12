@@ -72,7 +72,7 @@ type BottomBarProps = TailwindProps & {
 };
 
 const BottomBar = ({ file, selected = false, className = '' }: BottomBarProps) => {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
     const open = Boolean(anchorEl);
     const fileName = basename(file.Path);
 
@@ -83,7 +83,7 @@ const BottomBar = ({ file, selected = false, className = '' }: BottomBarProps) =
     };
 
     const onMenuClose = () => {
-        setAnchorEl(null);
+        setAnchorEl(undefined);
     };
 
     return (

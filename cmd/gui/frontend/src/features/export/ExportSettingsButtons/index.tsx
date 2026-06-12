@@ -28,8 +28,8 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const shModel = useSettingsStore((state) => state.shModel);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
-    const suggestRef = useRef<CancellablePromise<Operation[]> | null>(null);
-    const exportRef = useRef<CancellablePromise<void> | null>(null);
+    const suggestRef = useRef<CancellablePromise<Operation[]> | undefined>(undefined);
+    const exportRef = useRef<CancellablePromise<void> | undefined>(undefined);
 
     const handleCancel = () => {
         switch (state) {

@@ -2,8 +2,10 @@ import { CancellablePromise } from '@wailsio/runtime';
 import { LRUCache } from 'lru-cache';
 import type { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { GetImage, ProcessImage } from '@/bindings/gui/services/imageservice.ts';
-import { type File, InferenceParams } from '@/bindings/gui/types';
+import { type CropInfo, type File, InferenceParams } from '@/bindings/gui/types';
+import { useCropStore } from '@/stores/crop.ts';
 import { useEnhancementStore } from '@/stores/enhancements.ts';
+import { EMPTY_CROP } from '@/utils/constants.ts';
 import { getEnabledFaces, hasFaceRecovery } from '@/utils/face.ts';
 
 export type ImageData = {
@@ -15,19 +17,30 @@ export type ImageData = {
 
 const imageCache = new LRUCache<string, ImageData>({ max: 1000 });
 
+// A stable cache-key fragment for a crop; empty string when there's no crop so uncropped keys stay unchanged.
+const cropToken = (crop?: CropInfo) =>
+    crop
+        ? `_c${crop.Rotation}-${crop.FlipH ? 1 : 0}${crop.FlipV ? 1 : 0}-${crop.Left}-${crop.Top}-${crop.Width}-${crop.Height}`
+        : '';
+
+// The source dimensions of a file: the crop box (post-rotation) when cropped, otherwise the file's own dimensions.
+export const cropDimensions = (file: File, crop?: CropInfo): [number, number] =>
+    crop ? [crop.Width, crop.Height] : [file.Dimensions[0], file.Dimensions[1]];
+
 /**
  * Retrieves an image with the specified size, using a cache to avoid redundant processing.
  *
  * @param file - The file object containing the image path and hash.
  * @param size - The desired size for the image.
+ * @param crop - Optional flip/rotate/crop to apply; only honored by the backend when size is 0.
  * @returns A promise that resolves to the image data (url, width, height).
  */
-export const getImage = async (file: File, size: number) => {
-    const cacheKey = `${file.Hash}_${size}`;
+export const getImage = async (file: File, size: number, crop?: CropInfo) => {
+    const cacheKey = `${file.Hash}_${size}${cropToken(crop)}`;
     let image = imageCache.get(cacheKey);
 
     if (!image) {
-        const [base64, width, height] = await GetImage(file.Path, size);
+        const [base64, width, height] = await GetImage(file.Path, size, crop ?? EMPTY_CROP);
         image = await createImageData(file.Hash, base64, width, height);
         imageCache.set(cacheKey, image);
     }
@@ -53,7 +66,10 @@ export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operation
     const isFaceRecovery = hasFaceRecovery(operations);
     const disabled = isFaceRecovery ? useEnhancementStore.getState().disabledFaces.get(file) : undefined;
     const faceToken = disabled?.size ? `_d${[...disabled].sort((a, b) => a - b).join('-')}` : '';
-    const cacheKey = `${file.Hash}_${opIds}${faceToken}`;
+
+    // The crop is applied to the source before enhancement, so it must be part of the cache key too.
+    const crop = useCropStore.getState().crops.get(file);
+    const cacheKey = `${file.Hash}_${opIds}${faceToken}${cropToken(crop)}`;
 
     let image = imageCache.get(cacheKey);
     let p: CancellablePromise<[string, number, number]>;
@@ -66,7 +82,12 @@ export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operation
                     // them along so the recovery operations receive them — minus any faces the user has deselected.
                     const faces = await getEnabledFaces(file, ep, operations, disabled);
 
-                    p = ProcessImage(file.Path, ep, new InferenceParams({ Faces: faces }), ...operations);
+                    p = ProcessImage(
+                        file.Path,
+                        ep,
+                        new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
+                        ...operations,
+                    );
                     const [base64, width, height] = await p;
                     image = await createImageData(file.Hash, base64, width, height);
                     imageCache.set(cacheKey, image);

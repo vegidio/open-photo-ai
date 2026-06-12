@@ -9,4 +9,7 @@ import "github.com/vegidio/open-photo-ai/models/detection"
 type InferenceParams struct {
 	// Faces are the pre-detected faces forwarded to the face-recovery operations (athens/santorini).
 	Faces []detection.Face
+
+	// Crop is the flip/rotate/crop applied to the source image before any enhancement. A zero value means "no crop".
+	Crop CropInfo
 }

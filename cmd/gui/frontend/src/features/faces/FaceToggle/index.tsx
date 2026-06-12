@@ -34,7 +34,7 @@ export const FaceToggle = ({ file, open, onClose }: FaceToggleProps) => {
         return () => window.removeEventListener('resize', onResize);
     }, []);
 
-    if (!originalImage) return null;
+    if (!originalImage) return undefined;
 
     // Grow the modal to fill the screen while preserving the image aspect ratio, leaving room for the title bar.
     const aspectRatio = originalImage.width / originalImage.height;

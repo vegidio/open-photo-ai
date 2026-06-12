@@ -6,7 +6,7 @@ import { useOptionEnhancement } from '@/hooks';
 import { Kyoto, Saitama, Tokyo } from '@/operations';
 
 type OptionsUpscaleProps = {
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     open: boolean;
     onClose: () => void;
 };

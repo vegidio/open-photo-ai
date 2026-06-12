@@ -1,4 +1,5 @@
 export * from './app.ts';
+export * from './crop.ts';
 export * from './drawer';
 export * from './enhancements';
 export * from './export';

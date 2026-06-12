@@ -9,6 +9,55 @@ import { Create as $Create } from "@wailsio/runtime";
 // @ts-ignore: Unused imports
 import * as detection$0 from "../../github.com/vegidio/open-photo-ai/models/detection/models.js";
 
+/**
+ * CropInfo is the per-file flip/rotate/crop the user applied in the Crop/Rotate modal. It is applied to the source image
+ * (flip → rotate → crop) before any enhancement runs. A zero value (Width <= 0 || Height <= 0) means "no crop".
+ */
+export class CropInfo {
+    "Rotation": number;
+    "FlipH": boolean;
+    "FlipV": boolean;
+    "Top": number;
+    "Left": number;
+    "Width": number;
+    "Height": number;
+
+    /** Creates a new CropInfo instance. */
+    constructor($$source: Partial<CropInfo> = {}) {
+        if (!("Rotation" in $$source)) {
+            this["Rotation"] = 0;
+        }
+        if (!("FlipH" in $$source)) {
+            this["FlipH"] = false;
+        }
+        if (!("FlipV" in $$source)) {
+            this["FlipV"] = false;
+        }
+        if (!("Top" in $$source)) {
+            this["Top"] = 0;
+        }
+        if (!("Left" in $$source)) {
+            this["Left"] = 0;
+        }
+        if (!("Width" in $$source)) {
+            this["Width"] = 0;
+        }
+        if (!("Height" in $$source)) {
+            this["Height"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CropInfo instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CropInfo {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CropInfo($$parsedSource as Partial<CropInfo>);
+    }
+}
+
 export class File {
     "Path": string;
     "Hash": string;
@@ -62,10 +111,18 @@ export class InferenceParams {
      */
     "Faces": detection$0.Face[];
 
+    /**
+     * Crop is the flip/rotate/crop applied to the source image before any enhancement. A zero value means "no crop".
+     */
+    "Crop": CropInfo;
+
     /** Creates a new InferenceParams instance. */
     constructor($$source: Partial<InferenceParams> = {}) {
         if (!("Faces" in $$source)) {
             this["Faces"] = [];
+        }
+        if (!("Crop" in $$source)) {
+            this["Crop"] = (new CropInfo());
         }
 
         Object.assign(this, $$source);
@@ -76,9 +133,13 @@ export class InferenceParams {
      */
     static createFrom($$source: any = {}): InferenceParams {
         const $$createField0_0 = $$createType2;
+        const $$createField1_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("Faces" in $$parsedSource) {
             $$parsedSource["Faces"] = $$createField0_0($$parsedSource["Faces"]);
+        }
+        if ("Crop" in $$parsedSource) {
+            $$parsedSource["Crop"] = $$createField1_0($$parsedSource["Crop"]);
         }
         return new InferenceParams($$parsedSource as Partial<InferenceParams>);
     }
@@ -88,3 +149,4 @@ export class InferenceParams {
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = detection$0.Face.createFrom;
 const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = CropInfo.createFrom;

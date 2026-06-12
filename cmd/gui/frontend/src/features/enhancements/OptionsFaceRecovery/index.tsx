@@ -9,7 +9,7 @@ import { Athens, Santorini } from '@/operations';
 import { useEnhancementStore } from '@/stores';
 
 type OptionsFaceRecoveryProps = {
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     open: boolean;
     onClose: () => void;
 };
@@ -39,7 +39,7 @@ export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceReco
     const [facesOpen, setFacesOpen] = useState(false);
 
     const currentOp = operations.find((op) => op.id.startsWith('fr'));
-    if (!file || !currentOp) return null;
+    if (!file || !currentOp) return undefined;
 
     const selectedModel = `${currentOp.options.name}_${currentOp.options.precision}`;
 

@@ -6,7 +6,7 @@ import { useOptionEnhancement } from '@/hooks';
 import { Gothenburg, Malmo, Stockholm } from '@/operations';
 
 type OptionsDenoiseProps = {
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     open: boolean;
     onClose: () => void;
 };

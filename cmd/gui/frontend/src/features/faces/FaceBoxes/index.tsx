@@ -25,7 +25,7 @@ export const FaceBoxes = ({
 }: FaceBoxesProps) => {
     const faces = useFileFaces(file);
 
-    if (originalWidth <= 0 || originalHeight <= 0) return null;
+    if (originalWidth <= 0 || originalHeight <= 0) return undefined;
 
     // The bounding boxes are in original-image pixels; scale them to the displayed image size.
     const scaleX = displayWidth / originalWidth;

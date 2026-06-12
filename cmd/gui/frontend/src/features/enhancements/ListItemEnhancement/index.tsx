@@ -26,7 +26,7 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const { name, info, icon } = opToEnhancement(op, facesLabel(faces.length, disabledFaces.size));
     const OptionsComponent = selectOptionsComponent(op.id);
 
-    const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+    const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
     const open = Boolean(anchorEl);
 
     const onMenuOpen = (event: MouseEvent<HTMLDivElement>) => {
@@ -34,7 +34,7 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     };
 
     const onMenuClose = () => {
-        setAnchorEl(null);
+        setAnchorEl(undefined);
     };
 
     const onRemove = () => {
@@ -53,7 +53,7 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
                         <IconButton disableRipple edge='end' onClick={onRemove}>
                             <Icon option='close' />
                         </IconButton>
-                    ) : null
+                    ) : undefined
                 }
             >
                 <ListItemButton className='min-h-12' onClick={onMenuOpen}>
@@ -145,7 +145,7 @@ const opToEnhancement = (op: Operation, faceText: string): { name: string; info:
         }
     }
 
-    return { name: '', info: '', icon: null };
+    return { name: '', info: '', icon: undefined };
 };
 
 const titleCase = (input: string): string => {

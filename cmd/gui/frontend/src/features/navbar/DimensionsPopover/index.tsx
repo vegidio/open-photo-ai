@@ -4,7 +4,7 @@ import { Icon } from '@/components/atoms/Icon';
 type DimensionsPopoverProps = {
     originalDims: string;
     outputDims: string;
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     open: boolean;
     onClose: () => void;
 };

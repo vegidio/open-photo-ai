@@ -1,12 +1,16 @@
 package utils
 
 import (
+	"fmt"
+	"image"
+	"image/color"
 	"strconv"
 	"strings"
 
 	guitypes "gui/types"
 
 	"github.com/cockroachdb/errors"
+	"github.com/disintegration/imaging"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
 	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
@@ -139,6 +143,39 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 	}
 
 	return operations, nil
+}
+
+// ApplyCropInfo applies the user's flip/rotate/crop to the image in that order (flip → rotate → crop), matching how the
+// Crop/Rotate modal reports its coordinates. A zero CropInfo (Width <= 0 || Height <= 0) is a no-op and returns the
+// image unchanged. The rotation is negated because imaging.Rotate is counter-clockwise for positive angles while the
+// frontend cropper reports clockwise rotation.
+func ApplyCropInfo(img image.Image, c guitypes.CropInfo) image.Image {
+	if c.Width <= 0 || c.Height <= 0 {
+		return img
+	}
+
+	if c.FlipH {
+		img = imaging.FlipH(img)
+	}
+	if c.FlipV {
+		img = imaging.FlipV(img)
+	}
+	if c.Rotation != 0 {
+		img = imaging.Rotate(img, -c.Rotation, color.Transparent)
+	}
+
+	return imaging.Crop(img, image.Rect(c.Left, c.Top, c.Left+c.Width, c.Top+c.Height))
+}
+
+// CropCacheKey returns a stable signature for a crop, used to make a cropped image a distinct input for the library's
+// per-operation image cache (which keys on the input hash). It returns "" for a zero crop (Width <= 0 || Height <= 0)
+// so uncropped runs keep their original hash. Mirrors the frontend's cropToken.
+func CropCacheKey(c guitypes.CropInfo) string {
+	if c.Width <= 0 || c.Height <= 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("#c%v-%t%t-%d-%d-%d-%d", c.Rotation, c.FlipH, c.FlipV, c.Left, c.Top, c.Width, c.Height)
 }
 
 // parseIntensity extracts the denoise/sharpen intensity and precision from a split operation ID. It accepts both the

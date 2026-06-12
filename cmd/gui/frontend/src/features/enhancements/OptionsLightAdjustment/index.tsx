@@ -6,7 +6,7 @@ import { useOptionEnhancement } from '@/hooks';
 import { Paris } from '@/operations';
 
 type OptionsLightAdjustmentProps = {
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     open: boolean;
     onClose: () => void;
 };

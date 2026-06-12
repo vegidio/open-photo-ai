@@ -11,7 +11,7 @@ type NavbarCurrentFileProps = TailwindProps & {
 };
 
 export const NavbarCurrentFile = ({ file, className = '' }: NavbarCurrentFileProps) => {
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
     const open = Boolean(anchorEl);
 
     const onMenuOpen = (event: MouseEvent<HTMLButtonElement>) => {
@@ -21,7 +21,7 @@ export const NavbarCurrentFile = ({ file, className = '' }: NavbarCurrentFilePro
     };
 
     const onMenuClose = () => {
-        setAnchorEl(null);
+        setAnchorEl(undefined);
     };
 
     return (

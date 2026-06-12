@@ -1,6 +1,7 @@
 export * from './useAddEnhancements.ts';
 export * from './useCurrentFile.ts';
 export * from './useFaceSelection.ts';
+export * from './useFileCrop.ts';
 export * from './useFileDisabledFaces.ts';
 export * from './useFileFaces.ts';
 export * from './useFileManager.ts';

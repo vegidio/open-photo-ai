@@ -6,7 +6,7 @@ import { useOptionEnhancement } from '@/hooks';
 import { Moscow, Novgorod, Petersburg } from '@/operations';
 
 type OptionsSharpenProps = {
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     open: boolean;
     onClose: () => void;
 };

@@ -4,6 +4,8 @@ import type { Operation } from '@/operations';
 import { type ExecutionProvider, ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { ExportImage } from '@/bindings/gui/services/imageservice.ts';
 import { type File, InferenceParams } from '@/bindings/gui/types';
+import { useCropStore } from '@/stores/crop.ts';
+import { EMPTY_CROP } from '@/utils/constants.ts';
 import { getEnabledFaces } from '@/utils/face.ts';
 
 export type ExportOptions = {
@@ -68,6 +70,7 @@ export const exportImage = (opts: ExportOptions) => {
                 // Face recovery no longer detects faces internally; detect them up front (cached by hash) and pass
                 // them along so the recovery operations receive them — minus any faces the user has deselected.
                 const faces = await getEnabledFaces(file, ep, opIds);
+                const crop = useCropStore.getState().crops.get(file);
 
                 p = ExportImage(
                     file,
@@ -75,7 +78,7 @@ export const exportImage = (opts: ExportOptions) => {
                     ep,
                     overwrite,
                     imgFormat,
-                    new InferenceParams({ Faces: faces }),
+                    new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
                     ...opIds,
                 );
                 await p;

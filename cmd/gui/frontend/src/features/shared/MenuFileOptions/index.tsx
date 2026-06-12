@@ -7,7 +7,7 @@ import { os } from '@/utils/constants.ts';
 
 type MenuFileOptionsProps = {
     file: File;
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     anchorOrigin: PopoverOrigin;
     transformOrigin: PopoverOrigin;
     open: boolean;

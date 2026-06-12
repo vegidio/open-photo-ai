@@ -37,6 +37,8 @@ export function ExportImage(file: types$0.File, outputPath: string, ep: types$1.
  *   - size: The target size for the longest dimension of the image. If size is 0, the image is returned at its original
  *     dimensions. If size > 0, the image is resized proportionally so that its longest dimension (width or height)
  *     equals the specified size.
+ *   - crop: The flip/rotate/crop to apply to the source image. It is only applied when size == 0 (the full-resolution
+ *     preview); a zero CropInfo is a no-op.
  * 
  * # Returns:
  *   - []byte: The image data encoded as PNG bytes (lossless)
@@ -44,8 +46,8 @@ export function ExportImage(file: types$0.File, outputPath: string, ep: types$1.
  *   - int: The height of the image
  *   - error: An error if the image cannot be loaded, processed, or encoded
  */
-export function GetImage(filePath: string, size: number): $CancellablePromise<[string, number, number]> {
-    return $Call.ByID(2406933080, filePath, size).then(($result: any) => {
+export function GetImage(filePath: string, size: number, crop: types$0.CropInfo): $CancellablePromise<[string, number, number]> {
+    return $Call.ByID(2406933080, filePath, size, crop).then(($result: any) => {
         $result[0] = $Create.ByteSlice($result[0]);
         return $result;
     });

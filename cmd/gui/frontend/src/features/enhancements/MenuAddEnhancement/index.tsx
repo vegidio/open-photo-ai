@@ -7,7 +7,7 @@ import { useSettingsStore } from '@/stores';
 import { getCbOp, getDnOp, getFrOp, getLaOp, getShOp, getUpOp } from '@/utils/enhancement';
 
 type MenuAddEnhancementProps = {
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     open: boolean;
     onMenuClose: () => void;
 };

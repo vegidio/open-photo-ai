@@ -6,7 +6,7 @@ import { useOptionEnhancement } from '@/hooks';
 import { Rio } from '@/operations';
 
 type OptionsColorBalanceProps = {
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     open: boolean;
     onClose: () => void;
 };

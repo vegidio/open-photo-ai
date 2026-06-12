@@ -4,7 +4,7 @@ import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { EnhancementProgress } from '@/features/preview/EnhancementProgress';
 import { PreviewEmpty } from '@/features/preview/PreviewEmpty';
 import { PreviewImage } from '@/features/preview/PreviewImage';
-import { useCurrentFile, useFileDisabledFaces, useFileOperations, useNotify } from '@/hooks';
+import { useCurrentFile, useFileCrop, useFileDisabledFaces, useFileOperations, useNotify } from '@/hooks';
 import { useDrawerStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
 import { DOTTED_BACKGROUND } from '@/utils/constants.ts';
 import { userFriendlyErrorMessage } from '@/utils/errors.ts';
@@ -29,6 +29,8 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     const operations = useFileOperations(currentFile);
     // Re-run the preview when the user toggles which faces are enhanced (the Set ref changes on toggle).
     const disabledFaces = useFileDisabledFaces(currentFile);
+    // Re-run the preview when the user applies/clears a crop (the original is fetched cropped, enhanced reads it too).
+    const crop = useFileCrop(currentFile);
 
     const ep = useSettingsStore((state) => state.executionProvider);
 
@@ -41,7 +43,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
         async function loadPreview() {
             if (currentFile) {
-                const originalImage = await getImage(currentFile, 0);
+                const originalImage = await getImage(currentFile, 0, crop);
                 setOriginalImage(originalImage);
                 setEnhancedImage(originalImage);
 
@@ -79,7 +81,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             isCancelled = true;
             p?.cancel();
         };
-    }, [operations, currentFile, disabledFaces, setEnhancedImage, setOriginalImage]);
+    }, [operations, currentFile, disabledFaces, crop, setEnhancedImage, setOriginalImage]);
 
     useEffect(() => {
         if (filesLength > 1) setOpen(true);

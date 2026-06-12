@@ -6,9 +6,10 @@ import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { ExportQueueState } from '@/features/export/ExportQueueState';
+import { useFileCrop } from '@/hooks';
 import { useExportStore } from '@/stores';
 import { getExportInfo } from '@/utils/export.ts';
-import { getImage } from '@/utils/image.ts';
+import { cropDimensions, getImage } from '@/utils/image.ts';
 
 type ExportQueueRowProps = {
     file: File;
@@ -20,6 +21,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
     const prefix = useExportStore((state) => state.prefix);
     const suffix = useExportStore((state) => state.suffix);
     const location = useExportStore((state) => state.location);
+    const crop = useFileCrop(file);
 
     const [image, setImage] = useState<string>();
     const [state, setState] = useState('IDLE');
@@ -29,18 +31,19 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
     const { oldDims, newDims, oldSize, newExt, fileName, filePath } = useMemo(() => {
         const { fileName, filePath, ext } = getExportInfo(file, format, prefix, suffix, location);
 
-        // Dimensions
+        // Dimensions — a crop changes the source size (crop box is post-rotation = the cropped image's size).
         const scaleStr = operations.find((op) => op.id.startsWith('up'))?.options?.scale ?? '1';
         const scale = parseInt(scaleStr, 10);
-        const oldDims = `${file.Dimensions[0]} x ${file.Dimensions[1]}`;
-        const newDims = `${file.Dimensions[0] * scale} x ${file.Dimensions[1] * scale}`;
+        const [width, height] = cropDimensions(file, crop);
+        const oldDims = `${width} x ${height}`;
+        const newDims = `${width * scale} x ${height * scale}`;
 
         // Size
         const oldSize =
             file.Size < 1_000_000 ? `${(file.Size / 1_000).toFixed(2)} KB` : `${(file.Size / 1_000_000).toFixed(2)} MB`;
 
         return { oldDims, newDims, oldSize, newExt: ext, fileName, filePath };
-    }, [file, format, location, operations, prefix, suffix]);
+    }, [file, format, location, operations, prefix, suffix, crop]);
 
     useEffect(() => {
         async function loadImage() {
@@ -118,7 +121,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                         </IconButton>
                     ) : state === 'RUNNING' ? (
                         <CircularProgress size={20} />
-                    ) : null}
+                    ) : undefined}
                 </TableCell>
             </TableRow>
 

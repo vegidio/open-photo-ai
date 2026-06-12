@@ -61,7 +61,7 @@ type SettingsSnapshot = Pick<SettingsStore, SnapshotKey>;
 export const useSettingsStore = create(
     persist(
         immer<SettingsStore>((set, get) => {
-            let snapshot: SettingsSnapshot | null = null;
+            let snapshot: SettingsSnapshot | undefined;
 
             return {
                 isFirstTensorRT: true,

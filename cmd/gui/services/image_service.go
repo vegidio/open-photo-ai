@@ -47,18 +47,24 @@ func NewImageService(app *application.App, otel *o11y.Telemetry) *ImageService {
 //   - size: The target size for the longest dimension of the image. If size is 0, the image is returned at its original
 //     dimensions. If size > 0, the image is resized proportionally so that its longest dimension (width or height)
 //     equals the specified size.
+//   - crop: The flip/rotate/crop to apply to the source image. It is only applied when size == 0 (the full-resolution
+//     preview); a zero CropInfo is a no-op.
 //
 // # Returns:
 //   - []byte: The image data encoded as PNG bytes (lossless)
 //   - int: The width of the image
 //   - int: The height of the image
 //   - error: An error if the image cannot be loaded, processed, or encoded
-func (s *ImageService) GetImage(filePath string, size int) ([]byte, int, int, error) {
+func (s *ImageService) GetImage(filePath string, size int, crop guitypes.CropInfo) ([]byte, int, int, error) {
 	inputData, err := utils.LoadImage(filePath)
 	if err != nil {
 		s.otel.LogError("Error loading image", nil, err)
 		slog.Error("error loading image", "file_path", filePath, "err", err)
 		return nil, 0, 0, errors.Wrap(err, "failed to load image")
+	}
+
+	if size == 0 {
+		inputData.Pixels = guiutils.ApplyCropInfo(inputData.Pixels, crop)
 	}
 
 	if size > 0 {
@@ -257,6 +263,12 @@ func (s *ImageService) runInference(
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load image")
 	}
+
+	// Apply the user's flip/rotate/crop before any enhancement runs (no-op when no crop was set). The crop changes the
+	// pixels but not the file hash, so fold a crop signature into the hash — otherwise opai.Process's per-operation
+	// cache (keyed by input hash) would return a stale uncropped result.
+	inputImage.Pixels = guiutils.ApplyCropInfo(inputImage.Pixels, params.Crop)
+	inputImage.Hash += guiutils.CropCacheKey(params.Crop)
 
 	operations, err := guiutils.IdsToOperations(opIds, params)
 	if err != nil {

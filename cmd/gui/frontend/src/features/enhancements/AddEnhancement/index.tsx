@@ -8,7 +8,7 @@ type AddEnhancementProps = {
 };
 
 export const AddEnhancement = ({ disabled = false }: AddEnhancementProps) => {
-    const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+    const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
     const open = Boolean(anchorEl);
 
     const onMenuOpen = (event: MouseEvent<HTMLButtonElement>) => {
@@ -16,7 +16,7 @@ export const AddEnhancement = ({ disabled = false }: AddEnhancementProps) => {
     };
 
     const onMenuClose = () => {
-        setAnchorEl(null);
+        setAnchorEl(undefined);
     };
 
     return (

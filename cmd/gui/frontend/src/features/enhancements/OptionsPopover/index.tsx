@@ -4,7 +4,7 @@ import { ModalTitle } from '@/components/molecules/ModalTitle';
 
 type OptionsPopoverProps = {
     title: string;
-    anchorEl: HTMLElement | null;
+    anchorEl: HTMLElement | undefined;
     open: boolean;
     onClose: () => void;
     hideBackdrop?: boolean;
