@@ -18,9 +18,10 @@ export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps
 
     // A crop changes the source dimensions; the crop box (post-rotation) is the cropped image's size.
     const crop = useFileCrop(file);
-    const [width, height] = cropDimensions(file, crop);
+    const [width, height] = cropDimensions(file, crop); // effective source dims (cropped box if cropped, else file)
 
-    const originalDims = `${width} x ${height}`;
+    const originalDims = `${file.Dimensions[0]} x ${file.Dimensions[1]}`; // always the file's true size
+    const croppedDims = crop ? `${width} x ${height}` : undefined; // only when cropped
     const outputDims = `${(width * scale).toFixed(0)} x ${(height * scale).toFixed(0)}`;
 
     const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
@@ -49,7 +50,7 @@ export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps
                     </Typography>
 
                     <Typography variant='caption' className='text-[#b0b0b0]'>
-                        {scale > 1 ? outputDims : originalDims}
+                        {scale > 1 ? outputDims : (croppedDims ?? originalDims)}
                     </Typography>
                 </Button>
 
@@ -59,6 +60,7 @@ export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps
             {open && (
                 <DimensionsPopover
                     originalDims={originalDims}
+                    croppedDims={croppedDims}
                     outputDims={outputDims}
                     anchorEl={anchorEl}
                     open={true}

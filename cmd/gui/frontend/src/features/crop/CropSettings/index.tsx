@@ -75,6 +75,10 @@ export const CropSettings = ({
                 onSwap={onSwap}
             />
 
+            <Typography variant='body2' className='mt-6 text-center text-[#b0b0b0]'>
+                You can use the mouse wheel or the trackpad pinch to zoom in and out the image on the left.
+            </Typography>
+
             <div className='flex-1' />
 
             <div className='flex gap-3'>

@@ -3,13 +3,21 @@ import { Icon } from '@/components/atoms/Icon';
 
 type DimensionsPopoverProps = {
     originalDims: string;
+    croppedDims?: string;
     outputDims: string;
     anchorEl: HTMLElement | undefined;
     open: boolean;
     onClose: () => void;
 };
 
-export const DimensionsPopover = ({ originalDims, outputDims, anchorEl, open, onClose }: DimensionsPopoverProps) => {
+export const DimensionsPopover = ({
+    originalDims,
+    croppedDims,
+    outputDims,
+    anchorEl,
+    open,
+    onClose,
+}: DimensionsPopoverProps) => {
     return (
         <Popover
             anchorEl={anchorEl}
@@ -32,7 +40,7 @@ export const DimensionsPopover = ({ originalDims, outputDims, anchorEl, open, on
             }}
         >
             <ClickAwayListener onClickAway={onClose}>
-                <div className='flex flex-col gap-2 p-4 pr-5 bg-black border-1 border-[#2b2b2b] rounded'>
+                <div className='flex flex-col gap-2 p-4 pr-5 bg-black border border-[#2b2b2b] rounded'>
                     <div className='flex flex-row items-center gap-3'>
                         <Icon option='upscale' className='size-4' />
 
@@ -49,6 +57,18 @@ export const DimensionsPopover = ({ originalDims, outputDims, anchorEl, open, on
                         <Typography variant='caption' className='text-[#b0b0b0]'>
                             {originalDims}
                         </Typography>
+
+                        {croppedDims && (
+                            <>
+                                <Typography variant='caption' className='text-[#f2f2f2]'>
+                                    Cropped
+                                </Typography>
+
+                                <Typography variant='caption' className='text-[#b0b0b0]'>
+                                    {croppedDims}
+                                </Typography>
+                            </>
+                        )}
 
                         <Typography variant='caption' className='text-[#f2f2f2]'>
                             Output
