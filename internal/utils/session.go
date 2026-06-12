@@ -12,6 +12,8 @@ import (
 )
 
 func CreateSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*ort.DynamicAdvancedSession, error) {
+	internal.Log().Debug("creating session", "model_file", modelFile, "ep", ep)
+
 	configDir, err := os.UserConfigDir()
 	cachePath := filepath.Join(configDir, internal.AppName, "models")
 	var options *ort.SessionOptions

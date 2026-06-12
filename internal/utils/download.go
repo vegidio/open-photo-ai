@@ -200,6 +200,9 @@ func verifyDownload(destination string, fileCheck *types.FileCheck) error {
 	}
 
 	if hash != fileCheck.Hash {
+		internal.Log().Warn("download hash mismatch; removing artifact",
+			"file", fileCheck.Path, "expected", fileCheck.Hash, "got", hash)
+
 		if rmErr := os.Remove(filePath); rmErr != nil {
 			internal.Log().Warn("failed to remove corrupt download", "path", filePath, "err", rmErr)
 		}

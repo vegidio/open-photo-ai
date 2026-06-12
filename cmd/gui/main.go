@@ -89,6 +89,8 @@ func main() {
 	// Run the application. This blocks until the application exists
 	err := app.Run()
 
+	slog.Info("Open Photo AI exited")
+
 	// If an error occurred while running the application, log it and exit.
 	if err != nil {
 		otel.LogError("Error running the app", nil, err)
@@ -118,6 +120,7 @@ func eventDragAndDrop(app *application.App, win *application.WebviewWindow) {
 			paths := event.Context().DroppedFiles()
 			files := utils.CreateFileTypes(paths)
 
+			slog.Info("files dropped", "count", len(files))
 			app.Event.Emit(services.EventAppFilesDropped, files)
 		})
 }

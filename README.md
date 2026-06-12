@@ -116,7 +116,7 @@ These are the features I plan to implement in the future, in no particular order
 - [x] Simplify the app installation using packages and installers.
 - [x] Add new model for color balance.
 - [x] Add new models for denoise, sharpening.
-- [ ] Crop and rotate images in the GUI.
+- [x] Crop and rotate images in the GUI.
 - [ ] Add new model to colorize black and white photos.
 - [ ] Add new model to fix imperfections and remove objects from photos.
 - [ ] Attempt to include diffusion-based models (this will be hard!)

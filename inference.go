@@ -54,6 +54,7 @@ func Process(
 ) (*types.ImageData, error) {
 	var err error
 
+	start := time.Now()
 	internal.Log().Info("processing image", "op_count", len(operations), "hash", input.Hash)
 
 	// Make a copy of the input img so the original input is not modified
@@ -78,6 +79,9 @@ func Process(
 			return nil, errors.Wrap(err, "error caching image")
 		}
 	}
+
+	internal.Log().Info("image processed",
+		"op_count", len(operations), "hash", input.Hash, "duration", time.Since(start))
 
 	return &types.ImageData{
 		FilePath: input.FilePath,
@@ -261,13 +265,15 @@ func selectModel(
 
 	default:
 		internal.Log().Warn("no model found for operation", "op", operation.Id())
-		err = errors.Errorf("no model found with ID: %s", operation.Id())
+		return nil, errors.Errorf("no model found with ID: %s", operation.Id())
 	}
 
 	// We can't check `model != nil` here because model is an interface and in Go a variable is only nil if both its
 	// type and value are nil. In this case, even though the value is nil, the variable has a concrete type.
 	if err == nil {
 		internal.Registry.Set(operation.Id(), model)
+	} else {
+		internal.Log().Warn("model creation failed", "op", operation.Id(), "ep", ep, "err", err)
 	}
 
 	return model, err
