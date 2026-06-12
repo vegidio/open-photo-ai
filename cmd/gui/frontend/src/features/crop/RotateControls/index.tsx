@@ -12,7 +12,8 @@ type RotateControlsProps = TailwindProps & {
     onReset: () => void;
 };
 
-const MARKS = [-90, -75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90].map((value) => ({ value }));
+// 13 marks at 15° spacing across the [-90°, 90°] fine-rotation range.
+const MARKS = Array.from({ length: 13 }, (_, i) => ({ value: i * 15 - 90 }));
 
 export const RotateControls = ({
     rotation,

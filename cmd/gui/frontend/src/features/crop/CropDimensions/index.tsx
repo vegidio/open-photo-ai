@@ -5,7 +5,7 @@ import { IconButton } from '@/components/atoms/IconButton';
 import { TextField } from '@/components/atoms/TextField';
 import { MIN_CROP_SIZE } from '@/utils/constants.ts';
 
-const toInt = (value: string) => parseInt(value.trim(), 10);
+const toInt = (value: string) => Number.parseInt(value.trim(), 10);
 
 type DimensionFieldProps = {
     label: string;
