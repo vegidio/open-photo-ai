@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Events } from '@wailsio/runtime';
 import { Initialize } from '@/bindings/gui/services/appservice.ts';
-import { DialogDownload } from '@/components/organisms/DialogDownload';
-import { DialogTensorRT } from '@/components/organisms/DialogTensorRT';
-import { Drawer } from '@/components/organisms/Drawer';
-import { Navbar } from '@/components/organisms/Navbar';
-import { Preview } from '@/components/organisms/Preview';
-import { Sidebar } from '@/components/organisms/Sidebar';
+import { DialogDownload, DialogTensorRT } from '@/features/dialogs';
+import { Drawer } from '@/features/drawer';
+import { Navbar } from '@/features/navbar';
+import { Preview } from '@/features/preview';
+import { Sidebar } from '@/features/sidebar';
 import { useSettingsStore } from '@/stores';
 
 export const App = () => {
