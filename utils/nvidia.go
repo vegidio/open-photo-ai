@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	CudaTag     = "cuda/12.9.1"
-	CudnnTag    = "cudnn/9.14.0"
-	TensorrtTag = "tensorrt/10.9.0"
+	CudaTag     = "cuda/13.3.0"
+	CudnnTag    = "cudnn/9.23.1"
+	TensorrtTag = "tensorrt/10.16.1"
 )
 
 // IsCudaSupported performs a simplified check whether the system has an NVIDIA GPU that possibly supports CUDA.
@@ -71,7 +71,7 @@ func IsTensorRtSupported() bool {
 //
 // # Parameters:
 //   - libName: The name of the NVIDIA library (e.g., "cuda", "cudnn", "tensorrt").
-//   - libTag: The version tag used in the download URL (e.g., "cuda/12.9.1").
+//   - libTag: The version tag used in the download URL (e.g., "cuda/13.3.0").
 //   - checkFile: A filepath used to verify if the library is already installed.
 //   - onProgress: A callback function to report download progress.
 //
