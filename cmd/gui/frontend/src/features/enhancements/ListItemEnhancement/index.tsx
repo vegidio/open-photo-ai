@@ -107,7 +107,8 @@ const opToEnhancement = (op: Operation, faceText: string): { name: string; info:
     switch (true) {
         // Denoise
         case op.id.startsWith('dn'): {
-            const info = `${titleCase(op.options.name)}, ${quality}`;
+            const intensity = parseFloat(op.options.intensity) * 100;
+            const info = `${titleCase(op.options.name)}, ${intensity}%, ${quality}`;
             return { name: 'Denoise', info, icon: <Icon option='denoise' /> };
         }
 
@@ -140,7 +141,8 @@ const opToEnhancement = (op: Operation, faceText: string): { name: string; info:
 
         // Sharpen
         case op.id.startsWith('sh'): {
-            const info = `${titleCase(op.options.name)}, ${quality}`;
+            const intensity = parseFloat(op.options.intensity) * 100;
+            const info = `${titleCase(op.options.name)}, ${intensity}%, ${quality}`;
             return { name: 'Sharpen', info, icon: <Icon option='sharpen' /> };
         }
     }
