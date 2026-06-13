@@ -160,7 +160,7 @@ jobs:
           node scripts/replace.ts shared/constants.go "<otel_endpoint>" "$OTEL_ENDPOINT"
           node scripts/replace.ts shared/constants.go "<otel_auth>" "$OTEL_HEADER_AUTH"
           node scripts/replace.ts shared/constants.go "EnvDevelopment" "EnvProduction"
-          task package archs='amd64 arm64'
+          task package archs=arm64
 
       - name: Save artifacts
         uses: actions/upload-artifact@v4

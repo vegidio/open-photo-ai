@@ -1,6 +1,6 @@
 package internal
 
 const (
-	OnnxRuntimeName = "onnxruntime-1.22.0.so"
-	OnnxRuntimeHash = "5ede9537894434c221de73323aa1f644967afeed6569fd570ea356a366e98ecd"
+	OnnxRuntimeName = "onnxruntime.so.1.26.0"
+	OnnxRuntimeHash = "ea322d74879c376217a310e4233e4f50ea9267a0e339963d0e1961f46b7a57d5"
 )

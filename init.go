@@ -18,7 +18,7 @@ import (
 var destroyOnce sync.Once
 
 const (
-	onnxRuntimeTag = "runtime/1.22.0"
+	onnxRuntimeTag = "runtime/1.26.0"
 )
 
 // Initialize sets up the model runtime by ensuring all required dependencies are available.

@@ -88,8 +88,8 @@ github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5 h1:YCwDwYnp35h/5B6
 github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5/go.mod h1:LIuf1LAlIL2EsPYMJgchx9xAXK6hjfhVZtAUGYHdaQ8=
 github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6 h1:hevKFPyGBS6Ccf8dF+ltUjYv3wHDsIF3VbQisFJGVew=
 github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6/go.mod h1:KvXYy3lri/NnkiBoJV1dhpoutRd9kvc7W60hcV+hDvA=
-github.com/yalue/onnxruntime_go v1.21.0 h1:DdtvfY7OP5gR8mwPDqAOAQckf+KcI30hPNJL8hQaYWI=
-github.com/yalue/onnxruntime_go v1.21.0/go.mod h1:b4X26A8pekNb1ACJ58wAXgNKeUCGEAQ9dmACut9Sm/4=
+github.com/yalue/onnxruntime_go v1.31.0 h1:1ln4YW1SFOFfGJZXe3jNOb2JUSt+l2pEneZfV8HdtFA=
+github.com/yalue/onnxruntime_go v1.31.0/go.mod h1:b4X26A8pekNb1ACJ58wAXgNKeUCGEAQ9dmACut9Sm/4=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/zeebo/assert v1.3.0 h1:g7C04CbJuIDKNPFHmsk4hwZDO5O+kntRxzaUoNXj+IQ=

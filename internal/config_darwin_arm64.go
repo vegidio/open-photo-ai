@@ -1,6 +1,6 @@
 package internal
 
 const (
-	OnnxRuntimeName = "onnxruntime-1.22.0.dylib"
-	OnnxRuntimeHash = "2b885992d3d6fa4130d39ec84a80d7504ff52750027c547bb22c86165f19406a"
+	OnnxRuntimeName = "onnxruntime.1.26.0.dylib"
+	OnnxRuntimeHash = "30afadcfc3c704f7671f8430d6252956651c1972373901d2be629da2e6a4d8ee"
 )

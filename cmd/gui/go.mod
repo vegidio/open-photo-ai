@@ -67,7 +67,7 @@ require (
 	github.com/vegidio/webp-go v0.0.0-20251220093554-d304ec2dc4e6 // indirect
 	github.com/wailsapp/wails/webview2 v1.0.24 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
-	github.com/yalue/onnxruntime_go v1.21.0 // indirect
+	github.com/yalue/onnxruntime_go v1.31.0 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.43.0 // indirect
