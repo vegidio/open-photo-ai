@@ -16,7 +16,7 @@ tasks:
     generates:
       - node_modules/*
     preconditions:
-      - sh: pnpm version
+      - sh: pnpm --version
         msg: "Looks like pnpm isn't installed. pnpm is part of the Node installer: https://nodejs.org/en/download/"
     cmds:
       - pnpm install

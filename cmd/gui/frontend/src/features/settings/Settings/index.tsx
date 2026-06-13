@@ -23,9 +23,9 @@ export const Settings = ({ section: _section, open, onClose }: SettingsProps) =>
         onClose();
     };
 
-    const onSave = async () => {
-        await CleanRegistry();
+    const onSave = () => {
         onClose();
+        void CleanRegistry();
     };
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: N/A
