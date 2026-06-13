@@ -17,6 +17,20 @@ const (
 	tileSize    = 256
 )
 
+// TileOption configures an optional behavior of RunTiledInference.
+type TileOption func(*tileConfig)
+
+type tileConfig struct {
+	divergenceThreshold float32 // <=0 disables the per-tile divergence guard
+}
+
+// WithDivergenceGuard enables the per-tile divergence guard: if a tile's RAW model output exceeds threshold in absolute
+// magnitude, the original input pixels are kept for that tile (identity passthrough) instead of the diverged model
+// output. This guards against models (e.g. NAFNet-based) that occasionally blow up on out-of-distribution tiles.
+func WithDivergenceGuard(threshold float32) TileOption {
+	return func(c *tileConfig) { c.divergenceThreshold = threshold }
+}
+
 // RunTiledInference runs a fixed-shape ONNX session over an image in overlapping 256x256 tiles and stitches the results
 // back together with soft blending. scale is the model's output scale factor (1 for denoise, N for an NxN upscale), so
 // the result has dimensions width*scale x height*scale. opId is the progress key (e.g. "dn"/"up").
@@ -30,9 +44,15 @@ func RunTiledInference(
 	scale int,
 	opId string,
 	onProgress types.InferenceProgress,
+	opts ...TileOption,
 ) (*image.RGBA, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
+	}
+
+	var cfg tileConfig
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 
 	// Get image dimensions
@@ -60,7 +80,7 @@ func RunTiledInference(
 
 			paddedTile := prepareTileForInference(img, tileX, tileY, tileW, tileH, tileSize)
 
-			processedTile, err := processTile(session, paddedTile, tileW, tileH, scale)
+			processedTile, err := processTile(session, paddedTile, tileW, tileH, scale, cfg.divergenceThreshold)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to process tile")
 			}
@@ -133,9 +153,9 @@ func prepareTileForInference(img image.Image, tileX, tileY, tileW, tileH, tileSi
 
 // processTile runs the ML model inference and removes padding from the result. The crop bounds are scaled by scale to
 // match the inference output dimensions (scale is 1 for denoise).
-func processTile(session *ort.DynamicAdvancedSession, tile image.Image, tileW, tileH, scale int) (image.Image, error) {
+func processTile(session *ort.DynamicAdvancedSession, tile image.Image, tileW, tileH, scale int, divergenceThreshold float32) (image.Image, error) {
 	// Run inference
-	processedTile, err := runTileInference(session, tile, scale)
+	processedTile, err := runTileInference(session, tile, scale, divergenceThreshold)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to run inference")
 	}
@@ -150,7 +170,7 @@ func processTile(session *ort.DynamicAdvancedSession, tile image.Image, tileW, t
 
 // runTileInference runs inference on a single padded tile. The output shares the input's shape scaled by scale (scale 1
 // keeps the dimensions, e.g. denoise; scale N upscales).
-func runTileInference(session *ort.DynamicAdvancedSession, tile image.Image, scale int) (image.Image, error) {
+func runTileInference(session *ort.DynamicAdvancedSession, tile image.Image, scale int, divergenceThreshold float32) (image.Image, error) {
 	bounds := tile.Bounds()
 	h, w := bounds.Dy(), bounds.Dx()
 
@@ -178,6 +198,22 @@ func runTileInference(session *ort.DynamicAdvancedSession, tile image.Image, sca
 	outputData := outputTensor.GetData()
 	outW := int(outputShape[3])
 	outH := int(outputShape[2])
+
+	// Per-tile divergence guard: some models numerically blow up on certain out-of-distribution tiles, exploding the
+	// RAW output to ~1000+ (which clamps to a solid saturated block). Detect that from the raw values and keep the
+	// original input pixels for the tile instead — one cheap max(|·|) pass, no second inference.
+	if divergenceThreshold > 0 {
+		for _, v := range outputData {
+			if v > divergenceThreshold || v < -divergenceThreshold {
+				// Diverged tile: keep the original input pixels (identity passthrough). The guard is only enabled for
+				// the scale==1 path, where `tile` already matches the output dimensions; resize defensively if scale != 1.
+				if scale == 1 {
+					return tile, nil
+				}
+				return imaging.Resize(tile, w*scale, h*scale, imaging.Lanczos), nil
+			}
+		}
+	}
 
 	return CHWToImage(outputData, outW, outH, false), nil
 }
