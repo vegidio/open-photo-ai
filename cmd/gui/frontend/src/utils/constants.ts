@@ -24,3 +24,7 @@ export const MIN_CROP_SIZE = 16;
 export const ZOOM_MIN = 1;
 export const ZOOM_MAX = 8;
 export const ZOOM_WHEEL_STEP = 0.05; // scale change per wheel notch
+
+// Mouse-wheel zoom speed in the Crop/Rotate Cropper (multiplicative scale change
+// per wheel notch). Library default is 0.1; lowered to feel less abrupt.
+export const CROP_ZOOM_WHEEL_RATIO = 0.025;

@@ -2,6 +2,7 @@ import { forwardRef } from 'react';
 import { Cropper, type CropperRef, type CropperState } from 'react-advanced-cropper';
 import 'react-advanced-cropper/dist/style.css';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
+import { CROP_ZOOM_WHEEL_RATIO } from '@/utils/constants.ts';
 
 type ImageCropperProps = TailwindProps & {
     src: string;
@@ -22,6 +23,7 @@ export const ImageCropper = forwardRef<CropperRef, ImageCropperProps>(
                 ref={ref}
                 src={src}
                 defaultSize={defaultSize}
+                backgroundWrapperProps={{ scaleImage: { wheel: { ratio: CROP_ZOOM_WHEEL_RATIO } } }}
                 onChange={onChange}
                 onReady={onReady}
                 stencilProps={{
