@@ -25,7 +25,7 @@ type huggingFaceFile struct {
 // LoadModelData fetches the list of available AI models from the Hugging Face repository.
 //
 // It retrieves model metadata including file names, sizes, and LFS hashes from the vegidio/open-photo-ai repository
-// under the models directory.
+// under the models/ directory.
 //
 // Returns a slice of RemoteModelData structs containing model information, or an error if:
 //   - The HTTP request to Hugging Face fails

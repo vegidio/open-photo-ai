@@ -3,8 +3,10 @@ package opai
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/cockroachdb/errors"
@@ -55,6 +57,11 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 		return errors.Wrap(err, "failed to create image cache")
 	}
 	internal.ImageCache = cache
+
+	// Invalidate the on-disk model cache when it predates the current ONNX runtime tag
+	if err = cleanModelCache(); err != nil {
+		return errors.Wrap(err, "failed to clean model cache")
+	}
 
 	fileCheck := &types.FileCheck{
 		Path: internal.OnnxRuntimeName,
@@ -112,6 +119,38 @@ func Destroy() {
 }
 
 // region - Private functions
+
+func cleanModelCache() error {
+	modelsDir, err := fs.MkUserConfigDir(internal.AppName, "models")
+	if err != nil {
+		return errors.Wrap(err, "failed to resolve models directory")
+	}
+
+	versionPath := filepath.Join(modelsDir, ".version")
+
+	current, readErr := os.ReadFile(versionPath)
+	if readErr == nil && strings.TrimSpace(string(current)) == onnxRuntimeTag {
+		return nil // cache matches the current runtime tag; keep it
+	}
+
+	// Missing or mismatched .version → wipe the contents of models/
+	entries, err := os.ReadDir(modelsDir)
+	if err != nil {
+		return errors.Wrap(err, "failed to read models directory")
+	}
+	for _, e := range entries {
+		if err = os.RemoveAll(filepath.Join(modelsDir, e.Name())); err != nil {
+			return errors.Wrapf(err, "failed to remove %s from model cache", e.Name())
+		}
+	}
+
+	if err = os.WriteFile(versionPath, []byte(onnxRuntimeTag), 0o644); err != nil {
+		return errors.Wrap(err, "failed to write model cache version file")
+	}
+
+	internal.Log().Info("model cache invalidated", "onnx_tag", onnxRuntimeTag)
+	return nil
+}
 
 func startRuntime() error {
 	configDir, err := fs.MkUserConfigDir(internal.AppName)
