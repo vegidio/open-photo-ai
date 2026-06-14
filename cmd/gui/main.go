@@ -7,6 +7,7 @@ import (
 	"gui/utils"
 	"log"
 	"log/slog"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -118,9 +119,38 @@ func eventDragAndDrop(app *application.App, win *application.WebviewWindow) {
 		events.Common.WindowFilesDropped,
 		func(event *application.WindowEvent) {
 			paths := event.Context().DroppedFiles()
-			files := utils.CreateFileTypes(paths)
+			supported, unsupported := utils.PartitionSupportedFiles(paths)
 
+			// Warn about and surface any unsupported files, but still load the supported ones.
+			if len(unsupported) > 0 {
+				slog.Warn("unsupported files dropped", "count", len(unsupported))
+				showUnsupportedFilesDialog(app, unsupported)
+			}
+
+			if len(supported) == 0 {
+				return
+			}
+
+			files := utils.CreateFileTypes(supported)
 			slog.Info("files dropped", "count", len(files))
 			app.Event.Emit(services.EventAppFilesDropped, files)
 		})
+}
+
+func showUnsupportedFilesDialog(app *application.App, unsupported []string) {
+	var message string
+	if len(unsupported) == 1 {
+		message = fmt.Sprintf("The file %q is not supported.", filepath.Base(unsupported[0]))
+	} else {
+		names := make([]string, len(unsupported))
+		for i, path := range unsupported {
+			names[i] = "  • " + filepath.Base(path)
+		}
+		message = "The following files are not supported:\n\n" + strings.Join(names, "\n")
+	}
+
+	dialog := app.Dialog.Error()
+	dialog.SetTitle("Unsupported File(s)")
+	dialog.SetMessage(message)
+	dialog.Show()
 }

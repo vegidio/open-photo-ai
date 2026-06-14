@@ -16,7 +16,29 @@ import (
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/async"
 	"github.com/vegidio/go-sak/crypto"
+	"github.com/vegidio/open-photo-ai/utils"
 )
+
+// IsSupportedFile reports whether path has a supported image extension.
+func IsSupportedFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	if len(ext) > 0 {
+		ext = ext[1:]
+	}
+	return slices.Contains(utils.SupportedImageExtensions(), ext)
+}
+
+// PartitionSupportedFiles splits paths into supported and unsupported by extension.
+func PartitionSupportedFiles(paths []string) (supported, unsupported []string) {
+	for _, path := range paths {
+		if IsSupportedFile(path) {
+			supported = append(supported, path)
+		} else {
+			unsupported = append(unsupported, path)
+		}
+	}
+	return supported, unsupported
+}
 
 func CreateFileTypes(paths []string) []types.File {
 	concurrentCh := async.SliceToChannel(paths, runtime.NumCPU(), func(path string) types.File {
