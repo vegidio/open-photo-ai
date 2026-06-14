@@ -19,7 +19,7 @@ type Tokyo struct {
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Tokyo, error) {
 	op := operation.(OpUpTokyo)
-	scales := selectScaleMatrix(op.scale)
+	scales := upscale.SelectScaleMatrix(op.scale, upscale.DefaultScaleBuckets)
 
 	sessions, err := upscale.LoadSessions(ctx, "tokyo", op.precision, scales, ep, onProgress)
 	if err != nil {
@@ -59,21 +59,6 @@ func (m *Tokyo) Run(
 func (m *Tokyo) Destroy() {
 	for _, session := range m.sessions {
 		session.Destroy()
-	}
-}
-
-// endregion
-
-// region - Private functions
-
-func selectScaleMatrix(scale float64) []int {
-	switch {
-	case scale <= 4:
-		return []int{4}
-	case scale <= 8:
-		return []int{4, 4}
-	default:
-		return []int{}
 	}
 }
 

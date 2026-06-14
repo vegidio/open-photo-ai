@@ -19,7 +19,7 @@ type Kyoto struct {
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Kyoto, error) {
 	op := operation.(OpUpKyoto)
-	scales := selectScaleMatrix(op.scale)
+	scales := upscale.SelectScaleMatrix(op.scale, kyotoScaleBuckets)
 
 	sessions, err := upscale.LoadSessions(ctx, "kyoto", op.precision, scales, ep, onProgress)
 	if err != nil {
@@ -66,17 +66,11 @@ func (m *Kyoto) Destroy() {
 
 // region - Private functions
 
-func selectScaleMatrix(scale float64) []int {
-	switch {
-	case scale <= 2:
-		return []int{2}
-	case scale <= 4:
-		return []int{4}
-	case scale <= 8:
-		return []int{4, 2}
-	default:
-		return []int{}
-	}
+// kyotoScaleBuckets reflects Kyoto's native 2x and 4x models (8x = 4x then 2x).
+var kyotoScaleBuckets = []upscale.ScaleBucket{
+	{Max: 2, Passes: []int{2}},
+	{Max: 4, Passes: []int{4}},
+	{Max: 8, Passes: []int{4, 2}},
 }
 
 // endregion

@@ -22,8 +22,17 @@ func LoadSessions(
 	scales []int,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
-) ([]*ort.DynamicAdvancedSession, error) {
+) (_ []*ort.DynamicAdvancedSession, retErr error) {
 	sessions := make([]*ort.DynamicAdvancedSession, 0, len(scales))
+
+	// Release any sessions already opened if a later scale fails to load.
+	defer func() {
+		if retErr != nil {
+			for _, s := range sessions {
+				s.Destroy()
+			}
+		}
+	}()
 
 	for _, scale := range scales {
 		modelId := fmt.Sprintf("up_%s_%.4gx_%s", variant, float64(scale), precision)
