@@ -4,6 +4,7 @@ import { Events } from '@wailsio/runtime';
 import { RiFolderImageLine } from 'react-icons/ri';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
+import { AnalyticsEvent, track } from '@/analytics';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { ExportQueueState } from '@/features/export/ExportQueueState';
 import { useFileCrop } from '@/hooks';
@@ -64,8 +65,13 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                     value < 1_000_000 ? `${(value / 1_000).toFixed(2)} KB` : `${(value / 1_000_000).toFixed(2)} MB`,
                 );
                 setProgress(100);
+                track(AnalyticsEvent.ExportCompleted);
             } else {
                 setProgress(value * 100);
+            }
+
+            if (state === 'ERROR' || state === 'ERROR_DOWNLOAD') {
+                track(AnalyticsEvent.ExportFailed, { reason: state });
             }
 
             setState(state);

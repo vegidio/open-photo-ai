@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Events } from '@wailsio/runtime';
+import { AnalyticsEvent, track } from '@/analytics';
 import { Initialize } from '@/bindings/gui/services/appservice.ts';
 import { DialogDownload, DialogTensorRT } from '@/features/dialogs';
 import { Drawer } from '@/features/drawer';
@@ -7,6 +8,7 @@ import { Navbar } from '@/features/navbar';
 import { Preview } from '@/features/preview';
 import { Sidebar } from '@/features/sidebar';
 import { useSettingsStore } from '@/stores';
+import { getErrorMessage } from '@/utils/errors.ts';
 
 export const App = () => {
     const isFirstTensorRT = useSettingsStore((state) => state.isFirstTensorRT);
@@ -31,11 +33,15 @@ export const App = () => {
                 const supportedEps = await Initialize();
                 setProcessorSelectItems(supportedEps);
                 setOpenDownload(false);
+                track(AnalyticsEvent.AppInitialized, {
+                    execution_provider: useSettingsStore.getState().executionProvider,
+                });
 
                 // If it's the first run and TensorRT is supported, open the TensorRT dialog.
                 if (supportedEps.TensorRT && isFirstTensorRT) setOpenTensorRT(true);
-            } catch {
+            } catch (e) {
                 console.error('Failed to initialize the app');
+                track(AnalyticsEvent.InitFailed, { reason: getErrorMessage(e) });
                 setOpenDownload(true);
                 setDownloadError(true);
             }

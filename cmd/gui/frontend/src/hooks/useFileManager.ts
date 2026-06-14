@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { File } from '@/bindings/gui/types';
+import { AnalyticsEvent, track } from '@/analytics';
 import { useCropStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
 
 // useFileManager is the single place callers should go to remove files or clear the workspace.
@@ -23,6 +24,7 @@ export const useFileManager = () => {
             removeEnhancementsKey(file);
             removeCropKey(file);
             removeImageTransform(file.Hash);
+            track(AnalyticsEvent.FileRemoved);
         },
         [removeFileFromList, removeSelectedFile, removeEnhancementsKey, removeCropKey, removeImageTransform],
     );
@@ -32,6 +34,7 @@ export const useFileManager = () => {
         clearEnhancements();
         clearCrops();
         clearImageState();
+        track(AnalyticsEvent.FilesCleared);
     }, [clearFileList, clearEnhancements, clearCrops, clearImageState]);
 
     return { removeFile, clearAll };

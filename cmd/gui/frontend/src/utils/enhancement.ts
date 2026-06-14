@@ -28,6 +28,9 @@ export type ModelChoices = {
     sh: string;
 };
 
+// The first two letters of an operation ID are its enhancement type, e.g. `dn`, `fr`, `up`.
+export const getEnhancementType = (opId: string): string => opId.slice(0, 2);
+
 export const suggestEnhancement = (file: File, models: ModelChoices) => {
     let p: CancellablePromise<ModelType[]>;
 

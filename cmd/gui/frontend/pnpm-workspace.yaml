@@ -1,3 +1,8 @@
+allowBuilds:
+  '@firebase/util': true
+  protobufjs: true
 onlyBuiltDependencies:
+  - '@firebase/util'
   - '@tailwindcss/oxide'
   - esbuild
+  - protobufjs

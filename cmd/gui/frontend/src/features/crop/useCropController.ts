@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CropperRef } from 'react-advanced-cropper';
+import { AnalyticsEvent, track } from '@/analytics';
 import { CropInfo } from '@/bindings/gui/types';
 import { FULL_TURN, normalizeAngle, ROTATE_STEP, snapToStep } from '@/features/crop/utils.ts';
 import { useCurrentFile, useFileCrop, useFileOperations, useSyncFaces } from '@/hooks';
@@ -268,6 +269,12 @@ export const useCropController = (open: boolean, onClose: () => void) => {
                     Height: coords.height,
                 }),
             );
+
+            track(AnalyticsEvent.CropApplied, {
+                rotated: rotation !== 0,
+                flipped: flipH || flipV,
+                has_ratio: aspectRatio !== undefined,
+            });
         }
 
         // The crop is now in the store; re-detect faces against it so the face count/overlay reflect the cropped

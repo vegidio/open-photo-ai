@@ -1,8 +1,10 @@
 import { useCallback } from 'react';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
+import { AnalyticsEvent, track } from '@/analytics';
 import { useSyncFaces } from '@/hooks/useSyncFaces.ts';
 import { useEnhancementStore } from '@/stores';
+import { getEnhancementType } from '@/utils/enhancement.ts';
 import { hasFaceRecovery } from '@/utils/face.ts';
 
 /**
@@ -18,6 +20,8 @@ export const useAddEnhancements = () => {
     return useCallback(
         async (file: File, operations: Operation[]) => {
             addEnhancements(file, operations);
+
+            for (const op of operations) track(AnalyticsEvent.EnhancementAdded, { type: getEnhancementType(op.id) });
 
             if (hasFaceRecovery(operations.map((op) => op.id))) {
                 await syncFaces(file);

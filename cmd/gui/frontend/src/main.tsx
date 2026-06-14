@@ -9,6 +9,18 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App.tsx';
 import './style.css';
 import { SnackbarProvider } from 'notistack';
+import { AnalyticsEvent, initAnalytics, setAnalyticsEnabled, track } from '@/analytics';
+import { useSettingsStore } from '@/stores';
+
+// Initialize analytics before the app mounts, honoring the user's persisted opt-out, then record the app open.
+initAnalytics(useSettingsStore.getState().analyticsEnabled);
+track(AnalyticsEvent.AppOpen);
+
+// Keep Firebase's collection flag mirrored to the persisted opt-out — the store is the single source of truth, so any
+// change (including a Settings-cancel revert via restoreSnapshot) re-syncs Firebase without call-site coordination.
+useSettingsStore.subscribe((state, prev) => {
+    if (state.analyticsEnabled !== prev.analyticsEnabled) setAnalyticsEnabled(state.analyticsEnabled);
+});
 
 const lightTheme = createTheme({
     palette: {

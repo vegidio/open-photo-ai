@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
+import { AnalyticsEvent, track } from '@/analytics';
 import { EnhancementProgress } from '@/features/preview/EnhancementProgress';
 import { PreviewEmpty } from '@/features/preview/PreviewEmpty';
 import { PreviewImage } from '@/features/preview/PreviewImage';
 import { useCurrentFile, useFileCrop, useFileDisabledFaces, useFileOperations, useNotify } from '@/hooks';
 import { useDrawerStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
 import { DOTTED_BACKGROUND } from '@/utils/constants.ts';
-import { userFriendlyErrorMessage } from '@/utils/errors.ts';
+import { getErrorMessage, userFriendlyErrorMessage } from '@/utils/errors.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 
 export const Preview = ({ className = '' }: TailwindProps) => {
@@ -56,8 +57,10 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                     try {
                         const enhancedImage = await p;
                         setEnhancedImage(enhancedImage);
+                        track(AnalyticsEvent.ImageProcessed, { operation_count: opIds.length });
                     } catch (e) {
                         if (!(e instanceof CancelError)) {
+                            track(AnalyticsEvent.ProcessFailed, { reason: getErrorMessage(e) });
                             const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to enhance image.');
                             enqueueSnackbar(msg, { variant: 'error' });
                         }
@@ -92,6 +95,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     useEffect(() => {
         Events.On('app:FilesDropped', (event) => {
             addFiles(event.data);
+            if (event.data?.length > 0) track(AnalyticsEvent.FilesAdded, { count: event.data.length, source: 'drop' });
         });
 
         return () => Events.Off('app:FilesDropped');

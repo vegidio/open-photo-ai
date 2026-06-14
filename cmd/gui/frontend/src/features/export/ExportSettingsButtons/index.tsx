@@ -3,8 +3,10 @@ import { Button } from '@mui/material';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
+import { AnalyticsEvent, track } from '@/analytics';
 import { useExportStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
+import { getErrorMessage } from '@/utils/errors.ts';
 import { exportImage } from '@/utils/export.ts';
 
 type ExportSettingsButtonsProps = {
@@ -51,6 +53,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
         }
 
         setState('processing');
+        track(AnalyticsEvent.ExportStarted, { count: enhancements.size, format });
 
         for (const [file, operations] of enhancements.entries()) {
             try {
@@ -87,7 +90,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
                 if (e instanceof CancelError) {
                     Events.Emit('app:export', { hash: file.Hash, state: 'IDLE', value: 0 });
                 } else {
-                    const msg = e instanceof Error ? e.message : String(e);
+                    const msg = getErrorMessage(e);
                     const tag = msg.includes('[download]') ? 'ERROR_DOWNLOAD' : 'ERROR';
                     Events.Emit('app:export', { hash: file.Hash, state: tag, value: 0 });
                 }

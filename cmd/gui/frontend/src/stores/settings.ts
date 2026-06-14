@@ -19,6 +19,7 @@ type SettingsStore = {
     isFirstTensorRT: boolean;
     processorSelectItems: SelectItem[];
     executionProvider: ExecutionProvider;
+    analyticsEnabled: boolean;
 
     dnModel: string;
     frModel: string;
@@ -30,6 +31,7 @@ type SettingsStore = {
     setIsFirstTensorRT: (isFirstRun: boolean) => void;
     setProcessorSelectItems: (supportedEps: SupportedEPs) => void;
     setExecutionProvider: (ep: ExecutionProvider) => void;
+    setAnalyticsEnabled: (enabled: boolean) => void;
     setDnModel: (model: string) => void;
     setFrModel: (model: string) => void;
     setLaModel: (model: string) => void;
@@ -47,6 +49,7 @@ const SNAPSHOT_KEYS = [
     'isFirstTensorRT',
     'processorSelectItems',
     'executionProvider',
+    'analyticsEnabled',
     'dnModel',
     'frModel',
     'laModel',
@@ -67,6 +70,7 @@ export const useSettingsStore = create(
                 isFirstTensorRT: true,
                 processorSelectItems: [],
                 executionProvider: ExecutionProviderAuto,
+                analyticsEnabled: true,
                 dnModel: 'stockholm',
                 frModel: 'athens',
                 laModel: 'paris',
@@ -101,6 +105,12 @@ export const useSettingsStore = create(
                 setExecutionProvider: (ep: ExecutionProvider) => {
                     set((state) => {
                         state.executionProvider = ep;
+                    });
+                },
+
+                setAnalyticsEnabled: (enabled: boolean) => {
+                    set((state) => {
+                        state.analyticsEnabled = enabled;
                     });
                 },
 
@@ -146,6 +156,7 @@ export const useSettingsStore = create(
                         isFirstTensorRT: state.isFirstTensorRT,
                         processorSelectItems: [...state.processorSelectItems],
                         executionProvider: state.executionProvider,
+                        analyticsEnabled: state.analyticsEnabled,
                         dnModel: state.dnModel,
                         frModel: state.frModel,
                         laModel: state.laModel,

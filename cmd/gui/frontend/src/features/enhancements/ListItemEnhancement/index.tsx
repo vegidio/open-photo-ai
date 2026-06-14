@@ -1,6 +1,7 @@
 import { type MouseEvent, type ReactNode, useState } from 'react';
 import { IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import type { Operation } from '@/operations';
+import { AnalyticsEvent, track } from '@/analytics';
 import { Icon } from '@/components/atoms/Icon';
 import { OptionsColorBalance } from '@/features/enhancements/OptionsColorBalance';
 import { OptionsDenoise } from '@/features/enhancements/OptionsDenoise';
@@ -10,6 +11,7 @@ import { OptionsSharpen } from '@/features/enhancements/OptionsSharpen';
 import { OptionsUpscale } from '@/features/enhancements/OptionsUpscale';
 import { useCurrentFile, useFileDisabledFaces, useFileFaces } from '@/hooks';
 import { useEnhancementStore } from '@/stores';
+import { getEnhancementType } from '@/utils/enhancement.ts';
 
 type ListItemEnhancementProps = {
     op: Operation;
@@ -38,7 +40,10 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     };
 
     const onRemove = () => {
-        if (file) removeEnhancement(file, op.id);
+        if (file) {
+            removeEnhancement(file, op.id);
+            track(AnalyticsEvent.EnhancementRemoved, { type: getEnhancementType(op.id) });
+        }
     };
 
     return (

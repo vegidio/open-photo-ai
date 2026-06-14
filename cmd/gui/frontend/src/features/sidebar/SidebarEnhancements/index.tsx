@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { List } from '@mui/material';
 import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
+import { AnalyticsEvent, track } from '@/analytics';
 import { ListItemEnhancement } from '@/features/enhancements/ListItemEnhancement';
 import { ListItemAutopilot } from '@/features/sidebar/ListItemAutopilot';
 import { useAddEnhancements, useCurrentFile, useFileOperations, useNotify } from '@/hooks';
 import { useEnhancementStore, useSettingsStore } from '@/stores';
-import { suggestEnhancement } from '@/utils/enhancement.ts';
+import { getEnhancementType, suggestEnhancement } from '@/utils/enhancement.ts';
 import { userFriendlyErrorMessage } from '@/utils/errors.ts';
 
 export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
@@ -50,6 +51,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
                 });
 
                 await addEnhancements(currentFile, suggestions);
+                track(AnalyticsEvent.AutopilotRun, { count: suggestions.length });
             } catch (e) {
                 const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to run autopilot.');
                 enqueueSnackbar(msg, { variant: 'error' });
@@ -67,7 +69,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
                 <ListItemAutopilot />
             ) : (
                 operations.map((op) => {
-                    const prefix = op.id.slice(0, 2);
+                    const prefix = getEnhancementType(op.id);
                     return <ListItemEnhancement key={prefix} op={op} />;
                 })
             )}

@@ -1,11 +1,13 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { List, ListSubheader } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps';
+import { AnalyticsEvent, track } from '@/analytics';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { GetLogsPath } from '@/bindings/gui/services/appservice.ts';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { SettingsItemButton } from '@/features/settings/SettingsItemButton';
 import { SettingsItemSelect } from '@/features/settings/SettingsItemSelect';
+import { SettingsItemSwitch } from '@/features/settings/SettingsItemSwitch';
 import { useSettingsStore } from '@/stores';
 
 export type SettingsListHandle = {
@@ -42,6 +44,7 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
             </ListSubheader>
 
             <ItemAiProcessor id='app_processor' />
+            <ItemAnalytics id='app_analytics' />
             <ItemLogs id='app_logs' />
 
             <ListSubheader id='enhancements' className='bg-[#2b2b2b] text-[#f2f2f2]'>
@@ -200,7 +203,30 @@ const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
             description={description}
             items={processorSelectItems}
             selected={executionProvider}
-            onSelect={(value) => setExecutionProvider(value as ExecutionProvider)}
+            onSelect={(value) => {
+                setExecutionProvider(value as ExecutionProvider);
+                track(AnalyticsEvent.ExecutionProviderChanged, { provider: value });
+            }}
+        />
+    );
+};
+
+type ItemAnalyticsProps = {
+    id?: string;
+};
+
+const ItemAnalytics = ({ id }: ItemAnalyticsProps) => {
+    const analyticsEnabled = useSettingsStore((state) => state.analyticsEnabled);
+    const setAnalyticsEnabled = useSettingsStore((state) => state.setAnalyticsEnabled);
+
+    // Only writes the store; a subscription in main.tsx mirrors the flag into Firebase, so the store stays authoritative.
+    return (
+        <SettingsItemSwitch
+            id={id}
+            title='Send anonymous usage data'
+            description='Help improve the app by sending anonymous usage analytics. No images or personal data are ever collected.'
+            checked={analyticsEnabled}
+            onChange={setAnalyticsEnabled}
         />
     );
 };
