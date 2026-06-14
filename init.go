@@ -62,7 +62,7 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 	}
 
 	// ONNX Runtime
-	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.zip",
+	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/onnx_%s_%s.7z",
 		onnxRuntimeTag, runtime.GOOS, runtime.GOARCH)
 
 	if err = utils.PrepareDependency(ctx, url, "", fileCheck, onProgress); err != nil {

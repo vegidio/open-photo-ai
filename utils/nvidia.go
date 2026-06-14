@@ -20,7 +20,7 @@ import (
 const (
 	CudaTag     = "cuda/13.3.0"
 	CudnnTag    = "cudnn/9.23.1"
-	TensorrtTag = "tensorrt/10.16.1"
+	TensorrtTag = "tensorrt/10.13.3"
 )
 
 // IsCudaSupported performs a simplified check whether the system has an NVIDIA GPU that possibly supports CUDA.
@@ -82,7 +82,7 @@ func InitializeNvidiaLib(
 	fileCheck *types.FileCheck,
 	onProgress types.DownloadProgress,
 ) error {
-	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/%s_%s_%s.zip",
+	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/%s_%s_%s.7z",
 		libTag, libName, runtime.GOOS, runtime.GOARCH)
 	destination := filepath.Join("libs", libName)
 

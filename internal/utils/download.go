@@ -70,8 +70,8 @@ func PrepareDependency(
 
 	ext := filepath.Ext(fileName)
 
-	// If it's a zip file, unzip it
-	if ext == ".zip" {
+	// If it's a 7zip file, unzip it
+	if ext == ".7z" {
 		// Close the file before unzipping it on Windows
 		file.Close()
 		defer os.Remove(file.Name())
@@ -79,7 +79,7 @@ func PrepareDependency(
 		internal.Log().Info("extracting archive", "file", fileName)
 
 		targetDir := filepath.Dir(file.Name())
-		err = fs.Unzip(file.Name(), targetDir)
+		err = fs.Un7zip(file.Name(), targetDir)
 		if err != nil {
 			return errors.Wrap(err, "failed to unzip dependency")
 		}
