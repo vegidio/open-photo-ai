@@ -11,6 +11,10 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
+// divergenceThreshold is the max |raw output| above which a tile is treated as a NAFNet blow-up and replaced with the
+// original input pixels. 3.0 sits safely above legitimate output magnitude (~O(1)) and far below the ~1000+ blow-up.
+const divergenceThreshold = 3.0
+
 type Stockholm struct {
 	name      string
 	operation OpDnStockholm
@@ -51,7 +55,7 @@ func (m *Stockholm) Run(
 	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
-	result, err := denoise.RunPipeline(ctx, m.session, img, onProgress)
+	result, err := denoise.RunPipeline(ctx, m.session, img, onProgress, utils.WithDivergenceGuard(divergenceThreshold))
 	if err != nil {
 		return nil, err
 	}

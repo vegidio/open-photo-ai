@@ -17,10 +17,11 @@ func RunPipeline(
 	session *ort.DynamicAdvancedSession,
 	img image.Image,
 	onProgress types.InferenceProgress,
+	opts ...utils.TileOption,
 ) (image.Image, error) {
 	if onProgress != nil {
 		onProgress("dn", 0)
 	}
 
-	return utils.RunTiledInference(ctx, session, img, 1, "dn", onProgress)
+	return utils.RunTiledInference(ctx, session, img, 1, "dn", onProgress, opts...)
 }
