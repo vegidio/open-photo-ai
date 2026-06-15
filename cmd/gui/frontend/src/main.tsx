@@ -16,8 +16,8 @@ import { useSettingsStore } from '@/stores';
 initAnalytics(useSettingsStore.getState().analyticsEnabled);
 track(AnalyticsEvent.AppOpen);
 
-// Keep Firebase's collection flag mirrored to the persisted opt-out — the store is the single source of truth, so any
-// change (including a Settings-cancel revert via restoreSnapshot) re-syncs Firebase without call-site coordination.
+// Keep the analytics collection flag mirrored to the persisted opt-out — the store is the single source of truth, so any
+// change (including a Settings-cancel revert via restoreSnapshot) re-syncs analytics without call-site coordination.
 useSettingsStore.subscribe((state, prev) => {
     if (state.analyticsEnabled !== prev.analyticsEnabled) setAnalyticsEnabled(state.analyticsEnabled);
 });

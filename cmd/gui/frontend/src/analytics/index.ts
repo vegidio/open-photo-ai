@@ -1,7 +1,8 @@
-import { measurementApiSecret, measurementId } from './config.ts';
+import { init, trackEvent } from '@aptabase/web';
+import { version } from '@/utils/constants.ts';
+import { aptabaseAppKey } from './config.ts';
 
-// Single source of truth for analytics event names. GA4 constraints: snake_case, ≤ 40 chars, ≤ 25 params per event,
-// and avoid the reserved names. Add new events here so every `track()` call site stays type-checked.
+// Single source of truth for analytics event names. Add new events here so every `track()` call site stays type-checked.
 export const AnalyticsEvent = {
     AppOpen: 'app_open',
     AppInitialized: 'app_initialized',
@@ -25,40 +26,16 @@ export type AnalyticsEvent = (typeof AnalyticsEvent)[keyof typeof AnalyticsEvent
 
 type AnalyticsParams = Record<string, string | number | boolean>;
 
-// We send events via the GA4 Measurement Protocol instead of the Firebase Analytics web SDK: the SDK's gtag transport
-// silently fails to transmit from Wails' custom-scheme (wails://wails.localhost) webview, whereas a direct POST works.
-// The destination is the same GA4 property behind the Firebase project, so events still land in Firebase Analytics.
-const MP_ENDPOINT = 'https://www.google-analytics.com/mp/collect';
-
-const CLIENT_ID_KEY = 'analytics-client-id';
-
-// Module state: `enabled` mirrors the persisted opt-out; `clientId` is a stable per-install id GA4 requires.
+// Module state: `enabled` mirrors the persisted opt-out. Aptabase has no built-in opt-out, so collection is gated here.
 let enabled = true;
-let clientId = '';
 
-// A stable client id, persisted across launches. Uses getRandomValues (works in any context) rather than
-// crypto.randomUUID() (which needs a secure context the wails:// origin may not provide).
-const loadClientId = (): string => {
-    try {
-        const existing = localStorage.getItem(CLIENT_ID_KEY);
-        if (existing) return existing;
-
-        const bytes = new Uint8Array(16);
-        crypto.getRandomValues(bytes);
-        const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-        const id = `${hex.slice(0, 16)}.${hex.slice(16)}`;
-        localStorage.setItem(CLIENT_ID_KEY, id);
-        return id;
-    } catch {
-        // localStorage unavailable — fall back to an ephemeral id (per-session, still valid for GA4).
-        return `${Date.now()}.${Math.floor(Math.random() * 1e9)}`;
-    }
-};
+// The App Key literal ships as a placeholder until set; treat that as "not configured" so we never init/track with it.
+const keyConfigured = (): boolean => !!aptabaseAppKey && !aptabaseAppKey.startsWith('A-XX');
 
 /** Initializes analytics. Honors `collectionEnabled` so a persisted opt-out is respected from the first event. */
 export const initAnalytics = (collectionEnabled = true): void => {
     enabled = collectionEnabled;
-    clientId = loadClientId();
+    if (keyConfigured()) init(aptabaseAppKey, { appVersion: version });
 };
 
 /** Toggles whether analytics events are collected. Wired to the Settings opt-out switch. */
@@ -68,13 +45,9 @@ export const setAnalyticsEnabled = (value: boolean): void => {
 
 /** Logs a single analytics event. No-ops when collection is disabled or analytics isn't configured. */
 export const track = (event: AnalyticsEvent, params?: AnalyticsParams): void => {
-    if (!enabled) return;
-    if (!measurementId || !measurementApiSecret || measurementApiSecret.startsWith('<')) return;
+    if (!enabled || !keyConfigured()) return;
 
-    const body = JSON.stringify({ client_id: clientId, events: [{ name: event, params }] });
-    const url = `${MP_ENDPOINT}?measurement_id=${measurementId}&api_secret=${measurementApiSecret}`;
-
-    // no-cors: the MP endpoint sends no CORS headers and we don't read the response. keepalive lets in-flight events
-    // survive an app/window close. Fire-and-forget — analytics must never throw into the app.
-    fetch(url, { method: 'POST', mode: 'no-cors', body, keepalive: true }).catch(() => {});
+    // Fire-and-forget — analytics must never throw into the app. The SDK already swallows network errors; the extra
+    // catch guards against init-not-called or other synchronous rejections.
+    void trackEvent(event, params).catch(() => {});
 };
