@@ -223,7 +223,7 @@ const ItemAnalytics = ({ id }: ItemAnalyticsProps) => {
     return (
         <SettingsItemSwitch
             id={id}
-            title='Send anonymous usage data'
+            title='Analytics'
             description='Help improve the app by sending anonymous usage analytics. No images or personal data are ever collected.'
             checked={analyticsEnabled}
             onChange={setAnalyticsEnabled}

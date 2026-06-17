@@ -117,6 +117,7 @@ These are the features I plan to implement in the future, in no particular order
 - [x] Add new model for color balance.
 - [x] Add new models for denoise, sharpening.
 - [x] Crop and rotate images in the GUI.
+- [ ] Rework the architecture of some models to improve performance.
 - [ ] Add new model to colorize black and white photos.
 - [ ] Add new model to fix imperfections and remove objects from photos.
 - [ ] Attempt to include diffusion-based models (this will be hard!)
