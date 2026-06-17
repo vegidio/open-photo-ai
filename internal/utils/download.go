@@ -139,6 +139,12 @@ func shouldDownload(destination string, fileCheck *types.FileCheck) bool {
 		return true
 	}
 
+	// Debug override (opai.SetSkipModelVerification): an existing model is used as-is, so a different
+	// hash or an empty file no longer forces a re-download. Scoped to model files only.
+	if destination == "models" && internal.SkipModelVerification() {
+		return false
+	}
+
 	hash, err := crypto.Sha256File(filePath)
 	if err != nil {
 		return true
