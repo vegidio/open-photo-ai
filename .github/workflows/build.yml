@@ -209,6 +209,7 @@ jobs:
           go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.98
 
       - name: Build Windows binaries
+        shell: bash
         run: |
           node scripts/replace.ts shared/constants.go "<version>" "${{ needs.version.outputs.VERSION }}"
           node scripts/replace.ts shared/constants.go "<otel_endpoint>" "$OTEL_ENDPOINT"
