@@ -10,6 +10,7 @@ require (
 	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5
 	github.com/vegidio/go-sak v0.0.0-20260614071738-15d15e087bc0
 	github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5
+	github.com/vegidio/raw-go v0.0.0-20260619122347-1fd4b5c63e43
 	github.com/vegidio/webp-go v0.0.0-20260614080129-a1efc50b59e1
 	github.com/yalue/onnxruntime_go v1.31.0
 	golang.org/x/image v0.40.0

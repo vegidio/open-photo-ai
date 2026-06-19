@@ -111,9 +111,12 @@ github.com/vegidio/go-sak v0.0.0-20260614071738-15d15e087bc0 h1:dRfKYZI2VbdR2OBq
 github.com/vegidio/go-sak v0.0.0-20260614071738-15d15e087bc0/go.mod h1:8RBuB+x2+DN02fY036coZh6rMazRcKkL4r9E8JkH3kY=
 github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5 h1:YCwDwYnp35h/5B6I2ON4PLXkojttYeDYlw5AuTxKht0=
 github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5/go.mod h1:LIuf1LAlIL2EsPYMJgchx9xAXK6hjfhVZtAUGYHdaQ8=
+github.com/vegidio/raw-go v0.0.0-20260619122347-1fd4b5c63e43 h1:MvoSumRS2BIgRNWf7lySlhnPPMpm4rJlT3AukOCGAgo=
+github.com/vegidio/raw-go v0.0.0-20260619122347-1fd4b5c63e43/go.mod h1:Cukj07fslZb1fZcazuIP3V3FY9ZmGMEc8A6nzj1AXS0=
 github.com/vegidio/webp-go v0.0.0-20260614080129-a1efc50b59e1 h1:ebpM3jxApDzmF8UQLx7YzOou5LuEL++0m86eKD44ON8=
 github.com/vegidio/webp-go v0.0.0-20260614080129-a1efc50b59e1/go.mod h1:KvXYy3lri/NnkiBoJV1dhpoutRd9kvc7W60hcV+hDvA=
 github.com/xyproto/randomstring v1.0.5 h1:YtlWPoRdgMu3NZtP45drfy1GKoojuR7hmRcnhZqKjWU=
+github.com/xyproto/randomstring v1.0.5/go.mod h1:rgmS5DeNXLivK7YprL0pY+lTuhNQW3iGxZ18UQApw/E=
 github.com/yalue/onnxruntime_go v1.31.0 h1:1ln4YW1SFOFfGJZXe3jNOb2JUSt+l2pEneZfV8HdtFA=
 github.com/yalue/onnxruntime_go v1.31.0/go.mod h1:b4X26A8pekNb1ACJ58wAXgNKeUCGEAQ9dmACut9Sm/4=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

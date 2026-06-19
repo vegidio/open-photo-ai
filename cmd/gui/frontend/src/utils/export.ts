@@ -49,7 +49,11 @@ export const getExportInfo = (file: File, format: string, prefix: string, suffix
     const basePath = location ?? dirname(file.Path);
     const baseName = basename(file.Path, extname(file.Path));
 
-    const ext = format === 'preserve' ? file.Extension : format;
+    // "Preserve" keeps the source extension, but RAW (and any other non-writable) inputs can't be encoded back —
+    // fallback to TIFF so the export still produces a valid file.
+    let ext = format === 'preserve' ? file.Extension : format;
+    if (!(ext in IMAGE_FORMAT_BY_EXT)) ext = 'tiff';
+
     const fileName = `${prefix}${baseName}${suffix}.${ext}`;
     const filePath = join(basePath, fileName);
 

@@ -11,6 +11,7 @@ import (
 	_ "image/png"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/avif-go"
@@ -18,6 +19,7 @@ import (
 	"github.com/vegidio/go-sak/crypto"
 	"github.com/vegidio/heif-go"
 	_ "github.com/vegidio/heif-go"
+	raw "github.com/vegidio/raw-go"
 	"github.com/vegidio/webp-go"
 	_ "github.com/vegidio/webp-go"
 
@@ -27,6 +29,11 @@ import (
 	"golang.org/x/image/tiff"
 	_ "golang.org/x/image/tiff"
 )
+
+// rawMu serializes all calls into raw-go (LibRaw). The bundled LibRaw is not safe for concurrent
+// decoding — running multiple decodes in parallel corrupts their data (LibRaw prints "data corrupted
+// at …" and may return an all-black image), so every RAW decode/config call must hold this lock.
+var rawMu sync.Mutex
 
 // LoadImage loads an image file from the specified path and returns it as ImageData.
 //
@@ -46,7 +53,17 @@ func LoadImage(path string) (*types.ImageData, error) {
 	}
 	defer inputFile.Close()
 
-	img, _, err := image.Decode(inputFile)
+	// RAW formats (except CR2/RAF) share the plain TIFF magic, so image.Decode can't be relied on to route them
+	// correctly — branch on the extension and decode them explicitly with raw-go.
+	var img image.Image
+	if IsRawExtension(path) {
+		rawMu.Lock()
+		img, err = raw.Decode(inputFile)
+		rawMu.Unlock()
+	} else {
+		img, _, err = image.Decode(inputFile)
+	}
+
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode image")
 	}
@@ -67,6 +84,39 @@ func LoadImage(path string) (*types.ImageData, error) {
 		Pixels:   img,
 		Hash:     hash,
 	}, nil
+}
+
+// ImageDimensions reads the width and height of an image file without decoding the full image.
+//
+// It reads only the image header for standard formats; for RAW files it parses the metadata via raw-go
+// (no demosaicing). This centralizes the RAW-aware dimension logic so callers don't depend on raw-go directly.
+//
+// # Parameters:
+//   - path: The file system path to the image file
+//
+// # Returns:
+//   - []int: A two-element slice {width, height}
+//   - error: An error if the file cannot be opened or its header cannot be read
+func ImageDimensions(path string) ([]int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to open image file")
+	}
+	defer file.Close()
+
+	var config image.Config
+	if IsRawExtension(path) {
+		rawMu.Lock()
+		config, err = raw.DecodeConfig(file)
+		rawMu.Unlock()
+	} else {
+		config, _, err = image.DecodeConfig(file)
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode image config")
+	}
+
+	return []int{config.Width, config.Height}, nil
 }
 
 // EncodeImage encodes an image into a byte array in the specified format with the given quality level.

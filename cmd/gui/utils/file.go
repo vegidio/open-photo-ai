@@ -2,9 +2,6 @@ package utils
 
 import (
 	"gui/types"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -12,7 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/async"
 	"github.com/vegidio/go-sak/crypto"
@@ -25,7 +21,7 @@ func IsSupportedFile(path string) bool {
 	if len(ext) > 0 {
 		ext = ext[1:]
 	}
-	return slices.Contains(utils.SupportedImageExtensions(), ext)
+	return slices.Contains(utils.SupportedInputExtensions(), ext)
 }
 
 // PartitionSupportedFiles splits paths into supported and unsupported by extension.
@@ -47,7 +43,7 @@ func CreateFileTypes(paths []string) []types.File {
 			slog.Warn("failed to hash file", "path", path, "err", err)
 		}
 
-		dims, err := getImageDimensions(path)
+		dims, err := utils.ImageDimensions(path)
 		if err != nil {
 			slog.Warn("failed to read image dimensions", "path", path, "err", err)
 		}
@@ -89,20 +85,4 @@ func CreateFileTypes(paths []string) []types.File {
 	})
 
 	return files
-}
-
-func getImageDimensions(path string) ([]int, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to open image file")
-	}
-	defer file.Close()
-
-	// DecodeConfig only reads the image header, not the full image
-	config, _, err := image.DecodeConfig(file)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to decode image config")
-	}
-
-	return []int{config.Width, config.Height}, nil
 }

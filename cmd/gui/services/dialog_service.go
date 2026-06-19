@@ -23,7 +23,7 @@ func NewDialogService(app *application.App, otel *o11y.Telemetry) *DialogService
 }
 
 func (s *DialogService) OpenFileDialog() ([]types.File, error) {
-	extensions := lo.Map(utils.SupportedImageExtensions(), func(ext string, _ int) string {
+	extensions := lo.Map(utils.SupportedInputExtensions(), func(ext string, _ int) string {
 		return "*." + ext
 	})
 	extFilter := strings.Join(extensions, ";")
