@@ -34,13 +34,14 @@ tasks:
     env:
       CGO_ENABLED: 1
       PRODUCTION: true
-      ARCH: "{{.arch}}"
     cmds:
       - |
+        # Pass the target arch as `GOARCH=`, not `ARCH=`: wails3 only consumes `GOOS=`/`GOARCH=` and
+        # then appends its own `ARCH=<host arch>` as a task variable, which would win over ours.
         {{if eq OS "darwin"}}
-          wails3 package ARCH={{.arch}}
+          wails3 package GOARCH={{.arch}}
         {{else}}
-          wails3 build ARCH={{.arch}}
+          wails3 build GOARCH={{.arch}}
         {{end}}
 
         rm -rf "{{.ROOT_DIR}}/build/{{.NEW_FILE}}"
