@@ -18,6 +18,7 @@ declare module "@wailsio/runtime" {
             "app:FilesDropped": types$0.File[];
             "app:download": services$0.DownloadProgress;
             "app:export": services$0.ExportUpdate;
+            "app:fallback": services$0.ProviderFallback;
             "app:progress": services$0.InferenceProgress;
         }
     }

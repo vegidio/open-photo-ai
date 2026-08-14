@@ -18,6 +18,7 @@ const (
 	EventAppProgress     = "app:progress"
 	EventAppExport       = "app:export"
 	EventAppFilesDropped = "app:FilesDropped"
+	EventAppFallback     = "app:fallback"
 )
 
 // DownloadProgress is the payload of EventAppDownload. Emitted while a required runtime dependency
@@ -45,8 +46,16 @@ type ExportUpdate struct {
 	Value float64 `json:"value"`
 }
 
+// ProviderFallback is the payload of EventAppFallback. Emitted when the selected AI processor couldn't be used - a
+// GPU driver that is broken or too old, a GPU without enough free memory - and inference was downgraded to the CPU.
+// Only the first downgrade of a run is emitted, so the user isn't told the same thing on every operation.
+type ProviderFallback struct {
+	Provider string `json:"provider"`
+}
+
 func init() {
 	application.RegisterEvent[DownloadProgress](EventAppDownload)
+	application.RegisterEvent[ProviderFallback](EventAppFallback)
 	application.RegisterEvent[InferenceProgress](EventAppProgress)
 	application.RegisterEvent[ExportUpdate](EventAppExport)
 	application.RegisterEvent[[]guitypes.File](EventAppFilesDropped)

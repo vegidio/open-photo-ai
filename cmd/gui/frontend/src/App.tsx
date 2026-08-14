@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { Events } from '@wailsio/runtime';
 import { AnalyticsEvent, track } from '@/analytics';
+import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { Initialize } from '@/bindings/gui/services/appservice.ts';
 import { DialogDownload, DialogTensorRT } from '@/features/dialogs';
 import { Drawer } from '@/features/drawer';
 import { Navbar } from '@/features/navbar';
 import { Preview } from '@/features/preview';
 import { Sidebar } from '@/features/sidebar';
+import { useNotify } from '@/hooks';
 import { useSettingsStore } from '@/stores';
 import { getErrorMessage } from '@/utils/errors.ts';
 
 export const App = () => {
+    const { enqueueSnackbar } = useNotify();
+
     const isFirstTensorRT = useSettingsStore((state) => state.isFirstTensorRT);
     const setProcessorSelectItems = useSettingsStore((state) => state.setProcessorSelectItems);
 
@@ -27,6 +31,23 @@ export const App = () => {
     // biome-ignore lint/correctness/useExhaustiveDependencies: N/A
     useEffect(() => {
         Events.Once('app:download', (_) => setOpenDownload(true));
+
+        // The backend downgrades to the CPU when the selected processor can't run a model (broken/outdated GPU
+        // driver, no free VRAM). It's emitted once per run, so the message isn't repeated on every enhancement.
+        Events.On('app:fallback', (event) => {
+            const provider = event.data?.provider ?? '';
+            track(AnalyticsEvent.ProviderFallback, { provider });
+
+            const reason =
+                provider && provider !== ExecutionProvider.ExecutionProviderAuto
+                    ? `${provider} couldn't be used on this system`
+                    : 'No GPU processor could be used on this system';
+
+            enqueueSnackbar(`${reason}, so the CPU is being used instead. Enhancements will be slower.`, {
+                variant: 'warning',
+                autoHideDuration: 10000,
+            });
+        });
 
         const initDependencies = async () => {
             try {
@@ -51,6 +72,7 @@ export const App = () => {
 
         return () => {
             Events.Off('app:download');
+            Events.Off('app:fallback');
         };
     }, []);
 

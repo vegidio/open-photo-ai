@@ -4,10 +4,12 @@ import (
 	"context"
 	"image"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
 	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
@@ -24,6 +26,27 @@ import (
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
 )
+
+// FallbackHandler is notified when a model can't be created with the requested execution provider and the operation
+// is retried on the CPU. It receives the execution provider that failed and the reason why.
+type FallbackHandler func(ep types.ExecutionProvider, err error)
+
+var fallbackHandler atomic.Pointer[FallbackHandler]
+
+// SetFallbackHandler registers a function to be called whenever inference falls back to the CPU because the requested
+// execution provider (CUDA, TensorRT, CoreML, …) failed to create a model. It's meant for surfacing the downgrade to
+// the user, since CPU inference is noticeably slower. Passing nil removes a previously registered handler.
+//
+// The handler is called from the goroutine running the inference and may be called multiple times, once per model
+// that had to be downgraded.
+func SetFallbackHandler(handler FallbackHandler) {
+	if handler == nil {
+		fallbackHandler.Store(nil)
+		return
+	}
+
+	fallbackHandler.Store(&handler)
+}
 
 // Process processes an image through a sequence of image operations.
 //
@@ -209,9 +232,6 @@ func selectModel(
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
 ) (interface{}, error) {
-	var model interface{}
-	var err error
-
 	model, exists := internal.Registry.Get(operation.Id())
 	if exists {
 		internal.Log().Debug("model registry hit", "op", operation.Id())
@@ -219,6 +239,45 @@ func selectModel(
 	}
 
 	internal.Log().Info("creating model", "op", operation.Id(), "ep", ep)
+	model, err := newModel(ctx, operation, ep, onProgress)
+
+	// A GPU execution provider can fail for reasons that are outside of the app's control: an outdated or broken
+	// driver, a GPU that is unavailable, or one without enough free memory. Retrying on the CPU keeps the app usable
+	// (just slower) instead of failing the whole operation. Failures that aren't about the execution provider - a
+	// model that couldn't be downloaded, for instance - would fail the same way on the CPU, so they aren't retried.
+	if err != nil && ep != types.ExecutionProviderCPU && errors.Is(err, utils.ErrCreateSession) {
+		internal.Log().Warn("model creation failed; retrying on CPU", "op", operation.Id(), "ep", ep, "err", err)
+
+		failedEp, epErr := ep, err
+		ep = types.ExecutionProviderCPU
+		model, err = newModel(ctx, operation, ep, onProgress)
+
+		// Only report the downgrade once it actually worked; if the CPU fails too, the caller surfaces the error.
+		if err == nil {
+			notifyFallback(failedEp, epErr)
+		}
+	}
+
+	// We can't check `model != nil` here because model is an interface and in Go a variable is only nil if both its
+	// type and value are nil. In this case, even though the value is nil, the variable has a concrete type.
+	if err == nil {
+		internal.Registry.Set(operation.Id(), model)
+	} else {
+		internal.Log().Warn("model creation failed", "op", operation.Id(), "ep", ep, "err", err)
+	}
+
+	return model, err
+}
+
+// newModel builds the model that implements the given operation, using the requested execution provider.
+func newModel(
+	ctx context.Context,
+	operation types.Operation,
+	ep types.ExecutionProvider,
+	onProgress types.DownloadProgress,
+) (interface{}, error) {
+	var model interface{}
+	var err error
 
 	switch {
 	// Face Detection
@@ -268,15 +327,14 @@ func selectModel(
 		return nil, errors.Errorf("no model found with ID: %s", operation.Id())
 	}
 
-	// We can't check `model != nil` here because model is an interface and in Go a variable is only nil if both its
-	// type and value are nil. In this case, even though the value is nil, the variable has a concrete type.
-	if err == nil {
-		internal.Registry.Set(operation.Id(), model)
-	} else {
-		internal.Log().Warn("model creation failed", "op", operation.Id(), "ep", ep, "err", err)
-	}
-
 	return model, err
+}
+
+// notifyFallback informs the registered handler, if any, that a GPU execution provider was downgraded to the CPU.
+func notifyFallback(ep types.ExecutionProvider, err error) {
+	if handler := fallbackHandler.Load(); handler != nil {
+		(*handler)(ep, err)
+	}
 }
 
 // endregion

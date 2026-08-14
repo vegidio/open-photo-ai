@@ -20,6 +20,7 @@ export const AnalyticsEvent = {
     ExportCompleted: 'export_completed',
     ExportFailed: 'export_failed',
     ExecutionProviderChanged: 'execution_provider_changed',
+    ProviderFallback: 'provider_fallback',
 } as const;
 
 export type AnalyticsEvent = (typeof AnalyticsEvent)[keyof typeof AnalyticsEvent];

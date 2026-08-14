@@ -99,6 +99,14 @@ export const useSettingsStore = create(
 
                     set((state) => {
                         state.processorSelectItems = items;
+
+                        // The chosen processor is persisted, but the hardware behind it may be gone on the next run
+                        // (a GPU driver that broke or was uninstalled, a machine the settings were copied to). Without
+                        // this the app would keep asking for a processor that is no longer offered — and no longer
+                        // works — making every enhancement fail.
+                        if (!items.some((item) => item.value === state.executionProvider)) {
+                            state.executionProvider = ExecutionProviderAuto;
+                        }
                     });
                 },
 

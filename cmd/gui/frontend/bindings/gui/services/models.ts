@@ -99,6 +99,32 @@ export class InferenceProgress {
     }
 }
 
+/**
+ * ProviderFallback is the payload of EventAppFallback. Emitted when the selected AI processor couldn't be used - a
+ * GPU driver that is broken or too old, a GPU without enough free memory - and inference was downgraded to the CPU.
+ * Only the first downgrade of a run is emitted, so the user isn't told the same thing on every operation.
+ */
+export class ProviderFallback {
+    "provider": string;
+
+    /** Creates a new ProviderFallback instance. */
+    constructor($$source: Partial<ProviderFallback> = {}) {
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProviderFallback instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProviderFallback {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProviderFallback($$parsedSource as Partial<ProviderFallback>);
+    }
+}
+
 export class SupportedEPs {
     "CUDA": boolean;
     "TensorRT": boolean;

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/fs"
@@ -19,6 +20,10 @@ import (
 type AppService struct {
 	app  *application.App
 	otel *o11y.Telemetry
+
+	// fallbackNotified keeps the "running on CPU" warning to one per run: the downgrade is reported once per model,
+	// but the user only needs to be told about it once.
+	fallbackNotified atomic.Bool
 }
 
 type SupportedEPs struct {
@@ -46,6 +51,10 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	// Errors are surfaced through the returned error (the frontend awaits the promise and
 	// maps rejections to UI state). We deliberately do not also emit an `app:download:error`
 	// event here, to avoid two concurrent error paths racing in the UI.
+
+	// Warn the user when a GPU processor turns out to be unusable and inference is downgraded to the CPU, so the
+	// drop in speed doesn't look like the app hanging.
+	opai.SetFallbackHandler(s.onProviderFallback)
 
 	// Initialize the model runtime
 	if err := opai.Initialize(ctx, shared.AppName, onProgress); err != nil {
@@ -115,6 +124,19 @@ func (s *AppService) GetLogsPath() (string, error) {
 
 func (s *AppService) destroy() {
 	opai.Destroy()
+}
+
+// onProviderFallback reports that the requested execution provider couldn't create a model and the CPU was used
+// instead. Only the first downgrade reaches the frontend; the rest are logged.
+func (s *AppService) onProviderFallback(ep types.ExecutionProvider, err error) {
+	slog.Warn("execution provider unavailable; falling back to CPU", "ep", ep, "err", err)
+
+	if s.fallbackNotified.Swap(true) {
+		return
+	}
+
+	s.otel.LogError("Execution provider fallback", map[string]any{"provider": string(ep)}, err)
+	s.app.Event.Emit(EventAppFallback, ProviderFallback{Provider: string(ep)})
 }
 
 func (s *AppService) initializeCuda(ctx context.Context) error {

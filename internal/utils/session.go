@@ -11,7 +11,21 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
+// ErrCreateSession marks every error returned by CreateSession, so callers can tell a failure caused by the execution
+// provider (a broken GPU driver, no free VRAM, an unsupported model/EP combination) apart from one caused by the model
+// file itself. Test for it with errors.Is, it survives wrapping.
+var ErrCreateSession = errors.New("failed to create ONNX session")
+
 func CreateSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*ort.DynamicAdvancedSession, error) {
+	session, err := createSession(modelFile, inputs, outputs, ep)
+	if err != nil {
+		return nil, errors.Mark(err, ErrCreateSession)
+	}
+
+	return session, nil
+}
+
+func createSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*ort.DynamicAdvancedSession, error) {
 	internal.Log().Debug("creating session", "model_file", modelFile, "ep", ep)
 
 	configDir, err := os.UserConfigDir()

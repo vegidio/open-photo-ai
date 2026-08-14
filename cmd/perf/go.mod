@@ -2,7 +2,7 @@ module perf
 
 go 1.26.1
 
-require github.com/vegidio/go-sak v0.0.0-20260614071738-15d15e087bc0
+require github.com/vegidio/go-sak v0.0.0-20260814193649-fcd3a5f91a14
 
 require (
 	github.com/andybalholm/brotli v1.2.1 // indirect

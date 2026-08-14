@@ -109,6 +109,8 @@ github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5 h1:/C54x/gcnmppkzs
 github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5/go.mod h1:/ITCFP53XCH3zFZZLLtPm3jRqsv5CMgefZl4UCuP1rs=
 github.com/vegidio/go-sak v0.0.0-20260614071738-15d15e087bc0 h1:dRfKYZI2VbdR2OBqGUUg0h5AeaobA5tAm5u0P834VKY=
 github.com/vegidio/go-sak v0.0.0-20260614071738-15d15e087bc0/go.mod h1:8RBuB+x2+DN02fY036coZh6rMazRcKkL4r9E8JkH3kY=
+github.com/vegidio/go-sak v0.0.0-20260814193649-fcd3a5f91a14 h1:ZyyWbpib2mGKVluzhot30FOlHay0qHPXKK4KUGxtEl0=
+github.com/vegidio/go-sak v0.0.0-20260814193649-fcd3a5f91a14/go.mod h1:8RBuB+x2+DN02fY036coZh6rMazRcKkL4r9E8JkH3kY=
 github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5 h1:YCwDwYnp35h/5B6I2ON4PLXkojttYeDYlw5AuTxKht0=
 github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5/go.mod h1:LIuf1LAlIL2EsPYMJgchx9xAXK6hjfhVZtAUGYHdaQ8=
 github.com/vegidio/raw-go v0.0.0-20260619122347-1fd4b5c63e43 h1:MvoSumRS2BIgRNWf7lySlhnPPMpm4rJlT3AukOCGAgo=

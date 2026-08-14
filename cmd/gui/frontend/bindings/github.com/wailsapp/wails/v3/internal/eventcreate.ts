@@ -18,7 +18,8 @@ function configure() {
         "app:FilesDropped": $$createType1,
         "app:download": $$createType2,
         "app:export": $$createType3,
-        "app:progress": $$createType4,
+        "app:fallback": $$createType4,
+        "app:progress": $$createType5,
     }));
 }
 
@@ -27,6 +28,7 @@ const $$createType0 = types$0.File.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = services$0.DownloadProgress.createFrom;
 const $$createType3 = services$0.ExportUpdate.createFrom;
-const $$createType4 = services$0.InferenceProgress.createFrom;
+const $$createType4 = services$0.ProviderFallback.createFrom;
+const $$createType5 = services$0.InferenceProgress.createFrom;
 
 configure();

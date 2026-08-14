@@ -18,5 +18,6 @@ export {
     DownloadProgress,
     ExportUpdate,
     InferenceProgress,
+    ProviderFallback,
     SupportedEPs
 } from "./models.js";
