@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { File } from '@/bindings/gui/types';
 import { useNotify } from '@/hooks/useNotify.ts';
-import { useCropStore, useEnhancementStore, useSettingsStore } from '@/stores';
+import { useCropStore, useEnhancementStore, useJobStore, useSettingsStore } from '@/stores';
 import { userFriendlyErrorMessage } from '@/utils/errors.ts';
 import { detectFaces } from '@/utils/face.ts';
 
@@ -18,9 +18,14 @@ export const useSyncFaces = () => {
     const setFaces = useEnhancementStore((s) => s.setFaces);
     const ep = useSettingsStore((s) => s.executionProvider);
 
+    // JobStore: detection runs a model out of the same registry, so it has to hold the Settings dialog back too
+    const beginJob = useJobStore((s) => s.beginJob);
+    const endJob = useJobStore((s) => s.endJob);
+
     return useCallback(
         async (file: File) => {
             const crop = useCropStore.getState().crops.get(file);
+            beginJob();
 
             try {
                 const faces = await detectFaces(file, ep, crop);
@@ -29,8 +34,10 @@ export const useSyncFaces = () => {
                 setFaces(file, []);
                 const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to detect faces.');
                 enqueueSnackbar(msg, { variant: 'error' });
+            } finally {
+                endJob();
             }
         },
-        [setFaces, ep, enqueueSnackbar],
+        [setFaces, ep, enqueueSnackbar, beginJob, endJob],
     );
 };

@@ -8,6 +8,7 @@ type SettingsItemSelectProps = TailwindProps & {
     description?: string;
     items: SelectItem[];
     selected: string;
+    disabled?: boolean;
     onSelect: (value: string) => void;
 };
 
@@ -17,6 +18,7 @@ export const SettingsItemSelect = ({
     description,
     items,
     selected,
+    disabled = false,
     onSelect,
     className = '',
 }: SettingsItemSelectProps) => {
@@ -28,7 +30,13 @@ export const SettingsItemSelect = ({
                         {title}
                     </Typography>
 
-                    <Select items={items} value={selected} className='flex-1' onValueChange={onSelect} />
+                    <Select
+                        items={items}
+                        value={selected}
+                        disabled={disabled}
+                        className='flex-1'
+                        onValueChange={onSelect}
+                    />
                 </div>
 
                 {description && (

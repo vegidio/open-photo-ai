@@ -6,7 +6,7 @@ import { EnhancementProgress } from '@/features/preview/EnhancementProgress';
 import { PreviewEmpty } from '@/features/preview/PreviewEmpty';
 import { PreviewImage } from '@/features/preview/PreviewImage';
 import { useCurrentFile, useFileCrop, useFileDisabledFaces, useFileOperations, useNotify } from '@/hooks';
-import { useDrawerStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
+import { useDrawerStore, useFileStore, useImageStore, useJobStore, useSettingsStore } from '@/stores';
 import { DOTTED_BACKGROUND } from '@/utils/constants.ts';
 import { getErrorMessage, userFriendlyErrorMessage } from '@/utils/errors.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
@@ -35,6 +35,10 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
     const ep = useSettingsStore((state) => state.executionProvider);
 
+    // JobStore: keeps the Settings dialog from cleaning the model registry while this preview is running
+    const beginJob = useJobStore((state) => state.beginJob);
+    const endJob = useJobStore((state) => state.endJob);
+
     const [isRunning, setIsRunning] = useState(false);
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: enqueueSnackbar
@@ -50,6 +54,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
                 if (operations.length > 0) {
                     setIsRunning(true);
+                    beginJob();
 
                     const opIds = operations.map((op) => op.id);
                     p = getEnhancedImage(currentFile, ep, ...opIds);
@@ -65,6 +70,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                             enqueueSnackbar(msg, { variant: 'error' });
                         }
                     } finally {
+                        endJob();
                         if (!isCancelled) setIsRunning(false);
                     }
                 } else {
@@ -84,7 +90,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             isCancelled = true;
             p?.cancel();
         };
-    }, [operations, currentFile, disabledFaces, crop, setEnhancedImage, setOriginalImage]);
+    }, [operations, currentFile, disabledFaces, crop, setEnhancedImage, setOriginalImage, beginJob, endJob]);
 
     useEffect(() => {
         if (filesLength > 1) setOpen(true);

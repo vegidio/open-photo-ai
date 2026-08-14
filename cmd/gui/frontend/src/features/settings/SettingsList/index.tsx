@@ -8,7 +8,7 @@ import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { SettingsItemButton } from '@/features/settings/SettingsItemButton';
 import { SettingsItemSelect } from '@/features/settings/SettingsItemSelect';
 import { SettingsItemSwitch } from '@/features/settings/SettingsItemSwitch';
-import { useSettingsStore } from '@/stores';
+import { useJobStore, useSettingsStore } from '@/stores';
 
 export type SettingsListHandle = {
     scrollToSection: (itemId: string) => void;
@@ -175,7 +175,15 @@ const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
     const executionProvider = useSettingsStore((state) => state.executionProvider);
     const setExecutionProvider = useSettingsStore((state) => state.setExecutionProvider);
 
+    // Switching processors unloads the models that are currently running, which would kill the app mid-inference, so
+    // the option is locked while any enhancement, export or face detection is in flight.
+    const isBusy = useJobStore((state) => state.activeJobs > 0);
+
     const description = useMemo(() => {
+        if (isBusy) {
+            return "The AI processor can't be changed while an image is being enhanced or exported. Wait for it to finish and try again.";
+        }
+
         const base = 'Select the AI processor that will orchestrate the models.';
 
         switch (executionProvider) {
@@ -194,7 +202,7 @@ const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
             default:
                 return base;
         }
-    }, [executionProvider]);
+    }, [executionProvider, isBusy]);
 
     return (
         <SettingsItemSelect
@@ -203,6 +211,7 @@ const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
             description={description}
             items={processorSelectItems}
             selected={executionProvider}
+            disabled={isBusy}
             onSelect={(value) => {
                 setExecutionProvider(value as ExecutionProvider);
                 track(AnalyticsEvent.ExecutionProviderChanged, { provider: value });

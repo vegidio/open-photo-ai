@@ -97,6 +97,12 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	return supportedEPs, nil
 }
 
+// CleanRegistry unloads every model currently held in memory, so the next enhancement rebuilds them - that's how a
+// change to the AI processor takes effect, since the registry is keyed by operation ID only.
+//
+// It destroys the native ONNX sessions right away, so the frontend must not call it while an enhancement, an export or
+// a face detection is running: freeing a session mid-inference kills the whole app. The frontend holds the call back
+// until nothing is in flight (see `runWhenIdle` in stores/jobs.ts).
 func (s *AppService) CleanRegistry() {
 	opai.CleanRegistry()
 }

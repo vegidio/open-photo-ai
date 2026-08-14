@@ -169,6 +169,13 @@ func Execute[T any](
 //
 // This function should be called when the application is shutting down or when all model instances are no longer needed
 // to prevent resource leaks.
+//
+// # Warning:
+//
+// The models are destroyed immediately, which releases the underlying ONNX sessions. Calling this while Process,
+// Execute, or any other inference is still running frees a session that another goroutine is using, which is a
+// use-after-free in native code and terminates the process - not a panic that can be recovered from. The caller is
+// responsible for making sure no inference is in flight. See https://github.com/vegidio/open-photo-ai/issues/34.
 func CleanRegistry() {
 	drained := internal.Registry.Drain()
 	internal.Log().Debug("cleaning model registry", "count", len(drained))

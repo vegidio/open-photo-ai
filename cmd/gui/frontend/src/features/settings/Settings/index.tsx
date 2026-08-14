@@ -5,7 +5,7 @@ import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { SettingsButtons } from '@/features/settings/SettingsButtons';
 import { SettingsList, type SettingsListHandle } from '@/features/settings/SettingsList';
 import { SettingsMenu } from '@/features/settings/SettingsMenu';
-import { useSettingsStore } from '@/stores';
+import { runWhenIdle, useSettingsStore } from '@/stores';
 
 type SettingsProps = {
     section: 'application' | 'models';
@@ -18,6 +18,9 @@ export const Settings = ({ section: _section, open, onClose }: SettingsProps) =>
     const restoreSnapshot = useSettingsStore((state) => state.restoreSnapshot);
     const listRef = useRef<SettingsListHandle>(null);
 
+    // The processor the dialog opened with, so Save can tell whether it actually changed.
+    const initialEp = useRef(useSettingsStore.getState().executionProvider);
+
     const onCancel = () => {
         restoreSnapshot();
         onClose();
@@ -25,7 +28,14 @@ export const Settings = ({ section: _section, open, onClose }: SettingsProps) =>
 
     const onSave = () => {
         onClose();
-        void CleanRegistry();
+
+        // Cleaning the registry destroys the loaded models, which is only needed when the processor changed - the
+        // registry is keyed by operation ID, and the other settings (the model of each enhancement) already produce a
+        // different ID. It also destroys the native ONNX sessions immediately, taking the app down if one of them is
+        // mid-inference, so it waits until nothing is running (issue #34).
+        if (useSettingsStore.getState().executionProvider === initialEp.current) return;
+
+        runWhenIdle(() => void CleanRegistry());
     };
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: N/A

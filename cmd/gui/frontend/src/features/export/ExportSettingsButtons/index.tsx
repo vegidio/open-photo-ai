@@ -4,7 +4,7 @@ import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { AnalyticsEvent, track } from '@/analytics';
-import { useExportStore, useSettingsStore } from '@/stores';
+import { useExportStore, useJobStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { getErrorMessage } from '@/utils/errors.ts';
 import { exportImage } from '@/utils/export.ts';
@@ -28,6 +28,10 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const cbModel = useSettingsStore((state) => state.cbModel);
     const upModel = useSettingsStore((state) => state.upModel);
     const shModel = useSettingsStore((state) => state.shModel);
+
+    // JobStore: keeps the Settings dialog from cleaning the model registry while an export is running
+    const beginJob = useJobStore((state) => state.beginJob);
+    const endJob = useJobStore((state) => state.endJob);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | undefined>(undefined);
@@ -55,49 +59,57 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
         setState('processing');
         track(AnalyticsEvent.ExportStarted, { count: enhancements.size, format });
 
-        for (const [file, operations] of enhancements.entries()) {
-            try {
-                // The list of operations for this file is empty; it means Autopilot added this file in the export list.
-                // We need to check if there are any suitable operations to apply to the file.
-                if (operations.length === 0) {
-                    suggestRef.current = suggestEnhancement(file, {
-                        dn: dnModel,
-                        fr: frModel,
-                        la: laModel,
-                        cb: cbModel,
-                        up: upModel,
-                        sh: shModel,
+        // The whole loop counts as one running job: the models stay loaded between files, so the registry can't be
+        // cleaned until the last file is done.
+        beginJob();
+
+        try {
+            for (const [file, operations] of enhancements.entries()) {
+                try {
+                    // The list of operations for this file is empty; it means Autopilot added this file in the export
+                    // list. We need to check if there are any suitable operations to apply to the file.
+                    if (operations.length === 0) {
+                        suggestRef.current = suggestEnhancement(file, {
+                            dn: dnModel,
+                            fr: frModel,
+                            la: laModel,
+                            cb: cbModel,
+                            up: upModel,
+                            sh: shModel,
+                        });
+
+                        const suggestions = await suggestRef.current;
+
+                        if (suggestions.length === 0) continue;
+                        operations.push(...suggestions);
+                    }
+
+                    exportRef.current = exportImage({
+                        file,
+                        ep,
+                        operations,
+                        overwrite,
+                        format,
+                        prefix,
+                        suffix,
+                        location,
                     });
+                    await exportRef.current;
+                } catch (e) {
+                    if (e instanceof CancelError) {
+                        Events.Emit('app:export', { hash: file.Hash, state: 'IDLE', value: 0 });
+                    } else {
+                        const msg = getErrorMessage(e);
+                        const tag = msg.includes('[download]') ? 'ERROR_DOWNLOAD' : 'ERROR';
+                        Events.Emit('app:export', { hash: file.Hash, state: tag, value: 0 });
+                    }
 
-                    const suggestions = await suggestRef.current;
-
-                    if (suggestions.length === 0) continue;
-                    operations.push(...suggestions);
+                    setState('idle');
+                    return;
                 }
-
-                exportRef.current = exportImage({
-                    file,
-                    ep,
-                    operations,
-                    overwrite,
-                    format,
-                    prefix,
-                    suffix,
-                    location,
-                });
-                await exportRef.current;
-            } catch (e) {
-                if (e instanceof CancelError) {
-                    Events.Emit('app:export', { hash: file.Hash, state: 'IDLE', value: 0 });
-                } else {
-                    const msg = getErrorMessage(e);
-                    const tag = msg.includes('[download]') ? 'ERROR_DOWNLOAD' : 'ERROR';
-                    Events.Emit('app:export', { hash: file.Hash, state: tag, value: 0 });
-                }
-
-                setState('idle');
-                return;
             }
+        } finally {
+            endJob();
         }
 
         setState('completed');
