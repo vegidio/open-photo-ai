@@ -67,7 +67,7 @@ export const useExportStore = create(
         {
             name: 'export-storage',
             partialize: (state) => {
-                // biome-ignore lint/correctness/noUnusedVariables: Store everything, except the `key` field
+                // Store everything, except the `key` field
                 const { key, ...rest } = state;
                 return rest;
             },

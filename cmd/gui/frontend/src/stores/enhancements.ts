@@ -8,10 +8,14 @@ import type { Operation } from '@/operations';
 
 type EnhancementStore = {
     autopilot: boolean;
-    enhancements: Map<File, Operation[]>;
-    faces: Map<File, Face[]>;
+
+    // All three maps are keyed by `File.Path`, not by the File object. A Map keyed on the object uses reference
+    // identity, so any path that rebuilds a File for the same image (a re-drop, a re-hash) would silently orphan that
+    // file's state and leave the old entries behind forever. The path is stable and unique within the file list.
+    enhancements: Map<string, Operation[]>;
+    faces: Map<string, Face[]>;
     // Indices (into `faces`) of the faces the user has disabled (deselected) per file. Absent/empty = all enabled.
-    disabledFaces: Map<File, Set<number>>;
+    disabledFaces: Map<string, Set<number>>;
 
     setAutopilot: (enable: boolean) => void;
     toggle: () => void;
@@ -50,7 +54,7 @@ export const useEnhancementStore = create(
 
             addEnhancements: (file: File, operations: Operation[]) => {
                 set((state) => {
-                    const existingOps = state.enhancements.get(file) ?? [];
+                    const existingOps = state.enhancements.get(file.Path) ?? [];
 
                     // Combine existing and new operations
                     const allOps = [...existingOps, ...operations];
@@ -70,53 +74,53 @@ export const useEnhancementStore = create(
                         return getPriority(a) - getPriority(b);
                     });
 
-                    state.enhancements.set(file, sortedOps);
+                    state.enhancements.set(file.Path, sortedOps);
                 });
             },
 
             replaceEnhancement: (file: File, operation: Operation) => {
                 set((state) => {
                     const prefix = operation.id.split('_')[0];
-                    const ops = (state.enhancements.get(file) ?? []).map((op) =>
+                    const ops = (state.enhancements.get(file.Path) ?? []).map((op) =>
                         op.id.startsWith(prefix) ? operation : op,
                     );
 
-                    state.enhancements.set(file, ops);
+                    state.enhancements.set(file.Path, ops);
                 });
             },
 
             removeEnhancement: (file: File, operationId: string) => {
                 set((state) => {
-                    const ops = (state.enhancements.get(file) ?? []).filter((op) => op.id !== operationId);
-                    state.enhancements.set(file, ops);
+                    const ops = (state.enhancements.get(file.Path) ?? []).filter((op) => op.id !== operationId);
+                    state.enhancements.set(file.Path, ops);
 
                     // Detected faces only matter while a face-recovery op exists; drop them when it's removed.
                     if (operationId.startsWith('fr')) {
-                        state.faces.delete(file);
-                        state.disabledFaces.delete(file);
+                        state.faces.delete(file.Path);
+                        state.disabledFaces.delete(file.Path);
                     }
                 });
             },
 
             setFaces: (file: File, faces: Face[]) => {
                 set((state) => {
-                    state.faces.set(file, faces);
+                    state.faces.set(file.Path, faces);
                     // Fresh detection re-numbers faces, so any prior selection is stale — reset to all-enabled.
-                    state.disabledFaces.delete(file);
+                    state.disabledFaces.delete(file.Path);
                 });
             },
 
             setDisabledFaces: (file: File, disabled: Set<number>) => {
                 set((state) => {
-                    state.disabledFaces.set(file, disabled);
+                    state.disabledFaces.set(file.Path, disabled);
                 });
             },
 
             removeKey: (file: File) => {
                 set((state) => {
-                    state.enhancements.delete(file);
-                    state.faces.delete(file);
-                    state.disabledFaces.delete(file);
+                    state.enhancements.delete(file.Path);
+                    state.faces.delete(file.Path);
+                    state.disabledFaces.delete(file.Path);
                 });
             },
 

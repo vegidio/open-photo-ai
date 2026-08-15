@@ -158,20 +158,20 @@ export const useSettingsStore = create(
                     });
                 },
 
+                // Both directions iterate SNAPSHOT_KEYS, which is the whole point of that list: a new or renamed
+                // settings field updates one place and stays covered, instead of being silently left out of the
+                // snapshot until someone notices Cancel doesn't revert it.
                 saveSnapshot: () => {
                     const state = get();
-                    snapshot = {
-                        isFirstTensorRT: state.isFirstTensorRT,
-                        processorSelectItems: [...state.processorSelectItems],
-                        executionProvider: state.executionProvider,
-                        analyticsEnabled: state.analyticsEnabled,
-                        dnModel: state.dnModel,
-                        frModel: state.frModel,
-                        laModel: state.laModel,
-                        cbModel: state.cbModel,
-                        upModel: state.upModel,
-                        shModel: state.shModel,
-                    };
+                    const saved = {} as SettingsSnapshot;
+
+                    for (const key of SNAPSHOT_KEYS) {
+                        const value = state[key];
+                        // biome-ignore lint/suspicious/noExplicitAny: typed key, runtime-safe
+                        (saved as any)[key] = Array.isArray(value) ? [...value] : value;
+                    }
+
+                    snapshot = saved;
                 },
 
                 restoreSnapshot: () => {

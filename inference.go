@@ -4,12 +4,10 @@ import (
 	"context"
 	"image"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
-	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
 	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
@@ -26,27 +24,6 @@ import (
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
 )
-
-// FallbackHandler is notified when a model can't be created with the requested execution provider and the operation
-// is retried on the CPU. It receives the execution provider that failed and the reason why.
-type FallbackHandler func(ep types.ExecutionProvider, err error)
-
-var fallbackHandler atomic.Pointer[FallbackHandler]
-
-// SetFallbackHandler registers a function to be called whenever inference falls back to the CPU because the requested
-// execution provider (CUDA, TensorRT, CoreML, …) failed to create a model. It's meant for surfacing the downgrade to
-// the user, since CPU inference is noticeably slower. Passing nil removes a previously registered handler.
-//
-// The handler is called from the goroutine running the inference and may be called multiple times, once per model
-// that had to be downgraded.
-func SetFallbackHandler(handler FallbackHandler) {
-	if handler == nil {
-		fallbackHandler.Store(nil)
-		return
-	}
-
-	fallbackHandler.Store(&handler)
-}
 
 // Process processes an image through a sequence of image operations.
 //
@@ -76,6 +53,11 @@ func Process(
 	operations ...types.Operation,
 ) (*types.ImageData, error) {
 	var err error
+
+	// Held for the whole loop, not per operation, so the registry can't be drained between two operations of the same
+	// image. See internal.InferenceMu.
+	internal.InferenceMu.RLock()
+	defer internal.InferenceMu.RUnlock()
 
 	start := time.Now()
 	internal.Log().Info("processing image", "op_count", len(operations), "hash", input.Hash)
@@ -142,6 +124,10 @@ func Execute[T any](
 	// nil value for type T
 	var genericNil T
 
+	// Keeps the model alive from creation until Run returns. See internal.InferenceMu.
+	internal.InferenceMu.RLock()
+	defer internal.InferenceMu.RUnlock()
+
 	model, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
 		if onProgress != nil {
 			onProgress("dl", percent)
@@ -168,15 +154,20 @@ func Execute[T any](
 // calls their Destroy method to clean up memory and other resources.
 //
 // This function should be called when the application is shutting down or when all model instances are no longer needed
-// to prevent resource leaks.
+// to prevent resource leaks. It also forgets which execution provider was found to be unusable, so the next model
+// creation gives the requested one another chance - which is what makes cleaning the registry the way to apply a change
+// of execution provider.
 //
-// # Warning:
-//
-// The models are destroyed immediately, which releases the underlying ONNX sessions. Calling this while Process,
-// Execute, or any other inference is still running frees a session that another goroutine is using, which is a
-// use-after-free in native code and terminates the process - not a panic that can be recovered from. The caller is
-// responsible for making sure no inference is in flight. See https://github.com/vegidio/open-photo-ai/issues/34.
+// Destroying a model releases its underlying ONNX session, and freeing one while another goroutine is running inference
+// on it is a use-after-free in native code that terminates the process (see
+// https://github.com/vegidio/open-photo-ai/issues/34). This function therefore blocks until the inference in flight has
+// finished; callers don't have to coordinate anything themselves.
 func CleanRegistry() {
+	internal.InferenceMu.Lock()
+	defer internal.InferenceMu.Unlock()
+
+	internal.ResetFallback()
+
 	drained := internal.Registry.Drain()
 	internal.Log().Debug("cleaning model registry", "count", len(drained))
 
@@ -233,47 +224,18 @@ func logModelRun(operation types.Operation, start time.Time) {
 	internal.Log().Debug("model run complete", "op", operation.Id(), "duration", time.Since(start))
 }
 
+// selectModel returns the model that implements the given operation, building it on first use. The registry lookup and
+// the fallback to the CPU live in internal.GetOrCreateModel, shared with the face detection used by
+// SuggestEnhancements; all this adds is the switch that knows which model an operation maps to.
 func selectModel(
 	ctx context.Context,
 	operation types.Operation,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
-) (interface{}, error) {
-	model, exists := internal.Registry.Get(operation.Id())
-	if exists {
-		internal.Log().Debug("model registry hit", "op", operation.Id())
-		return model, nil
-	}
-
-	internal.Log().Info("creating model", "op", operation.Id(), "ep", ep)
-	model, err := newModel(ctx, operation, ep, onProgress)
-
-	// A GPU execution provider can fail for reasons that are outside of the app's control: an outdated or broken
-	// driver, a GPU that is unavailable, or one without enough free memory. Retrying on the CPU keeps the app usable
-	// (just slower) instead of failing the whole operation. Failures that aren't about the execution provider - a
-	// model that couldn't be downloaded, for instance - would fail the same way on the CPU, so they aren't retried.
-	if err != nil && ep != types.ExecutionProviderCPU && errors.Is(err, utils.ErrCreateSession) {
-		internal.Log().Warn("model creation failed; retrying on CPU", "op", operation.Id(), "ep", ep, "err", err)
-
-		failedEp, epErr := ep, err
-		ep = types.ExecutionProviderCPU
-		model, err = newModel(ctx, operation, ep, onProgress)
-
-		// Only report the downgrade once it actually worked; if the CPU fails too, the caller surfaces the error.
-		if err == nil {
-			notifyFallback(failedEp, epErr)
-		}
-	}
-
-	// We can't check `model != nil` here because model is an interface and in Go a variable is only nil if both its
-	// type and value are nil. In this case, even though the value is nil, the variable has a concrete type.
-	if err == nil {
-		internal.Registry.Set(operation.Id(), model)
-	} else {
-		internal.Log().Warn("model creation failed", "op", operation.Id(), "ep", ep, "err", err)
-	}
-
-	return model, err
+) (any, error) {
+	return internal.GetOrCreateModel(operation.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
+		return newModel(ctx, operation, ep, onProgress)
+	})
 }
 
 // newModel builds the model that implements the given operation, using the requested execution provider.
@@ -282,8 +244,8 @@ func newModel(
 	operation types.Operation,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
-) (interface{}, error) {
-	var model interface{}
+) (any, error) {
+	var model any
 	var err error
 
 	switch {
@@ -335,13 +297,6 @@ func newModel(
 	}
 
 	return model, err
-}
-
-// notifyFallback informs the registered handler, if any, that a GPU execution provider was downgraded to the CPU.
-func notifyFallback(ep types.ExecutionProvider, err error) {
-	if handler := fallbackHandler.Load(); handler != nil {
-		(*handler)(ep, err)
-	}
 }
 
 // endregion

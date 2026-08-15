@@ -29,7 +29,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const upModel = useSettingsStore((state) => state.upModel);
     const shModel = useSettingsStore((state) => state.shModel);
 
-    // JobStore: keeps the Settings dialog from cleaning the model registry while an export is running
+    // JobStore: holds the batch as one job, so the AI processor stays locked for the whole export
     const beginJob = useJobStore((state) => state.beginJob);
     const endJob = useJobStore((state) => state.endJob);
 
@@ -50,6 +50,56 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
         }
     };
 
+    // Exports every file in turn, reporting whether it got through all of them. Returns early on the first failure —
+    // the file's error state has already been emitted by then.
+    const exportAll = async (): Promise<boolean> => {
+        for (const [file, operations] of enhancements.entries()) {
+            try {
+                // The list of operations for this file is empty; it means Autopilot added this file in the export
+                // list. We need to check if there are any suitable operations to apply to the file.
+                if (operations.length === 0) {
+                    suggestRef.current = suggestEnhancement(file, {
+                        dn: dnModel,
+                        fr: frModel,
+                        la: laModel,
+                        cb: cbModel,
+                        up: upModel,
+                        sh: shModel,
+                    });
+
+                    const suggestions = await suggestRef.current;
+
+                    if (suggestions.length === 0) continue;
+                    operations.push(...suggestions);
+                }
+
+                exportRef.current = exportImage({
+                    file,
+                    ep,
+                    operations,
+                    overwrite,
+                    format,
+                    prefix,
+                    suffix,
+                    location,
+                });
+                await exportRef.current;
+            } catch (e) {
+                if (e instanceof CancelError) {
+                    Events.Emit('app:export', { hash: file.Hash, state: 'IDLE', value: 0 });
+                } else {
+                    const msg = getErrorMessage(e);
+                    const tag = msg.includes('[download]') ? 'ERROR_DOWNLOAD' : 'ERROR';
+                    Events.Emit('app:export', { hash: file.Hash, state: tag, value: 0 });
+                }
+
+                return false;
+            }
+        }
+
+        return true;
+    };
+
     const handleExport = async () => {
         if (state === 'completed') {
             resetKey();
@@ -59,60 +109,13 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
         setState('processing');
         track(AnalyticsEvent.ExportStarted, { count: enhancements.size, format });
 
-        // The whole loop counts as one running job: the models stay loaded between files, so the registry can't be
-        // cleaned until the last file is done.
+        // The whole loop counts as one running job on top of the per-file ones, so the "busy" state doesn't flicker
+        // off between two files while the models are still loaded.
         beginJob();
+        const completed = await exportAll();
+        endJob();
 
-        try {
-            for (const [file, operations] of enhancements.entries()) {
-                try {
-                    // The list of operations for this file is empty; it means Autopilot added this file in the export
-                    // list. We need to check if there are any suitable operations to apply to the file.
-                    if (operations.length === 0) {
-                        suggestRef.current = suggestEnhancement(file, {
-                            dn: dnModel,
-                            fr: frModel,
-                            la: laModel,
-                            cb: cbModel,
-                            up: upModel,
-                            sh: shModel,
-                        });
-
-                        const suggestions = await suggestRef.current;
-
-                        if (suggestions.length === 0) continue;
-                        operations.push(...suggestions);
-                    }
-
-                    exportRef.current = exportImage({
-                        file,
-                        ep,
-                        operations,
-                        overwrite,
-                        format,
-                        prefix,
-                        suffix,
-                        location,
-                    });
-                    await exportRef.current;
-                } catch (e) {
-                    if (e instanceof CancelError) {
-                        Events.Emit('app:export', { hash: file.Hash, state: 'IDLE', value: 0 });
-                    } else {
-                        const msg = getErrorMessage(e);
-                        const tag = msg.includes('[download]') ? 'ERROR_DOWNLOAD' : 'ERROR';
-                        Events.Emit('app:export', { hash: file.Hash, state: tag, value: 0 });
-                    }
-
-                    setState('idle');
-                    return;
-                }
-            }
-        } finally {
-            endJob();
-        }
-
-        setState('completed');
+        setState(completed ? 'completed' : 'idle');
     };
 
     // Exporting

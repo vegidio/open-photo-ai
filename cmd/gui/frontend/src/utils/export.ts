@@ -7,6 +7,7 @@ import { type File, InferenceParams } from '@/bindings/gui/types';
 import { useCropStore } from '@/stores/crop.ts';
 import { EMPTY_CROP } from '@/utils/constants.ts';
 import { getEnabledFaces } from '@/utils/face.ts';
+import { withJob } from '@/utils/jobs.ts';
 
 export type ExportOptions = {
     file: File;
@@ -33,11 +34,23 @@ const IMAGE_FORMAT_BY_EXT: Record<string, ImageFormat> = {
     webp: ImageFormat.FormatWebp,
 };
 
-export const getExportEligible = (selectedFiles: File[], enhancements: Map<File, Operation[]>, autopilot: boolean) => {
+/**
+ * Picks the files an export should actually process: those with enhancements, plus (under Autopilot) those with none
+ * yet, whose operations are suggested later.
+ *
+ * `enhancements` is the store's map, keyed by path. The result is keyed by the `File` objects instead, because the
+ * export needs the whole file (path, hash, extension) — that map is built and consumed within a single pass, so
+ * object identity is not a concern there the way it is for the long-lived stores.
+ */
+export const getExportEligible = (
+    selectedFiles: File[],
+    enhancements: Map<string, Operation[]>,
+    autopilot: boolean,
+) => {
     const allEnhancements = new Map<File, Operation[]>();
 
     for (const file of selectedFiles) {
-        const operations = enhancements.get(file);
+        const operations = enhancements.get(file.Path);
         if (operations && operations.length > 0) allEnhancements.set(file, operations);
         if (!operations && autopilot) allEnhancements.set(file, []);
     }
@@ -71,21 +84,23 @@ export const exportImage = (opts: ExportOptions) => {
     return new CancellablePromise<void>(
         async (resolve, reject) => {
             try {
-                // Face recovery no longer detects faces internally; detect them up front (cached by hash+crop, so the
-                // boxes match the cropped source) and pass them along — minus any faces the user has deselected.
-                const crop = useCropStore.getState().crops.get(file);
-                const faces = await getEnabledFaces(file, ep, opIds, undefined, crop);
+                await withJob(async () => {
+                    // Face recovery no longer detects faces internally; detect them up front (cached by hash+crop, so
+                    // the boxes match the cropped source) and pass them along — minus any faces the user deselected.
+                    const crop = useCropStore.getState().crops.get(file.Path);
+                    const faces = await getEnabledFaces(file, ep, opIds, undefined, crop);
 
-                p = ExportImage(
-                    file,
-                    filePath,
-                    ep,
-                    overwrite,
-                    imgFormat,
-                    new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
-                    ...opIds,
-                );
-                await p;
+                    p = ExportImage(
+                        file,
+                        filePath,
+                        ep,
+                        overwrite,
+                        imgFormat,
+                        new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
+                        ...opIds,
+                    );
+                    await p;
+                });
 
                 resolve();
             } catch (e) {

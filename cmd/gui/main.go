@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/o11y"
@@ -21,6 +22,11 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+const (
+	minWindowWidth  = 1280
+	minWindowHeight = 720
+)
 
 func main() {
 	// TODO: Workaround for Linux to set LD_LIBRARY_PATH; I must revisit this approach in the future
@@ -69,8 +75,10 @@ func main() {
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:      "Open Photo AI",
 		StartState: application.WindowStateMaximised,
-		MinWidth:   1280,
-		MinHeight:  720,
+		Width:      minWindowWidth,
+		Height:     minWindowHeight,
+		MinWidth:   minWindowWidth,
+		MinHeight:  minWindowHeight,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,
@@ -79,6 +87,9 @@ func main() {
 		URL:            "/",
 		EnableFileDrop: true,
 	})
+
+	// Open the window maximized
+	maximizeOnStart(win)
 
 	// Track drag and drops on the app
 	eventDragAndDrop(app, win)
@@ -112,6 +123,32 @@ func setLibPathAndRestart() {
 
 	slog.Info("re-executing with LD_LIBRARY_PATH", "paths", strings.Join(libPaths, ":"))
 	os.ReExec(fmt.Sprintf("LD_LIBRARY_PATH=%s", strings.Join(libPaths, ":")))
+}
+
+// maximizeOnStart maximises the window once the frontend runtime has connected, since StartState and early Maximise()
+// calls are ignored by macOS before the window is shown.
+//
+// Maximise() also clears the size constraints, which Wails only restores on its own un-maximise, so the minimum is
+// re-applied by hand once WindowDidResize shows the window has grown past it (macOS never fires WindowMaximise).
+// WindowUnFullscreen needs the same fix for the same reason.
+func maximizeOnStart(win *application.WebviewWindow) {
+	var maximise, restore sync.Once
+
+	win.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
+		maximise.Do(func() { win.Maximise() })
+	})
+
+	restoreMinSize := func(_ *application.WindowEvent) {
+		win.SetMinSize(minWindowWidth, minWindowHeight)
+	}
+
+	win.OnWindowEvent(events.Common.WindowDidResize, func(event *application.WindowEvent) {
+		if w, h := win.Size(); w >= minWindowWidth && h >= minWindowHeight {
+			restore.Do(func() { restoreMinSize(event) })
+		}
+	})
+
+	win.OnWindowEvent(events.Common.WindowUnFullscreen, restoreMinSize)
 }
 
 func eventDragAndDrop(app *application.App, win *application.WebviewWindow) {

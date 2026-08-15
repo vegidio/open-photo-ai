@@ -1,7 +1,8 @@
-/** biome-ignore-all lint/suspicious/noUnknownAtRules: N/A */
 @import "tailwindcss";
+/* `tailwind-animations` (formerly `@midudev/tailwind-animations`) ships as plain CSS, so it is imported rather than
+   loaded via `@plugin`. All @import rules must precede the @plugin rules below to stay valid CSS. */
+@import "tailwind-animations";
 @plugin "tailwind-scrollbar";
-@plugin "@midudev/tailwind-animations";
 
 /*
  * Dark mode is forced app-wide (see main.tsx), but native UA controls such as scrollbars follow the document's

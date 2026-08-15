@@ -11,15 +11,16 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-// ErrCreateSession marks every error returned by CreateSession, so callers can tell a failure caused by the execution
-// provider (a broken GPU driver, no free VRAM, an unsupported model/EP combination) apart from one caused by the model
-// file itself. Test for it with errors.Is, it survives wrapping.
-var ErrCreateSession = errors.New("failed to create ONNX session")
-
+// CreateSession builds an ONNX session for the given model file and execution provider.
+//
+// Every failure it returns - the provider options, the session options and the model load alike - is marked with
+// internal.ErrCreateSession, so callers can tell "this session couldn't be built" apart from the failures around it,
+// such as a model that couldn't be downloaded. That's what lets GetOrCreateModel decide a retry on the CPU is worth
+// attempting.
 func CreateSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*ort.DynamicAdvancedSession, error) {
 	session, err := createSession(modelFile, inputs, outputs, ep)
 	if err != nil {
-		return nil, errors.Mark(err, ErrCreateSession)
+		return nil, errors.Mark(err, internal.ErrCreateSession)
 	}
 
 	return session, nil
@@ -29,17 +30,24 @@ func createSession(modelFile string, inputs, outputs []string, ep types.Executio
 	internal.Log().Debug("creating session", "model_file", modelFile, "ep", ep)
 
 	configDir, err := os.UserConfigDir()
-	cachePath := filepath.Join(configDir, internal.AppName, "models")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to resolve user config directory")
+	}
+
+	modelsPath := filepath.Join(configDir, internal.AppName, "models")
 	var options *ort.SessionOptions
 
-	// Check the computer's OS
+	// Check the computer's OS. The default is what keeps `options` from staying nil below: without it an
+	// unsupported GOOS would fall through with a nil error and blow up on the deferred Destroy.
 	switch runtime.GOOS {
 	case "windows":
-		options, err = createWindowsOptions(cachePath, ep)
+		options, err = createWindowsOptions(modelsPath, ep)
 	case "linux":
-		options, err = createLinuxOptions(cachePath, ep)
+		options, err = createLinuxOptions(modelsPath, ep)
 	case "darwin":
-		options, err = createMacOptions(cachePath, ep)
+		options, err = createMacOptions(modelsPath, ep)
+	default:
+		return nil, errors.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
 
 	if err != nil {
@@ -56,7 +64,7 @@ func createSession(modelFile string, inputs, outputs []string, ep types.Executio
 		return nil, errors.Wrap(err, "failed to set execution mode")
 	}
 
-	modelPath := filepath.Join(configDir, internal.AppName, "models", modelFile)
+	modelPath := filepath.Join(modelsPath, modelFile)
 	session, err := ort.NewDynamicAdvancedSession(modelPath, inputs, outputs, options)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create session")
@@ -90,7 +98,8 @@ func createWindowsOptions(cachePath string, ep types.ExecutionProvider) (*ort.Se
 		_ = getDirectMLEP(cachePath, options)
 		_ = getOpenVINOEP(cachePath, options)
 	default:
-		return nil, errors.Errorf("unsupported execution provider: %x", ep)
+		options.Destroy()
+		return nil, errors.Errorf("unsupported execution provider: %s", ep)
 	}
 
 	return options, nil
@@ -116,7 +125,8 @@ func createLinuxOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sess
 		_ = getCudaEP(cachePath, options)
 		_ = getOpenVINOEP(cachePath, options)
 	default:
-		return nil, errors.Errorf("unsupported execution provider: %x", ep)
+		options.Destroy()
+		return nil, errors.Errorf("unsupported execution provider: %s", ep)
 	}
 
 	return options, nil
@@ -139,7 +149,8 @@ func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.Sessio
 		_ = getCoreMLEP(cachePath, options)
 		_ = getOpenVINOEP(cachePath, options)
 	default:
-		return nil, errors.Errorf("unsupported execution provider: %x", ep)
+		options.Destroy()
+		return nil, errors.Errorf("unsupported execution provider: %s", ep)
 	}
 
 	return options, nil

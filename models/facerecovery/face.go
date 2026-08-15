@@ -25,17 +25,15 @@ const (
 func GetDtModel(ctx context.Context, ep types.ExecutionProvider) (types.Model[[]detection.Face], error) {
 	dtOp := newyork.Op(types.PrecisionFp32)
 
-	if cached, exists := internal.Registry.Get(dtOp.Id()); exists {
-		return cached.(types.Model[[]detection.Face]), nil
-	}
+	model, err := internal.GetOrCreateModel(dtOp.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
+		return newyork.New(ctx, dtOp, ep, nil)
+	})
 
-	model, err := newyork.New(ctx, dtOp, ep, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create Face Detection model")
 	}
 
-	internal.Registry.Set(dtOp.Id(), model)
-	return model, nil
+	return model.(types.Model[[]detection.Face]), nil
 }
 
 // alignFace aligns a face image using the provided landmarks and returns the aligned image and the affine

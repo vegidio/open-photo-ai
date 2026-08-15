@@ -31,7 +31,9 @@ type AnalyticsParams = Record<string, string | number | boolean>;
 let enabled = true;
 
 // The App Key literal ships as a placeholder until set; treat that as "not configured" so we never init/track with it.
-const keyConfigured = (): boolean => !!aptabaseAppKey && !aptabaseAppKey.startsWith('A-XX');
+// The placeholder is the `<aptabase_key>` literal that CI replaces (see .github/workflows/build.yml), so the angle
+// bracket is what identifies an un-substituted build — matching on the key's own prefix would let the placeholder pass.
+const keyConfigured = (): boolean => !!aptabaseAppKey && !aptabaseAppKey.startsWith('<');
 
 /** Initializes analytics. Honors `collectionEnabled` so a persisted opt-out is respected from the first event. */
 export const initAnalytics = (collectionEnabled = true): void => {

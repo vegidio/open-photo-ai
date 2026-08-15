@@ -17,11 +17,7 @@ import (
 
 // IsSupportedFile reports whether path has a supported image extension.
 func IsSupportedFile(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	if len(ext) > 0 {
-		ext = ext[1:]
-	}
-	return slices.Contains(utils.SupportedInputExtensions(), ext)
+	return utils.IsSupportedInputExtension(path)
 }
 
 // PartitionSupportedFiles splits paths into supported and unsupported by extension.

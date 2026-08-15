@@ -3,18 +3,18 @@ module github.com/vegidio/open-photo-ai
 go 1.26.1
 
 require (
-	github.com/DeRuina/timberjack v1.4.5
-	github.com/cockroachdb/errors v1.12.0
+	github.com/DeRuina/timberjack v1.4.6
+	github.com/cockroachdb/errors v1.14.0
 	github.com/disintegration/imaging v1.6.2
-	github.com/samber/lo v1.52.0
-	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5
+	github.com/samber/lo v1.53.0
+	github.com/vegidio/avif-go v0.0.0-20260715095249-dbb32e4e0094
 	github.com/vegidio/go-sak v0.0.0-20260814193649-fcd3a5f91a14
 	github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5
 	github.com/vegidio/raw-go v0.0.0-20260619122347-1fd4b5c63e43
 	github.com/vegidio/webp-go v0.0.0-20260614080129-a1efc50b59e1
 	github.com/yalue/onnxruntime_go v1.31.0
-	golang.org/x/image v0.40.0
-	golang.org/x/text v0.37.0
+	golang.org/x/image v0.45.0
+	golang.org/x/text v0.41.0
 )
 
 require (
@@ -31,7 +31,7 @@ require (
 	github.com/dgraph-io/badger/v4 v4.9.1 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.4.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/getsentry/sentry-go v0.42.0 // indirect
+	github.com/getsentry/sentry-go v0.46.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -63,12 +63,12 @@ require (
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go4.org v0.0.0-20260112195520-a5071408f32f // indirect
-	golang.org/x/net v0.53.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251222181119-0a764e51fe1b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251222181119-0a764e51fe1b // indirect
-	google.golang.org/grpc v1.78.0 // indirect
+	google.golang.org/grpc v1.79.3 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 

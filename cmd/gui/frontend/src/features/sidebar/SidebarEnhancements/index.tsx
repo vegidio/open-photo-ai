@@ -15,7 +15,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
 
     const file = useCurrentFile();
     const autopilot = useEnhancementStore((state) => state.autopilot);
-    const hasEnhancement = useEnhancementStore((state) => (file ? state.enhancements.has(file) : false));
+    const hasEnhancement = useEnhancementStore((state) => (file ? state.enhancements.has(file.Path) : false));
     const operations = useFileOperations(file);
     const addEnhancements = useAddEnhancements();
     const dnModel = useSettingsStore((state) => state.dnModel);

@@ -8,7 +8,7 @@ import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { SettingsItemButton } from '@/features/settings/SettingsItemButton';
 import { SettingsItemSelect } from '@/features/settings/SettingsItemSelect';
 import { SettingsItemSwitch } from '@/features/settings/SettingsItemSwitch';
-import { useJobStore, useSettingsStore } from '@/stores';
+import { selectIsBusy, useJobStore, useSettingsStore } from '@/stores';
 
 export type SettingsListHandle = {
     scrollToSection: (itemId: string) => void;
@@ -175,9 +175,9 @@ const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
     const executionProvider = useSettingsStore((state) => state.executionProvider);
     const setExecutionProvider = useSettingsStore((state) => state.setExecutionProvider);
 
-    // Switching processors unloads the models that are currently running, which would kill the app mid-inference, so
-    // the option is locked while any enhancement, export or face detection is in flight.
-    const isBusy = useJobStore((state) => state.activeJobs > 0);
+    // Switching processors only takes effect by unloading every loaded model, so the option is locked while any
+    // enhancement, export or face detection is still using them.
+    const isBusy = useJobStore(selectIsBusy);
 
     const description = useMemo(() => {
         if (isBusy) {

@@ -52,7 +52,7 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
 
         const onWheel = (e: WheelEvent) => {
             e.preventDefault();
-            const state = tRef.current?.instance.transformState;
+            const state = tRef.current?.instance.state;
             if (!state) return;
 
             const dir = e.deltaY < 0 ? 1 : -1; // wheel up = zoom in
@@ -76,7 +76,7 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
             scale: currentScale,
             positionX: currentPosX,
             positionY: currentPosY,
-        } = tRef.current.instance.transformState;
+        } = tRef.current.instance.state;
         const { scale: newScale, positionX, positionY } = imageTransform;
         const scaledWidth = dimensions.width * newScale;
         const scaledHeight = dimensions.height * newScale;
@@ -124,7 +124,7 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
             panning={{ velocityDisabled: true }}
             onPanning={onPanning}
             onPanningStop={onPanning}
-            alignmentAnimation={{ animationTime: 0 }}
+            autoAlignment={{ animationTime: 0 }}
             doubleClick={{ disabled: true }}
             wheel={{ disabled: true }}
         >

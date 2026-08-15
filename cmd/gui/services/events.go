@@ -48,7 +48,8 @@ type ExportUpdate struct {
 
 // ProviderFallback is the payload of EventAppFallback. Emitted when the selected AI processor couldn't be used - a
 // GPU driver that is broken or too old, a GPU without enough free memory - and inference was downgraded to the CPU.
-// Only the first downgrade of a run is emitted, so the user isn't told the same thing on every operation.
+// Only the first downgrade since the models were last loaded is emitted, so the user isn't told the same thing on
+// every operation, but a different processor that also fails is reported again.
 type ProviderFallback struct {
 	Provider string `json:"provider"`
 }

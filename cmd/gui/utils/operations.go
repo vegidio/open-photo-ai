@@ -15,6 +15,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
+	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
@@ -50,99 +51,106 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 
 		name := values[1]
 
-		switch name {
-		// Face Recovery — "_<name>_<precision>" (faces are detected independently and supplied by the caller)
-		case "athens":
-			operations = append(operations, athens.Op(types.Precision(values[2]), params.Faces))
-		case "santorini":
-			operations = append(operations, santorini.Op(types.Precision(values[2]), params.Faces))
-
-		// Light Adjustment — "_<name>_<intensity>_<precision>"
-		case "paris":
-			if len(values) < 4 {
-				return nil, errors.Errorf("invalid operation ID: %q", opId)
-			}
-
-			intensity, err := strconv.ParseFloat(values[2], 32)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid intensity in %q", opId)
-			}
-
-			operations = append(operations, paris.Op(float32(intensity), types.Precision(values[3])))
-
-		// Denoise — "_<name>_<intensity>_<precision>" (older IDs without an intensity segment default to 1.0)
-		case "stockholm", "gothenburg", "malmo":
-			intensity, precision, err := parseIntensity(values)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid intensity in %q", opId)
-			}
-
-			switch name {
-			case "stockholm":
-				operations = append(operations, stockholm.Op(intensity, precision))
-			case "gothenburg":
-				operations = append(operations, gothenburg.Op(intensity, precision))
-			case "malmo":
-				operations = append(operations, malmo.Op(intensity, precision))
-			}
-
-		// Sharpen — "_<name>_<intensity>_<precision>" (older IDs without an intensity segment default to 1.0)
-		case "moscow", "petersburg", "novgorod":
-			intensity, precision, err := parseIntensity(values)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid intensity in %q", opId)
-			}
-
-			switch name {
-			case "moscow":
-				operations = append(operations, moscow.Op(intensity, precision))
-			case "petersburg":
-				operations = append(operations, petersburg.Op(intensity, precision))
-			case "novgorod":
-				operations = append(operations, novgorod.Op(intensity, precision))
-			}
-
-		// Color Balance — "_<name>_<intensity>_<precision>"
-		case "rio":
-			if len(values) < 4 {
-				return nil, errors.Errorf("invalid operation ID: %q", opId)
-			}
-
-			intensity, err := strconv.ParseFloat(values[2], 32)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid intensity in %q", opId)
-			}
-
-			operations = append(operations, rio.Op(float32(intensity), types.Precision(values[3])))
-
-		// Upscale — "_<name>_<scale>x_<precision>"
-		case "tokyo", "kyoto", "saitama":
-			if len(values) < 4 {
-				return nil, errors.Errorf("invalid operation ID: %q", opId)
-			}
-
-			scale, err := strconv.ParseFloat(strings.TrimSuffix(values[2], "x"), 64)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid scale in %q", opId)
-			}
-
-			precision := types.Precision(values[3])
-
-			switch name {
-			case "tokyo":
-				operations = append(operations, tokyo.Op(scale, precision))
-			case "kyoto":
-				operations = append(operations, kyoto.Op(scale, precision))
-			case "saitama":
-				operations = append(operations, saitama.Op(scale, precision))
-			}
-
-		default:
+		build, known := operationBuilders[name]
+		if !known {
 			return nil, errors.Errorf("unknown operation variant %q in ID %q", name, opId)
 		}
+
+		operation, err := build(values, params)
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid operation ID %q", opId)
+		}
+
+		operations = append(operations, operation)
 	}
 
 	return operations, nil
+}
+
+// operationBuilder turns the underscore-split segments of an operation ID into the operation it names. params carries
+// the pre-detected faces that only the face-recovery models consume.
+type operationBuilder func(values []string, params guitypes.InferenceParams) (types.Operation, error)
+
+// operationBuilders maps a model name to its constructor. A table rather than a switch so that adding a model is one
+// entry here, and so the shared "<name>_<amount>_<precision>" parsing is written once instead of per model.
+var operationBuilders = map[string]operationBuilder{
+	// Face Recovery — "_<name>_<precision>" (faces are detected independently and supplied by the caller)
+	"athens":    faceRecoveryBuilder(athens.Op),
+	"santorini": faceRecoveryBuilder(santorini.Op),
+
+	// Denoise — "_<name>_<intensity>_<precision>" (older IDs without an intensity segment default to 1.0)
+	"stockholm":  intensityBuilder(stockholm.Op),
+	"gothenburg": intensityBuilder(gothenburg.Op),
+	"malmo":      intensityBuilder(malmo.Op),
+
+	// Sharpen — "_<name>_<intensity>_<precision>" (older IDs without an intensity segment default to 1.0)
+	"moscow":     intensityBuilder(moscow.Op),
+	"petersburg": intensityBuilder(petersburg.Op),
+	"novgorod":   intensityBuilder(novgorod.Op),
+
+	// Light Adjustment / Color Balance — "_<name>_<intensity>_<precision>", intensity always present
+	"paris": requiredIntensityBuilder(paris.Op),
+	"rio":   requiredIntensityBuilder(rio.Op),
+
+	// Upscale — "_<name>_<scale>x_<precision>"
+	"tokyo":   scaleBuilder(tokyo.Op),
+	"kyoto":   scaleBuilder(kyoto.Op),
+	"saitama": scaleBuilder(saitama.Op),
+}
+
+// Each model's Op returns its own concrete operation type, so the builders below are generic over that type rather
+// than taking a func that returns types.Operation — Go won't convert the function types implicitly.
+
+// faceRecoveryBuilder reads "_<name>_<precision>" and forwards the caller-supplied faces.
+func faceRecoveryBuilder[T types.Operation](op func(types.Precision, []detection.Face) T) operationBuilder {
+	return func(values []string, params guitypes.InferenceParams) (types.Operation, error) {
+		return op(types.Precision(values[2]), params.Faces), nil
+	}
+}
+
+// intensityBuilder reads "_<name>_<intensity>_<precision>", tolerating the older "_<name>_<precision>" form by
+// defaulting the intensity to 1.0.
+func intensityBuilder[T types.Operation](op func(float32, types.Precision) T) operationBuilder {
+	return func(values []string, _ guitypes.InferenceParams) (types.Operation, error) {
+		intensity, precision, err := parseIntensity(values)
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid intensity")
+		}
+
+		return op(intensity, precision), nil
+	}
+}
+
+// requiredIntensityBuilder reads "_<name>_<intensity>_<precision>", where the intensity segment is mandatory.
+func requiredIntensityBuilder[T types.Operation](op func(float32, types.Precision) T) operationBuilder {
+	return func(values []string, _ guitypes.InferenceParams) (types.Operation, error) {
+		if len(values) < 4 {
+			return nil, errors.New("missing intensity segment")
+		}
+
+		intensity, err := strconv.ParseFloat(values[2], 32)
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid intensity")
+		}
+
+		return op(float32(intensity), types.Precision(values[3])), nil
+	}
+}
+
+// scaleBuilder reads "_<name>_<scale>x_<precision>".
+func scaleBuilder[T types.Operation](op func(float64, types.Precision) T) operationBuilder {
+	return func(values []string, _ guitypes.InferenceParams) (types.Operation, error) {
+		if len(values) < 4 {
+			return nil, errors.New("missing scale segment")
+		}
+
+		scale, err := strconv.ParseFloat(strings.TrimSuffix(values[2], "x"), 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid scale")
+		}
+
+		return op(scale, types.Precision(values[3])), nil
+	}
 }
 
 // ApplyCropInfo applies the user's flip/rotate/crop to the image in that order (flip → rotate → crop), matching how the

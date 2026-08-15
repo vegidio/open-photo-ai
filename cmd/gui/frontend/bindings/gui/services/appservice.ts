@@ -13,9 +13,8 @@ import * as $models from "./models.js";
  * CleanRegistry unloads every model currently held in memory, so the next enhancement rebuilds them - that's how a
  * change to the AI processor takes effect, since the registry is keyed by operation ID only.
  * 
- * It destroys the native ONNX sessions right away, so the frontend must not call it while an enhancement, an export or
- * a face detection is running: freeing a session mid-inference kills the whole app. The frontend holds the call back
- * until nothing is in flight (see `runWhenIdle` in stores/jobs.ts).
+ * The call blocks until the inference in flight has finished, so it's safe to make at any time; the frontend doesn't
+ * have to wait for anything itself.
  */
 export function CleanRegistry(): $CancellablePromise<void> {
     return $Call.ByID(3767199187);

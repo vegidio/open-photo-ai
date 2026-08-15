@@ -25,7 +25,7 @@ func ImageToCHW(img image.Image, useOffset, standardize bool) []float32 {
 	// relative to Bounds().Min, which equals the generic path when useOffset is true, or when the
 	// origin is already (0,0) (the case for every imaging.Resize/Crop output passed with useOffset).
 	atOrigin := bounds.Min.X == 0 && bounds.Min.Y == 0
-	if pix, stride, ok := rgbPixBuffer(img); ok && (useOffset || atOrigin) {
+	if pix, stride, ok := RgbPixBuffer(img); ok && (useOffset || atOrigin) {
 		_, isNRGBA := img.(*image.NRGBA)
 
 		for y := 0; y < height; y++ {
@@ -34,7 +34,7 @@ func ImageToCHW(img image.Image, useOffset, standardize bool) []float32 {
 
 			for x := 0; x < width; x++ {
 				// Reconstruct the exact 16-bit values color.RGBA/NRGBA.RGBA() returns.
-				r16, g16, b16, _ := sample16(pix, row+x*4, isNRGBA)
+				r16, g16, b16, _ := Sample16(pix, row+x*4, isNRGBA)
 				writeCHW(tensor, dst, gBase, bBase, r16, g16, b16, standardize)
 				dst++
 			}

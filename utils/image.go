@@ -53,30 +53,52 @@ func LoadImage(path string) (*types.ImageData, error) {
 	}
 	defer inputFile.Close()
 
+	// Hash the file as it is decoded rather than rewinding and reading it a second time — for a 60 MB RAW that second
+	// pass is not free. The hash keys the image cache and has to match crypto.Xxh3File for the same file, so it must
+	// still cover every byte: decoders routinely stop before EOF (trailing metadata, padding), hence the drain below.
+	pipeReader, pipeWriter := io.Pipe()
+	hashed := make(chan struct{})
+
+	var hash string
+	var hashErr error
+
+	go func() {
+		defer close(hashed)
+		hash, hashErr = crypto.Xxh3Reader(pipeReader)
+		// Keep consuming after the hasher is done so a decoder that stops early can never block writing into the pipe.
+		_, _ = io.Copy(io.Discard, pipeReader)
+	}()
+
+	source := io.TeeReader(inputFile, pipeWriter)
+
 	// RAW formats (except CR2/RAF) share the plain TIFF magic, so image.Decode can't be relied on to route them
 	// correctly — branch on the extension and decode them explicitly with raw-go.
 	var img image.Image
 	if IsRawExtension(path) {
 		rawMu.Lock()
-		img, err = raw.Decode(inputFile)
+		img, err = raw.Decode(source)
 		rawMu.Unlock()
 	} else {
-		img, _, err = image.Decode(inputFile)
+		img, _, err = image.Decode(source)
 	}
+
+	// Feed the hasher whatever the decoder left behind, then close the pipe so it sees EOF.
+	var drainErr error
+	if err == nil {
+		_, drainErr = io.Copy(io.Discard, source)
+	}
+
+	pipeWriter.Close()
+	<-hashed
 
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode image")
 	}
-
-	// Reset file pointer to the beginning
-	_, err = inputFile.Seek(0, io.SeekStart)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to reset file pointer")
+	if drainErr != nil {
+		return nil, errors.Wrap(drainErr, "failed to read image file")
 	}
-
-	hash, err := crypto.Xxh3Reader(inputFile)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to compute image hash")
+	if hashErr != nil {
+		return nil, errors.Wrap(hashErr, "failed to compute image hash")
 	}
 
 	return &types.ImageData{

@@ -8,6 +8,7 @@ import { useEnhancementStore } from '@/stores/enhancements.ts';
 import { EMPTY_CROP } from '@/utils/constants.ts';
 import { cropToken } from '@/utils/crop.ts';
 import { getEnabledFaces, hasFaceRecovery } from '@/utils/face.ts';
+import { withJob } from '@/utils/jobs.ts';
 
 export type ImageData = {
     id: string;
@@ -16,7 +17,13 @@ export type ImageData = {
     height: number;
 };
 
-const imageCache = new LRUCache<string, ImageData>({ max: 1000 });
+// `dispose` is what keeps the cache bounded in memory, not just in entry count. The object URL is the only remaining
+// reference to the decoded blob, so dropping an evicted entry without revoking it would strand that image — tens of MB
+// for a full-resolution preview — for the lifetime of the webview.
+const imageCache = new LRUCache<string, ImageData>({
+    max: 1000,
+    dispose: (value) => URL.revokeObjectURL(value.url),
+});
 
 // The source dimensions of a file: the crop box (post-rotation) when cropped, otherwise the file's own dimensions.
 export const cropDimensions = (file: File, crop?: CropInfo): [number, number] =>
@@ -59,11 +66,11 @@ export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operation
     // The user can deselect individual faces; that selection changes the recovery output, so it must be part of the
     // cache key (otherwise a toggle would return a stale enhanced image).
     const isFaceRecovery = hasFaceRecovery(operations);
-    const disabled = isFaceRecovery ? useEnhancementStore.getState().disabledFaces.get(file) : undefined;
+    const disabled = isFaceRecovery ? useEnhancementStore.getState().disabledFaces.get(file.Path) : undefined;
     const faceToken = disabled?.size ? `_d${[...disabled].sort((a, b) => a - b).join('-')}` : '';
 
     // The crop is applied to the source before enhancement, so it must be part of the cache key too.
-    const crop = useCropStore.getState().crops.get(file);
+    const crop = useCropStore.getState().crops.get(file.Path);
     const cacheKey = `${file.Hash}_${opIds}${faceToken}${cropToken(crop)}`;
 
     let image = imageCache.get(cacheKey);
@@ -73,20 +80,23 @@ export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operation
         async (resolve, reject) => {
             if (!image) {
                 try {
-                    // Face recovery no longer detects faces internally; detect them up front (cached by hash+crop) and
-                    // pass them along so the recovery operations receive them — minus any faces the user deselected.
-                    const faces = await getEnabledFaces(file, ep, operations, disabled, crop);
+                    image = await withJob(async () => {
+                        // Face recovery no longer detects faces internally; detect them up front (cached by hash+crop)
+                        // and pass them along so the recovery operations receive them — minus any faces the user
+                        // deselected.
+                        const faces = await getEnabledFaces(file, ep, operations, disabled, crop);
 
-                    p = ProcessImage(
-                        file.Path,
-                        ep,
-                        new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
-                        ...operations,
-                    );
-                    const [base64, width, height] = await p;
-                    image = await createImageData(file.Hash, base64, width, height);
+                        p = ProcessImage(
+                            file.Path,
+                            ep,
+                            new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
+                            ...operations,
+                        );
+                        const [base64, width, height] = await p;
+                        return createImageData(file.Hash, base64, width, height);
+                    });
+
                     imageCache.set(cacheKey, image);
-
                     resolve(image);
                 } catch (e) {
                     reject(e);
@@ -100,6 +110,7 @@ export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operation
 };
 
 export const clearCache = () => {
+    // `clear()` runs `dispose` for every entry, so the blobs are released along with the entries.
     imageCache.clear();
 };
 

@@ -2,6 +2,7 @@ package opai
 
 import (
 	"context"
+	"image"
 	"math"
 
 	"github.com/vegidio/open-photo-ai/internal"
@@ -18,15 +19,23 @@ import (
 func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.ModelType {
 	enhancementTypes := make([]types.ModelType, 0)
 
+	// The face-detection path runs a model out of the same registry CleanRegistry drains. See internal.InferenceMu.
+	internal.InferenceMu.RLock()
+	defer internal.InferenceMu.RUnlock()
+
 	if shouldFaceRecovery(ctx, input) {
 		enhancementTypes = append(enhancementTypes, types.ModelTypeFaceRecovery)
 	}
 
-	if shouldLightAdjustment(input) {
+	// The light and colour heuristics both need per-pixel statistics over the whole image, so they share one scan
+	// rather than walking every pixel twice.
+	stats := scanImage(input.Pixels)
+
+	if shouldLightAdjustment(stats) {
 		enhancementTypes = append(enhancementTypes, types.ModelTypeLightAdjustment)
 	}
 
-	if shouldColorBalance(input) {
+	if shouldColorBalance(stats) {
 		enhancementTypes = append(enhancementTypes, types.ModelTypeColorBalance)
 	}
 
@@ -56,51 +65,123 @@ func shouldFaceRecovery(ctx context.Context, input *types.ImageData) bool {
 	return len(faces) > 0
 }
 
-func shouldLightAdjustment(input *types.ImageData) bool {
-	bounds := input.Pixels.Bounds()
-	totalPixels := float64(bounds.Dx() * bounds.Dy())
+// Thresholds that decide what the scan accumulates, as opposed to how the accumulations are judged (those stay with
+// their respective predicates below).
+const (
+	darkThreshold    = 15  // 8-bit luminance considered near black
+	brightThreshold  = 240 // 8-bit luminance considered near white
+	neutralSatCutoff = 40.0
+	hueBinCount      = 12
+)
 
-	if totalPixels == 0 {
+// imageStats holds everything the light-adjustment and colour-balance heuristics need from the image, gathered in a
+// single pass. Both used to walk every pixel themselves, which meant two full traversals of the same buffer.
+type imageStats struct {
+	totalPixels float64
+
+	// Luminance distribution (Rec. 709, 8-bit)
+	sumLuminance float64
+	darkPixels   int
+	brightPixels int
+
+	// Channel means and the near-neutral pixels that reveal a colour cast
+	sumR, sumG, sumB                      float64
+	neutralSumR, neutralSumG, neutralSumB float64
+	neutralPixels                         int
+	neutralHueHistogram                   [hueBinCount]int
+}
+
+// scanImage walks the image once and accumulates the statistics both colour heuristics need.
+//
+// For the concrete RGBA-family types it indexes the backing pixel buffer directly rather than going through
+// image.Image.At().RGBA() per pixel. utils.Sample16 reconstructs the exact 16-bit values At() would have returned, so
+// the statistics — and therefore the suggestions — are identical to the generic path on every image.
+func scanImage(img image.Image) imageStats {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+
+	stats := imageStats{totalPixels: float64(width * height)}
+	if stats.totalPixels == 0 {
+		return stats
+	}
+
+	accumulate := func(r, g, b uint32) {
+		// Convert from 16-bit to 8-bit
+		r8 := float64(r >> 8)
+		g8 := float64(g >> 8)
+		b8 := float64(b >> 8)
+
+		// Perceived luminance (Rec. 709)
+		luminance := 0.2126*r8 + 0.7152*g8 + 0.0722*b8
+		stats.sumLuminance += luminance
+
+		if luminance <= darkThreshold {
+			stats.darkPixels++
+		} else if luminance >= brightThreshold {
+			stats.brightPixels++
+		}
+
+		stats.sumR += r8
+		stats.sumG += g8
+		stats.sumB += b8
+
+		h, s, _ := utils.RgbToHsv(r8, g8, b8)
+
+		if s < neutralSatCutoff {
+			stats.neutralSumR += r8
+			stats.neutralSumG += g8
+			stats.neutralSumB += b8
+
+			bin := int(h / 360.0 * float64(hueBinCount))
+			if bin >= hueBinCount {
+				bin = hueBinCount - 1
+			}
+			stats.neutralHueHistogram[bin]++
+			stats.neutralPixels++
+		}
+	}
+
+	// Fast path: read the backing pixel buffer directly, skipping the per-pixel interface dispatch and color boxing.
+	if pix, stride, ok := utils.RgbPixBuffer(img); ok {
+		_, isNRGBA := img.(*image.NRGBA)
+
+		for y := 0; y < height; y++ {
+			row := y * stride // Pix/Stride are already relative to Bounds().Min
+
+			for x := 0; x < width; x++ {
+				r, g, b, _ := utils.Sample16(pix, row+x*4, isNRGBA)
+				accumulate(r, g, b)
+			}
+		}
+
+		return stats
+	}
+
+	// Generic fallback for any other image.Image implementation.
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			accumulate(r, g, b)
+		}
+	}
+
+	return stats
+}
+
+func shouldLightAdjustment(stats imageStats) bool {
+	if stats.totalPixels == 0 {
 		return false
 	}
 
-	var sumLuminance float64
-	var darkPixels int
-	var brightPixels int
-
-	// Thresholds (8-bit luminance)
 	const (
-		darkThreshold   = 15  // near black
-		brightThreshold = 240 // near white
 		meanDarkLimit   = 50
 		meanBrightLimit = 200
 		clippingRatio   = 0.35 // 35% pixels clipped
 	)
 
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			r, g, b, _ := input.Pixels.At(x, y).RGBA()
-
-			// Convert from 16-bit to 8-bit
-			r8 := float64(r >> 8)
-			g8 := float64(g >> 8)
-			b8 := float64(b >> 8)
-
-			// Perceived luminance (Rec. 709)
-			luminance := 0.2126*r8 + 0.7152*g8 + 0.0722*b8
-			sumLuminance += luminance
-
-			if luminance <= darkThreshold {
-				darkPixels++
-			} else if luminance >= brightThreshold {
-				brightPixels++
-			}
-		}
-	}
-
-	meanLuminance := sumLuminance / totalPixels
-	darkRatio := float64(darkPixels) / totalPixels
-	brightRatio := float64(brightPixels) / totalPixels
+	meanLuminance := stats.sumLuminance / stats.totalPixels
+	darkRatio := float64(stats.darkPixels) / stats.totalPixels
+	brightRatio := float64(stats.brightPixels) / stats.totalPixels
 
 	// Too dark
 	if meanLuminance < meanDarkLimit && darkRatio > clippingRatio {
@@ -115,63 +196,28 @@ func shouldLightAdjustment(input *types.ImageData) bool {
 	return false
 }
 
-func shouldColorBalance(input *types.ImageData) bool {
-	bounds := input.Pixels.Bounds()
-	totalPixels := float64(bounds.Dx() * bounds.Dy())
-
-	if totalPixels == 0 {
+func shouldColorBalance(stats imageStats) bool {
+	if stats.totalPixels == 0 {
 		return false
 	}
 
 	const (
-		neutralSatCutoff        = 40.0
 		neutralPixelMinRatio    = 0.02
 		neutralCastThreshold    = 12.0
-		hueBinCount             = 12
 		neutralHueSkewThreshold = 0.45
 		whiteBalanceThreshold   = 0.5
 	)
 
-	var sumR, sumG, sumB float64
-	var neutralSumR, neutralSumG, neutralSumB float64
-	neutralHueHistogram := make([]int, hueBinCount)
-	var neutralPixels int
+	neutralPixels := stats.neutralPixels
+	neutralSumR, neutralSumG, neutralSumB := stats.neutralSumR, stats.neutralSumG, stats.neutralSumB
+	neutralHueHistogram := stats.neutralHueHistogram
 
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			r, g, b, _ := input.Pixels.At(x, y).RGBA()
-
-			r8 := float64(r >> 8)
-			g8 := float64(g >> 8)
-			b8 := float64(b >> 8)
-
-			sumR += r8
-			sumG += g8
-			sumB += b8
-
-			h, s, _ := utils.RgbToHsv(r8, g8, b8)
-
-			if s < neutralSatCutoff {
-				neutralSumR += r8
-				neutralSumG += g8
-				neutralSumB += b8
-
-				bin := int(h / 360.0 * float64(hueBinCount))
-				if bin >= hueBinCount {
-					bin = hueBinCount - 1
-				}
-				neutralHueHistogram[bin]++
-				neutralPixels++
-			}
-		}
-	}
-
-	meanR := sumR / totalPixels
-	meanG := sumG / totalPixels
-	meanB := sumB / totalPixels
+	meanR := stats.sumR / stats.totalPixels
+	meanG := stats.sumG / stats.totalPixels
+	meanB := stats.sumB / stats.totalPixels
 
 	flags := 0
-	hasEnoughNeutral := float64(neutralPixels)/totalPixels >= neutralPixelMinRatio
+	hasEnoughNeutral := float64(neutralPixels)/stats.totalPixels >= neutralPixelMinRatio
 
 	// Neutral-pixel RGB cast: pixels that should be gray reveal a cast when their mean shifts off-gray.
 	if hasEnoughNeutral {

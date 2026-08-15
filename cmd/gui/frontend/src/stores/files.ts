@@ -34,9 +34,16 @@ export const useFileStore = create(
             const oldLength = get().files.length;
 
             set((state) => {
-                const uniqueFiles = files.filter(
-                    (file) => !state.files.some((existingFile) => existingFile.Path === file.Path),
-                );
+                // A Set of the existing paths, rather than a scan per incoming file: dropping a folder onto a long
+                // list was O(n·m). Adding to the set as we go also de-duplicates within the incoming batch, which the
+                // previous check missed.
+                const seenPaths = new Set(state.files.map((existingFile) => existingFile.Path));
+                const uniqueFiles = files.filter((file) => {
+                    if (seenPaths.has(file.Path)) return false;
+                    seenPaths.add(file.Path);
+                    return true;
+                });
+
                 state.files.push(...uniqueFiles);
 
                 // Move the current selection to the first newly added file

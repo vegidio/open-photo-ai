@@ -1,5 +1,6 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.2.6/schema.json",
+    "root": true,
+    "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
     "vcs": {
         "enabled": false,
         "clientKind": "git",
@@ -37,7 +38,7 @@
             "suspicious": {
                 "noArrayIndexKey": "off"
             },
-            "recommended": true
+            "preset": "recommended"
         }
     },
     "javascript": {
@@ -62,11 +63,16 @@
                                 "type": true
                             },
                             ":PATH:",
-                            ":SIDE_EFFECT:"
+                            ":STYLE:"
                         ]
                     }
                 }
             }
+        }
+    },
+    "css": {
+        "parser": {
+            "tailwindDirectives": true
         }
     }
 }

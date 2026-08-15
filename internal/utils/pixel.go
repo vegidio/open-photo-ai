@@ -2,9 +2,13 @@ package utils
 
 import "image"
 
-// rgbPixBuffer returns the backing pixel slice and row stride for the concrete RGBA-family image
+// RgbPixBuffer returns the backing pixel slice and row stride for the concrete RGBA-family image
 // types, or ok=false for any other implementation. The returned offsets are relative to Bounds().Min.
-func rgbPixBuffer(img image.Image) (pix []uint8, stride int, ok bool) {
+//
+// Paired with Sample16, it lets a per-pixel loop skip the image.Image interface (an At() dispatch plus a color.Color
+// boxing per pixel) for the types that make up virtually every image in the pipeline, while still falling back to the
+// generic path for anything else.
+func RgbPixBuffer(img image.Image) (pix []uint8, stride int, ok bool) {
 	switch m := img.(type) {
 	case *image.NRGBA:
 		return m.Pix, m.Stride, true
@@ -15,10 +19,13 @@ func rgbPixBuffer(img image.Image) (pix []uint8, stride int, ok bool) {
 	}
 }
 
-// sample16 returns the 16-bit (0-65535) RGBA channel values for the pixel at byte offset off in a
+// Sample16 returns the 16-bit (0-65535) RGBA channel values for the pixel at byte offset off in a
 // concrete RGBA-family buffer, matching exactly what color.RGBA/NRGBA.RGBA() would return. isNRGBA
 // must be true for *image.NRGBA buffers (straight alpha) and false for premultiplied *image.RGBA.
-func sample16(pix []uint8, off int, isNRGBA bool) (r, g, b, a uint32) {
+//
+// Reproducing RGBA() bit-for-bit is the point: it means a fast-path loop and the generic At() fallback produce
+// identical results, so the choice between them is purely a performance detail and never changes output.
+func Sample16(pix []uint8, off int, isNRGBA bool) (r, g, b, a uint32) {
 	r = uint32(pix[off]) * 257
 	g = uint32(pix[off+1]) * 257
 	b = uint32(pix[off+2]) * 257

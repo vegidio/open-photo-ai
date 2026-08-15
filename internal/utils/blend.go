@@ -38,10 +38,10 @@ func BlendWithIntensity(original, modelOutput image.Image, intensity float32) im
 	result := image.NewNRGBA(image.Rect(0, 0, width, height))
 
 	// Fast path: when both inputs are concrete RGBA-family buffers at the origin, blend via direct Pix
-	// indexing. sample16 reproduces the exact 16-bit values At().RGBA() would return, so the output is
+	// indexing. Sample16 reproduces the exact 16-bit values At().RGBA() would return, so the output is
 	// bit-identical to the generic path while avoiding per-pixel interface dispatch on two sources.
-	oPix, oStride, oFast := rgbPixBuffer(original)
-	mPix, mStride, mFast := rgbPixBuffer(modelOutput)
+	oPix, oStride, oFast := RgbPixBuffer(original)
+	mPix, mStride, mFast := RgbPixBuffer(modelOutput)
 	_, oIsNRGBA := original.(*image.NRGBA)
 	_, mIsNRGBA := modelOutput.(*image.NRGBA)
 	atOrigin := original.Bounds().Min == image.Point{} && modelOutput.Bounds().Min == image.Point{}
@@ -52,8 +52,8 @@ func BlendWithIntensity(original, modelOutput image.Image, intensity float32) im
 			mRow := y * mStride
 			dst := y * result.Stride
 			for x := 0; x < width; x++ {
-				origR, origG, origB, origA := sample16(oPix, oRow+x*4, oIsNRGBA)
-				modelR, modelG, modelB, _ := sample16(mPix, mRow+x*4, mIsNRGBA)
+				origR, origG, origB, origA := Sample16(oPix, oRow+x*4, oIsNRGBA)
+				modelR, modelG, modelB, _ := Sample16(mPix, mRow+x*4, mIsNRGBA)
 
 				oR := float32(origR) / 257.0
 				oG := float32(origG) / 257.0
@@ -127,7 +127,7 @@ func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlap int, b
 
 	overlapFloat := float64(overlap)
 
-	srcPix, srcStride, srcFast := rgbPixBuffer(src)
+	srcPix, srcStride, srcFast := RgbPixBuffer(src)
 	_, srcIsNRGBA := src.(*image.NRGBA)
 
 	for dy := 0; dy < maxY; dy++ {

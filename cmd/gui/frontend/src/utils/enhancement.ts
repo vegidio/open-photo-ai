@@ -18,6 +18,7 @@ import {
     Stockholm,
     Tokyo,
 } from '@/operations';
+import { withJob } from '@/utils/jobs.ts';
 
 export type ModelChoices = {
     dn: string;
@@ -39,7 +40,9 @@ export const suggestEnhancement = (file: File, models: ModelChoices) => {
             p = SuggestEnhancements(file.Path);
 
             try {
-                const opIds = await p;
+                // Autopilot runs face detection out of the same model registry an enhancement does, so it counts as a
+                // job too.
+                const opIds = await withJob(() => p);
                 resolve(modelTypesToOps(opIds, file, models));
             } catch (e) {
                 reject(e);

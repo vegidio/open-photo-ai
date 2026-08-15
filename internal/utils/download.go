@@ -97,11 +97,17 @@ func PrepareDependency(
 
 // region - Progress reader
 
+// progressInterval is the shortest gap between two progress callbacks. io.Copy reads in 32 KB chunks, so reporting on
+// every Read means ~16,000 callbacks for a 500 MB dependency — each one crossing into the GUI's event bus and on to the
+// frontend. Throttling keeps the reporting smooth without making the download drive the UI.
+const progressInterval = 100 * time.Millisecond
+
 type progressReader struct {
 	reader     io.Reader
 	total      int64
 	downloaded int64
 	onProgress types.DownloadProgress
+	lastReport time.Time
 }
 
 func (pr *progressReader) Read(p []byte) (int, error) {
@@ -109,12 +115,19 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	pr.downloaded += int64(n)
 
 	if pr.onProgress != nil {
-		percent := 0.0
-		if pr.total > 0 {
-			percent = float64(pr.downloaded) / float64(pr.total)
-		}
+		// The final callback is always emitted, so the UI lands on 100% (or on the true total for a failed transfer)
+		// rather than wherever the last tick happened to fall.
+		done := err != nil
+		if done || time.Since(pr.lastReport) >= progressInterval {
+			pr.lastReport = time.Now()
 
-		pr.onProgress(pr.downloaded, pr.total, percent)
+			percent := 0.0
+			if pr.total > 0 {
+				percent = float64(pr.downloaded) / float64(pr.total)
+			}
+
+			pr.onProgress(pr.downloaded, pr.total, percent)
+		}
 	}
 
 	return n, err

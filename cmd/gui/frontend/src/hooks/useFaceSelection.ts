@@ -15,7 +15,7 @@ export const useFaceSelection = (file: File, open: boolean) => {
 
     // Re-seed the working copy from the committed selection each time the modal opens.
     useEffect(() => {
-        if (open) setDisabled(new Set(useEnhancementStore.getState().disabledFaces.get(file) ?? []));
+        if (open) setDisabled(new Set(useEnhancementStore.getState().disabledFaces.get(file.Path) ?? []));
     }, [open, file]);
 
     const toggle = useCallback((index: number) => {
@@ -33,7 +33,7 @@ export const useFaceSelection = (file: File, open: boolean) => {
     // Commit to the store (call on close). Only writes when the set actually changed, so an open-and-close with no
     // edits doesn't re-trigger the preview.
     const commit = useCallback(() => {
-        const committed = useEnhancementStore.getState().disabledFaces.get(file) ?? new Set<number>();
+        const committed = useEnhancementStore.getState().disabledFaces.get(file.Path) ?? new Set<number>();
         const changed = disabled.size !== committed.size || [...disabled].some((x) => !committed.has(x));
         if (changed) setDisabledFaces(file, disabled);
     }, [disabled, file, setDisabledFaces]);

@@ -21,8 +21,9 @@ type AppService struct {
 	app  *application.App
 	otel *o11y.Telemetry
 
-	// fallbackNotified keeps the "running on CPU" warning to one per run: the downgrade is reported once per model,
-	// but the user only needs to be told about it once.
+	// fallbackNotified keeps the "running on CPU" warning to one per set of loaded models, so a run that downgrades
+	// several models only tells the user once. CleanRegistry clears it, so picking a different processor that also
+	// fails is reported again.
 	fallbackNotified atomic.Bool
 }
 
@@ -100,10 +101,12 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 // CleanRegistry unloads every model currently held in memory, so the next enhancement rebuilds them - that's how a
 // change to the AI processor takes effect, since the registry is keyed by operation ID only.
 //
-// It destroys the native ONNX sessions right away, so the frontend must not call it while an enhancement, an export or
-// a face detection is running: freeing a session mid-inference kills the whole app. The frontend holds the call back
-// until nothing is in flight (see `runWhenIdle` in stores/jobs.ts).
+// The call blocks until the inference in flight has finished, so it's safe to make at any time; the frontend doesn't
+// have to wait for anything itself.
 func (s *AppService) CleanRegistry() {
+	// The models are about to be rebuilt on the newly chosen processor, so a downgrade to the CPU is news again.
+	s.fallbackNotified.Store(false)
+
 	opai.CleanRegistry()
 }
 
@@ -133,7 +136,7 @@ func (s *AppService) destroy() {
 }
 
 // onProviderFallback reports that the requested execution provider couldn't create a model and the CPU was used
-// instead. Only the first downgrade reaches the frontend; the rest are logged.
+// instead. Only the first downgrade since the models were last loaded reaches the frontend; the rest are logged.
 func (s *AppService) onProviderFallback(ep types.ExecutionProvider, err error) {
 	slog.Warn("execution provider unavailable; falling back to CPU", "ep", ep, "err", err)
 
