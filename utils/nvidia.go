@@ -20,7 +20,7 @@ import (
 const (
 	CudaTag     = "cuda/13.3.0"
 	CudnnTag    = "cudnn/9.23.1"
-	TensorrtTag = "tensorrt/10.13.3"
+	TensorrtTag = "tensorrt/10.14.1"
 )
 
 // IsCudaSupported performs a simplified check whether the system has an NVIDIA GPU that possibly supports CUDA.
