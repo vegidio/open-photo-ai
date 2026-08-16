@@ -7,11 +7,13 @@ import (
 	"gui/utils"
 	"log"
 	"log/slog"
+	stdos "os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 
+	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/o11y"
 	"github.com/vegidio/go-sak/os"
@@ -111,7 +113,20 @@ func main() {
 	}
 }
 
+// setLibPathAndRestart re-executes the process with LD_LIBRARY_PATH pointing at the bundled NVIDIA libraries, because
+// glibc parses that variable once at exec time: appending to it later, after the libraries have been downloaded, has no
+// effect on the dlopen() calls that ONNX Runtime makes to load its execution providers.
+//
+// Every library that a provider links against must be listed here, even if its directory is still empty on a fresh
+// install — MkUserConfigDir creates it up front so the loader doesn't mark it as non-existing and skip it for the rest
+// of the process lifetime, which would break a provider downloaded later in the same session.
 func setLibPathAndRestart() {
+	// ReExec sets APP_REEXEC=1 in the child and no-ops when called again, so bail out before doing any work: the child
+	// would otherwise recreate the dirs and log a re-exec that never happens.
+	if stdos.Getenv("APP_REEXEC") == "1" {
+		return
+	}
+
 	libPaths := make([]string, 0)
 
 	if path, err := fs.MkUserConfigDir(shared.AppName, "libs", "cuda"); err == nil {
@@ -120,6 +135,16 @@ func setLibPathAndRestart() {
 	if path, err := fs.MkUserConfigDir(shared.AppName, "libs", "cudnn"); err == nil {
 		libPaths = append(libPaths, path)
 	}
+	if path, err := fs.MkUserConfigDir(shared.AppName, "libs", "tensorrt"); err == nil {
+		libPaths = append(libPaths, path)
+	}
+
+	// Keep any inherited value, appended last so the bundled libraries — which are version-matched to the ONNX Runtime
+	// build — take precedence over a system-wide install. Merging matters: ReExec adds the variable to the inherited
+	// environment rather than replacing it, so an inherited entry would otherwise compete with this one. Uniq keeps the
+	// first occurrence, so the bundled dirs win and a repeated entry can't turn into a duplicated path.
+	libPaths = append(libPaths, filepath.SplitList(stdos.Getenv("LD_LIBRARY_PATH"))...)
+	libPaths = lo.Uniq(lo.Compact(libPaths))
 
 	slog.Info("re-executing with LD_LIBRARY_PATH", "paths", strings.Join(libPaths, ":"))
 	os.ReExec(fmt.Sprintf("LD_LIBRARY_PATH=%s", strings.Join(libPaths, ":")))
