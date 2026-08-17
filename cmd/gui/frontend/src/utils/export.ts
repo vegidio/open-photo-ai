@@ -1,4 +1,4 @@
-import { CancellablePromise } from '@wailsio/runtime';
+import { CancelError, CancellablePromise } from '@wailsio/runtime';
 import { basename, dirname, extname, join } from 'pathe';
 import type { Operation } from '@/operations';
 import { type ExecutionProvider, ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
@@ -113,7 +113,11 @@ export const exportImage = (opts: ExportOptions) => {
     const imgFormat = getImageFormat(ext);
     const opIds = operations.map((op) => op.id);
 
-    let p: CancellablePromise<void>;
+    // Tracked separately from `p` because cancellation can arrive before there is anything to cancel: `p` only exists
+    // once face detection has resolved. Without the flag, cancelling during detection would reject this promise and
+    // then still launch a full export that nobody is waiting for — per row, for the rest of a cancelled batch.
+    let cancelled = false;
+    let p: CancellablePromise<void> | undefined;
 
     return new CancellablePromise<void>(
         async (resolve, reject) => {
@@ -122,6 +126,7 @@ export const exportImage = (opts: ExportOptions) => {
                 // the boxes match the cropped source) and pass them along — minus any faces the user deselected.
                 const crop = useCropStore.getState().crops.get(file.Path);
                 const faces = await getEnabledFaces(file, ep, opIds, undefined, crop);
+                if (cancelled) return reject(new CancelError());
 
                 p = ExportImage(
                     file,
@@ -139,7 +144,10 @@ export const exportImage = (opts: ExportOptions) => {
                 reject(e);
             }
         },
-        () => p?.cancel(),
+        () => {
+            cancelled = true;
+            p?.cancel();
+        },
     );
 };
 

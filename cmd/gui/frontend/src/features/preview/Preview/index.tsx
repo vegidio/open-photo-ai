@@ -45,6 +45,12 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         async function loadPreview() {
             if (currentFile) {
                 const originalImage = await getImage(currentFile, 0, crop);
+
+                // `p?.cancel()` in the cleanup can't help here: on this path `p` doesn't exist yet, so a file switch
+                // while the original is still loading would let the abandoned file's image land in the store on top
+                // of the newer one — and then start a full enhancement run for it.
+                if (isCancelled) return;
+
                 setOriginalImage(originalImage);
                 setEnhancedImage(originalImage);
 
@@ -56,10 +62,14 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
                     try {
                         const enhancedImage = await p;
+                        if (isCancelled) return;
+
                         setEnhancedImage(enhancedImage);
                         track(AnalyticsEvent.ImageProcessed, { operation_count: opIds.length });
                     } catch (e) {
-                        if (!(e instanceof CancelError)) {
+                        // A run this effect has already abandoned reports nothing: it may fail precisely *because* it
+                        // was cancelled, and a snackbar about a file the user has navigated away from is noise.
+                        if (!isCancelled && !(e instanceof CancelError)) {
                             track(AnalyticsEvent.ProcessFailed, { reason: getErrorMessage(e) });
                             const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to enhance image.');
                             enqueueSnackbar(msg, { variant: 'error' });

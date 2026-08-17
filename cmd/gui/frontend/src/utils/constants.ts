@@ -4,9 +4,9 @@ import { Version } from '@/bindings/gui/services/appservice.ts';
 import { GetArch, GetOS } from '@/bindings/gui/services/osservice.ts';
 import { CropInfo } from '@/bindings/gui/types';
 
-export const version = await Version();
-export const os = await GetOS();
-export const arch = await GetArch();
+// Top-level await: every module importing this one blocks until the backend answers. Issued together rather than
+// sequentially so that costs one round trip over the Wails bridge on startup instead of three.
+export const [version, os, arch] = await Promise.all([Version(), GetOS(), GetArch()]);
 
 export const EMPTY_OPERATIONS: Operation[] = [];
 export const EMPTY_FACES: Face[] = [];

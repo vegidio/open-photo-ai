@@ -6,7 +6,10 @@ import { useEnhancementStore } from '@/stores/enhancements.ts';
 import { EMPTY_CROP } from '@/utils/constants.ts';
 import { cropToken } from '@/utils/crop.ts';
 
-const facesCache = new Map<string, Face[]>();
+// Caches the in-flight promise, not the resolved faces, so concurrent callers for the same key share one detection
+// run. Caching the result instead would let two callers that both miss (the preview and an export of the same file,
+// say) each pay a full detection inference.
+const facesCache = new Map<string, Promise<Face[]>>();
 
 /**
  * Detects the faces in an image, caching the result by file hash (plus a crop token) to avoid redundant detection.
@@ -21,12 +24,18 @@ const facesCache = new Map<string, Face[]>();
  * @param crop - The flip/rotate/crop to detect against; omit for the uncropped image.
  * @returns A promise that resolves to the detected faces (empty when none are found).
  */
-export const detectFaces = async (file: File, ep: ExecutionProvider, crop?: CropInfo): Promise<Face[]> => {
+export const detectFaces = (file: File, ep: ExecutionProvider, crop?: CropInfo): Promise<Face[]> => {
     const key = `${file.Hash}${cropToken(crop)}`;
     let faces = facesCache.get(key);
 
     if (!faces) {
-        faces = await DetectFaces(file.Path, ep, crop ?? EMPTY_CROP);
+        faces = DetectFaces(file.Path, ep, crop ?? EMPTY_CROP).catch((e) => {
+            // Only successes are cached: a detection that failed (or was cancelled) must be retried on the next call,
+            // not replayed from the cache forever.
+            facesCache.delete(key);
+            throw e;
+        });
+
         facesCache.set(key, faces);
     }
 

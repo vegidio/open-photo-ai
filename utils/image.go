@@ -193,7 +193,7 @@ func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte
 //   - quality: The quality level the encoding (0-100, where 100 is the highest quality).
 //
 // # Returns:
-//   - int64: The size of the saved file in bytes.
+//   - int: The size of the saved file in bytes.
 //   - error: An error if the quality is out of range, the file cannot be created, or encoding fails.
 func SaveImage(data *types.ImageData, format types.ImageFormat, quality int) (int, error) {
 	if quality < 0 || quality > 100 {

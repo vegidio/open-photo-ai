@@ -255,12 +255,12 @@ func shouldColorBalance(stats imageStats) bool {
 }
 
 func shouldUpscale(input *types.ImageData) bool {
-	const _2Mp = 4_194_304
+	const maxPixelsForUpscale = 4 << 20
 
 	bounds := input.Pixels.Bounds()
-	mp := bounds.Dx() * bounds.Dy()
+	pixels := bounds.Dx() * bounds.Dy()
 
-	return mp <= _2Mp
+	return pixels <= maxPixelsForUpscale
 }
 
 // endregion
