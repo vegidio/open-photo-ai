@@ -35,17 +35,8 @@ import (
 // at …" and may return an all-black image), so every RAW decode/config call must hold this lock.
 var rawMu sync.Mutex
 
-// LoadImage loads an image file from the specified path and returns it as ImageData.
-//
-// The function opens the file, decodes the image data, and constructs an ImageData
-// structure containing both the file path and the decoded pixel data.
-//
-// # Parameters:
-//   - path: The file system path to the image file to be loaded
-//
-// # Returns:
-//   - *types.ImageData: A pointer to the ImageData structure containing the file path and decoded image
-//   - error: An error if the file cannot be opened or the image cannot be decoded
+// LoadImage decodes an image file into memory, filling ImageData.Hash with the xxh3 of the file's bytes as it goes.
+// Camera RAW files are decoded through LibRaw; see IsRawExtension for the formats that covers.
 func LoadImage(path string) (*types.ImageData, error) {
 	inputFile, err := os.Open(path)
 	if err != nil {
@@ -108,17 +99,9 @@ func LoadImage(path string) (*types.ImageData, error) {
 	}, nil
 }
 
-// ImageDimensions reads the width and height of an image file without decoding the full image.
-//
-// It reads only the image header for standard formats; for RAW files it parses the metadata via raw-go
-// (no demosaicing). This centralizes the RAW-aware dimension logic so callers don't depend on raw-go directly.
-//
-// # Parameters:
-//   - path: The file system path to the image file
-//
-// # Returns:
-//   - []int: A two-element slice {width, height}
-//   - error: An error if the file cannot be opened or its header cannot be read
+// ImageDimensions returns {width, height} from an image file's header, without decoding the pixels. For RAW files it
+// parses the metadata via raw-go (no demosaicing), which centralizes the RAW-aware logic so callers don't depend on
+// raw-go directly.
 func ImageDimensions(path string) ([]int, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -141,16 +124,10 @@ func ImageDimensions(path string) ([]int, error) {
 	return []int{config.Width, config.Height}, nil
 }
 
-// EncodeImage encodes an image into a byte array in the specified format with the given quality level.
+// EncodeImage encodes an image into the given format.
 //
-// # Parameters:
-//   - img: The image.Image to be encoded.
-//   - format: The target image format (e.g., FormatBmp, FormatJpeg, FormatPng).
-//   - quality: The quality level for lossy formats like JPEG (0-100, where 100 is the highest quality).
-//
-// # Returns:
-//   - []byte: The encoded image data as a byte slice.
-//   - error: An error if the format is unsupported or encoding fails.
+// quality is 0-100 and applies to JPEG only; the other lossy formats (AVIF, HEIC, WebP) are encoded at fixed quality
+// settings and ignore it.
 func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte, error) {
 	var buf bytes.Buffer
 	var err error
@@ -184,17 +161,8 @@ func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte
 	return buf.Bytes(), nil
 }
 
-// SaveImage saves the image data to a file in the specified format. The output format is determined by the Format field
-// in the OutputImage structure.
-//
-// # Parameters:
-//   - data: A pointer to OutputImage containing the file path, pixel data, and desired format.
-//   - format: The image format to save the image data as.
-//   - quality: The quality level the encoding (0-100, where 100 is the highest quality).
-//
-// # Returns:
-//   - int: The size of the saved file in bytes.
-//   - error: An error if the quality is out of range, the file cannot be created, or encoding fails.
+// SaveImage encodes data.Pixels in the given format and writes it to data.FilePath, returning the number of bytes
+// written. quality is 0-100 and, as in EncodeImage, only affects JPEG.
 func SaveImage(data *types.ImageData, format types.ImageFormat, quality int) (int, error) {
 	if quality < 0 || quality > 100 {
 		return 0, errors.Errorf("invalid quality: %d, must be between 0 and 100", quality)

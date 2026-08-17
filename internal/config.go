@@ -15,10 +15,7 @@ type RemoteModelData struct {
 	Hash string
 }
 
-// ModelData contains metadata about remote models available for download.
-//
-// This slice holds information about the model name, size, and hash for verification purposes. It is populated during
-// initialization and should not be modified directly.
+// ModelData is the remote model manifest. It is populated during Initialize and should not be modified directly.
 var ModelData []RemoteModelData
 
 // ModelsWithPrefix returns the manifest entries whose file name starts with id.

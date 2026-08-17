@@ -17,7 +17,6 @@ type CropStore = {
     clear: () => void;
 };
 
-// Enable MapSet support in Immer
 enableMapSet();
 
 export const useCropStore = create(

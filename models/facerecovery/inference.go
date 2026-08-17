@@ -92,8 +92,8 @@ func restoreSingleFace(
 
 // runInference runs face recovery inference on an aligned face image.
 //
-// If fidelityWeight is positive, it will be used as a second input tensor; otherwise, only the image input will be
-// used.
+// A non-negative fidelity is passed as a second input tensor; a negative one selects the single-input path, for the
+// models whose graph has no fidelity input.
 func runInference(session *utils.Session, aligned image.Image, tileSize int, fidelity float32) (image.Image, error) {
 	inputData := utils.ImageToCHW(aligned, false, true)
 
@@ -109,7 +109,6 @@ func runInference(session *utils.Session, aligned image.Image, tileSize int, fid
 	}
 	defer outputTensor.Destroy()
 
-	// If fidelityWeight is provided, include it as a second input
 	if fidelity >= 0 {
 		weightTensor, err := ort.NewTensor(ort.NewShape(1), []float32{fidelity})
 		if err != nil {

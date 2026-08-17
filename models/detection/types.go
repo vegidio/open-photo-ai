@@ -27,7 +27,7 @@ type RectF struct {
 
 // Face represents a detected face with its properties
 type Face struct {
-	BoundingBox RectF                // Rectangle for face bounds
-	Landmarks   [numLandmarks]PointF // 5 facial landmark points
+	BoundingBox RectF
+	Landmarks   [numLandmarks]PointF
 	Confidence  float32
 }

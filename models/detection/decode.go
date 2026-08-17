@@ -29,7 +29,6 @@ func decodeBox(loc []float32, prior Prior, i int) RectF {
 	boxW := prior.sx * float32(math.Exp(float64(loc[locOffset+2]*variance1)))
 	boxH := prior.sy * float32(math.Exp(float64(loc[locOffset+3]*variance1)))
 
-	// Calculate half-dimensions once
 	halfW := boxW * 0.5
 	halfH := boxH * 0.5
 

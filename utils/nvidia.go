@@ -23,9 +23,8 @@ const (
 	TensorrtTag = "tensorrt/10.14.1"
 )
 
-// IsCudaSupported performs a simplified check whether the system has an NVIDIA GPU that possibly supports CUDA.
-//
-// Returns false if an error occurs while querying GPU information or no NVIDIA GPU is found.
+// IsCudaSupported reports whether the machine has an NVIDIA GPU, which is only a rough proxy for CUDA being usable:
+// the driver may still be missing or too old, which shows up as a session-build failure later.
 func IsCudaSupported() bool {
 	gpus, err := internal.GPUInfo()
 	if err != nil {
@@ -41,9 +40,8 @@ func IsCudaSupported() bool {
 	return found
 }
 
-// IsTensorRtSupported performs a simplified check whether the system has an NVIDIA GPU that possibly supports TensorRT.
-//
-// Returns false if an error occurs while querying GPU information or no NVIDIA GPU is found.
+// IsTensorRtSupported reports whether the machine has an RTX 20-series or newer card. Like IsCudaSupported, it is a
+// rough proxy - it says nothing about whether the TensorRT libraries themselves will load.
 func IsTensorRtSupported() bool {
 	gpus, err := internal.GPUInfo()
 	if err != nil {
@@ -64,18 +62,11 @@ func IsTensorRtSupported() bool {
 	return found
 }
 
-// InitializeNvidiaLib downloads and initializes an NVIDIA library dependency.
+// InitializeNvidiaLib downloads an NVIDIA library (libName being "cuda", "cudnn" or "tensorrt", libTag its release
+// tag) into the user's config directory and appends it to PATH and LD_LIBRARY_PATH so the ONNX Runtime can dlopen it.
 //
-// It constructs a download URL based on the library name, tag, and current OS/architecture, then downloads and extracts
-// the library to the user's config directory. The library path is added to the environment PATH for runtime discovery.
-//
-// # Parameters:
-//   - libName: The name of the NVIDIA library (e.g., "cuda", "cudnn", "tensorrt").
-//   - libTag: The version tag used in the download URL (e.g., "cuda/13.3.0").
-//   - checkFile: A filepath used to verify if the library is already installed.
-//   - onProgress: A callback function to report download progress.
-//
-// Returns an error if the download, extraction, or path configuration fails.
+// On Linux the LD_LIBRARY_PATH change only takes effect in a process started afterwards, since glibc reads the
+// variable once at exec time - see setLibPathAndRestart in cmd/gui.
 func InitializeNvidiaLib(
 	ctx context.Context,
 	libName, libTag string,

@@ -25,26 +25,14 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// Process processes an image through a sequence of image operations.
+// Process runs the image through the given operations in sequence, each on the AI model that implements it.
 //
-// The function selects the appropriate AI model for each operation and runs its inference on the image. If multiple
-// operations are provided, they are applied in the order specified. The output is the final processed image after all
-// operations are applied.
-//
-// # Parameters:
-//   - ctx: A context object that can be used to cancel the operation.
-//   - input: The input image data to be processed.
-//   - ep: The execution provider (CPU, CUDA, etc.) to use for inference.
-//   - onProgress: A callback function called with the progress of the current operation (0-1).
-//   - operations: A variable number of operations to apply sequentially.
-//
-// # Returns:
-//   - *types.ImageData: The final processed image data after all operations
-//   - error: An error if model selection fails, any operation fails, or no operations are provided
+// onProgress reports the current operation's progress in the 0-1 range; it is called with "dl" as the operation name
+// while a model is still being downloaded.
 //
 // # Example:
 //
-//	output, err := Process(ctx, inputImage, faceRecoveryOp, upscaleOp)
+//	output, err := Process(ctx, inputImage, ep, onProgress, faceRecoveryOp, upscaleOp)
 func Process(
 	ctx context.Context,
 	input *types.ImageData,
@@ -63,7 +51,8 @@ func Process(
 	start := time.Now()
 	internal.Log().Info("processing image", "op_count", len(operations), "hash", input.Hash)
 
-	// Make a copy of the input img so the original input is not modified
+	// Tracks the latest image through the chain; the input's own Pixels are never written to, so the caller's
+	// ImageData is left untouched.
 	output := input.Pixels
 
 	// Read once per call rather than per operation, so a concurrent SetImageCacheEnabled can't have this loop read
@@ -113,25 +102,15 @@ func Process(
 	}, nil
 }
 
-// Execute executes a single image operation and returns the result as a generic data type.
+// Execute runs a single operation whose output is data rather than an image - face detection, for instance. T must
+// match what the operation's model produces, or it fails with "operation type not supported".
 //
-// The function selects the appropriate AI model for the operation and runs its inference on the image. The output is
-// not an image, but the information data returned by the model.
-//
-// # Parameters:
-//   - ctx: A context object that can be used to cancel the operation.
-//   - input: The input image data to be processed.
-//   - ep: The execution provider (CPU, CUDA, etc.) to use for inference.
-//   - onProgress: A callback function called with the progress of the current operation (0-1).
-//   - operation: The operation to apply to the image.
-//
-// # Returns:
-//   - T: The result of the operation with the specified generic type
-//   - error: An error if model selection fails, the operation fails, or the operation type is not supported
+// onProgress reports the operation's progress in the 0-1 range; it is called with "dl" as the operation name while the
+// model is still being downloaded.
 //
 // # Example:
 //
-//	faces, err := Execute[[]types.Face](ctx, inputImage, progressCallback, faceDetectionOp)
+//	faces, err := Execute[[]detection.Face](ctx, inputImage, ep, onProgress, faceDetectionOp)
 func Execute[T any](
 	ctx context.Context,
 	input *types.ImageData,
@@ -139,7 +118,6 @@ func Execute[T any](
 	onProgress types.InferenceProgress,
 	operation types.Operation,
 ) (T, error) {
-	// nil value for type T
 	var genericNil T
 
 	lease, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
@@ -272,7 +250,6 @@ func paramsOf(operation types.Operation) map[string]any {
 	return nil
 }
 
-// logModelRun emits the per-run timing Debug log shared by Execute and runInference.
 func logModelRun(operation types.Operation, start time.Time) {
 	internal.Log().Debug("model run complete", "op", operation.Id(), "duration", time.Since(start))
 }
@@ -293,7 +270,6 @@ func selectModel(
 	})
 }
 
-// newModel builds the model that implements the given operation, using the requested execution provider.
 func newModel(
 	ctx context.Context,
 	operation types.Operation,

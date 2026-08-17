@@ -26,7 +26,6 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
         return Math.max(containerSize - scaledSize, Math.min(0, position));
     }, []);
 
-    // Set the image dimensions when the image loads
     useEffect(() => {
         const container = tRef.current?.instance.wrapperComponent;
         if (!container) return;
@@ -66,7 +65,6 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
         return () => container.removeEventListener('wheel', onWheel);
     }, [image.id, setImageTransform]);
 
-    // Update the zoom level and position of the image
     useEffect(() => {
         const container = tRef.current?.instance.wrapperComponent;
         if (!tRef.current || !container) return;
@@ -81,10 +79,8 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
         const scaledWidth = dimensions.width * newScale;
         const scaledHeight = dimensions.height * newScale;
 
-        // Calculate new positions based on whether the scale changed
         let newPosX: number, newPosY: number;
 
-        // If scale didn't change, just update the position
         if (currentScale === newScale) {
             newPosX = constrainPosition(positionX, scaledWidth, containerWidth);
             newPosY = constrainPosition(positionY, scaledHeight, containerHeight);

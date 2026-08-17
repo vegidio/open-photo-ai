@@ -14,19 +14,15 @@ const (
 	meanR = float32(123.0)
 )
 
-// PreprocessImage handles image resizing and tensor data preparation
+// PreprocessImage resizes img to fit targetSize, pads it out to a square, and returns the mean-subtracted BGR/CHW
+// input tensor along with the ORIGINAL width and height, which the caller needs to scale the detections back.
 func PreprocessImage(img image.Image, targetSize int) ([]float32, float32, float32) {
 	bounds := img.Bounds()
 	originalWidth := float32(bounds.Dx())
 	originalHeight := float32(bounds.Dy())
 
-	// Calculate resize dimensions maintaining aspect ratio
 	newWidth, newHeight := calculateResizeDimensions(originalWidth, originalHeight, targetSize)
-
-	// Resize image
 	resized := imaging.Resize(img, newWidth, newHeight, imaging.Lanczos)
-
-	// Create padded input tensor data with mean subtraction
 	inputData := createInputTensorData(resized, newWidth, newHeight, targetSize)
 
 	return inputData, originalWidth, originalHeight

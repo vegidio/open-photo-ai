@@ -110,8 +110,6 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
         setState(completed ? 'completed' : 'idle');
     };
 
-    // Exporting
-
     return (
         <div className='flex gap-3'>
             <Button

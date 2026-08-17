@@ -31,18 +31,8 @@ var downloadClient = &http.Client{
 	},
 }
 
-// PrepareDependency downloads a file from the given URL to the destination directory if it doesn't already exist.
-//
-// If the downloaded file is a zip archive, it will be automatically extracted to the destination directory and the zip
-// file will be removed.
-//
-// # Parameters:
-//   - url: the URL to download the file from.
-//   - destination: the subdirectory within the user's config directory to store the file.
-//   - checkFile: the file to check for existence and correctness.
-//   - onProgress: optional callback function to track download progress.
-//
-// Returns an error if the download or extraction fails, nil otherwise.
+// PrepareDependency downloads a file into destination - a subdirectory of the user's config directory - unless
+// fileCheck says a correct copy is already there. A `.7z` download is extracted in place and the archive removed.
 func PrepareDependency(
 	ctx context.Context,
 	url, destination string,
@@ -70,7 +60,6 @@ func PrepareDependency(
 
 	ext := filepath.Ext(fileName)
 
-	// If it's a 7zip file, unzip it
 	if ext == ".7z" {
 		// Close the file before unzipping it on Windows
 		file.Close()
@@ -182,10 +171,8 @@ func downloadFile(ctx context.Context, url string, dstFile *os.File, onProgress 
 		return errors.Newf("bad status: %s", resp.Status)
 	}
 
-	// Get the total file size from the Content-Length header
 	totalSize := resp.ContentLength
 
-	// Wrap the reader with a progress tracker
 	reader := &progressReader{
 		reader:     resp.Body,
 		total:      totalSize,

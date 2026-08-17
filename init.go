@@ -28,11 +28,8 @@ const (
 	shutdownDrainTimeout = 30 * time.Second
 )
 
-// Initialize sets up the model runtime by ensuring all required dependencies are available.
-//
-// This function performs a two-step initialization process:
-//  1. Installs the ONNX runtime if not already present in the user's config directory
-//  2. Initializes the ONNX runtime
+// Initialize sets up the model runtime, downloading the ONNX runtime on first use and deriving the per-machine memory
+// budgets. It must be called before any other function in this package.
 //
 // The name parameter specifies the application name used to create a dedicated config directory under the user's
 // standard configuration path (e.g., ~/.config/name on Linux). It's important that you reuse the same name on later
@@ -40,13 +37,9 @@ const (
 //
 // Cancelling ctx aborts any in-flight download; already-downloaded files are kept for the next call.
 //
-// Returns an error if any step fails, including:
-//   - Unable to create config directories or files
-//   - ONNX runtime initialization failures
-//
 // # Example:
 //
-//	err := opai.Initialize(ctx, "myapp",  nil)
+//	err := opai.Initialize(ctx, "myapp", nil)
 //	if err != nil {
 //	    log.Fatal("Failed to initialize:", err)
 //	}
@@ -105,16 +98,12 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 	return nil
 }
 
-// Destroy cleans up resources used by the model runtime.
-//
-// This function performs cleanup operations to free memory and resources allocated during initialization. It should be
-// called when the application is shutting down or when the AI functionalities are no longer needed.
-//
-// It's recommended to use this function with defer for proper cleanup:
+// Destroy unloads every model and tears the ONNX environment down. Call it at shutdown, typically with defer. Calling
+// it more than once is harmless; only the first call does anything.
 //
 // # Example:
 //
-//	if err := opai.Initialize("myapp", nil); err != nil {
+//	if err := opai.Initialize(ctx, "myapp", nil); err != nil {
 //	    log.Fatal("Initialization failed:", err)
 //	}
 //	defer opai.Destroy() // Ensure cleanup on exit
@@ -152,10 +141,9 @@ func cleanModelCache() error {
 
 	current, readErr := os.ReadFile(versionPath)
 	if readErr == nil && strings.TrimSpace(string(current)) == onnxRuntimeTag {
-		return nil // cache matches the current runtime tag; keep it
+		return nil
 	}
 
-	// Missing or mismatched .version → wipe the contents of models/
 	entries, err := os.ReadDir(modelsDir)
 	if err != nil {
 		return errors.Wrap(err, "failed to read models directory")

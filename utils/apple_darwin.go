@@ -12,9 +12,8 @@ static int macos_major_version(void) {
 */
 import "C"
 
-// IsCoreMLSupported performs a simplified check whether the Mac supported CoreML with MLProgram engine.
-//
-// Returns false if CoreML is not supported.
+// IsCoreMLSupported reports whether this Mac is on macOS 12 or later, which is what the MLProgram model format the
+// CoreML provider is configured with requires.
 func IsCoreMLSupported() bool {
 	return int(C.macos_major_version()) >= 12
 }

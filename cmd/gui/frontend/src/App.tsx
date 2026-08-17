@@ -58,7 +58,6 @@ export const App = () => {
                     execution_provider: useSettingsStore.getState().executionProvider,
                 });
 
-                // If it's the first run and TensorRT is supported, open the TensorRT dialog.
                 if (supportedEps.TensorRT && isFirstTensorRT) setOpenTensorRT(true);
             } catch (e) {
                 console.error('Failed to initialize the app');

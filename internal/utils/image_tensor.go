@@ -33,7 +33,6 @@ func ImageToCHW(img image.Image, useOffset, standardize bool) []float32 {
 			dst := y * width
 
 			for x := range width {
-				// Reconstruct the exact 16-bit values color.RGBA/NRGBA.RGBA() returns.
 				r16, g16, b16, _ := Sample16(pix, row+x*4, isNRGBA)
 				writeCHW(tensor, dst, gBase, bBase, r16, g16, b16, standardize)
 				dst++
@@ -109,7 +108,7 @@ func CHWToImage(data []float32, width, height int, standardize bool) image.Image
 // values, matching the normalization used by both the fast and generic paths.
 func writeCHW(tensor []float32, idx, gBase, bBase int, r, g, b uint32, standardize bool) {
 	if standardize {
-		// Convert to RGB, normalize to [-1, 1]
+		// Normalize to [-1, 1]
 		tensor[idx] = (float32(r/257)/255.0 - 0.5) / 0.5
 		tensor[gBase+idx] = (float32(g/257)/255.0 - 0.5) / 0.5
 		tensor[bBase+idx] = (float32(b/257)/255.0 - 0.5) / 0.5

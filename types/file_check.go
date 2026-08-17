@@ -1,10 +1,7 @@
 package types
 
-// FileCheck represents a file validation configuration used to determine if a dependency needs to be downloaded.
-//
-// # Fields:
-//   - Path: the path to the file within the destination directory to check for existence.
-//   - Hash: the expected SHA256 hash of the file for integrity verification. If empty, no hash validation is performed.
+// FileCheck decides whether a dependency needs downloading: Path is relative to the destination directory, and Hash
+// is the expected SHA-256 of the file. An empty Hash skips verification entirely.
 type FileCheck struct {
 	Path string
 	Hash string

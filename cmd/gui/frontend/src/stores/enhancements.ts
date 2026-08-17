@@ -29,7 +29,6 @@ type EnhancementStore = {
     clear: () => void;
 };
 
-// Enable MapSet support in Immer
 enableMapSet();
 
 export const useEnhancementStore = create(
@@ -56,7 +55,6 @@ export const useEnhancementStore = create(
                 set((state) => {
                     const existingOps = state.enhancements.get(file.Path) ?? [];
 
-                    // Combine existing and new operations
                     const allOps = [...existingOps, ...operations];
 
                     // Sort operations by prefix priority: dn -> fr -> la -> cb -> up -> sh

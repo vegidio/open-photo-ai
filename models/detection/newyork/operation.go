@@ -23,7 +23,6 @@ func (o OpDtNewYork) Hash() string {
 	return utils.GetModelHash(o.Id())
 }
 
-// Compile-time assertion to ensure it conforms to the Op interface.
 var _ types.Operation = (*OpDtNewYork)(nil)
 
 func Op(precision types.Precision) OpDtNewYork {

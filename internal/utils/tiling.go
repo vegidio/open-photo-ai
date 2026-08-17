@@ -55,21 +55,16 @@ func RunTiledInference(
 		opt(&cfg)
 	}
 
-	// Get image dimensions
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	// Create output image (scaled)
 	result := image.NewRGBA(image.Rect(0, 0, width*scale, height*scale))
-
-	// Calculate tile stride (step size)
 	stride := tileSize - tileOverlap
 
 	step := 1 / (math.Ceil(float64(height)/float64(stride)) * math.Ceil(float64(width)/float64(stride)))
 	total := 0.0
 
-	// Process image in tiles
 	for y := 0; y < height; y += stride {
 		for x := 0; x < width; x += stride {
 			if err := ctx.Err(); err != nil {
@@ -99,14 +94,13 @@ func RunTiledInference(
 	return result, nil
 }
 
-// calculateTileBounds adjusts tile coordinates to fit within image boundaries
+// calculateTileBounds clamps a tile to the image, shifting it back in-bounds rather than shrinking it when it fits.
 func calculateTileBounds(x, y, imgWidth, imgHeight, tileSize int) (tileX, tileY, tileW, tileH int) {
 	tileX = x
 	tileY = y
 	tileW = tileSize
 	tileH = tileSize
 
-	// Adjust horizontal bounds
 	if tileX+tileW > imgWidth {
 		tileX = imgWidth - tileW
 		if tileX < 0 {
@@ -115,7 +109,6 @@ func calculateTileBounds(x, y, imgWidth, imgHeight, tileSize int) (tileX, tileY,
 		}
 	}
 
-	// Adjust vertical bounds
 	if tileY+tileH > imgHeight {
 		tileY = imgHeight - tileH
 		if tileY < 0 {
@@ -127,12 +120,11 @@ func calculateTileBounds(x, y, imgWidth, imgHeight, tileSize int) (tileX, tileY,
 	return
 }
 
-// prepareTileForInference extracts a tile and pads it to the required size
+// prepareTileForInference extracts a tile and reflection-pads it out to tileSize, which the fixed-shape sessions
+// require even for the partial tiles at the right and bottom edges.
 func prepareTileForInference(img image.Image, tileX, tileY, tileW, tileH, tileSize int) image.Image {
-	// Extract tile from the image
 	tile := imaging.Crop(img, image.Rect(tileX, tileY, tileX+tileW, tileY+tileH))
 
-	// Calculate required padding
 	padRight := 0
 	padBottom := 0
 
@@ -143,7 +135,6 @@ func prepareTileForInference(img image.Image, tileX, tileY, tileW, tileH, tileSi
 		padBottom = tileSize - tileH
 	}
 
-	// Apply reflection padding if needed
 	if padRight > 0 || padBottom > 0 {
 		return reflectionPad(tile, 0, 0, padRight, padBottom)
 	}
@@ -151,16 +142,14 @@ func prepareTileForInference(img image.Image, tileX, tileY, tileW, tileH, tileSi
 	return tile
 }
 
-// processTile runs the ML model inference and removes padding from the result. The crop bounds are scaled by scale to
-// match the inference output dimensions (scale is 1 for denoise).
+// processTile runs the model and crops the padding back off. The crop bounds are scaled by scale to match the
+// inference output dimensions (scale is 1 for denoise).
 func processTile(session *Session, tile image.Image, tileW, tileH, scale int, divergenceThreshold float32) (image.Image, error) {
-	// Run inference
 	processedTile, err := runTileInference(session, tile, scale, divergenceThreshold)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to run inference")
 	}
 
-	// Remove padding by cropping to the actual content size (scaled)
 	cropW := tileW * scale
 	cropH := tileH * scale
 	croppedTile := imaging.Crop(processedTile, image.Rect(0, 0, cropW, cropH))
@@ -218,7 +207,6 @@ func runTileInference(session *Session, tile image.Image, scale int, divergenceT
 	return CHWToImage(outputData, outW, outH, false), nil
 }
 
-// reflectionPad adds reflection padding to an image
 func reflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 	bounds := img.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
@@ -227,7 +215,6 @@ func reflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 	paddedHeight := height + top + bottom
 	padded := image.NewRGBA(image.Rect(0, 0, paddedWidth, paddedHeight))
 
-	// Helper to get reflected coordinate
 	reflectIndex := func(idx, max int) int {
 		if idx < 0 {
 			return -idx - 1
@@ -246,13 +233,11 @@ func reflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 		srcY := bounds.Min.Y + y
 		dstY := y + top
 
-		// Left padding
 		for x := range left {
 			srcX := bounds.Min.X + reflectIndex(left-x-1, width)
 			padded.Set(x, dstY, img.At(srcX, srcY))
 		}
 
-		// Right padding
 		for x := range right {
 			srcX := bounds.Min.X + reflectIndex(width+x, width)
 			padded.Set(width+left+x, dstY, img.At(srcX, srcY))
@@ -261,13 +246,11 @@ func reflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 
 	// Pad top and bottom edges (including corners)
 	for x := range paddedWidth {
-		// Top padding
 		for y := range top {
 			srcY := reflectIndex(top-y-1, height) + top
 			padded.Set(x, y, padded.At(x, srcY))
 		}
 
-		// Bottom padding
 		for y := range bottom {
 			srcY := reflectIndex(height+y, height) + top
 			padded.Set(x, height+top+y, padded.At(x, srcY))

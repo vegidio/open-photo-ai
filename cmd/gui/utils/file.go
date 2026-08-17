@@ -15,12 +15,10 @@ import (
 	"github.com/vegidio/open-photo-ai/utils"
 )
 
-// IsSupportedFile reports whether path has a supported image extension.
 func IsSupportedFile(path string) bool {
 	return utils.IsSupportedInputExtension(path)
 }
 
-// PartitionSupportedFiles splits paths into supported and unsupported by extension.
 func PartitionSupportedFiles(paths []string) (supported, unsupported []string) {
 	for _, path := range paths {
 		if IsSupportedFile(path) {
@@ -44,7 +42,6 @@ func CreateFileTypes(paths []string) []types.File {
 			slog.Warn("failed to read image dimensions", "path", path, "err", err)
 		}
 
-		// Extension
 		ext := strings.ToLower(filepath.Ext(path))
 		if len(ext) > 0 {
 			ext = ext[1:]

@@ -2,22 +2,20 @@ package types
 
 import "image"
 
-// ImageData represents an image file loaded into memory for processing.
-// It contains both the file system path and the decoded pixel data of the image.
-//
-// # Fields:
-//   - FilePath: The file system path from which the image was loaded
-//   - Pixels: The decoded image data as an image.Image interface
+// ImageData is an image file loaded into memory for processing.
 type ImageData struct {
 	FilePath string
 	Pixels   image.Image
-	Hash     string
+
+	// Hash identifies the source pixels and keys the per-operation image cache. utils.LoadImage fills it with the
+	// xxh3 of the file's bytes; a caller that alters Pixels afterwards must alter Hash too, or the cache returns a
+	// result computed from the original image.
+	Hash string
 }
 
 // ImageFormat describes the type of image used.
 type ImageFormat int
 
-// Constants for supported image formats.
 const (
 	FormatAvif ImageFormat = iota
 	FormatBmp

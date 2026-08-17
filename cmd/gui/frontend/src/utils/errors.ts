@@ -1,4 +1,3 @@
-// getErrorMessage extracts a raw error string from an unknown thrown value.
 export const getErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 // userFriendlyErrorMessage maps a backend error into a short message safe to show in a toast.

@@ -40,21 +40,10 @@ func NewImageService(app *application.App, otel *o11y.Telemetry) *ImageService {
 	}
 }
 
-// GetImage loads an image from the specified file path and optionally resizes it.
+// GetImage loads an image and returns it JPEG-encoded, together with its width and height.
 //
-// # Parameters:
-//   - filePath: The path to the image file to load
-//   - size: The target size for the longest dimension of the image. If size is 0, the image is returned at its original
-//     dimensions. If size > 0, the image is resized proportionally so that its longest dimension (width or height)
-//     equals the specified size.
-//   - crop: The flip/rotate/crop to apply to the source image. It is only applied when size == 0 (the full-resolution
-//     preview); a zero CropInfo is a no-op.
-//
-// # Returns:
-//   - []byte: The image data encoded as PNG bytes (lossless)
-//   - int: The width of the image
-//   - int: The height of the image
-//   - error: An error if the image cannot be loaded, processed, or encoded
+// size caps the longest dimension, resizing proportionally; 0 returns the original dimensions. crop is only applied
+// when size == 0 (the full-resolution preview), since the thumbnails are never cropped.
 func (s *ImageService) GetImage(filePath string, size int, crop guitypes.CropInfo) ([]byte, int, int, error) {
 	inputData, err := utils.LoadImage(filePath)
 	if err != nil {
@@ -87,18 +76,8 @@ func (s *ImageService) GetImage(filePath string, size int, crop guitypes.CropInf
 	return data, bounds.Dx(), bounds.Dy(), nil
 }
 
-// ProcessImage runs inference operations on an image and returns the processed result.
-//
-// # Parameters:
-//   - filePath: The path to the image file to process.
-//   - opIds: Variable number of operation IDs specifying the inference operations to apply to the image.
-//     Each operation ID encodes the model name, parameters, and precision.
-//
-// # Returns:
-//   - []byte: The processed image data encoded as JPEG bytes for presentation purposes.
-//   - int: The width of the processed image.
-//   - int: The height of the processed image.
-//   - error: An error if the inference fails or the image cannot be processed.
+// ProcessImage runs the operations named by opIds (see utils.IdsToOperations for the ID format) and returns the
+// result JPEG-encoded for preview, together with its width and height.
 func (s *ImageService) ProcessImage(
 	ctx context.Context,
 	filePath string,
@@ -140,19 +119,11 @@ func (s *ImageService) ProcessImage(
 		return nil, 0, 0, errors.Wrap(err, "failed to encode image")
 	}
 
-	// Return a version of the image as JPG for presentation purposes
 	bounds := outputData.Pixels.Bounds()
 	return data, bounds.Dx(), bounds.Dy(), nil
 }
 
-// SuggestEnhancements analyzes an image and returns suggestions for enhancement operations.
-//
-// # Parameters:
-//   - filePath: The path to the image file to analyze
-//
-// # Returns:
-//   - []types.ModelType: A list of suggested enhancement types to apply to the image.
-//   - error: An error if the image cannot be loaded.
+// SuggestEnhancements analyzes an image and returns the enhancement types worth applying to it.
 func (s *ImageService) SuggestEnhancements(ctx context.Context, filePath string) ([]types.ModelType, error) {
 	inputImage, err := utils.LoadImage(filePath)
 	if err != nil {
@@ -166,17 +137,10 @@ func (s *ImageService) SuggestEnhancements(ctx context.Context, filePath string)
 	return suggestions, nil
 }
 
-// ExportImage runs inference operations on an image and saves the result to disk.
+// ExportImage runs the operations named by opIds and writes the result to outputPath at full quality. Unless
+// overwrite is set, an existing file is left alone and a "_N" suffix is added instead (see getOutputPath).
 //
-// # Parameters:
-//   - inputPath: The path to the image file to process.
-//   - outputPath: The path to the output file to save the processed image.
-//   - format: The image format to use when saving the processed imag.
-//   - opIds: Variable number of operation IDs specifying the inference operations to apply to the image.
-//     Each operation ID encodes the model name, parameters, and precision.
-//
-// # Returns:
-//   - error: An error if the inference fails, the image cannot be processed, or the file cannot be saved.
+// Progress is reported through EventAppExport rather than the return value, keyed by file.Hash.
 func (s *ImageService) ExportImage(
 	ctx context.Context,
 	file guitypes.File,

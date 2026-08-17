@@ -5,19 +5,17 @@ import (
 	"image"
 )
 
-// Model defines the interface for AI models that process images.
-// It encapsulates specific AI models for image processing tasks such as upscaling, enhancement, or other
-// transformations.
+// Model is one AI model - an upscaler, a denoiser, a face detector - producing T from an image.
 //
-// Implementations should ensure that Destroy is called when the model is no longer needed to prevent resource leaks.
+// Whoever holds a model is responsible for calling Destroy when it is no longer needed; within this library that is
+// the model registry, not the caller.
 type Model[T any] interface {
 	// Destroyable is a workaround for Destroy() in generic interfaces
 	Destroyable
 
-	// Id returns a unique identifier for the model
 	Id() string
 
-	// Name returns a human-readable name for the model
+	// Name returns the model's display name, e.g. "Denoise (FP16)".
 	Name() string
 
 	// Run processes the image and returns the processed output.
@@ -38,12 +36,10 @@ type Measurable interface {
 	ResidentBytes() int64
 }
 
-// Destroyable defines an interface for types that require explicit resource cleanup. Implementations must provide a
-// Destroy method to release allocated resources, memory, or handles when the instance is no longer needed.
+// Destroyable releases the native resources behind a value.
 //
-// This interface is used as a workaround to embed cleanup functionality in generic interfaces like Model[T], where Go's
-// type system requires explicit interface embedding rather than direct method inclusion.
+// It is a named interface rather than a method on Model[T] because Go's type system requires explicit interface
+// embedding in a generic interface rather than direct method inclusion.
 type Destroyable interface {
-	// Destroy cleans up resources and releases memory used by the model
 	Destroy()
 }

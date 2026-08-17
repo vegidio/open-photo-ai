@@ -59,7 +59,6 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	}, nil
 }
 
-// Compile-time assertion to ensure it conforms to the Model interface.
 var _ types.Model[[]detection.Face] = (*NewYork)(nil)
 var _ types.Measurable = (*NewYork)(nil)
 
@@ -86,10 +85,8 @@ func (m *NewYork) Run(
 		onProgress("dt", 0)
 	}
 
-	// Preprocess image
 	inputData, originalWidth, originalHeight := detection.PreprocessImage(img, detection.TargetSize)
 
-	// Create input tensor
 	inputShape := ort.NewShape(1, 3, int64(detection.TargetSize), int64(detection.TargetSize))
 	inputTensor, err := ort.NewTensor(inputShape, inputData)
 	if err != nil {
@@ -125,13 +122,11 @@ func (m *NewYork) Run(
 		onProgress("dt", 0.2)
 	}
 
-	// Run inference
 	err = m.Session.Run([]ort.Value{inputTensor}, []ort.Value{locTensor, confTensor, landmarksTensor})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to run inference")
 	}
 
-	// Post-process results
 	locData := locTensor.GetData()
 	confData := confTensor.GetData()
 	landmarksData := landmarksTensor.GetData()

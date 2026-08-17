@@ -56,7 +56,6 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 	}
 	defer inputTensor.Destroy()
 
-	// Create output tensor
 	outputShape := ort.NewShape(1, 3, int64(rH), int64(rW))
 	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
 	if err != nil {
@@ -68,7 +67,6 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	// Run inference on the (down)scaled image
 	if err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor}); err != nil {
 		return nil, errors.Wrap(err, "failed to run inference")
 	}
@@ -77,7 +75,6 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	// Convert the low-res model output back to an image
 	outLR := utils.CHWToImage(outputTensor.GetData(), rW, rH, false)
 
 	// If we never downscaled, the output already matches the full resolution.

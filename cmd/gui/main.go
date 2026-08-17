@@ -57,10 +57,8 @@ func main() {
 
 	defer otel.Close()
 
-	// Track of system info
 	shared.ReportSystemInfo(otel)
 
-	// Create a new Wails application by providing the necessary options.
 	app := application.New(application.Options{
 		Name:        "Open Photo AI",
 		Description: "An open source photo AI editor",
@@ -73,7 +71,6 @@ func main() {
 		LogLevel: shared.ResolveLogLevel(slog.LevelError),
 	})
 
-	// Create a new window with the necessary options.
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:      "Open Photo AI",
 		StartState: application.WindowStateMaximised,
@@ -90,22 +87,17 @@ func main() {
 		EnableFileDrop: true,
 	})
 
-	// Open the window maximized
 	maximizeOnStart(win)
-
-	// Track drag and drops on the app
 	eventDragAndDrop(app, win)
 
-	// Services
 	destroyServices := services.RegisterServices(app, otel)
 	defer destroyServices()
 
-	// Run the application. This blocks until the application exists
+	// Blocks until the application exits.
 	err := app.Run()
 
 	slog.Info("Open Photo AI exited")
 
-	// If an error occurred while running the application, log it and exit.
 	if err != nil {
 		otel.LogError("Error running the app", nil, err)
 		slog.Error("error running the app", "err", err)

@@ -18,12 +18,10 @@ func PostProcessDetections(
 	filteredBoxes, filteredLandmarks, filteredScores := filterAndScaleDetections(
 		loc, landmarksRaw, priors, conf, threshold, float32(TargetSize))
 
-	// Early exit if no detections
 	if len(filteredBoxes) == 0 {
 		return []Face{}
 	}
 
-	// Apply NMS
 	keep := nms(filteredBoxes, filteredScores, nmsIoUThreshold)
 
 	// Scale back to the original image size using the same integer dimensions the image was actually resized to
@@ -32,7 +30,6 @@ func PostProcessDetections(
 	scaleW := origWidth / float32(resizedWidth)
 	scaleH := origHeight / float32(resizedHeight)
 
-	// Convert to Face structs with original dimensions
 	return scaleDetectionsToOriginal(filteredBoxes, filteredLandmarks, filteredScores, keep, scaleW, scaleH)
 }
 
@@ -55,7 +52,6 @@ func filterAndScaleDetections(
 		}
 	}
 
-	// Early exit if no detections
 	if numFiltered == 0 {
 		return []RectF{}, [][numLandmarks]PointF{}, []float32{}
 	}
@@ -72,14 +68,12 @@ func filterAndScaleDetections(
 			continue
 		}
 
-		// Decode and scale the box to target size
 		box := decodeBox(loc, priors[i], i)
 		box.Min.X *= targetSize
 		box.Min.Y *= targetSize
 		box.Max.X *= targetSize
 		box.Max.Y *= targetSize
 
-		// Decode and scale the landmarks to target size
 		lm := decodeLandmark(landmarksRaw, priors[i], i)
 		for j := 0; j < numLandmarks; j++ {
 			lm[j].X *= targetSize
@@ -191,7 +185,6 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 	return keep
 }
 
-// scaleDetectionsToOriginal scales filtered detections back to original image dimensions
 func scaleDetectionsToOriginal(
 	filteredBoxes []RectF,
 	filteredLandmarks [][numLandmarks]PointF,
@@ -205,7 +198,6 @@ func scaleDetectionsToOriginal(
 		lm := filteredLandmarks[idx]
 		score := filteredScores[idx]
 
-		// Create a bounding box rectangle with float32 coordinates
 		boundingBox := RectF{
 			Min: PointF{
 				X: box.Min.X * scaleW,
@@ -217,7 +209,6 @@ func scaleDetectionsToOriginal(
 			},
 		}
 
-		// Create landmark points with float32 coordinates
 		var landmarkPoints [numLandmarks]PointF
 		for j := 0; j < numLandmarks; j++ {
 			landmarkPoints[j] = PointF{

@@ -2,7 +2,6 @@ package utils
 
 import "math"
 
-// ClampInt clamps an integer value between minVal and maxVal
 func ClampInt(val, minVal, maxVal int) int {
 	if val < minVal {
 		return minVal
@@ -13,7 +12,6 @@ func ClampInt(val, minVal, maxVal int) int {
 	return val
 }
 
-// Clamp255 clamps a float32 value to the [0, 255] byte range (callers typically cast the result to uint8).
 func Clamp255(val float32) float32 {
 	if val < 0 {
 		return 0
@@ -43,7 +41,6 @@ func FitToMaxSize(w, h, maxSize int) (int, int) {
 	return RoundUpTo16(nw), RoundUpTo16(nh)
 }
 
-// RoundUpTo16 rounds v up to the next multiple of 16.
 func RoundUpTo16(v int) int {
 	if v%16 == 0 {
 		return v

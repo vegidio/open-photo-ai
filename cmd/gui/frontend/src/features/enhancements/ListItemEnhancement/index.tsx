@@ -24,7 +24,6 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const disabledFaces = useFileDisabledFaces(file);
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
 
-    // Get enhancement details and options component menu
     const { name, info, icon } = opToEnhancement(op, facesLabel(faces.length, disabledFaces.size));
     const OptionsComponent = selectOptionsComponent(op.id);
 

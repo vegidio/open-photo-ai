@@ -34,7 +34,6 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	}, nil
 }
 
-// Compile-time assertion to ensure it conforms to the Model interface.
 var _ types.Model[image.Image] = (*Saitama)(nil)
 var _ types.Measurable = (*Saitama)(nil)
 

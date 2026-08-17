@@ -11,11 +11,9 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// SuggestEnhancements analyzes the input image and returns a list of recommended enhancement.
+// SuggestEnhancements analyzes the input image and returns a list of recommended enhancements.
 //
-// It evaluates the image for potential face recovery, light adjustment, color balance, and upscaling improvements based
-// on image characteristics such as detected faces and resolution. The face-detection path may trigger a model download
-// on first use; pass a cancellable ctx to abort it.
+// The face-detection path may trigger a model download on first use; pass a cancellable ctx to abort it.
 func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.ModelType {
 	enhancementTypes := make([]types.ModelType, 0)
 
@@ -74,7 +72,7 @@ const (
 )
 
 // imageStats holds everything the light-adjustment and colour-balance heuristics need from the image, gathered in a
-// single pass. Both used to walk every pixel themselves, which meant two full traversals of the same buffer.
+// single pass.
 type imageStats struct {
 	totalPixels float64
 
@@ -175,19 +173,17 @@ func shouldLightAdjustment(stats imageStats) bool {
 	const (
 		meanDarkLimit   = 50
 		meanBrightLimit = 200
-		clippingRatio   = 0.35 // 35% pixels clipped
+		clippingRatio   = 0.35
 	)
 
 	meanLuminance := stats.sumLuminance / stats.totalPixels
 	darkRatio := float64(stats.darkPixels) / stats.totalPixels
 	brightRatio := float64(stats.brightPixels) / stats.totalPixels
 
-	// Too dark
 	if meanLuminance < meanDarkLimit && darkRatio > clippingRatio {
 		return true
 	}
 
-	// Too bright
 	if meanLuminance > meanBrightLimit && brightRatio > clippingRatio {
 		return true
 	}

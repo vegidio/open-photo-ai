@@ -32,8 +32,7 @@ type Session struct {
 	bytes int64
 }
 
-// ResidentBytes reports the on-disk size of the files backing this session, which is what the model registry budgets
-// against when deciding what can stay loaded. It implements types.Measurable.
+// ResidentBytes implements types.Measurable, reporting the on-disk size of the files behind this session.
 func (s *Session) ResidentBytes() int64 {
 	if s == nil {
 		return 0
@@ -143,8 +142,8 @@ func createSession(modelFile string, inputs, outputs []string, ep types.Executio
 	modelsPath := filepath.Join(configDir, internal.AppName, "models")
 	var options *ort.SessionOptions
 
-	// Check the computer's OS. The default is what keeps `options` from staying nil below: without it an
-	// unsupported GOOS would fall through with a nil error and blow up on the deferred Destroy.
+	// The default case is what keeps `options` from staying nil below: without it an unsupported GOOS would fall
+	// through with a nil error and blow up on the deferred Destroy.
 	switch runtime.GOOS {
 	case "windows":
 		options, err = createWindowsOptions(modelsPath, ep)

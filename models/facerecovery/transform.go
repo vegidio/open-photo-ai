@@ -9,7 +9,7 @@ import (
 	"github.com/vegidio/open-photo-ai/internal/utils"
 )
 
-// invertAffine computes the inverse of a 2x3 affine transformation matrix
+// invertAffine inverts a 2x3 affine matrix, returning the identity when it is singular.
 func invertAffine(transform AffineMatrix) AffineMatrix {
 	a, b, c := transform[0][0], transform[0][1], transform[0][2]
 	d, e, f := transform[1][0], transform[1][1], transform[1][2]
@@ -18,7 +18,6 @@ func invertAffine(transform AffineMatrix) AffineMatrix {
 
 	// Check for near-zero determinant to avoid numerical issues
 	if det == 0 || (det > -1e-10 && det < 1e-10) {
-		// Return identity matrix
 		return AffineMatrix{{1, 0, 0}, {0, 1, 0}}
 	}
 
@@ -30,7 +29,6 @@ func invertAffine(transform AffineMatrix) AffineMatrix {
 	}
 }
 
-// warpAffine applies an affine transformation to an image
 func warpAffine(img image.Image, transform AffineMatrix, width, height int) image.Image {
 	result := imaging.New(width, height, color.NRGBA{})
 	bounds := img.Bounds()
@@ -48,14 +46,13 @@ func warpAffine(img image.Image, transform AffineMatrix, width, height int) imag
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			// Apply inverse transform - using cached values instead of array lookups
+			// Destination coords -> source coords
 			srcX := m00*float32(x) + m01*float32(y) + m02
 			srcY := m10*float32(x) + m11*float32(y) + m12
 
 			// Bilinear interpolation with reflection padding
 			nrgba := bilinearInterpolate(img, srcX, srcY, bounds, true)
 
-			// Write directly to the pixel buffer
 			i := y*stride + x*4
 			pix[i+0] = nrgba.R
 			pix[i+1] = nrgba.G
@@ -93,7 +90,6 @@ func bilinearInterpolate(img image.Image, x, y float32, bounds image.Rectangle, 
 		return img.At(px, py)
 	}
 
-	// Get the four corner pixels
 	c00 := getPixel(x0, y0)
 	c10 := getPixel(x1, y0)
 	c01 := getPixel(x0, y1)
@@ -107,11 +103,9 @@ func bilinearInterpolate(img image.Image, x, y float32, bounds image.Rectangle, 
 
 	// Two-step lerp: first along x-axis, then along y-axis
 	lerp2D := func(v00, v01, v10, v11 uint32) uint8 {
-		// Interpolate along x-axis for both rows
 		v0 := float32(v00)*wx0 + float32(v10)*wx
 		v1 := float32(v01)*wx0 + float32(v11)*wx
 
-		// Interpolate along y-axis
 		result := v0*wy0 + v1*wy
 		return uint8(result / 257) // Convert from 16-bit to 8-bit
 	}

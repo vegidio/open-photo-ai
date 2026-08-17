@@ -35,15 +35,6 @@ func NewFaceService(app *application.App, otel *o11y.Telemetry) *FaceService {
 // resulting bounding boxes live in the cropped image's coordinate space — matching the cropped source that face
 // recovery and the preview operate on. Results are deterministic for a given image+crop, so the frontend caches them
 // by file hash plus a crop token.
-//
-// # Parameters:
-//   - filePath: The path to the image file to analyze.
-//   - ep: The execution provider (CPU, CUDA, etc.) to use for inference.
-//   - crop: The flip/rotate/crop to apply before detection (zero value = no crop).
-//
-// # Returns:
-//   - []detection.Face: The faces detected in the image (empty when none are found).
-//   - error: An error if the image cannot be loaded or detection fails.
 func (s *FaceService) DetectFaces(
 	ctx context.Context,
 	filePath string,

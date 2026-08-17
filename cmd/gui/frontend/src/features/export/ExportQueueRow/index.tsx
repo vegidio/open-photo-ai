@@ -39,7 +39,6 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
         const oldDims = `${width} x ${height}`;
         const newDims = `${width * scale} x ${height * scale}`;
 
-        // Size
         const oldSize =
             file.Size < 1_000_000 ? `${(file.Size / 1_000).toFixed(2)} KB` : `${(file.Size / 1_000_000).toFixed(2)} MB`;
 

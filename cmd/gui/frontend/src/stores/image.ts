@@ -17,7 +17,6 @@ export type ImageViewport = {
     height: number;
 };
 
-// Enable MapSet support in Immer
 enableMapSet();
 
 type ImageStore = {

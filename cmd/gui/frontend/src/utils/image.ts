@@ -90,10 +90,8 @@ const cached = (key: string, produce: () => Promise<ImageData>): Promise<ImageDa
 /**
  * Retrieves an image with the specified size, using a cache to avoid redundant processing.
  *
- * @param file - The file object containing the image path and hash.
- * @param size - The desired size for the image.
- * @param crop - Optional flip/rotate/crop to apply; only honored by the backend when size is 0.
- * @returns A promise that resolves to the image data (url, width, height).
+ * `size` caps the longest dimension; 0 means the original dimensions. `crop` is only honored by the backend when
+ * `size` is 0.
  */
 export const getImage = (file: File, size: number, crop?: CropInfo) => {
     const cacheKey = `${file.Hash}_${size}${cropToken(crop)}`;
@@ -107,12 +105,7 @@ export const getImage = (file: File, size: number, crop?: CropInfo) => {
 /**
  * Retrieves an enhanced image with the specified operations applied, using a cache to avoid redundant processing.
  *
- * Returns a cancellable promise that can be aborted if the operation is no longer needed.
- *
- * @param file - The file object containing the image path and hash.
- * @param ep - The execution provider to use for image processing.
- * @param operations - The image processing operations to apply.
- * @returns A cancellable promise that resolves to the image data (url, width, height).
+ * The returned promise is cancellable, so a preview the user has navigated away from can be aborted mid-inference.
  */
 export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operations: string[]) => {
     const opIds = operations.join('_');

@@ -57,14 +57,12 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	// drop in speed doesn't look like the app hanging.
 	opai.SetFallbackHandler(s.onProviderFallback)
 
-	// Initialize the model runtime
 	if err := opai.Initialize(ctx, shared.AppName, onProgress); err != nil {
 		s.otel.LogError("Error initializing ONNX", nil, err)
 		slog.Error("error initializing ONNX runtime", "err", err)
 		return supportedEPs, errors.Wrap(err, "failed to initialize ONNX Runtime")
 	}
 
-	// Initialize CUDA and TensorRT if they are supported
 	if utils.IsCudaSupported() {
 		supportedEPs.CUDA = true
 		slog.Info("CUDA supported")
@@ -87,7 +85,7 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 		}
 	}
 
-	// Check if CoreML is supported (macOS only)
+	// macOS only; the non-darwin build always reports false.
 	if utils.IsCoreMLSupported() {
 		supportedEPs.CoreML = true
 		slog.Info("CoreML supported")

@@ -21,15 +21,8 @@ type huggingFaceFile struct {
 	} `json:"lfs"`
 }
 
-// LoadModelData fetches the list of available AI models from the Hugging Face repository.
-//
-// It retrieves model metadata including file names, sizes, and LFS hashes from the vegidio/open-photo-ai repository
-// under the models/ directory.
-//
-// Returns a slice of RemoteModelData structs containing model information, or an error if:
-//   - The HTTP request to Hugging Face fails
-//   - The response status is not 200 OK
-//   - The request takes longer than 2 seconds
+// LoadModelData fetches the manifest of downloadable models - name, size and LFS hash - from the models/ directory of
+// the vegidio/open-photo-ai Hugging Face repository.
 func LoadModelData() ([]internal.RemoteModelData, error) {
 	// We limit the request to 2 seconds to avoid blocking the GUI thread for too long.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

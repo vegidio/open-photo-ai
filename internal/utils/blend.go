@@ -87,8 +87,7 @@ func BlendWithIntensity(original, modelOutput image.Image, intensity float32) im
 			mG := float32(modelG) / 257.0
 			mB := float32(modelB) / 257.0
 
-			// Blend formula: result = original + intensity * (modelOutput - original)
-			// This allows extrapolation beyond the range for negative intensity
+			// Extrapolates past the endpoints for a negative intensity, which is what inverts the effect.
 			r := oR + intensity*(mR-oR)
 			g := oG + intensity*(mG-oG)
 			b := oB + intensity*(mB-oB)
@@ -134,7 +133,6 @@ func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlap int, b
 		dstY := y + dy
 		srcY := srcBounds.Min.Y + dy
 
-		// Calculate vertical alpha
 		topAlpha := 1.0
 		if blendTop && dy < overlap {
 			topAlpha = float64(dy) / overlapFloat
@@ -178,7 +176,6 @@ func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlap int, b
 
 			di := dstRow + dx*4
 			if alpha >= 0.999 {
-				// No blending needed - direct copy
 				dst.Pix[di] = uint8(sr)
 				dst.Pix[di+1] = uint8(sg)
 				dst.Pix[di+2] = uint8(sb)
@@ -194,7 +191,6 @@ func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlap int, b
 	}
 }
 
-// calculateBlendAlpha computes the blend weight based on position in the overlap region
 func calculateBlendAlpha(dx, dy, overlap int, overlapFloat, topAlpha float64, blendLeft, blendTop bool) float64 {
 	alpha := 1.0
 

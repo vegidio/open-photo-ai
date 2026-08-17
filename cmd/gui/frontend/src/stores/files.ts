@@ -52,7 +52,6 @@ export const useFileStore = create(
                 }
             });
 
-            // If the list was empty and now has files, select the first one
             if (wasEmpty && get().files.length > 0) {
                 get().addSelectedFile(get().files[0]);
             }
@@ -65,7 +64,6 @@ export const useFileStore = create(
 
                 state.files = state.files.filter((f) => f.Path !== file.Path);
 
-                // Update currentIndex if necessary
                 if (state.files.length === 0) {
                     state.currentIndex = 0;
                 } else if (removedIndex < state.currentIndex) {

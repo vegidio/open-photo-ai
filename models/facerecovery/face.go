@@ -50,8 +50,6 @@ func GetDtModel(
 	return model, lease, nil
 }
 
-// alignFace aligns a face image using the provided landmarks and returns the aligned image and the affine
-// transformation matrix.
 func alignFace(img image.Image, landmarks [5]detection.PointF, tileSize int) (image.Image, AffineMatrix) {
 	transform := calculateSimilarityTransform(landmarks[:], detection.ArcfaceTemplate)
 	aligned := warpAffine(img, transform, tileSize, tileSize)
@@ -115,8 +113,6 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 	result := imaging.Clone(original)
 	origBounds := original.Bounds()
 
-	// Expand bbox significantly to cover the entire feathered region
-	// The blurred mask extends well beyond the face, so we need a large margin
 	bboxWidth := bbox.Max.X - bbox.Min.X
 	bboxHeight := bbox.Max.Y - bbox.Min.Y
 	margin := max(bboxWidth, bboxHeight) * maskMarginFactor
@@ -146,7 +142,6 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 		transformXBase := a01*float32(y) + a02
 		transformYBase := a11*float32(y) + a12
 
-		// Calculate row offset once per row
 		rowOffset := y * stride
 
 		for x := minX; x < maxX; x++ {
@@ -154,28 +149,22 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 			alignedX := a00*float32(x) + transformXBase
 			alignedY := a10*float32(x) + transformYBase
 
-			// Check if within the tileSize x tileSize aligned face
 			if alignedX >= 0 && alignedX < tileSizeFloat &&
 				alignedY >= 0 && alignedY < tileSizeFloat {
-				// Sample the mask directly at aligned coordinates to get the blend alpha
 				alpha := float32(bilinearInterpolate(mask, alignedX, alignedY, maskBounds, false).A) / 255.0
 
-				// Blend even very low alpha values for maximum smoothness
 				if alpha > minBlendAlpha {
-					// Sample from the restored face at aligned coordinates
 					restoredCol := bilinearInterpolate(restored, alignedX, alignedY, restoredBounds, false)
 					originalCol := original.At(x, y)
 
 					or, og, ob, _ := originalCol.RGBA()
 					rr, rg, rb, _ := restoredCol.RGBA()
 
-					// Blend colors using the original formula
 					oneMinusAlpha := 1 - alpha
 					finalR := uint8(float32(rr/257)*alpha + float32(or/257)*oneMinusAlpha)
 					finalG := uint8(float32(rg/257)*alpha + float32(og/257)*oneMinusAlpha)
 					finalB := uint8(float32(rb/257)*alpha + float32(ob/257)*oneMinusAlpha)
 
-					// Write directly to pixel buffer (RGBA format)
 					pixelOffset := rowOffset + x*4
 					pixels[pixelOffset] = finalR
 					pixels[pixelOffset+1] = finalG
@@ -199,7 +188,6 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 func calculateSimilarityTransform(src, dst []detection.PointF) AffineMatrix {
 	numPoints := len(src)
 
-	// Compute means
 	var srcMeanX, srcMeanY, dstMeanX, dstMeanY float32
 	for i := 0; i < numPoints; i++ {
 		srcMeanX += src[i].X
@@ -218,11 +206,9 @@ func calculateSimilarityTransform(src, dst []detection.PointF) AffineMatrix {
 	var dXsX, dXsY, dYsX, dYsY float32
 
 	for i := 0; i < numPoints; i++ {
-		// Centered source points
 		sX := src[i].X - srcMeanX
 		sY := src[i].Y - srcMeanY
 
-		// Centered destination points
 		dX := dst[i].X - dstMeanX
 		dY := dst[i].Y - dstMeanY
 
@@ -253,11 +239,9 @@ func calculateSimilarityTransform(src, dst []detection.PointF) AffineMatrix {
 	a := (dXsX + dYsY) / srcNorm // cos(θ) * scale
 	b := (dYsX - dXsY) / srcNorm // sin(θ) * scale
 
-	// Compute translation
 	tx := dstMeanX - (a*srcMeanX - b*srcMeanY)
 	ty := dstMeanY - (b*srcMeanX + a*srcMeanY)
 
-	// Construct the 2x3 affine transformation matrix
 	return AffineMatrix{
 		{a, -b, tx},
 		{b, a, ty},

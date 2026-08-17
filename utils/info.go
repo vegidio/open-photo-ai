@@ -66,56 +66,31 @@ func extensionOf(path string) string {
 	return ext
 }
 
-// SupportedImageExtensions returns a list of image file extensions that the application can process.
-//
-// The returned extensions include common image formats that have registered decoders and encoders in this package. File
-// extensions are returned in lowercase without the leading dot.
-//
-// # Returns:
-//   - []string: A slice of supported image file extensions
+// SupportedImageExtensions returns the standard image formats with both a decoder and an encoder registered here,
+// lowercase and without the leading dot.
 func SupportedImageExtensions() []string {
 	return slices.Clone(imageExtensions)
 }
 
-// SupportedRawExtensions returns a list of camera RAW file extensions that the application can read.
-//
-// RAW formats are read-only: they can be decoded (via github.com/vegidio/raw-go / LibRaw) but never written. File
-// extensions are returned in lowercase without the leading dot.
-//
-// # Returns:
-//   - []string: A slice of supported RAW file extensions
+// SupportedRawExtensions returns the camera RAW formats the application can read, lowercase and without the leading
+// dot. RAW is read-only: it can be decoded (via github.com/vegidio/raw-go / LibRaw) but never written.
 func SupportedRawExtensions() []string {
 	return slices.Clone(rawExtensions)
 }
 
-// SupportedInputExtensions returns the union of standard image and RAW extensions accepted as input
-// (file dialog filtering and drag-and-drop validation). Extensions are lowercase without the leading dot.
-//
-// # Returns:
-//   - []string: A slice of all readable input file extensions
+// SupportedInputExtensions returns the union of standard image and RAW extensions accepted as input (file dialog
+// filtering and drag-and-drop validation). Extensions are lowercase without the leading dot.
 func SupportedInputExtensions() []string {
 	return append(SupportedImageExtensions(), rawExtensions...)
 }
 
 // IsSupportedInputExtension reports whether path has an extension the app accepts as input (image or RAW).
-//
-// # Parameters:
-//   - path: The file system path (or file name) to inspect
-//
-// # Returns:
-//   - bool: true if the extension is a readable input format
 func IsSupportedInputExtension(path string) bool {
 	_, ok := inputExtensionSet[extensionOf(path)]
 	return ok
 }
 
 // IsRawExtension reports whether path has a camera RAW file extension.
-//
-// # Parameters:
-//   - path: The file system path (or file name) to inspect
-//
-// # Returns:
-//   - bool: true if the extension is a supported RAW format
 func IsRawExtension(path string) bool {
 	_, ok := rawExtensionSet[extensionOf(path)]
 	return ok

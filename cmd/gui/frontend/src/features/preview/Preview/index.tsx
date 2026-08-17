@@ -14,19 +14,15 @@ import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 export const Preview = ({ className = '' }: TailwindProps) => {
     const { enqueueSnackbar } = useNotify();
 
-    // DrawerStore
     const setOpen = useDrawerStore((state) => state.setOpen);
 
-    // FileListStore
     const filesLength = useFileStore((state) => state.files.length);
     const addFiles = useFileStore((state) => state.addFiles);
     const currentFile = useCurrentFile();
 
-    // ImageStore
     const setOriginalImage = useImageStore((state) => state.setOriginalImage);
     const setEnhancedImage = useImageStore((state) => state.setEnhancedImage);
 
-    // EnhancementStore
     const operations = useFileOperations(currentFile);
     // Re-run the preview when the user toggles which faces are enhanced (the Set ref changes on toggle).
     const disabledFaces = useFileDisabledFaces(currentFile);
@@ -78,7 +74,6 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                         if (!isCancelled) setIsRunning(false);
                     }
                 } else {
-                    // When there are no operations, use the original image
                     setIsRunning(false);
                 }
             } else {
@@ -90,7 +85,6 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         loadPreview();
 
         return () => {
-            // Cancel any pending request to preview the enhanced image
             isCancelled = true;
             p?.cancel();
         };
