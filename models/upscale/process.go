@@ -9,14 +9,13 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
-	ort "github.com/yalue/onnxruntime_go"
 )
 
 // RunPipeline upscales an image by running each scale-factor session in turn over overlapping tiles (via the shared
 // tiled-inference driver) and finally resizing to the intended scale.
 func RunPipeline(
 	ctx context.Context,
-	sessions []*ort.DynamicAdvancedSession,
+	sessions []*utils.Session,
 	img image.Image,
 	scales []int,
 	intendedScale float64,

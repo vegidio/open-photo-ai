@@ -8,7 +8,6 @@ import (
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
-	ort "github.com/yalue/onnxruntime_go"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -22,7 +21,7 @@ func LoadSession(
 	precision types.Precision,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
-) (*ort.DynamicAdvancedSession, error) {
+) (*utils.Session, error) {
 	modelId := fmt.Sprintf("sh_%s_%s", variant, precision)
 	modelFile := modelId + ".onnx"
 	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)

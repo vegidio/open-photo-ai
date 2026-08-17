@@ -5,15 +5,15 @@ import (
 	"image"
 
 	"github.com/cockroachdb/errors"
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
-	ort "github.com/yalue/onnxruntime_go"
 )
 
 type Kyoto struct {
 	name      string
 	operation OpUpKyoto
-	sessions  []*ort.DynamicAdvancedSession
+	sessions  []*utils.Session
 	scales    []int
 }
 
@@ -36,6 +36,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 
 // Compile-time assertion to ensure it conforms to the Model interface.
 var _ types.Model[image.Image] = (*Kyoto)(nil)
+var _ types.Measurable = (*Kyoto)(nil)
 
 // region - Model methods
 
@@ -54,6 +55,12 @@ func (m *Kyoto) Run(
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	return upscale.RunPipeline(ctx, m.sessions, img, m.scales, m.operation.scale, onProgress)
+}
+
+// ResidentBytes reports the size of the model files backing this session, which is what the registry
+// budgets against when deciding what can stay loaded.
+func (m *Kyoto) ResidentBytes() int64 {
+	return utils.SessionsBytes(m.sessions)
 }
 
 func (m *Kyoto) Destroy() {

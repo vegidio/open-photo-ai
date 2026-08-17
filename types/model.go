@@ -28,6 +28,16 @@ type Model[T any] interface {
 	Run(ctx context.Context, img image.Image, params map[string]any, onProgress InferenceProgress) (T, error)
 }
 
+// Measurable is implemented by models that can report the size of the files backing them, which is what the model
+// registry budgets against when deciding how much can stay resident at once.
+//
+// It is optional: a model that doesn't implement it is charged a conservative default rather than being treated as
+// free, so forgetting the method makes the budget coarser instead of defeating it.
+type Measurable interface {
+	// ResidentBytes returns the on-disk size of the files backing the model
+	ResidentBytes() int64
+}
+
 // Destroyable defines an interface for types that require explicit resource cleanup. Implementations must provide a
 // Destroy method to release allocated resources, memory, or handles when the instance is no longer needed.
 //

@@ -11,13 +11,44 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
+// Session is an ONNX session together with the on-disk size of the files backing it, which is the proxy the model
+// registry budgets against. Real device memory is larger - arenas, cuDNN workspaces and the CoreML MLProgram all sit
+// on top of the weights - and none of it is queryable through these bindings, so the budget that consumes this number
+// is deliberately conservative.
+//
+// The embedded session is promoted, so a Session is a drop-in for the *ort.DynamicAdvancedSession it wraps: Run and
+// Destroy work unchanged.
+type Session struct {
+	*ort.DynamicAdvancedSession
+	bytes int64
+}
+
+// Bytes reports the on-disk size of the files backing this session.
+func (s *Session) Bytes() int64 {
+	if s == nil {
+		return 0
+	}
+
+	return s.bytes
+}
+
+// SessionsBytes sums Bytes over a slice of sessions, for the models that hold one session per scale factor.
+func SessionsBytes(sessions []*Session) int64 {
+	var total int64
+	for _, session := range sessions {
+		total += session.Bytes()
+	}
+
+	return total
+}
+
 // CreateSession builds an ONNX session for the given model file and execution provider.
 //
 // Every failure it returns - the provider options, the session options and the model load alike - is marked with
 // internal.ErrCreateSession, so callers can tell "this session couldn't be built" apart from the failures around it,
 // such as a model that couldn't be downloaded. That's what lets GetOrCreateModel decide a retry on the CPU is worth
 // attempting.
-func CreateSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*ort.DynamicAdvancedSession, error) {
+func CreateSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*Session, error) {
 	session, err := createSession(modelFile, inputs, outputs, ep)
 	if err != nil {
 		return nil, errors.Mark(err, internal.ErrCreateSession)
@@ -26,7 +57,7 @@ func CreateSession(modelFile string, inputs, outputs []string, ep types.Executio
 	return session, nil
 }
 
-func createSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*ort.DynamicAdvancedSession, error) {
+func createSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*Session, error) {
 	internal.Log().Debug("creating session", "model_file", modelFile, "ep", ep)
 
 	configDir, err := os.UserConfigDir()
@@ -70,7 +101,40 @@ func createSession(modelFile string, inputs, outputs []string, ep types.Executio
 		return nil, errors.Wrap(err, "failed to create session")
 	}
 
-	return session, nil
+	return &Session{DynamicAdvancedSession: session, bytes: modelFileBytes(modelPath)}, nil
+}
+
+// modelFileBytes reports the total size of the files backing the model at modelPath: the graph itself plus any
+// external-data blob stored beside it.
+//
+// ONNX keeps the weights of a model larger than the 2 GB protobuf limit in a separate file, named by a `location`
+// field inside the graph. Reading that field would mean parsing the protobuf, so this globs for siblings sharing the
+// model's full name as a prefix instead, which covers every convention in use (`<model>.onnx.data`,
+// `<model>.onnx_data`). That matters by three orders of magnitude for the diffusion upscaler: `up_osaka_fp16.onnx` is
+// 7.7 MB and `up_osaka_fp16.onnx.data` is 6.8 GB, so charging the budget for the graph alone would make a 7 GB model
+// look free.
+//
+// The models directory also holds the TensorRT engine cache and the CoreML model cache, but those are named after the
+// compiled kernels rather than the source model, so the prefix match doesn't sweep them in. A file that can't be
+// stat-ed contributes 0: an under-count degrades the budget, whereas failing here would fail the session build.
+func modelFileBytes(modelPath string) int64 {
+	matches, err := filepath.Glob(modelPath + "*")
+	if err != nil {
+		internal.Log().Warn("failed to size model files", "model_path", modelPath, "err", err)
+		return 0
+	}
+
+	var total int64
+	for _, match := range matches {
+		info, statErr := os.Stat(match)
+		if statErr != nil || info.IsDir() {
+			continue
+		}
+
+		total += info.Size()
+	}
+
+	return total
 }
 
 // region - OS specific options

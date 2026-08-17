@@ -14,7 +14,7 @@ import (
 
 const maxSize = 656
 
-func Process(ctx context.Context, session *ort.DynamicAdvancedSession, img image.Image) (image.Image, error) {
+func Process(ctx context.Context, session *utils.Session, img image.Image) (image.Image, error) {
 	bounds := img.Bounds()
 	origW := bounds.Dx()
 	origH := bounds.Dy()

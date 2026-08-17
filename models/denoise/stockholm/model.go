@@ -8,7 +8,6 @@ import (
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/denoise"
 	"github.com/vegidio/open-photo-ai/types"
-	ort "github.com/yalue/onnxruntime_go"
 )
 
 // divergenceThreshold is the max |raw output| above which a tile is treated as a NAFNet blow-up and replaced with the
@@ -18,7 +17,7 @@ const divergenceThreshold = 3.0
 type Stockholm struct {
 	name      string
 	operation OpDnStockholm
-	session   *ort.DynamicAdvancedSession
+	session   *utils.Session
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Stockholm, error) {
@@ -38,6 +37,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 
 // Compile-time assertion to ensure it conforms to the Model interface.
 var _ types.Model[image.Image] = (*Stockholm)(nil)
+var _ types.Measurable = (*Stockholm)(nil)
 
 // region - Model methods
 
@@ -63,6 +63,12 @@ func (m *Stockholm) Run(
 	// Amplify (or soften) the denoising by extrapolating the residual at the per-run intensity; intensity 1.0 returns
 	// the model output unchanged.
 	return utils.BlendWithIntensity(img, result, utils.IntensityFromParams(params)), nil
+}
+
+// ResidentBytes reports the size of the model files backing this session, which is what the registry
+// budgets against when deciding what can stay loaded.
+func (m *Stockholm) ResidentBytes() int64 {
+	return m.session.Bytes()
 }
 
 func (m *Stockholm) Destroy() {

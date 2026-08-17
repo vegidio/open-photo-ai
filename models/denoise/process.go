@@ -6,7 +6,6 @@ import (
 
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
-	ort "github.com/yalue/onnxruntime_go"
 )
 
 // RunPipeline denoises an entire image using the given fixed-shape session, processing it in overlapping 256x256 tiles
@@ -14,7 +13,7 @@ import (
 // shared tiled-inference driver runs with a scale factor of 1.
 func RunPipeline(
 	ctx context.Context,
-	session *ort.DynamicAdvancedSession,
+	session *utils.Session,
 	img image.Image,
 	onProgress types.InferenceProgress,
 	opts ...utils.TileOption,

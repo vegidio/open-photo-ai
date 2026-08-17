@@ -8,7 +8,6 @@ import (
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
-	ort "github.com/yalue/onnxruntime_go"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -22,8 +21,8 @@ func LoadSessions(
 	scales []int,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
-) (_ []*ort.DynamicAdvancedSession, retErr error) {
-	sessions := make([]*ort.DynamicAdvancedSession, 0, len(scales))
+) (_ []*utils.Session, retErr error) {
+	sessions := make([]*utils.Session, 0, len(scales))
 
 	// Release any sessions already opened if a later scale fails to load.
 	defer func() {

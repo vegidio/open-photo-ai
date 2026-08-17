@@ -16,7 +16,7 @@ import (
 
 type huggingFaceFile struct {
 	Path string `json:"path"`
-	Size int    `json:"size"`
+	Size int64  `json:"size"`
 	LFS  struct {
 		OID string `json:"oid"`
 	} `json:"lfs"`

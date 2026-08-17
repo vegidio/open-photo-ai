@@ -16,7 +16,7 @@ const maskBlurSigma = 15.0
 
 func RestoreFaces(
 	ctx context.Context,
-	session *ort.DynamicAdvancedSession,
+	session *utils.Session,
 	img image.Image,
 	faces []detection.Face,
 	tileSize int,
@@ -74,7 +74,7 @@ func RestoreFaces(
 }
 
 func restoreSingleFace(
-	session *ort.DynamicAdvancedSession,
+	session *utils.Session,
 	img image.Image,
 	face detection.Face,
 	tileSize int,
@@ -94,7 +94,7 @@ func restoreSingleFace(
 //
 // If fidelityWeight is positive, it will be used as a second input tensor; otherwise, only the image input will be
 // used.
-func runInference(session *ort.DynamicAdvancedSession, aligned image.Image, tileSize int, fidelity float32) (image.Image, error) {
+func runInference(session *utils.Session, aligned image.Image, tileSize int, fidelity float32) (image.Image, error) {
 	inputData := utils.ImageToCHW(aligned, false, true)
 
 	inputTensor, err := ort.NewTensor(ort.NewShape(1, 3, int64(tileSize), int64(tileSize)), inputData)

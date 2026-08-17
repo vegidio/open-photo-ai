@@ -10,7 +10,6 @@ import (
 	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/types"
-	ort "github.com/yalue/onnxruntime_go"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -22,7 +21,7 @@ const (
 type Santorini struct {
 	name      string
 	operation OpFrSantorini
-	session   *ort.DynamicAdvancedSession
+	session   *utils.Session
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Santorini, error) {
@@ -52,6 +51,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 
 // Compile-time assertion to ensure it conforms to the Model interface.
 var _ types.Model[image.Image] = (*Santorini)(nil)
+var _ types.Measurable = (*Santorini)(nil)
 
 // region - Model methods
 
@@ -82,6 +82,12 @@ func (m *Santorini) Run(
 	}
 
 	return result, nil
+}
+
+// ResidentBytes reports the size of the model files backing this session, which is what the registry
+// budgets against when deciding what can stay loaded.
+func (m *Santorini) ResidentBytes() int64 {
+	return m.session.Bytes()
 }
 
 func (m *Santorini) Destroy() {

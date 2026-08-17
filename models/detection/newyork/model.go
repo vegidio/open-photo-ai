@@ -20,7 +20,7 @@ const confidenceThreshold = 0.5
 type NewYork struct {
 	name      string
 	operation OpDtNewYork
-	session   *ort.DynamicAdvancedSession
+	session   *utils.Session
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*NewYork, error) {
@@ -61,6 +61,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 
 // Compile-time assertion to ensure it conforms to the Model interface.
 var _ types.Model[[]detection.Face] = (*NewYork)(nil)
+var _ types.Measurable = (*NewYork)(nil)
 
 // region - Model methods
 
@@ -150,6 +151,12 @@ func (m *NewYork) Run(
 	}
 
 	return faces, nil
+}
+
+// ResidentBytes reports the size of the model files backing this session, which is what the registry
+// budgets against when deciding what can stay loaded.
+func (m *NewYork) ResidentBytes() int64 {
+	return m.session.Bytes()
 }
 
 func (m *NewYork) Destroy() {

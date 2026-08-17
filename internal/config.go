@@ -1,6 +1,9 @@
 package internal
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // AppName is the name of the application using Open Photo AI's library.
 //
@@ -11,7 +14,7 @@ var AppName = "open-photo-ai"
 
 type RemoteModelData struct {
 	Name string
-	Size int
+	Size int64
 	Hash string
 }
 
@@ -20,6 +23,26 @@ type RemoteModelData struct {
 // This slice holds information about the model name, size, and hash for verification purposes. It is populated during
 // initialization and should not be modified directly.
 var ModelData []RemoteModelData
+
+// EstimateModelBytes reports the expected size of the files behind an operation ID, taken from the remote manifest, so
+// the registry can free memory *before* an expensive session is built rather than after.
+//
+// The match is by prefix, like GetModelHash, which is what makes it sum a model split across several files: both
+// `up_osaka_fp16.onnx` and its `up_osaka_fp16.onnx.data` weights blob start with `up_osaka_fp16`.
+//
+// It returns 0 when nothing matches - an operation built from several model files (`up_kyoto_8x_fp32` runs the 4x and
+// 2x models in sequence, and neither is named after it), or a manifest that failed to load, since LoadModelData is
+// best-effort. Callers must read 0 as "unknown", not "free"; the exact size is charged after the session is built.
+func EstimateModelBytes(id string) int64 {
+	var total int64
+	for _, model := range ModelData {
+		if strings.HasPrefix(model.Name, id) {
+			total += model.Size
+		}
+	}
+
+	return total
+}
 
 // ModelRegistry is a concurrency-safe map of loaded models keyed by operation ID. Callers must use the provided
 // methods; the map inside is not exported.

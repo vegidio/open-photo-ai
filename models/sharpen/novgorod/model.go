@@ -8,13 +8,12 @@ import (
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/sharpen"
 	"github.com/vegidio/open-photo-ai/types"
-	ort "github.com/yalue/onnxruntime_go"
 )
 
 type Novgorod struct {
 	name      string
 	operation OpShNovgorod
-	session   *ort.DynamicAdvancedSession
+	session   *utils.Session
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Novgorod, error) {
@@ -34,6 +33,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 
 // Compile-time assertion to ensure it conforms to the Model interface.
 var _ types.Model[image.Image] = (*Novgorod)(nil)
+var _ types.Measurable = (*Novgorod)(nil)
 
 // region - Model methods
 
@@ -59,6 +59,12 @@ func (m *Novgorod) Run(
 	// Amplify (or soften) the sharpening by extrapolating the residual at the per-run intensity; intensity 1.0 returns
 	// the model output unchanged.
 	return utils.BlendWithIntensity(img, result, utils.IntensityFromParams(params)), nil
+}
+
+// ResidentBytes reports the size of the model files backing this session, which is what the registry
+// budgets against when deciding what can stay loaded.
+func (m *Novgorod) ResidentBytes() int64 {
+	return m.session.Bytes()
 }
 
 func (m *Novgorod) Destroy() {

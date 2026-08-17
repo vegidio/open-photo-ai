@@ -21,7 +21,7 @@ const maxSize = 1024
 // eps guards the per-channel gain division against near-black input pixels.
 const eps = 1e-3
 
-func Process(ctx context.Context, session *ort.DynamicAdvancedSession, img image.Image) (image.Image, error) {
+func Process(ctx context.Context, session *utils.Session, img image.Image) (image.Image, error) {
 	bounds := img.Bounds()
 	fullW := bounds.Dx()
 	fullH := bounds.Dy()

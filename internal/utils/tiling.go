@@ -39,7 +39,7 @@ func WithDivergenceGuard(threshold float32) TileOption {
 // must not reset progress to 0 on each pass.
 func RunTiledInference(
 	ctx context.Context,
-	session *ort.DynamicAdvancedSession,
+	session *Session,
 	img image.Image,
 	scale int,
 	opId string,
@@ -153,7 +153,7 @@ func prepareTileForInference(img image.Image, tileX, tileY, tileW, tileH, tileSi
 
 // processTile runs the ML model inference and removes padding from the result. The crop bounds are scaled by scale to
 // match the inference output dimensions (scale is 1 for denoise).
-func processTile(session *ort.DynamicAdvancedSession, tile image.Image, tileW, tileH, scale int, divergenceThreshold float32) (image.Image, error) {
+func processTile(session *Session, tile image.Image, tileW, tileH, scale int, divergenceThreshold float32) (image.Image, error) {
 	// Run inference
 	processedTile, err := runTileInference(session, tile, scale, divergenceThreshold)
 	if err != nil {
@@ -170,7 +170,7 @@ func processTile(session *ort.DynamicAdvancedSession, tile image.Image, tileW, t
 
 // runTileInference runs inference on a single padded tile. The output shares the input's shape scaled by scale (scale 1
 // keeps the dimensions, e.g. denoise; scale N upscales).
-func runTileInference(session *ort.DynamicAdvancedSession, tile image.Image, scale int, divergenceThreshold float32) (image.Image, error) {
+func runTileInference(session *Session, tile image.Image, scale int, divergenceThreshold float32) (image.Image, error) {
 	bounds := tile.Bounds()
 	h, w := bounds.Dy(), bounds.Dx()
 
