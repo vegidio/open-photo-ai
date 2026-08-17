@@ -6,8 +6,12 @@ includes:
 tasks:
   build:
     summary: Builds the application for Linux
+    # `common:go:mod:tidy` is deliberately NOT a dep here, even though the wails3-generated assets ship it that way:
+    # deps run concurrently, so its `go work sync` would rewrite go.work while the `go list` behind
+    # `common:generate:bindings` reads it, and the reader intermittently sees an empty workspace ("go: no modules were
+    # found in the current workspace") and generates nothing. `generate:bindings` already depends on it, so the sync
+    # still runs before this `go build` - just sequentially. Re-apply this after `wails3 update build-assets`.
     deps:
-      - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
           BUILD_FLAGS:

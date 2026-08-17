@@ -6,8 +6,9 @@ includes:
 tasks:
   build:
     summary: Creates a production build of the application
+    # See the note in build/linux/Taskfile.yml: `common:go:mod:tidy` must not be a dep here, or its `go work sync`
+    # races the `go list` behind `common:generate:bindings`. Re-apply after `wails3 update build-assets`.
     deps:
-      - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
           BUILD_FLAGS:
