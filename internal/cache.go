@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/png"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -14,6 +15,20 @@ import (
 	"github.com/vegidio/go-sak/memo"
 	"github.com/vegidio/open-photo-ai/types"
 )
+
+// imageCacheDisabled is named for the disabled state so that the zero value keeps the cache on: an embedder that never
+// calls SetImageCacheEnabled must see the default behavior. Safe for concurrent use.
+var imageCacheDisabled atomic.Bool
+
+// SetImageCacheEnabled toggles the per-operation image cache. Safe for concurrent use.
+func SetImageCacheEnabled(enabled bool) {
+	imageCacheDisabled.Store(!enabled)
+}
+
+// ImageCacheEnabled reports whether Process should read from and write to the image cache.
+func ImageCacheEnabled() bool {
+	return !imageCacheDisabled.Load()
+}
 
 type Cache struct {
 	diskCache *memo.Memoizer

@@ -4,100 +4,298 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"log"
 	"log/slog"
+	"maps"
 	"os"
-	"time"
+	"os/signal"
+	"slices"
+	"strings"
+	"syscall"
 
+	"github.com/charmbracelet/x/term"
+	"github.com/urfave/cli/v3"
 	"github.com/vegidio/go-sak/fs"
 	opai "github.com/vegidio/open-photo-ai"
-	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/shared"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 )
 
-const AppName = "open-photo-ai"
-
 //go:embed test.dat
 var testDataBinary []byte
 
+// providers and precisions back both the flag validators and the string-to-value mapping, so a value can never pass
+// validation and then fail to map.
+var providers = map[string]types.ExecutionProvider{
+	"auto":     types.ExecutionProviderAuto,
+	"cpu":      types.ExecutionProviderCPU,
+	"cuda":     types.ExecutionProviderCUDA,
+	"tensorrt": types.ExecutionProviderTensorRT,
+	"directml": types.ExecutionProviderDirectML,
+	"openvino": types.ExecutionProviderOpenVINO,
+	"coreml":   types.ExecutionProviderCoreML,
+}
+
+var precisions = map[string]types.Precision{
+	"fp32": types.PrecisionFp32,
+	"fp16": types.PrecisionFp16,
+}
+
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	// The context is cancelled on Ctrl-C. Process and Execute both honour it, so an in-flight inference stops, the
+	// sweep breaks out, and the partial summary still prints - which is why nothing here calls os.Exit directly.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cmd := &cli.Command{
+		Name:      "perftest",
+		Usage:     "benchmark open-photo-ai models",
+		ArgsUsage: "[model...]",
+		Description: "Benchmarks one inference pass per model against an embedded 640x640 sample image, reporting\n" +
+			"the cold start (session build + one inference) and the steady-state distribution over --runs.\n\n" +
+			"With no arguments every model in the catalog is benchmarked, which on a fresh machine downloads\n" +
+			"several gigabytes of weights. Start with \"perftest list\" and a single model name.",
+		Flags:    flags(),
+		Action:   run,
+		Commands: []*cli.Command{{Name: "list", Usage: "list the available models", Action: list}},
+	}
+
+	if err := cmd.Run(ctx, os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// flags declares the run parameters. Every flag is Local: in urfave/cli v3 flags are persistent by default, which
+// would leak all of these into "perftest list --help".
+func flags() []cli.Flag {
+	return []cli.Flag{
+		&cli.IntFlag{
+			Name: "runs", Aliases: []string{"n"}, Value: 5, Local: true,
+			Usage: "number of timed runs per model",
+			Validator: func(v int) error {
+				if v < 1 {
+					return fmt.Errorf("must be at least 1, got %d", v)
+				}
+
+				return nil
+			},
+		},
+		&cli.IntFlag{
+			Name: "warmup", Aliases: []string{"w"}, Value: 1, Local: true,
+			Usage: "number of untimed warm-up runs; also what downloads a missing model",
+			Validator: func(v int) error {
+				if v < 0 {
+					return fmt.Errorf("cannot be negative, got %d", v)
+				}
+
+				return nil
+			},
+		},
+		&cli.StringFlag{
+			Name: "provider", Aliases: []string{"p"}, Value: "auto", Local: true,
+			Usage:            "execution provider: auto, cpu, cuda, tensorrt, directml, openvino or coreml",
+			Validator:        oneOf(providers),
+			ValidateDefaults: true,
+		},
+		&cli.StringFlag{
+			Name: "precision", Value: "fp32", Local: true,
+			Usage:            "model precision: fp32 or fp16 (not every model publishes fp16 weights)",
+			Validator:        oneOf(precisions),
+			ValidateDefaults: true,
+		},
+		&cli.FloatFlag{
+			Name: "scale", Aliases: []string{"s"}, Value: 4, Local: true,
+			Usage:     "upscale factor; ignored by every model that isn't an upscaler",
+			Validator: inRange(1, 8),
+		},
+		&cli.FloatFlag{
+			Name: "intensity", Aliases: []string{"i"}, Value: 1, Local: true,
+			Usage: "blend intensity for the denoise/sharpen/light/color models; applied after inference, " +
+				"so it barely moves the timing. Ignored by the other models",
+			Validator: inRange(-1, 1),
+		},
+		&cli.BoolFlag{
+			Name: "cache", Local: true,
+			Usage: "keep the library's image cache on, so the timings include its PNG encode and disk write " +
+				"— i.e. what Process costs a real caller",
+		},
+		&cli.BoolFlag{
+			Name: "plain", Local: true,
+			Usage: "force the line-by-line output instead of the live view (automatic when stdout isn't a terminal)",
+		},
+		&cli.BoolFlag{
+			Name: "verbose", Aliases: []string{"v"}, Local: true,
+			Usage: "print the library's debug log and every timed run in order; implies --plain",
+		},
+	}
+}
+
+func oneOf[T any](allowed map[string]T) func(string) error {
+	// Sorted so the error message is stable: Go randomizes map iteration, and an error that reorders itself between
+	// two runs of the same command reads like a different error.
+	keys := slices.Sorted(maps.Keys(allowed))
+
+	return func(s string) error {
+		if _, ok := allowed[strings.ToLower(s)]; ok {
+			return nil
+		}
+
+		return fmt.Errorf("invalid value %q, want one of: %s", s, strings.Join(keys, ", "))
+	}
+}
+
+func inRange(low, high float64) func(float64) error {
+	return func(v float64) error {
+		if v < low || v > high {
+			return fmt.Errorf("must be between %g and %g, got %g", low, high, v)
+		}
+
+		return nil
+	}
+}
+
+func list(_ context.Context, _ *cli.Command) error {
+	printCatalog()
+	return nil
+}
+
+func run(ctx context.Context, cmd *cli.Command) error {
+	// Resolved before anything else touches the runtime: a typo in a model name should fail in milliseconds, not
+	// after the ONNX runtime and a few gigabytes of weights have been downloaded.
+	selection, err := resolveSelection(cmd.Args().Slice())
+	if err != nil {
+		return err
+	}
+
+	verbose := cmd.Bool("verbose") || os.Getenv("OPAI_PERF_DEBUG") != ""
 
 	// The library is silent unless a logger is installed. Opting in shows the per-run "cache hit"/"creating model"
-	// lines, which is how you check the harness is measuring what you think it is.
-	if os.Getenv("OPAI_PERF_DEBUG") != "" {
+	// lines, which is how you check the harness is measuring what you think it is. Installed before Initialize so the
+	// runtime setup is logged too.
+	if verbose {
 		opai.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}
 
-	if err := opai.Initialize(context.Background(), AppName, nil); err != nil {
-		log.Fatalf("Failed to initialize the model runtime: %v\n", err)
+	cfg := config{
+		provider:  providers[strings.ToLower(cmd.String("provider"))],
+		precision: precisions[strings.ToLower(cmd.String("precision"))],
+		scale:     cmd.Float("scale"),
+		intensity: float32(cmd.Float("intensity")),
+		runs:      cmd.Int("runs"),
+		warmup:    cmd.Int("warmup"),
+		cache:     cmd.Bool("cache"),
+	}
+
+	// Off by default: Process writes every result to the disk image cache, which means a PNG encode of the output
+	// inside the call being timed. Measuring that as if it were inference is the single biggest distortion this tool
+	// used to have.
+	opai.SetImageCacheEnabled(cfg.cache)
+
+	if err = opai.Initialize(ctx, shared.AppName, printDownloadProgress); err != nil {
+		return fmt.Errorf("failed to initialize the model runtime: %w", err)
 	}
 	defer opai.Destroy()
 
+	rec := &fallbackRecorder{}
+	opai.SetFallbackHandler(rec.record)
+
+	input, cleanup, err := loadInput()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Reported in the header so the face-recovery rows can be trusted: on an image with no faces they would be
+	// benchmarking nothing.
+	faces := countFaces(ctx, input, cfg)
+
+	printHeader(cfg, input, faces, selection)
+
+	// A live view needs a terminal it owns. --verbose writes the debug log to stderr, which would tear it apart, and
+	// a redirected stdout has nothing to animate.
+	live := !cmd.Bool("plain") && !verbose && isTerminal(os.Stdout)
+
+	var results []result
+
+	if live {
+		tiles := &tileProgress{}
+		cfg.onProgress = tiles.callback()
+
+		results = runLive(ctx, func(listener sweepListener) []result {
+			return sweep(ctx, selection, input, cfg, rec, listener)
+		}, len(selection), tiles)
+	} else {
+		// No progress callback in plain mode: the models invoke it per tile, and anything that writes to the terminal
+		// from inside the timed section would skew the measurement.
+		results = sweep(ctx, selection, input, cfg, rec, plainListener{total: len(selection)})
+	}
+
+	outln()
+	printSummary(results, cfg, input, verbose)
+
+	// Counted without the models the user interrupted: a Ctrl-C is not a model failure, and reporting it as one would
+	// make a cancelled run indistinguishable from a broken model in CI.
+	failed := 0
+	for _, r := range results {
+		if !r.ok() && !r.interrupted() {
+			failed++
+		}
+	}
+
+	if ctx.Err() != nil {
+		return cli.Exit("interrupted; the summary above covers the models that finished", 1)
+	}
+
+	if failed > 0 {
+		return cli.Exit(fmt.Sprintf("%d model(s) failed", failed), 1)
+	}
+
+	return nil
+}
+
+// loadInput materializes the embedded sample image and decodes it.
+func loadInput() (*types.ImageData, func(), error) {
 	// First argument is the directory, not a name pattern: "" means the system temp dir. The pattern needs the .jpg
 	// suffix because LoadImage picks the decoder from the file extension.
 	tempFile, cleanup, err := fs.MkTempFile("", "open-photo-ai-*.jpg")
 	if err != nil {
-		log.Fatalf("Error creating temp file: %v\n", err)
+		return nil, nil, fmt.Errorf("error creating temp file: %w", err)
 	}
-	defer cleanup()
 
-	_, err = tempFile.Write(testDataBinary)
+	if _, err = tempFile.Write(testDataBinary); err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("error writing temp file: %w", err)
+	}
+
+	input, err := utils.LoadImage(tempFile.Name())
 	if err != nil {
-		log.Fatalf("Error writing temp file: %v\n", err)
+		cleanup()
+		return nil, nil, fmt.Errorf("failed to load the input image: %w", err)
 	}
 
-	inputData, err := utils.LoadImage(tempFile.Name())
-	if err != nil {
-		log.Fatalf("Failed to load the input image: %v\n", err)
-	}
-
-	startUpscaleTest(inputData)
+	return input, cleanup, nil
 }
 
-func startUpscaleTest(inputData *types.ImageData) {
-	// Warm-up; the first run is not included in the measurements because it's a cold-start
-	log.Printf("UPSCALE: Warming up!\n")
-	ctx := context.Background()
-
-	op := kyoto.Op(4, types.PrecisionFp32)
-	baseHash := inputData.Hash
-
-	// Process short-circuits on a hit in the disk image cache, which is keyed by image hash + operations and outlives
-	// the process (500 entries / 1 GB / 24 h). Reusing one hash made every run after the warm-up a cache read rather
-	// than an inference, and made the warm-up itself a cache read on the second invocation - so nothing was measuring
-	// what it claimed to. Each run therefore gets a hash unique to this invocation. The pixels are untouched, so every
-	// run does identical work; only the cache key differs.
-	runId := fmt.Sprintf("%s-perf-%d", baseHash, time.Now().UnixNano())
-
-	// The cold start covers building the ONNX session (graph optimization, and the provider's own compilation: the
-	// cuDNN algo search on CUDA, an engine build on TensorRT, an MLProgram compile on CoreML) plus one inference.
-	// The gap between this and the steady-state figure below is what makes keeping models resident worth it.
-	inputData.Hash = runId + "-warmup"
-	coldStart := time.Now()
-	_, err := opai.Process(ctx, inputData, types.ExecutionProviderAuto, nil, op)
+// countFaces runs a detection pass purely so the header can state how many faces the input has. A failure is not
+// fatal: it only means the header omits the count, and the face-recovery models will report the real error themselves.
+func countFaces(ctx context.Context, input *types.ImageData, cfg config) int {
+	faces, err := detectFaces(ctx, input, cfg)
 	if err != nil {
-		log.Fatalf("Failed to upscale the image: %v\n", err)
-	}
-	coldElapsed := time.Since(coldStart)
-
-	now := time.Now()
-
-	for i := 0; i < 5; i++ {
-		log.Printf("Running test %d...\n", i+1)
-
-		inputData.Hash = fmt.Sprintf("%s-%d", runId, i)
-
-		_, err = opai.Process(ctx, inputData, types.ExecutionProviderAuto, nil, op)
-		if err != nil {
-			log.Fatalf("Failed to upscale the image: %v\n", err)
-		}
+		return 0
 	}
 
-	inputData.Hash = baseHash
-	log.Printf("Cold start (session build + first run): %v\n", coldElapsed)
+	// The registry is drained before the first model runs anyway, but doing it here keeps the detection session from
+	// counting towards the first model's memory.
+	opai.CleanRegistry()
 
-	since := time.Since(now) / 5
-	log.Printf("Time elapsed: %v", since)
+	return len(faces)
+}
+
+// isTerminal reports whether the live view has a terminal to draw on.
+//
+// This asks the OS, rather than checking os.ModeCharDevice on the file info: /dev/null is a character device too, so
+// the cheaper test says "terminal" for `perftest > /dev/null` and the live view then animates into the void.
+func isTerminal(f *os.File) bool {
+	return term.IsTerminal(f.Fd())
 }

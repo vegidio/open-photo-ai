@@ -65,19 +65,29 @@ func Process(
 	// Make a copy of the input img so the original input is not modified
 	output := input.Pixels
 
+	// Read once per call rather than per operation, so a concurrent SetImageCacheEnabled can't have this loop read
+	// from the cache and then decline to write back to it.
+	useCache := internal.ImageCacheEnabled()
+
 	for i, op := range operations {
-		// Check first if there's a cached image for this operation
-		if cachedImg, err := internal.ImageCache.GetImage(ctx, input.Hash, operations[:i+1]...); err == nil {
+		if !useCache {
+			internal.Log().Debug("cache disabled, running inference", "op", op.Id(), "index", i)
+		} else if cachedImg, err := internal.ImageCache.GetImage(ctx, input.Hash, operations[:i+1]...); err == nil {
+			// Check first if there's a cached image for this operation
 			internal.Log().Debug("cache hit", "op", op.Id(), "index", i)
 			output = cachedImg
 			continue
+		} else {
+			internal.Log().Debug("cache miss, running inference", "op", op.Id(), "index", i)
 		}
-
-		internal.Log().Debug("cache miss, running inference", "op", op.Id(), "index", i)
 
 		output, err = runInference(ctx, output, ep, onProgress, op)
 		if err != nil {
 			return nil, errors.Wrap(err, "error running inference")
+		}
+
+		if !useCache {
+			continue
 		}
 
 		if err = internal.ImageCache.SetImage(ctx, output, input.Hash, operations[:i+1]...); err != nil {
