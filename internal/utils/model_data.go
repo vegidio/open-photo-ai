@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -74,11 +73,11 @@ func LoadModelData() ([]internal.RemoteModelData, error) {
 	}), nil
 }
 
+// GetModelHash returns the expected SHA-256 of the model file behind an operation ID, or "" when the manifest doesn't
+// name it. It takes the first prefix match, which for a split model is the graph rather than the weights blob.
 func GetModelHash(id string) string {
-	if model, found := lo.Find(internal.ModelData, func(model internal.RemoteModelData) bool {
-		return strings.HasPrefix(model.Name, id)
-	}); found {
-		return model.Hash
+	if models := internal.ModelsWithPrefix(id); len(models) > 0 {
+		return models[0].Hash
 	}
 
 	return ""

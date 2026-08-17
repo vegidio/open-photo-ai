@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -41,17 +42,14 @@ func (p phase) label() string {
 	}
 }
 
-// runObserver is how benchmark reports where it is. Implementations must be cheap and non-blocking: phase is called
-// from the sweep goroutine between timed sections, but a live view also feeds a progress callback that fires from
-// inside them.
-type runObserver interface {
+// sweepListener is how the sweep and the models inside it report where they are: phase/runDone during one model,
+// modelStart/modelDone around it.
+//
+// Implementations must be cheap and non-blocking: phase is called from the sweep goroutine between timed sections, but
+// a live view also feeds a progress callback that fires from inside them.
+type sweepListener interface {
 	phase(p phase, current, total int)
 	runDone(elapsed time.Duration)
-}
-
-// sweepListener adds the per-model boundaries to runObserver.
-type sweepListener interface {
-	runObserver
 	modelStart(index int, e entry)
 	modelDone(index int, r result)
 }
@@ -358,22 +356,12 @@ func runLive(ctx context.Context, run func(listener sweepListener) []result, tot
 const nameWidth = 11
 
 func pad(s string, width int) string {
-	for len(s) < width {
-		s += " "
-	}
-
-	return s
+	return fmt.Sprintf("%-*s", width, s)
 }
 
+// digits is how wide a counter has to be to hold n, so "[ 9/14]" lines up with "[10/14]".
 func digits(n int) int {
-	if n < 10 {
-		return 1
-	}
-	if n < 100 {
-		return 2
-	}
-
-	return 3
+	return len(strconv.Itoa(n))
 }
 
 // region - Styles

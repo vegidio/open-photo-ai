@@ -44,7 +44,11 @@ func AcquireModel(
 		// Resolve the provider before keying, so the entry is filed under the one the model will actually be built on.
 		// Keying by the requested provider instead would file a CPU model under "@CUDA" after a fallback, and an
 		// explicit switch to CPU would then build a second, identical copy of it.
-		key := registryKey(id, effectiveProvider(requested))
+		//
+		// Resolved once per attempt rather than again at the build below: the latch it reads can flip between the two
+		// reads, which would key the entry under one provider and build it on another.
+		ep := effectiveProvider(requested)
+		key := registryKey(id, ep)
 
 		lease, b, leader, err := Registry.acquireOrBuild(key)
 		if err != nil {
@@ -68,7 +72,7 @@ func AcquireModel(
 			continue
 		}
 
-		return buildAndInstall(id, key, effectiveProvider(requested), create)
+		return buildAndInstall(id, key, ep, create)
 	}
 
 	return nil, errors.Newf("model registry churn: gave up acquiring %s", id)
@@ -138,22 +142,23 @@ func buildAndInstall(
 	if err != nil {
 		Log().Warn("model creation failed", "op", id, "ep", ep, "err", err)
 		Registry.releaseReservation(pool, estimate)
-		Registry.abortBuild(buildKey, err)
+		Registry.resolveBuild(buildKey, err)
 
 		return nil, err
 	}
 
 	// A fallback moves the model to a different pool than the one reserved against, so give the reservation back where
 	// it was taken before charging the model where it actually landed.
-	if PoolOf(ep) != pool {
+	landed := PoolOf(ep)
+	if landed != pool {
 		Registry.releaseReservation(pool, estimate)
 		estimate = 0
 	}
 
 	// After a fallback this is not buildKey: the model is filed under the CPU. Waiters re-resolve the provider when
 	// they wake, see the latch, and look up that same CPU key - so the move needs no hand-off.
-	lease, dup, trim := Registry.install(registryKey(id, ep), id, ep, model, residentBytes(model), estimate)
-	Registry.finishBuild(buildKey)
+	lease, dup, trim := Registry.install(registryKey(id, ep), id, ep, landed, model, residentBytes(model), estimate)
+	Registry.resolveBuild(buildKey, nil)
 
 	// Evicted because this model turned out bigger than its estimate.
 	DestroyEntries(trim)

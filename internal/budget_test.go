@@ -7,72 +7,62 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// TestHostBudgetFor pins the unit conversion as much as the clamps.
-//
-// sysinfo.MemoryInfo documents its field as bytes but every backend divides by 1,000,000 before returning it, so the
-// value is decimal megabytes. Reading it as bytes makes a 64 GB machine look like 68 KB of RAM and silently collapses
-// the budget to its floor - a mistake with no visible symptom beyond models being rebuilt more than they should be,
-// which is exactly the kind of thing that survives review. The GB figures below are what sysctl/proc/CIM report for
-// machines of those sizes.
+// TestHostBudgetFor pins the clamps. The unit conversion that feeds it lives in sysinfo.go and is covered by
+// TestTotalRAMBytes.
 func TestHostBudgetFor(t *testing.T) {
 	const gib = int64(1) << 30
 
 	tests := []struct {
 		name       string
-		reportedMB uint64
+		totalBytes int64
 		want       int64
 	}{
-		// 16 GiB of RAM is reported as 17179 MB; half, less the 4 GiB pipeline reserve, is 4 GiB.
-		{"16 GB machine", 17179, 4 * gib},
-		{"32 GB machine", 34359, 12 * gib},
-		{"64 GB machine is capped", 68719, 16 * gib},
-		{"an enormous machine is capped", 1_000_000, 16 * gib},
+		// Half the machine, less the 4 GiB pipeline reserve.
+		{"16 GB machine", 16 * gib, 4 * gib},
+		{"32 GB machine", 32 * gib, 12 * gib},
+		{"64 GB machine is capped", 64 * gib, 16 * gib},
+		{"an enormous machine is capped", 1024 * gib, 16 * gib},
 
 		// Half of 8 GiB less a 4 GiB reserve is 0, so the floor applies.
-		{"8 GB machine hits the floor", 8589, 1 * gib},
-		{"a tiny machine hits the floor", 2000, 1 * gib},
+		{"8 GB machine hits the floor", 8 * gib, 1 * gib},
+		{"a tiny machine hits the floor", 2 * gib, 1 * gib},
 
 		// Unqueryable RAM falls back to the assumed machine size rather than to zero.
 		{"unknown RAM uses the fallback", 0, 1 * gib},
 	}
 
-	// The reported figures are truncated decimal megabytes, so the results land a hair under the round GiB values
-	// rather than exactly on them. A tolerance keeps the test about the unit conversion - the failure mode here is off
-	// by a factor of a million, not by a few MiB.
-	const tolerance = 64 * (1 << 20)
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := hostBudgetFor(tt.reportedMB)
-			if diff := got - tt.want; diff > tolerance || diff < -tolerance {
-				t.Errorf("hostBudgetFor(%d MB) = %.3f GiB, want %.3f GiB",
-					tt.reportedMB, float64(got)/float64(gib), float64(tt.want)/float64(gib))
+			if got := hostBudgetFor(tt.totalBytes); got != tt.want {
+				t.Errorf("hostBudgetFor(%.3f GiB) = %.3f GiB, want %.3f GiB",
+					float64(tt.totalBytes)/float64(gib), float64(got)/float64(gib), float64(tt.want)/float64(gib))
 			}
 		})
 	}
 }
 
-// TestDeviceBudgetFor covers the other unit: GPU memory is reported in MiB, not in the megabytes system RAM uses.
+// TestDeviceBudgetFor pins the device-side fraction and its clamps.
 func TestDeviceBudgetFor(t *testing.T) {
 	const gib = int64(1) << 30
+	const mib = int64(1) << 20
 
 	tests := []struct {
-		name    string
-		vramMiB uint
-		want    int64
+		name      string
+		vramBytes int64
+		want      int64
 	}{
-		{"8 GB card", 8192, 8192 * (1 << 20) * 70 / 100},
-		{"12 GB card", 12288, 12288 * (1 << 20) * 70 / 100},
+		{"8 GB card", 8192 * mib, 8192 * mib * 70 / 100},
+		{"12 GB card", 12288 * mib, 12288 * mib * 70 / 100},
 		{"unqueryable VRAM uses the fallback", 0, 4 * gib},
 
 		// 70% of a 512 MiB part is below the floor, and a card that small still has to be able to load one model.
-		{"a tiny card hits the floor", 512, 1 * gib},
+		{"a tiny card hits the floor", 512 * mib, 1 * gib},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := deviceBudgetFor(tt.vramMiB); got != tt.want {
-				t.Errorf("deviceBudgetFor(%d MiB) = %d, want %d", tt.vramMiB, got, tt.want)
+			if got := deviceBudgetFor(tt.vramBytes); got != tt.want {
+				t.Errorf("deviceBudgetFor(%d bytes) = %d, want %d", tt.vramBytes, got, tt.want)
 			}
 		})
 	}

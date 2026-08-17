@@ -21,15 +21,13 @@ func LoadSessions(
 	scales []int,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
-) (_ []*utils.Session, retErr error) {
-	sessions := make([]*utils.Session, 0, len(scales))
+) (_ utils.Sessions, retErr error) {
+	sessions := make(utils.Sessions, 0, len(scales))
 
 	// Release any sessions already opened if a later scale fails to load.
 	defer func() {
 		if retErr != nil {
-			for _, s := range sessions {
-				s.Destroy()
-			}
+			sessions.Destroy()
 		}
 	}()
 

@@ -17,7 +17,7 @@ import (
 type Rio struct {
 	name      string
 	operation OpCbRio
-	session   *utils.Session
+	*utils.Session
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Rio, error) {
@@ -51,7 +51,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	return &Rio{
 		name:      name,
 		operation: op,
-		session:   session,
+		Session:   session,
 	}, nil
 }
 
@@ -82,7 +82,7 @@ func (m *Rio) Run(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	result, err := colorbalance.Process(ctx, m.session, img)
+	result, err := colorbalance.Process(ctx, m.Session, img)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to process image")
 	}
@@ -103,16 +103,6 @@ func (m *Rio) Run(
 	}
 
 	return blendedImg, nil
-}
-
-// ResidentBytes reports the size of the model files backing this session, which is what the registry
-// budgets against when deciding what can stay loaded.
-func (m *Rio) ResidentBytes() int64 {
-	return m.session.Bytes()
-}
-
-func (m *Rio) Destroy() {
-	m.session.Destroy()
 }
 
 // endregion

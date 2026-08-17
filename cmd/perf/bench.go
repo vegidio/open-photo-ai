@@ -11,6 +11,7 @@ import (
 	"time"
 
 	opai "github.com/vegidio/open-photo-ai"
+	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -28,6 +29,22 @@ type config struct {
 	// invisible in the measurement: the live UI's implementation does a single atomic store per tile and nothing else.
 	// It is nil when there is no live view to feed.
 	onProgress types.InferenceProgress
+
+	// faces is the result of the one detection pass the run makes, filled in by countFaces before the sweep starts.
+	//
+	// The face-recovery models need it as input but must not be timed producing it, and the header needs the count. It
+	// is carried here rather than re-detected per model because every model boundary drains the registry, so a second
+	// caller would pay a full detection session build again - three of them across a sweep, all untimed but all real
+	// wall clock, and on TensorRT a session build dominates everything else.
+	faces facesResult
+}
+
+// facesResult is the outcome of the auxiliary detection pass: the faces it found, or why it found none. The error is
+// kept rather than discarded so the face-recovery models can fail with the real reason instead of silently
+// benchmarking a no-op.
+type facesResult struct {
+	faces []detection.Face
+	err   error
 }
 
 // stats summarizes the timed runs.
@@ -107,7 +124,7 @@ func benchmark(
 	input *types.ImageData,
 	cfg config,
 	rec *fallbackRecorder,
-	observer runObserver,
+	observer sweepListener,
 ) result {
 	res := result{entry: e}
 

@@ -26,17 +26,6 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// shape describes which run parameters a model actually consumes. It drives the `list` output and the flag hints, so
-// nobody reads "--scale had no effect on stockholm" as a bug.
-type shape int
-
-const (
-	shapeScale     shape = iota // upscale models: --scale
-	shapeIntensity              // denoise/sharpen/light/color models: --intensity
-	shapeDetect                 // detection models: no image output, run through opai.Execute
-	shapeFaces                  // face recovery models: need faces from an untimed detection pass
-)
-
 // outcome is what one iteration contributes to the report: the size of the image produced (zero for models that don't
 // produce one) and a short note, e.g. how many faces a detector found.
 type outcome struct {
@@ -53,9 +42,8 @@ type runner func(ctx context.Context, input *types.ImageData) (outcome, error)
 // entry is one benchmarkable model. Adding a model is one line in catalog below: the four Op shapes are normalized
 // into a single build function by the adapters further down.
 type entry struct {
-	name  string
-	kind  types.ModelType
-	shape shape
+	name string
+	kind types.ModelType
 
 	// build prepares everything that must NOT be timed: it constructs the operation from cfg and, for the face
 	// recovery models, runs the detection pass that produces their input faces. It can therefore be slow and fail.
@@ -142,9 +130,8 @@ func resolveSelection(names []string) ([]entry, error) {
 // the report can't claim a factor the model didn't use.
 func scaleEntry[T types.Operation](name string, kind types.ModelType, op func(float64, types.Precision) T) entry {
 	return entry{
-		name:  name,
-		kind:  kind,
-		shape: shapeScale,
+		name: name,
+		kind: kind,
 		build: func(_ context.Context, _ *types.ImageData, cfg config) (runner, error) {
 			return processRunner(cfg, op(cfg.scale, cfg.precision), ""), nil
 		},
@@ -156,9 +143,8 @@ func scaleEntry[T types.Operation](name string, kind types.ModelType, op func(fl
 // barely the timing; it is configurable for completeness.
 func intensityEntry[T types.Operation](name string, kind types.ModelType, op func(float32, types.Precision) T) entry {
 	return entry{
-		name:  name,
-		kind:  kind,
-		shape: shapeIntensity,
+		name: name,
+		kind: kind,
 		build: func(_ context.Context, _ *types.ImageData, cfg config) (runner, error) {
 			return processRunner(cfg, op(cfg.intensity, cfg.precision), ""), nil
 		},
@@ -170,9 +156,8 @@ func intensityEntry[T types.Operation](name string, kind types.ModelType, op fun
 // the detection models return.
 func detectEntry[T types.Operation](name string, kind types.ModelType, op func(types.Precision) T) entry {
 	return entry{
-		name:  name,
-		kind:  kind,
-		shape: shapeDetect,
+		name: name,
+		kind: kind,
 		build: func(_ context.Context, _ *types.ImageData, cfg config) (runner, error) {
 			operation := op(cfg.precision)
 
@@ -189,22 +174,24 @@ func detectEntry[T types.Operation](name string, kind types.ModelType, op func(t
 }
 
 // faceEntry adapts the face-recovery constructors, which only have work to do on faces someone else located: without a
-// detection pass they would recover nothing and the benchmark would time a no-op. The detection runs once in build,
-// outside the timed section, so its cost is not charged to the model under test.
+// detection pass they would recover nothing and the benchmark would time a no-op.
+//
+// The faces come from cfg, where detectFacesOnce put them before the sweep started, so the detection is never charged
+// to the model under test and is never repeated per model.
 func faceEntry[T types.Operation](
 	name string,
 	kind types.ModelType,
 	op func(types.Precision, []detection.Face) T,
 ) entry {
 	return entry{
-		name:  name,
-		kind:  kind,
-		shape: shapeFaces,
-		build: func(ctx context.Context, input *types.ImageData, cfg config) (runner, error) {
-			faces, err := detectFaces(ctx, input, cfg)
-			if err != nil {
-				return nil, err
+		name: name,
+		kind: kind,
+		build: func(_ context.Context, _ *types.ImageData, cfg config) (runner, error) {
+			if cfg.faces.err != nil {
+				return nil, cfg.faces.err
 			}
+
+			faces := cfg.faces.faces
 
 			return processRunner(cfg, op(cfg.precision, faces), facesNote(len(faces))), nil
 		},

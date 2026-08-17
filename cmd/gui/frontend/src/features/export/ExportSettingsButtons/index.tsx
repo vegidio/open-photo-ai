@@ -29,8 +29,6 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const upModel = useSettingsStore((state) => state.upModel);
     const shModel = useSettingsStore((state) => state.shModel);
 
-    // JobStore: holds the batch as one job, so the AI processor stays locked for the whole export
-
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | undefined>(undefined);
     const exportRef = useRef<CancellablePromise<void> | undefined>(undefined);

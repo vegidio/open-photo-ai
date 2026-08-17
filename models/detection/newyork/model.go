@@ -20,7 +20,7 @@ const confidenceThreshold = 0.5
 type NewYork struct {
 	name      string
 	operation OpDtNewYork
-	session   *utils.Session
+	*utils.Session
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*NewYork, error) {
@@ -55,7 +55,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	return &NewYork{
 		name:      name,
 		operation: op,
-		session:   session,
+		Session:   session,
 	}, nil
 }
 
@@ -126,7 +126,7 @@ func (m *NewYork) Run(
 	}
 
 	// Run inference
-	err = m.session.Run([]ort.Value{inputTensor}, []ort.Value{locTensor, confTensor, landmarksTensor})
+	err = m.Session.Run([]ort.Value{inputTensor}, []ort.Value{locTensor, confTensor, landmarksTensor})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to run inference")
 	}
@@ -151,16 +151,6 @@ func (m *NewYork) Run(
 	}
 
 	return faces, nil
-}
-
-// ResidentBytes reports the size of the model files backing this session, which is what the registry
-// budgets against when deciding what can stay loaded.
-func (m *NewYork) ResidentBytes() int64 {
-	return m.session.Bytes()
-}
-
-func (m *NewYork) Destroy() {
-	m.session.Destroy()
 }
 
 // endregion

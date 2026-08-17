@@ -84,8 +84,8 @@ export const Preview = ({ className = '' }: TailwindProps) => {
             isCancelled = true;
             p?.cancel();
         };
-        // `ep` belongs here: switching the AI processor unloads every model (CleanRegistry), so a preview left running
-        // on the old provider would be rebuilt against a registry that no longer matches it.
+        // `ep` belongs here: it selects which model the backend builds the preview on, so a preview produced by the
+        // old provider is stale as soon as the user picks a different one and has to be re-run.
     }, [operations, currentFile, disabledFaces, crop, ep, setEnhancedImage, setOriginalImage]);
 
     useEffect(() => {

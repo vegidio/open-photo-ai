@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +12,8 @@ import (
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Session is an ONNX session together with the on-disk size of the files backing it, which is the proxy the model
@@ -19,13 +23,18 @@ import (
 //
 // The embedded session is promoted, so a Session is a drop-in for the *ort.DynamicAdvancedSession it wraps: Run and
 // Destroy work unchanged.
+//
+// Models embed a *Session rather than holding it in a named field, which promotes ResidentBytes and Destroy and so
+// satisfies types.Measurable and types.Destroyable without any per-model code. That is what stops a new model from
+// silently being charged the default size because someone forgot to write the method.
 type Session struct {
 	*ort.DynamicAdvancedSession
 	bytes int64
 }
 
-// Bytes reports the on-disk size of the files backing this session.
-func (s *Session) Bytes() int64 {
+// ResidentBytes reports the on-disk size of the files backing this session, which is what the model registry budgets
+// against when deciding what can stay loaded. It implements types.Measurable.
+func (s *Session) ResidentBytes() int64 {
 	if s == nil {
 		return 0
 	}
@@ -33,14 +42,40 @@ func (s *Session) Bytes() int64 {
 	return s.bytes
 }
 
-// SessionsBytes sums Bytes over a slice of sessions, for the models that hold one session per scale factor.
-func SessionsBytes(sessions []*Session) int64 {
+// Destroy releases the native resources behind the session. It implements types.Destroyable.
+//
+// It exists to drop the error that the ONNX binding's own Destroy returns, which types.Destroyable does not have: a
+// model that fails to free is unreachable either way, and there is nothing a caller could do about it. Without this
+// method the promoted one would be the wrong shape and no model would satisfy the interface.
+func (s *Session) Destroy() {
+	if s == nil || s.DynamicAdvancedSession == nil {
+		return
+	}
+
+	if err := s.DynamicAdvancedSession.Destroy(); err != nil {
+		internal.Log().Warn("failed to destroy ONNX session", "err", err)
+	}
+}
+
+// Sessions is the set of sessions behind one model, for the upscalers that hold one per scale factor. It reports and
+// releases them as a unit, so those models embed it exactly the way the single-session models embed a *Session.
+type Sessions []*Session
+
+// ResidentBytes sums the on-disk size of every session in the set. It implements types.Measurable.
+func (s Sessions) ResidentBytes() int64 {
 	var total int64
-	for _, session := range sessions {
-		total += session.Bytes()
+	for _, session := range s {
+		total += session.ResidentBytes()
 	}
 
 	return total
+}
+
+// Destroy releases every session in the set. It implements types.Destroyable.
+func (s Sessions) Destroy() {
+	for _, session := range s {
+		session.Destroy()
+	}
 }
 
 // CreateSession builds an ONNX session for the given model file and execution provider.
@@ -56,6 +91,45 @@ func CreateSession(modelFile string, inputs, outputs []string, ep types.Executio
 	}
 
 	return session, nil
+}
+
+// LoadSingleSession downloads and opens the one session behind a model whose ID is `<prefix>_<variant>_<precision>`,
+// e.g. `dn_stockholm_fp16`. It covers the fixed-shape families that have no scale matrix - denoise and sharpen - which
+// otherwise carry a byte-identical copy of this function each.
+func LoadSingleSession(
+	ctx context.Context,
+	prefix, variant string,
+	precision types.Precision,
+	ep types.ExecutionProvider,
+	onProgress types.DownloadProgress,
+) (*Session, error) {
+	modelId := fmt.Sprintf("%s_%s_%s", prefix, variant, precision)
+	modelFile := modelId + ".onnx"
+	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
+	fileCheck := &types.FileCheck{
+		Path: modelFile,
+		Hash: GetModelHash(modelId),
+	}
+
+	if err := PrepareDependency(ctx, url, "models", fileCheck, onProgress); err != nil {
+		return nil, errors.Wrapf(err, "failed to prepare %s model", variant)
+	}
+
+	internal.Log().Debug("loading model session", "model_id", modelId)
+
+	session, err := CreateSession(modelFile, []string{"input"}, []string{"output"}, ep)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create %s session", variant)
+	}
+
+	internal.Log().Debug("model session ready", "model_id", modelId)
+
+	return session, nil
+}
+
+// FormatModelName builds the display name a model family shows in the UI, e.g. "Denoise (FP16)".
+func FormatModelName(label string, precision types.Precision) string {
+	return fmt.Sprintf("%s (%s)", label, cases.Upper(language.English).String(string(precision)))
 }
 
 func createSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*Session, error) {
@@ -123,26 +197,18 @@ func createSession(modelFile string, inputs, outputs []string, ep types.Executio
 // A file that can't be stat-ed contributes 0: an under-count degrades the budget, whereas failing here would fail the
 // session build.
 func modelFileBytes(modelPath string) int64 {
-	// `<model>.data` drops the `.onnx` extension rather than appending to it, so it is derived from the stem.
-	candidates := []string{
-		modelPath,
-		modelPath + ".data",
-		modelPath + "_data",
-		strings.TrimSuffix(modelPath, filepath.Ext(modelPath)) + ".data",
+	candidates := []string{modelPath, modelPath + ".data", modelPath + "_data"}
+
+	// `<model>.data` drops the `.onnx` extension rather than appending to it, so it is derived from the stem - and is
+	// only a distinct candidate when there is an extension to drop. Without one the stem is the whole path, making it
+	// a duplicate of `<model>.data` above, which would charge that blob twice.
+	if ext := filepath.Ext(modelPath); ext != "" {
+		candidates = append(candidates, strings.TrimSuffix(modelPath, ext)+".data")
 	}
 
 	var total int64
-	seen := make(map[string]bool, len(candidates))
 
 	for _, candidate := range candidates {
-		// A model file without an extension makes the stem-derived candidate identical to modelPath itself; counting
-		// it twice would double-charge the graph.
-		if seen[candidate] {
-			continue
-		}
-
-		seen[candidate] = true
-
 		info, err := os.Stat(candidate)
 		if err != nil || info.IsDir() {
 			continue

@@ -13,8 +13,8 @@ import (
 type Saitama struct {
 	name      string
 	operation OpUpSaitama
-	sessions  []*utils.Session
-	scales    []int
+	utils.Sessions
+	scales []int
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Saitama, error) {
@@ -29,7 +29,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	return &Saitama{
 		name:      upscale.FormatUpscaleName(op.scale, op.precision),
 		operation: op,
-		sessions:  sessions,
+		Sessions:  sessions,
 		scales:    scales,
 	}, nil
 }
@@ -54,19 +54,7 @@ func (m *Saitama) Run(
 	_ map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
-	return upscale.RunPipeline(ctx, m.sessions, img, m.scales, m.operation.scale, onProgress)
-}
-
-// ResidentBytes reports the size of the model files backing this session, which is what the registry
-// budgets against when deciding what can stay loaded.
-func (m *Saitama) ResidentBytes() int64 {
-	return utils.SessionsBytes(m.sessions)
-}
-
-func (m *Saitama) Destroy() {
-	for _, session := range m.sessions {
-		session.Destroy()
-	}
+	return upscale.RunPipeline(ctx, m.Sessions, img, m.scales, m.operation.scale, onProgress)
 }
 
 // endregion

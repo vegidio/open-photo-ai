@@ -120,7 +120,9 @@ func (s *AppService) SetExecutionProvider() {
 // wants the memory back now. It waits for any work still using a model before destroying it, so it is safe to call at
 // any time; the frontend doesn't have to coordinate anything itself.
 func (s *AppService) CleanRegistry() {
-	s.fallbackNotified.Store(false)
+	// Unloading everything implies the same reset a provider change does - whatever was known to be bad is worth
+	// trying again once nothing is loaded - so it goes through the one function that owns that rule.
+	s.SetExecutionProvider()
 
 	opai.CleanRegistry()
 }

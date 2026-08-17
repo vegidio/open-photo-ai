@@ -17,7 +17,7 @@ const divergenceThreshold = 3.0
 type Stockholm struct {
 	name      string
 	operation OpDnStockholm
-	session   *utils.Session
+	*utils.Session
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Stockholm, error) {
@@ -31,7 +31,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	return &Stockholm{
 		name:      denoise.FormatDenoiseName(op.precision),
 		operation: op,
-		session:   session,
+		Session:   session,
 	}, nil
 }
 
@@ -55,7 +55,7 @@ func (m *Stockholm) Run(
 	params map[string]any,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
-	result, err := denoise.RunPipeline(ctx, m.session, img, onProgress, utils.WithDivergenceGuard(divergenceThreshold))
+	result, err := denoise.RunPipeline(ctx, m.Session, img, onProgress, utils.WithDivergenceGuard(divergenceThreshold))
 	if err != nil {
 		return nil, err
 	}
@@ -63,16 +63,6 @@ func (m *Stockholm) Run(
 	// Amplify (or soften) the denoising by extrapolating the residual at the per-run intensity; intensity 1.0 returns
 	// the model output unchanged.
 	return utils.BlendWithIntensity(img, result, utils.IntensityFromParams(params)), nil
-}
-
-// ResidentBytes reports the size of the model files backing this session, which is what the registry
-// budgets against when deciding what can stay loaded.
-func (m *Stockholm) ResidentBytes() int64 {
-	return m.session.Bytes()
-}
-
-func (m *Stockholm) Destroy() {
-	m.session.Destroy()
 }
 
 // endregion

@@ -7,6 +7,7 @@ import (
 
 	"github.com/vegidio/go-sak/o11y"
 	"github.com/vegidio/go-sak/sysinfo"
+	"github.com/vegidio/open-photo-ai/internal"
 )
 
 func ReportSystemInfo(otel *o11y.Telemetry) {
@@ -17,15 +18,19 @@ func ReportSystemInfo(otel *o11y.Telemetry) {
 		info["cpu.cores"] = cpu.Cores
 	}
 
-	if mem, err := sysinfo.GetMemoryInfo(); err == nil {
-		info["memory"] = mem.Total
+	// Through internal rather than sysinfo directly: these two probes shell out (`system_profiler` on macOS, a
+	// PowerShell CIM query each on Windows) and internal memoizes them, so going straight to sysinfo would pay for both
+	// a second time - on the blocking path before the window is created. Reported in bytes, because the raw fields are
+	// two different units and were being emitted into one payload unlabelled.
+	if total := internal.TotalRAMBytes(); total > 0 {
+		info["memory"] = total
 	}
 
-	if gpu, err := sysinfo.GetGPUInfo(); err == nil {
+	if gpu, err := internal.GPUInfo(); err == nil {
 		for index, card := range gpu {
 			key := fmt.Sprintf("gpu.%d.", index+1)
 			info[key+"name"] = card.Name
-			info[key+"memory"] = card.Memory
+			info[key+"memory"] = int64(card.Memory) << 20
 		}
 	}
 

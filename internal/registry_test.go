@@ -899,12 +899,12 @@ func TestInstallAdoptsIncumbent(t *testing.T) {
 	incumbent := &fakeModel{bytes: 10}
 	loser := &fakeModel{bytes: 10}
 
-	first, dup, _ := Registry.install("op", "op", types.ExecutionProviderCPU, incumbent, 10, 0)
+	first, dup, _ := Registry.install("op", "op", types.ExecutionProviderCPU, types.MemoryPoolHost, incumbent, 10, 0)
 	if dup != nil {
 		t.Fatal("the first install should not report a duplicate")
 	}
 
-	second, dup, _ := Registry.install("op", "op", types.ExecutionProviderCPU, loser, 10, 0)
+	second, dup, _ := Registry.install("op", "op", types.ExecutionProviderCPU, types.MemoryPoolHost, loser, 10, 0)
 	if dup == nil {
 		t.Fatal("the second install should have reported the loser as a duplicate")
 	}
@@ -919,4 +919,50 @@ func TestInstallAdoptsIncumbent(t *testing.T) {
 
 	first.Release()
 	second.Release()
+}
+
+// TestInstallTrimsWhenTheModelOutgrewItsEstimate covers the post-install eviction: a model whose real size turns out
+// larger than the manifest estimate pushes its pool over budget once it is charged, and install has to hand the
+// neighbours it displaced back to the caller.
+//
+// The trim slice is the only route out for those entries - they are already removed from the map, so nothing else will
+// ever find them. Losing it destroys nothing and leaks a live ONNX session per over-estimate.
+func TestInstallTrimsWhenTheModelOutgrewItsEstimate(t *testing.T) {
+	withRegistry(t)
+	Registry.SetBudget(types.MemoryPoolHost, 100)
+
+	// An idle neighbour, installed and released so it is eligible for eviction.
+	idle := &fakeModel{bytes: 60}
+	lease, _, trim := Registry.install("idle", "idle", types.ExecutionProviderCPU, types.MemoryPoolHost, idle, 60, 0)
+
+	if len(trim) != 0 {
+		t.Fatalf("the first install fits the budget and should trim nothing, got %d", len(trim))
+	}
+
+	lease.Release()
+
+	// The manifest said this model was free, so nothing was reserved for it; charging its real 60 bytes takes the pool
+	// to 120 against a ceiling of 100.
+	big := &fakeModel{bytes: 60}
+	bigLease, dup, trim := Registry.install("big", "big", types.ExecutionProviderCPU, types.MemoryPoolHost, big, 60, 0)
+
+	if dup != nil {
+		t.Fatal("install reported a duplicate where there was no race")
+	}
+
+	if len(trim) != 1 || trim[0].model != any(idle) {
+		t.Fatalf("install should have trimmed the idle neighbour, got %d entries", len(trim))
+	}
+
+	// The trimmed entry is out of the registry and uncharged, leaving only the model that displaced it.
+	if got := Registry.Len(); got != 1 {
+		t.Errorf("registry holds %d models, want 1", got)
+	}
+
+	if got := Registry.Stats().Host.Resident; got != 60 {
+		t.Errorf("resident host bytes = %d, want 60", got)
+	}
+
+	DestroyEntries(trim)
+	bigLease.Release()
 }

@@ -22,7 +22,7 @@ const (
 type Athens struct {
 	name      string
 	operation OpFrAthens
-	session   *utils.Session
+	*utils.Session
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Athens, error) {
@@ -46,7 +46,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	return &Athens{
 		name:      modelName,
 		operation: operation.(OpFrAthens),
-		session:   session,
+		Session:   session,
 	}, nil
 }
 
@@ -77,22 +77,12 @@ func (m *Athens) Run(
 		return img, nil
 	}
 
-	result, err := facerecovery.RestoreFaces(ctx, m.session, img, faces, tileSize, fidelity, onProgress)
+	result, err := facerecovery.RestoreFaces(ctx, m.Session, img, faces, tileSize, fidelity, onProgress)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to restore faces")
 	}
 
 	return result, nil
-}
-
-// ResidentBytes reports the size of the model files backing this session, which is what the registry
-// budgets against when deciding what can stay loaded.
-func (m *Athens) ResidentBytes() int64 {
-	return m.session.Bytes()
-}
-
-func (m *Athens) Destroy() {
-	m.session.Destroy()
 }
 
 // endregion

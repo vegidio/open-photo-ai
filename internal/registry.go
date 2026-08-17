@@ -9,14 +9,6 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// defaultResidentBytes is what a model that doesn't implement types.Measurable is charged.
-//
-// It is deliberately large - bigger than every model shipped today except the fp32 denoisers - because the failure
-// modes are asymmetric. Over-charging an unmeasurable model makes the budget conservative and costs at most a rebuild;
-// under-charging it (or treating it as free) lets an unbounded amount of memory accumulate outside the accounting,
-// which is the exact problem the budget exists to solve.
-const defaultResidentBytes = 256 << 20
-
 // numPools is the number of types.MemoryPool values, so the per-pool counters can be plain arrays indexed by the pool.
 const numPools = 2
 
@@ -177,21 +169,12 @@ func (r *ModelRegistry) lockedLease(e *entry) *Lease {
 	return &Lease{reg: r, e: e}
 }
 
-// finishBuild releases the waiters on a successful build.
-func (r *ModelRegistry) finishBuild(key string) {
-	r.mu.Lock()
-	b := r.pending[key]
-	delete(r.pending, key)
-	r.mu.Unlock()
-
-	if b != nil {
-		close(b.done)
-	}
-}
-
-// abortBuild releases the waiters on a failed build, handing them the error so they fail the same way instead of each
-// retrying a creation that just proved impossible.
-func (r *ModelRegistry) abortBuild(key string, err error) {
+// resolveBuild releases the waiters on a finished build. err is nil when it succeeded, and otherwise is handed to the
+// waiters so they fail the same way instead of each retrying a creation that just proved impossible.
+//
+// Success and failure share one function because the invariant is the same for both: the leader must always resolve
+// its pending build, or every waiter blocks forever.
+func (r *ModelRegistry) resolveBuild(key string, err error) {
 	r.mu.Lock()
 	b := r.pending[key]
 	delete(r.pending, key)
@@ -216,33 +199,58 @@ func (r *ModelRegistry) abortBuild(key string, err error) {
 // the whole budget has to remain loadable - refusing it would simply break the feature it belongs to.
 func (r *ModelRegistry) makeRoom(p types.MemoryPool, want int64) []*entry {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
-	var victims []*entry
+	victims, stillOver := r.lockedEvictUntilFits(p, want)
+	r.reserved[p] += want
+	resident, budget := r.resident[p], r.budget[p]
 
-	if r.budget[p] > 0 {
-		for r.lockedOverBudget(p, want) {
-			victim := r.lockedOldestIdle(p)
-			if victim == nil {
-				break
-			}
+	r.mu.Unlock()
 
-			r.resident[p] -= victim.bytes
+	if stillOver {
+		Log().Warn("model does not fit the memory budget; admitting it anyway",
+			"pool", p, "want", want, "resident", resident, "budget", budget)
+	}
 
-			if r.lockedStartEvicting(victim) {
-				victims = append(victims, victim)
-			}
+	return victims
+}
+
+// lockedEvictUntilFits evicts idle models from pool p, least-recently-used first, until want more bytes fit under that
+// pool's ceiling, and reports whether the pool is still over budget once there is nothing left to evict.
+//
+// An unbounded pool evicts nothing and is never over. Callers must hold mu, and must destroy the victims after
+// unlocking.
+func (r *ModelRegistry) lockedEvictUntilFits(p types.MemoryPool, want int64) (victims []*entry, stillOver bool) {
+	if r.budget[p] <= 0 {
+		return nil, false
+	}
+
+	for r.lockedOverBudget(p, want) {
+		victim := r.lockedOldestIdle(p)
+		if victim == nil {
+			break
 		}
 
-		if r.lockedOverBudget(p, want) {
-			Log().Warn("model does not fit the memory budget; admitting it anyway",
-				"pool", p, "want", want, "resident", r.resident[p], "budget", r.budget[p])
+		if evicted := r.lockedEvict(victim); evicted != nil {
+			victims = append(victims, evicted)
 		}
 	}
 
-	r.reserved[p] += want
+	return victims, r.lockedOverBudget(p, want)
+}
 
-	return victims
+// lockedEvict uncharges e from its pool and removes it from the registry, returning it when it can be destroyed right
+// now and nil when a live lease has to finish first.
+//
+// Uncharging before the removal is the invariant every eviction path shares, which is why they all go through here.
+// Callers must hold mu, and must destroy what they collect after unlocking.
+func (r *ModelRegistry) lockedEvict(e *entry) *entry {
+	r.resident[e.pool] -= e.bytes
+
+	if r.lockedStartEvicting(e) {
+		return e
+	}
+
+	return nil
 }
 
 // lockedOverBudget reports whether admitting want more bytes would exceed pool p's ceiling. Callers must hold mu.
@@ -290,18 +298,19 @@ func (r *ModelRegistry) releaseReservation(p types.MemoryPool, want int64) {
 func (r *ModelRegistry) install(
 	key, id string,
 	ep types.ExecutionProvider,
+	pool types.MemoryPool,
 	model any,
 	bytes, reserved int64,
 ) (lease *Lease, dup any, trim []*entry) {
-	pool := PoolOf(ep)
-
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	r.reserved[pool] -= reserved
 
 	if incumbent, ok := r.entries[key]; ok {
-		return r.lockedLease(incumbent), model, nil
+		lease = r.lockedLease(incumbent)
+		r.mu.Unlock()
+
+		return lease, model, nil
 	}
 
 	e := &entry{
@@ -320,17 +329,14 @@ func (r *ModelRegistry) install(
 	// The new entry is leased before the trim, so it can never evict itself.
 	lease = r.lockedLease(e)
 
-	for r.budget[pool] > 0 && r.lockedOverBudget(pool, 0) {
-		victim := r.lockedOldestIdle(pool)
-		if victim == nil {
-			break
-		}
+	trim, stillOver := r.lockedEvictUntilFits(pool, 0)
+	resident, budget := r.resident[pool], r.budget[pool]
 
-		r.resident[pool] -= victim.bytes
+	r.mu.Unlock()
 
-		if r.lockedStartEvicting(victim) {
-			trim = append(trim, victim)
-		}
+	if stillOver {
+		Log().Warn("model does not fit the memory budget; admitting it anyway",
+			"pool", pool, "want", bytes, "resident", resident, "budget", budget)
 	}
 
 	return lease, nil, trim
@@ -434,10 +440,8 @@ func (r *ModelRegistry) DrainAll() []*entry {
 	victims := make([]*entry, 0, len(r.entries))
 
 	for _, e := range r.entries {
-		r.resident[e.pool] -= e.bytes
-
-		if r.lockedStartEvicting(e) {
-			victims = append(victims, e)
+		if evicted := r.lockedEvict(e); evicted != nil {
+			victims = append(victims, evicted)
 		}
 	}
 
@@ -535,38 +539,66 @@ func (r *ModelRegistry) stopJanitor() {
 // It also reports models that have been held continuously for a very long time. Nothing in the app does that, so it
 // almost certainly means a lease was never released - which silently shrinks the budget and stops eviction working,
 // and is otherwise invisible.
+//
+// The log lines are collected under mu and emitted after it is released. The library logger writes to a rotating file,
+// so writing one per entry while holding the lock would block every concurrent acquire and release on disk I/O - the
+// thing rule 1 exists to prevent.
 func (r *ModelRegistry) sweepIdle() []*entry {
+	// note is one pending log line: which model, how long it has been that way, and the field that distinguishes the
+	// two cases - refs for a suspected leak, bytes for an eviction.
+	type note struct {
+		id      string
+		elapsed time.Duration
+		refs    int
+		bytes   int64
+	}
+
+	var (
+		victims []*entry
+		evicted []note
+		held    []note
+	)
+
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	if r.idleTTL <= 0 {
+		r.mu.Unlock()
 		return nil
 	}
 
 	now := time.Now()
 
-	var victims []*entry
-
 	for _, e := range r.entries {
+		elapsed := now.Sub(e.lastUsed)
+
 		if e.refs > 0 {
-			if now.Sub(e.lastUsed) > leaseLeakAfter {
-				Log().Debug("model has been held for a long time; a lease may have leaked",
-					"op", e.id, "refs", e.refs, "held_for", now.Sub(e.lastUsed))
+			if elapsed > leaseLeakAfter {
+				held = append(held, note{id: e.id, elapsed: elapsed, refs: e.refs})
 			}
 
 			continue
 		}
 
-		if now.Sub(e.lastUsed) <= r.idleTTL {
+		if elapsed <= r.idleTTL {
 			continue
 		}
 
-		Log().Debug("evicting idle model", "op", e.id, "idle_for", now.Sub(e.lastUsed), "bytes", e.bytes)
-		r.resident[e.pool] -= e.bytes
+		evicted = append(evicted, note{id: e.id, elapsed: elapsed, bytes: e.bytes})
 
-		if r.lockedStartEvicting(e) {
-			victims = append(victims, e)
+		if victim := r.lockedEvict(e); victim != nil {
+			victims = append(victims, victim)
 		}
+	}
+
+	r.mu.Unlock()
+
+	for _, n := range held {
+		Log().Debug("model has been held for a long time; a lease may have leaked",
+			"op", n.id, "refs", n.refs, "held_for", n.elapsed)
+	}
+
+	for _, n := range evicted {
+		Log().Debug("evicting idle model", "op", n.id, "idle_for", n.elapsed, "bytes", n.bytes)
 	}
 
 	return victims

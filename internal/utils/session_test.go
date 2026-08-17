@@ -36,6 +36,11 @@ func TestModelFileBytes(t *testing.T) {
 	// A sibling that merely shares a stem must not be swept in: up_osaka_vae_decoder_fp16 is its own model.
 	write("up_osaka_vae_decoder_fp16.onnx", 700)
 
+	// An extension-less model makes the stem-derived candidate collide with the `.data` one. Only one of them may be
+	// counted, or the blob is charged twice.
+	write("dn_noext_fp32", 9)
+	write("dn_noext_fp32.data", 60)
+
 	// The models directory also holds the TensorRT engine cache; a directory must never be counted.
 	if err := os.Mkdir(filepath.Join(dir, "up_kyoto_4x_fp32.onnx_cache"), 0o755); err != nil {
 		t.Fatalf("failed to create cache dir: %v", err)
@@ -51,6 +56,7 @@ func TestModelFileBytes(t *testing.T) {
 		{"underscore convention is included", "dn_underscore_fp32.onnx", 43},
 		{"stem convention is included", "dn_stem_fp32.onnx", 807},
 		{"unrelated prefix is excluded", "up_osaka_vae_decoder_fp16.onnx", 700},
+		{"extension-less model charges its blob once", "dn_noext_fp32", 69},
 		{"missing model sizes to zero", "does_not_exist.onnx", 0},
 	}
 
@@ -63,15 +69,15 @@ func TestModelFileBytes(t *testing.T) {
 	}
 }
 
-func TestSessionsBytes(t *testing.T) {
+func TestSessionsResidentBytes(t *testing.T) {
 	// A nil session contributes 0 rather than panicking: an upscale pass that failed to load must not take down the
 	// size accounting with it.
-	if got := SessionsBytes(nil); got != 0 {
-		t.Errorf("SessionsBytes(nil) = %d, want 0", got)
+	if got := Sessions(nil).ResidentBytes(); got != 0 {
+		t.Errorf("Sessions(nil).ResidentBytes() = %d, want 0", got)
 	}
 
-	sessions := []*Session{{bytes: 10}, {bytes: 32}, nil}
-	if got := SessionsBytes(sessions); got != 42 {
-		t.Errorf("SessionsBytes() = %d, want 42", got)
+	sessions := Sessions{{bytes: 10}, {bytes: 32}, nil}
+	if got := sessions.ResidentBytes(); got != 42 {
+		t.Errorf("Sessions.ResidentBytes() = %d, want 42", got)
 	}
 }

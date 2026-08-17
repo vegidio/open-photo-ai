@@ -21,7 +21,7 @@ const (
 type Santorini struct {
 	name      string
 	operation OpFrSantorini
-	session   *utils.Session
+	*utils.Session
 }
 
 func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvider, onProgress types.DownloadProgress) (*Santorini, error) {
@@ -45,7 +45,7 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	return &Santorini{
 		name:      modelName,
 		operation: operation.(OpFrSantorini),
-		session:   session,
+		Session:   session,
 	}, nil
 }
 
@@ -76,22 +76,12 @@ func (m *Santorini) Run(
 		return img, nil
 	}
 
-	result, err := facerecovery.RestoreFaces(ctx, m.session, img, faces, tileSize, -1, onProgress)
+	result, err := facerecovery.RestoreFaces(ctx, m.Session, img, faces, tileSize, -1, onProgress)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to restore faces")
 	}
 
 	return result, nil
-}
-
-// ResidentBytes reports the size of the model files backing this session, which is what the registry
-// budgets against when deciding what can stay loaded.
-func (m *Santorini) ResidentBytes() int64 {
-	return m.session.Bytes()
-}
-
-func (m *Santorini) Destroy() {
-	m.session.Destroy()
 }
 
 // endregion

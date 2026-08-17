@@ -206,11 +206,11 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer cleanup()
 
-	// Reported in the header so the face-recovery rows can be trusted: on an image with no faces they would be
-	// benchmarking nothing.
-	faces := countFaces(ctx, input, cfg)
+	// Runs once, here, and is reused by the face-recovery models below. Reported in the header so the face-recovery
+	// rows can be trusted: on an image with no faces they would be benchmarking nothing.
+	cfg.faces = detectFacesOnce(ctx, input, cfg)
 
-	printHeader(cfg, input, faces, selection)
+	printHeader(cfg, input, len(cfg.faces.faces), selection)
 
 	// A live view needs a terminal it owns. --verbose writes the debug log to stderr, which would tear it apart, and
 	// a redirected stdout has nothing to animate.
@@ -277,19 +277,19 @@ func loadInput() (*types.ImageData, func(), error) {
 	return input, cleanup, nil
 }
 
-// countFaces runs a detection pass purely so the header can state how many faces the input has. A failure is not
-// fatal: it only means the header omits the count, and the face-recovery models will report the real error themselves.
-func countFaces(ctx context.Context, input *types.ImageData, cfg config) int {
+// detectFacesOnce runs the sweep's single detection pass, before any model is benchmarked.
+//
+// It happens here rather than inside the face-recovery models because every model boundary drains the registry: a
+// per-model detection would rebuild the detector's session each time. A failure is not fatal - the header simply omits
+// the count, and the face-recovery models surface the real error when their turn comes.
+func detectFacesOnce(ctx context.Context, input *types.ImageData, cfg config) facesResult {
 	faces, err := detectFaces(ctx, input, cfg)
-	if err != nil {
-		return 0
-	}
 
 	// The registry is drained before the first model runs anyway, but doing it here keeps the detection session from
 	// counting towards the first model's memory.
 	opai.CleanRegistry()
 
-	return len(faces)
+	return facesResult{faces: faces, err: err}
 }
 
 // isTerminal reports whether the live view has a terminal to draw on.
