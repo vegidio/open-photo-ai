@@ -8,7 +8,6 @@ import { useEnhancementStore } from '@/stores/enhancements.ts';
 import { EMPTY_CROP } from '@/utils/constants.ts';
 import { cropToken } from '@/utils/crop.ts';
 import { getEnabledFaces, hasFaceRecovery } from '@/utils/face.ts';
-import { withJob } from '@/utils/jobs.ts';
 
 export type ImageData = {
     id: string;
@@ -80,21 +79,19 @@ export const getEnhancedImage = (file: File, ep: ExecutionProvider, ...operation
         async (resolve, reject) => {
             if (!image) {
                 try {
-                    image = await withJob(async () => {
-                        // Face recovery no longer detects faces internally; detect them up front (cached by hash+crop)
-                        // and pass them along so the recovery operations receive them — minus any faces the user
-                        // deselected.
-                        const faces = await getEnabledFaces(file, ep, operations, disabled, crop);
+                    // Face recovery no longer detects faces internally; detect them up front (cached by hash+crop)
+                    // and pass them along so the recovery operations receive them — minus any faces the user
+                    // deselected.
+                    const faces = await getEnabledFaces(file, ep, operations, disabled, crop);
 
-                        p = ProcessImage(
-                            file.Path,
-                            ep,
-                            new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
-                            ...operations,
-                        );
-                        const [base64, width, height] = await p;
-                        return createImageData(file.Hash, base64, width, height);
-                    });
+                    p = ProcessImage(
+                        file.Path,
+                        ep,
+                        new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
+                        ...operations,
+                    );
+                    const [base64, width, height] = await p;
+                    image = await createImageData(file.Hash, base64, width, height);
 
                     imageCache.set(cacheKey, image);
                     resolve(image);

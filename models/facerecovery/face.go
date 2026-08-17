@@ -22,18 +22,32 @@ const (
 	minBlendAlpha = 0.001
 )
 
-func GetDtModel(ctx context.Context, ep types.ExecutionProvider) (types.Model[[]detection.Face], error) {
+// GetDtModel returns the face-detection model together with the lease that keeps it resident.
+//
+// The caller owns the lease and must release it once it is done with the model - deferred immediately after the error
+// check. Holding the model without the lease is a use-after-free waiting to happen, which is why the two are returned
+// together rather than the lease being hidden inside.
+func GetDtModel(
+	ctx context.Context,
+	ep types.ExecutionProvider,
+) (types.Model[[]detection.Face], *internal.Lease, error) {
 	dtOp := newyork.Op(types.PrecisionFp32)
 
-	model, err := internal.GetOrCreateModel(dtOp.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
+	lease, err := internal.AcquireModel(dtOp.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
 		return newyork.New(ctx, dtOp, ep, nil)
 	})
 
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create Face Detection model")
+		return nil, nil, errors.Wrap(err, "failed to create Face Detection model")
 	}
 
-	return model.(types.Model[[]detection.Face]), nil
+	model, ok := lease.Model().(types.Model[[]detection.Face])
+	if !ok {
+		lease.Release()
+		return nil, nil, errors.Errorf("unexpected model type for face detection: %s", dtOp.Id())
+	}
+
+	return model, lease, nil
 }
 
 // alignFace aligns a face image using the provided landmarks and returns the aligned image and the affine

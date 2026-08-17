@@ -27,6 +27,12 @@ func TestModelFileBytes(t *testing.T) {
 	write("up_osaka_fp16.onnx", 10)
 	write("up_osaka_fp16.onnx.data", 5000)
 
+	// The other two external-data conventions: appended to the full name, and replacing the extension.
+	write("dn_underscore_fp32.onnx", 3)
+	write("dn_underscore_fp32.onnx_data", 40)
+	write("dn_stem_fp32.onnx", 7)
+	write("dn_stem_fp32.data", 800)
+
 	// A sibling that merely shares a stem must not be swept in: up_osaka_vae_decoder_fp16 is its own model.
 	write("up_osaka_vae_decoder_fp16.onnx", 700)
 
@@ -42,6 +48,8 @@ func TestModelFileBytes(t *testing.T) {
 	}{
 		{"self-contained model", "up_kyoto_4x_fp32.onnx", 100},
 		{"external data is included", "up_osaka_fp16.onnx", 5010},
+		{"underscore convention is included", "dn_underscore_fp32.onnx", 43},
+		{"stem convention is included", "dn_stem_fp32.onnx", 807},
 		{"unrelated prefix is excluded", "up_osaka_vae_decoder_fp16.onnx", 700},
 		{"missing model sizes to zero", "does_not_exist.onnx", 0},
 	}

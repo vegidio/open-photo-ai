@@ -242,33 +242,33 @@ func reflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 	draw.Draw(padded, image.Rect(left, top, left+width, top+height), img, bounds.Min, draw.Src)
 
 	// Pad left and right edges
-	for y := 0; y < height; y++ {
+	for y := range height {
 		srcY := bounds.Min.Y + y
 		dstY := y + top
 
 		// Left padding
-		for x := 0; x < left; x++ {
+		for x := range left {
 			srcX := bounds.Min.X + reflectIndex(left-x-1, width)
 			padded.Set(x, dstY, img.At(srcX, srcY))
 		}
 
 		// Right padding
-		for x := 0; x < right; x++ {
+		for x := range right {
 			srcX := bounds.Min.X + reflectIndex(width+x, width)
 			padded.Set(width+left+x, dstY, img.At(srcX, srcY))
 		}
 	}
 
 	// Pad top and bottom edges (including corners)
-	for x := 0; x < paddedWidth; x++ {
+	for x := range paddedWidth {
 		// Top padding
-		for y := 0; y < top; y++ {
+		for y := range top {
 			srcY := reflectIndex(top-y-1, height) + top
 			padded.Set(x, y, padded.At(x, srcY))
 		}
 
 		// Bottom padding
-		for y := 0; y < bottom; y++ {
+		for y := range bottom {
 			srcY := reflectIndex(height+y, height) + top
 			padded.Set(x, height+top+y, padded.At(x, srcY))
 		}

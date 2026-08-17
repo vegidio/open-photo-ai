@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
@@ -46,7 +47,7 @@ func SessionsBytes(sessions []*Session) int64 {
 //
 // Every failure it returns - the provider options, the session options and the model load alike - is marked with
 // internal.ErrCreateSession, so callers can tell "this session couldn't be built" apart from the failures around it,
-// such as a model that couldn't be downloaded. That's what lets GetOrCreateModel decide a retry on the CPU is worth
+// such as a model that couldn't be downloaded. That's what lets AcquireModel decide a retry on the CPU is worth
 // attempting.
 func CreateSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*Session, error) {
 	session, err := createSession(modelFile, inputs, outputs, ep)
@@ -108,26 +109,42 @@ func createSession(modelFile string, inputs, outputs []string, ep types.Executio
 // external-data blob stored beside it.
 //
 // ONNX keeps the weights of a model larger than the 2 GB protobuf limit in a separate file, named by a `location`
-// field inside the graph. Reading that field would mean parsing the protobuf, so this globs for siblings sharing the
-// model's full name as a prefix instead, which covers every convention in use (`<model>.onnx.data`,
-// `<model>.onnx_data`). That matters by three orders of magnitude for the diffusion upscaler: `up_osaka_fp16.onnx` is
-// 7.7 MB and `up_osaka_fp16.onnx.data` is 6.8 GB, so charging the budget for the graph alone would make a 7 GB model
-// look free.
+// field inside the graph. Reading that field would mean parsing the protobuf, so this probes the three naming
+// conventions in use instead (`<model>.onnx.data`, `<model>.onnx_data`, `<model>.data`). That matters by three orders
+// of magnitude for the diffusion upscaler: `up_osaka_fp16.onnx` is 7.7 MB and `up_osaka_fp16.onnx.data` is 6.8 GB, so
+// charging the budget for the graph alone would make a 7 GB model look free.
 //
-// The models directory also holds the TensorRT engine cache and the CoreML model cache, but those are named after the
-// compiled kernels rather than the source model, so the prefix match doesn't sweep them in. A file that can't be
-// stat-ed contributes 0: an under-count degrades the budget, whereas failing here would fail the session build.
+// Probing exact names rather than globbing the directory matters for two reasons. The models directory doubles as the
+// TensorRT engine cache and the CoreML model cache, so a glob's cost grows with every compiled kernel - and this runs
+// on every session build, once per scale for the upscalers and twice on the CPU-fallback path. It also keeps a model
+// that merely shares a stem out of the total by construction: `up_osaka_vae_decoder_fp16.onnx` is its own model, not
+// part of `up_osaka_fp16`.
+//
+// A file that can't be stat-ed contributes 0: an under-count degrades the budget, whereas failing here would fail the
+// session build.
 func modelFileBytes(modelPath string) int64 {
-	matches, err := filepath.Glob(modelPath + "*")
-	if err != nil {
-		internal.Log().Warn("failed to size model files", "model_path", modelPath, "err", err)
-		return 0
+	// `<model>.data` drops the `.onnx` extension rather than appending to it, so it is derived from the stem.
+	candidates := []string{
+		modelPath,
+		modelPath + ".data",
+		modelPath + "_data",
+		strings.TrimSuffix(modelPath, filepath.Ext(modelPath)) + ".data",
 	}
 
 	var total int64
-	for _, match := range matches {
-		info, statErr := os.Stat(match)
-		if statErr != nil || info.IsDir() {
+	seen := make(map[string]bool, len(candidates))
+
+	for _, candidate := range candidates {
+		// A model file without an extension makes the stem-derived candidate identical to modelPath itself; counting
+		// it twice would double-charge the graph.
+		if seen[candidate] {
+			continue
+		}
+
+		seen[candidate] = true
+
+		info, err := os.Stat(candidate)
+		if err != nil || info.IsDir() {
 			continue
 		}
 

@@ -7,7 +7,6 @@ import { type File, InferenceParams } from '@/bindings/gui/types';
 import { useCropStore } from '@/stores/crop.ts';
 import { EMPTY_CROP } from '@/utils/constants.ts';
 import { getEnabledFaces } from '@/utils/face.ts';
-import { withJob } from '@/utils/jobs.ts';
 
 export type ExportOptions = {
     file: File;
@@ -55,7 +54,42 @@ export const getExportEligible = (
         if (!operations && autopilot) allEnhancements.set(file, []);
     }
 
-    return allEnhancements;
+    return groupByChain(allEnhancements);
+};
+
+/**
+ * Reorders the queue so files needing the same models are exported back to back.
+ *
+ * The backend keeps models loaded between images, bounded by a memory budget. A batch where every file wants the same
+ * enhancements therefore loads each model once, however long the batch is. A *mixed* batch is the problem: if the set
+ * of models it needs doesn't all fit at once, an image part-way through can evict a model that a later image needs
+ * back, and each of those rebuilds is a full ONNX session construction — the exact cost keeping models resident exists
+ * to avoid. Grouping bounds each model to one load per batch no matter how the budget falls.
+ *
+ * This reorders when files are processed, not what they produce. Progress events are keyed by file hash, so the UI is
+ * unaffected; only the order rows complete in changes.
+ *
+ * Autopilot files carry no operations yet — their models are chosen per file once the suggestions come back — so they
+ * all share the empty signature and stay in their original relative order.
+ */
+const groupByChain = (eligible: Map<File, Operation[]>) => {
+    // Only the operation ids, not their options: options are per-run parameters (intensity, scale) that the model is
+    // handed on each call, so two files differing only there still use the very same loaded model.
+    const chainOf = (operations: Operation[]) => operations.map((operation) => operation.id).join('>');
+
+    // Group rather than sort: files with the same chain keep their original order, and so do the groups themselves,
+    // which keeps the export order predictable instead of reshuffling on an unrelated change.
+    const groups = new Map<string, [File, Operation[]][]>();
+
+    for (const entry of eligible) {
+        const chain = chainOf(entry[1]);
+        const group = groups.get(chain);
+
+        if (group) group.push(entry);
+        else groups.set(chain, [entry]);
+    }
+
+    return new Map<File, Operation[]>(Array.from(groups.values()).flat());
 };
 
 export const getExportInfo = (file: File, format: string, prefix: string, suffix: string, location?: string) => {
@@ -84,23 +118,21 @@ export const exportImage = (opts: ExportOptions) => {
     return new CancellablePromise<void>(
         async (resolve, reject) => {
             try {
-                await withJob(async () => {
-                    // Face recovery no longer detects faces internally; detect them up front (cached by hash+crop, so
-                    // the boxes match the cropped source) and pass them along — minus any faces the user deselected.
-                    const crop = useCropStore.getState().crops.get(file.Path);
-                    const faces = await getEnabledFaces(file, ep, opIds, undefined, crop);
+                // Face recovery no longer detects faces internally; detect them up front (cached by hash+crop, so
+                // the boxes match the cropped source) and pass them along — minus any faces the user deselected.
+                const crop = useCropStore.getState().crops.get(file.Path);
+                const faces = await getEnabledFaces(file, ep, opIds, undefined, crop);
 
-                    p = ExportImage(
-                        file,
-                        filePath,
-                        ep,
-                        overwrite,
-                        imgFormat,
-                        new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
-                        ...opIds,
-                    );
-                    await p;
-                });
+                p = ExportImage(
+                    file,
+                    filePath,
+                    ep,
+                    overwrite,
+                    imgFormat,
+                    new InferenceParams({ Faces: faces, Crop: crop ?? EMPTY_CROP }),
+                    ...opIds,
+                );
+                await p;
 
                 resolve();
             } catch (e) {

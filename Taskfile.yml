@@ -6,6 +6,15 @@ tasks:
     cmds:
       - rm -rf {{.ROOT_DIR}}/build/*
 
+  test:
+    desc: Run the tests of every module in the workspace
+    cmds:
+      # -race is not optional here: the model registry hands out concurrent leases, and the bug class it exists to
+      # prevent (freeing an ONNX session while another goroutine runs inference on it) is a native use-after-free that
+      # kills the process instead of panicking. Without the race detector its tests prove very little.
+      - go test -race ./...
+      - for dir in cmd/cli cmd/gui cmd/perf; do (cd "$dir" && go test -race ./...) || exit 1; done
+
   # Perftest build tasks
   perf:
     desc: Build the performance test binary

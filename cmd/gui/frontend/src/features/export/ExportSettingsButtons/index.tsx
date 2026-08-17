@@ -4,7 +4,7 @@ import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { AnalyticsEvent, track } from '@/analytics';
-import { useExportStore, useJobStore, useSettingsStore } from '@/stores';
+import { useExportStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { getErrorMessage } from '@/utils/errors.ts';
 import { exportImage } from '@/utils/export.ts';
@@ -30,8 +30,6 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const shModel = useSettingsStore((state) => state.shModel);
 
     // JobStore: holds the batch as one job, so the AI processor stays locked for the whole export
-    const beginJob = useJobStore((state) => state.beginJob);
-    const endJob = useJobStore((state) => state.endJob);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | undefined>(undefined);
@@ -109,11 +107,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
         setState('processing');
         track(AnalyticsEvent.ExportStarted, { count: enhancements.size, format });
 
-        // The whole loop counts as one running job on top of the per-file ones, so the "busy" state doesn't flicker
-        // off between two files while the models are still loaded.
-        beginJob();
         const completed = await exportAll();
-        endJob();
 
         setState(completed ? 'completed' : 'idle');
     };

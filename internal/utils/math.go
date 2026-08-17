@@ -36,10 +36,7 @@ func ClampProgress(val float64) float64 {
 // FitToMaxSize returns (newW, newH) such that the longest side equals maxSize and both dimensions are rounded up to the
 // next multiple of 16.
 func FitToMaxSize(w, h, maxSize int) (int, int) {
-	longest := w
-	if h > longest {
-		longest = h
-	}
+	longest := max(h, w)
 	ratio := float64(maxSize) / float64(longest)
 	nw := int(math.Round(float64(w) * ratio))
 	nh := int(math.Round(float64(h) * ratio))

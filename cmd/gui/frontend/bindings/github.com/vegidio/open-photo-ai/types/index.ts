@@ -4,5 +4,8 @@
 export {
     ExecutionProvider,
     ImageFormat,
-    ModelType
+    MemoryPool,
+    ModelMemory,
+    ModelType,
+    PoolMemory
 } from "./models.js";

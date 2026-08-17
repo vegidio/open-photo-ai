@@ -27,7 +27,7 @@ const (
 //
 // Returns false if an error occurs while querying GPU information or no NVIDIA GPU is found.
 func IsCudaSupported() bool {
-	gpus, err := sysinfo.GetGPUInfo()
+	gpus, err := internal.GPUInfo()
 	if err != nil {
 		return false
 	}
@@ -45,7 +45,7 @@ func IsCudaSupported() bool {
 //
 // Returns false if an error occurs while querying GPU information or no NVIDIA GPU is found.
 func IsTensorRtSupported() bool {
-	gpus, err := sysinfo.GetGPUInfo()
+	gpus, err := internal.GPUInfo()
 	if err != nil {
 		return false
 	}

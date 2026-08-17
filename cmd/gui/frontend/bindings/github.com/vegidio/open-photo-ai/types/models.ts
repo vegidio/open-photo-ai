@@ -79,6 +79,67 @@ export enum ImageFormat {
     FormatWebp = 7,
 };
 
+/**
+ * MemoryPool identifies which kind of memory a loaded model occupies.
+ * 
+ * The two are budgeted separately because they are not the same memory. Charging a 7 GB device-resident model against
+ * system RAM would admit it onto a graphics card that cannot hold it, and the failure surfaces as a silent drop to the
+ * CPU - slow inference with no error, which is harder to diagnose than a refusal.
+ */
+export enum MemoryPool {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = 0,
+
+    /**
+     * MemoryPoolDevice is memory on a discrete accelerator: CUDA, TensorRT and DirectML keep model weights in VRAM.
+     */
+    MemoryPoolDevice = 0,
+
+    /**
+     * MemoryPoolHost is system RAM, where CPU inference keeps its weights. CoreML is charged here too: Apple Silicon
+     * shares one physical pool between the CPU and the GPU, so there is no separate device memory to budget.
+     */
+    MemoryPoolHost = 1,
+};
+
+/**
+ * ModelMemory reports what the model registry currently holds.
+ */
+export class ModelMemory {
+    "Device": PoolMemory;
+    "Host": PoolMemory;
+
+    /** Creates a new ModelMemory instance. */
+    constructor($$source: Partial<ModelMemory> = {}) {
+        if (!("Device" in $$source)) {
+            this["Device"] = (new PoolMemory());
+        }
+        if (!("Host" in $$source)) {
+            this["Host"] = (new PoolMemory());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ModelMemory instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ModelMemory {
+        const $$createField0_0 = $$createType0;
+        const $$createField1_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("Device" in $$parsedSource) {
+            $$parsedSource["Device"] = $$createField0_0($$parsedSource["Device"]);
+        }
+        if ("Host" in $$parsedSource) {
+            $$parsedSource["Host"] = $$createField1_0($$parsedSource["Host"]);
+        }
+        return new ModelMemory($$parsedSource as Partial<ModelMemory>);
+    }
+}
+
 export enum ModelType {
     /**
      * The Go zero value for the underlying type of the enum.
@@ -93,3 +154,61 @@ export enum ModelType {
     ModelTypeUpscale = "up",
     ModelTypeSharpen = "sh",
 };
+
+/**
+ * PoolMemory describes one pool's occupancy at a moment in time.
+ */
+export class PoolMemory {
+    /**
+     * Pool is which memory this describes.
+     */
+    "Pool": MemoryPool;
+
+    /**
+     * Resident is the total size of the model files currently loaded into this pool.
+     * 
+     * It is a proxy, not a measurement: real footprint is larger, because arenas, cuDNN workspaces and the CoreML
+     * MLProgram all sit on top of the weights and none of them is queryable through the ONNX bindings. The budgets are
+     * set conservatively for exactly this reason.
+     */
+    "Resident": number;
+
+    /**
+     * Budget is the ceiling Resident is kept under, or 0 when the pool is unbounded.
+     */
+    "Budget": number;
+
+    /**
+     * Models is how many models are loaded in this pool.
+     */
+    "Models": number;
+
+    /** Creates a new PoolMemory instance. */
+    constructor($$source: Partial<PoolMemory> = {}) {
+        if (!("Pool" in $$source)) {
+            this["Pool"] = MemoryPool.$zero;
+        }
+        if (!("Resident" in $$source)) {
+            this["Resident"] = 0;
+        }
+        if (!("Budget" in $$source)) {
+            this["Budget"] = 0;
+        }
+        if (!("Models" in $$source)) {
+            this["Models"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PoolMemory instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PoolMemory {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PoolMemory($$parsedSource as Partial<PoolMemory>);
+    }
+}
+
+// Private type creation functions
+const $$createType0 = PoolMemory.createFrom;

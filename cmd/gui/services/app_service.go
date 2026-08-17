@@ -98,16 +98,36 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	return supportedEPs, nil
 }
 
-// CleanRegistry unloads every model currently held in memory, so the next enhancement rebuilds them - that's how a
-// change to the AI processor takes effect, since the registry is keyed by operation ID only.
+// SetExecutionProvider tells the library the user picked a different AI processor.
 //
-// The call blocks until the inference in flight has finished, so it's safe to make at any time; the frontend doesn't
-// have to wait for anything itself.
+// It does not unload anything. The model registry is keyed by operation *and* provider, so the next enhancement simply
+// misses the cache and builds on the newly chosen one; whatever was loaded for the old provider ages out on its own
+// once nothing is using it. That makes switching safe in the middle of an export - the running job keeps the models it
+// already holds, and the next one picks up the new choice.
+//
+// What it does reset is the two pieces of state that mean "this provider is bad": the library's latch, so the new
+// choice actually gets tried instead of being short-circuited to the CPU, and the one-shot warning, so a downgrade on
+// the new provider is news again.
+func (s *AppService) SetExecutionProvider() {
+	s.fallbackNotified.Store(false)
+
+	opai.ResetProviderFallback()
+}
+
+// CleanRegistry unloads every model currently held in memory.
+//
+// Changing the AI processor no longer needs this - see SetExecutionProvider - so it exists for the case where the user
+// wants the memory back now. It waits for any work still using a model before destroying it, so it is safe to call at
+// any time; the frontend doesn't have to coordinate anything itself.
 func (s *AppService) CleanRegistry() {
-	// The models are about to be rebuilt on the newly chosen processor, so a downgrade to the CPU is news again.
 	s.fallbackNotified.Store(false)
 
 	opai.CleanRegistry()
+}
+
+// ModelMemory reports how much memory the loaded models are holding, for the diagnostics view.
+func (s *AppService) ModelMemory() types.ModelMemory {
+	return opai.ModelMemoryStats()
 }
 
 func (s *AppService) Version() string {

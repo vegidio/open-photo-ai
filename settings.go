@@ -2,10 +2,33 @@ package opai
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/types"
 )
+
+// ModelMemoryStats reports how much memory the loaded models are holding, per pool, along with the ceiling each pool
+// is being kept under.
+//
+// The numbers are the on-disk size of the model files, which is a proxy rather than a measurement: the real footprint
+// is larger, because memory arenas, cuDNN workspaces and the CoreML MLProgram all sit on top of the weights and none
+// of them is queryable through the ONNX bindings. That is why the default budgets leave a wide margin. Useful for a
+// diagnostics screen or a benchmark header; not something an application needs to consult to work correctly.
+func ModelMemoryStats() types.ModelMemory {
+	return internal.Registry.Stats()
+}
+
+// ResetProviderFallback forgets that an execution provider was found to be unusable, so the next model built with it
+// tries it again instead of going straight to the CPU.
+//
+// The library latches that failure to avoid paying a full provider initialization plus a failing session build for
+// every model in a run once a driver has proved broken. The latch should be cleared when the user does something that
+// means "try again" - picking a provider in the settings, typically after installing a driver - which is why it is an
+// explicit call rather than something tied to memory being freed.
+func ResetProviderFallback() {
+	internal.ResetFallback()
+}
 
 // SetFallbackHandler registers a function to be called whenever inference falls back to the CPU because the requested
 // execution provider (CUDA, TensorRT, CoreML, …) failed to create a model. It's meant for surfacing the downgrade to
@@ -41,6 +64,31 @@ func SetImageCacheEnabled(enabled bool) {
 // typically don't call this directly; the bundled binaries wire it up through shared.SetupLogging.
 func SetLogger(l *slog.Logger) {
 	internal.SetLogger(l)
+}
+
+// SetModelBudget caps how much memory the models loaded in one pool may occupy. Passing 0 makes that pool unbounded.
+//
+// Each pool defaults to a fraction of what the machine has - a share of VRAM for the device pool, a share of system
+// RAM less a reserve for the image pipeline for the host pool - computed once during Initialize. Raising a budget lets
+// more models stay resident, which trades memory for not rebuilding sessions; lowering it does the reverse. Lowering
+// it evicts nothing immediately: the new ceiling applies to the next model admitted, so a settings change never stalls
+// work already running.
+//
+// A model larger than the whole budget is still loaded, after everything idle in its pool has been evicted to make
+// room. A budget is a target, not a hard limit that can refuse to run an operation the user asked for.
+func SetModelBudget(pool types.MemoryPool, bytes int64) {
+	internal.Registry.SetBudget(pool, bytes)
+}
+
+// SetModelIdleTTL sets how long a model stays loaded after nothing is using it. Passing 0 disables the idle sweep,
+// leaving the memory budget as the only thing that unloads models.
+//
+// Models are kept resident between operations because building an ONNX session is expensive - full graph optimization,
+// plus the provider's own compilation, which for TensorRT means building an engine. The TTL is what eventually gives
+// that memory back when the user has moved on. It is deliberately longer than any gap within a batch export, so a
+// batch never rebuilds a model it is still working through.
+func SetModelIdleTTL(ttl time.Duration) {
+	internal.Registry.SetIdleTTL(ttl)
 }
 
 // SetSkipModelVerification enables a debug mode where models already present on disk are used as-is.

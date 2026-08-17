@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/fs"
@@ -21,6 +22,10 @@ var destroyOnce sync.Once
 
 const (
 	onnxRuntimeTag = "runtime/1.26.0"
+
+	// shutdownDrainTimeout bounds how long Destroy waits for in-flight inference to finish before giving up on a clean
+	// ONNX teardown. A single large upscale can legitimately run for a while, so it is generous.
+	shutdownDrainTimeout = 30 * time.Second
 )
 
 // Initialize sets up the model runtime by ensuring all required dependencies are available.
@@ -88,6 +93,14 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 		return err
 	}
 
+	// Bound how much stays resident. The defaults are derived from the machine here, once, because the probes behind
+	// them shell out to the OS; an embedder that wants different ceilings calls SetModelBudget afterwards.
+	device, host := internal.DefaultBudgets()
+	internal.Registry.SetBudget(types.MemoryPoolDevice, device)
+	internal.Registry.SetBudget(types.MemoryPoolHost, host)
+	internal.Registry.SetIdleTTL(internal.DefaultIdleTTL)
+	internal.Registry.StartJanitor()
+
 	internal.Log().Info("opai initialized", "app_name", name)
 	return nil
 }
@@ -113,8 +126,17 @@ func Destroy() {
 			internal.ImageCache.Close()
 		}
 
-		CleanRegistry()
-		ort.DestroyEnvironment()
+		// Tearing the ONNX environment down while a session is still running is the same use-after-free that freeing a
+		// model would be, and at shutdown there is no one left to report it. So the environment comes down only once
+		// every model is provably gone; if some work refuses to finish, leaking it is the right trade - the process is
+		// exiting anyway, and the OS reclaims everything a moment later.
+		if internal.Registry.Close(shutdownDrainTimeout) {
+			ort.DestroyEnvironment()
+			return
+		}
+
+		internal.Log().Error("timed out waiting for models to be released; skipping ONNX teardown to avoid a crash",
+			"timeout", shutdownDrainTimeout)
 	})
 }
 

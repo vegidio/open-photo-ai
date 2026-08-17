@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Dialog, Divider } from '@mui/material';
-import { CleanRegistry } from '@/bindings/gui/services/appservice.ts';
+import { SetExecutionProvider } from '@/bindings/gui/services/appservice.ts';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { SettingsButtons } from '@/features/settings/SettingsButtons';
 import { SettingsList, type SettingsListHandle } from '@/features/settings/SettingsList';
@@ -29,13 +29,14 @@ export const Settings = ({ section: _section, open, onClose }: SettingsProps) =>
     const onSave = () => {
         onClose();
 
-        // Cleaning the registry destroys the loaded models, which is only needed when the processor changed - the
-        // registry is keyed by operation ID, and the other settings (the model of each enhancement) already produce a
-        // different ID. The backend waits for any inference in flight before destroying anything, so this is safe to
-        // call at any time.
+        // Only the processor needs telling: the other settings (the model of each enhancement) already produce a
+        // different operation ID, so they miss the model cache on their own.
         if (useSettingsStore.getState().executionProvider === initialEp.current) return;
 
-        void CleanRegistry();
+        // Nothing is unloaded here. The backend keys loaded models by operation *and* processor, so the next
+        // enhancement simply builds on the new one and whatever the old processor held ages out by itself. That means
+        // this is safe mid-export: the running job keeps its models, and the next one picks up the change.
+        void SetExecutionProvider();
     };
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: N/A

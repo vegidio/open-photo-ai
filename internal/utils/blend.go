@@ -47,11 +47,11 @@ func BlendWithIntensity(original, modelOutput image.Image, intensity float32) im
 	atOrigin := original.Bounds().Min == image.Point{} && modelOutput.Bounds().Min == image.Point{}
 
 	if oFast && mFast && atOrigin {
-		for y := 0; y < height; y++ {
+		for y := range height {
 			oRow := y * oStride
 			mRow := y * mStride
 			dst := y * result.Stride
-			for x := 0; x < width; x++ {
+			for x := range width {
 				origR, origG, origB, origA := Sample16(oPix, oRow+x*4, oIsNRGBA)
 				modelR, modelG, modelB, _ := Sample16(mPix, mRow+x*4, mIsNRGBA)
 
@@ -73,8 +73,8 @@ func BlendWithIntensity(original, modelOutput image.Image, intensity float32) im
 		return result
 	}
 
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := range height {
+		for x := range width {
 			origR, origG, origB, origA := original.At(x, y).RGBA()
 			modelR, modelG, modelB, _ := modelOutput.At(x, y).RGBA()
 
@@ -130,7 +130,7 @@ func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlap int, b
 	srcPix, srcStride, srcFast := RgbPixBuffer(src)
 	_, srcIsNRGBA := src.(*image.NRGBA)
 
-	for dy := 0; dy < maxY; dy++ {
+	for dy := range maxY {
 		dstY := y + dy
 		srcY := srcBounds.Min.Y + dy
 
@@ -149,7 +149,7 @@ func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlap int, b
 
 		dstRow := dst.PixOffset(x, dstY)
 
-		for dx := 0; dx < maxX; dx++ {
+		for dx := range maxX {
 			var alpha float64
 			if dx < rowBlendStart {
 				alpha = calculateBlendAlpha(dx, dy, overlap, overlapFloat, topAlpha, blendLeft, blendTop)

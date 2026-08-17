@@ -9,6 +9,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/types"
 	"github.com/vegidio/open-photo-ai/utils"
 )
@@ -104,8 +105,28 @@ func printHeader(cfg config, input *types.ImageData, faces int, selection []entr
 	}
 	line("cache", cacheNote)
 
+	line("budget", budgetSummary())
 	line("models", fmt.Sprintf("%d selected", len(selection)))
 	outln()
+}
+
+// budgetSummary reports the memory ceilings the model registry is enforcing on this machine.
+//
+// It belongs in the header because the ceilings are derived from the hardware, so two machines can produce different
+// cold-start numbers for the same model without anything else differing. A benchmark that doesn't say which budget it
+// ran under can't explain that.
+func budgetSummary() string {
+	stats := opai.ModelMemoryStats()
+
+	return fmt.Sprintf("device %s | host %s", poolBudget(stats.Device), poolBudget(stats.Host))
+}
+
+func poolBudget(pool types.PoolMemory) string {
+	if pool.Budget == 0 {
+		return "unbounded"
+	}
+
+	return fmt.Sprintf("%.1f GiB", float64(pool.Budget)/(1<<30))
 }
 
 // probeSummary reports what the library can tell us about the machine. DirectML and OpenVINO have no probe, so they

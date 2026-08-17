@@ -54,10 +54,11 @@ func Process(
 ) (*types.ImageData, error) {
 	var err error
 
-	// Held for the whole loop, not per operation, so the registry can't be drained between two operations of the same
-	// image. See internal.InferenceMu.
-	internal.InferenceMu.RLock()
-	defer internal.InferenceMu.RUnlock()
+	// Every model this chain touches is pinned until the whole chain finishes, not just until its own operation
+	// returns: releasing per operation would let a concurrent admission evict operation 1's model while operation 2 is
+	// still running, and the rebuild would be charged to this call.
+	leases := &leaseSet{}
+	defer leases.releaseAll()
 
 	start := time.Now()
 	internal.Log().Info("processing image", "op_count", len(operations), "hash", input.Hash)
@@ -68,20 +69,27 @@ func Process(
 	// Read once per call rather than per operation, so a concurrent SetImageCacheEnabled can't have this loop read
 	// from the cache and then decline to write back to it.
 	useCache := internal.ImageCacheEnabled()
+	if !useCache {
+		internal.Log().Debug("image cache disabled for this call")
+	}
 
 	for i, op := range operations {
-		if !useCache {
-			internal.Log().Debug("cache disabled, running inference", "op", op.Id(), "index", i)
-		} else if cachedImg, err := internal.ImageCache.GetImage(ctx, input.Hash, operations[:i+1]...); err == nil {
-			// Check first if there's a cached image for this operation
-			internal.Log().Debug("cache hit", "op", op.Id(), "index", i)
-			output = cachedImg
-			continue
-		} else {
+		// The cache key is the input image plus every operation applied so far, so the same operation lands in a
+		// different slot depending on what preceded it.
+		applied := operations[:i+1]
+
+		if useCache {
+			if cachedImg, err := internal.ImageCache.GetImage(ctx, input.Hash, applied...); err == nil {
+				internal.Log().Debug("cache hit", "op", op.Id(), "index", i)
+				output = cachedImg
+
+				continue
+			}
+
 			internal.Log().Debug("cache miss, running inference", "op", op.Id(), "index", i)
 		}
 
-		output, err = runInference(ctx, output, ep, onProgress, op)
+		output, err = runInference(ctx, leases, output, ep, onProgress, op)
 		if err != nil {
 			return nil, errors.Wrap(err, "error running inference")
 		}
@@ -90,7 +98,7 @@ func Process(
 			continue
 		}
 
-		if err = internal.ImageCache.SetImage(ctx, output, input.Hash, operations[:i+1]...); err != nil {
+		if err = internal.ImageCache.SetImage(ctx, output, input.Hash, applied...); err != nil {
 			return nil, errors.Wrap(err, "error caching image")
 		}
 	}
@@ -134,11 +142,7 @@ func Execute[T any](
 	// nil value for type T
 	var genericNil T
 
-	// Keeps the model alive from creation until Run returns. See internal.InferenceMu.
-	internal.InferenceMu.RLock()
-	defer internal.InferenceMu.RUnlock()
-
-	model, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
+	lease, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
 		if onProgress != nil {
 			onProgress("dl", percent)
 		}
@@ -148,7 +152,11 @@ func Execute[T any](
 		return genericNil, errors.Wrap(err, "error selecting model")
 	}
 
-	dataModel, ok := model.(types.Model[T])
+	// Keeps the model alive from here until Run returns. Deferred before the type assertion below, which has its own
+	// early return.
+	defer lease.Release()
+
+	dataModel, ok := lease.Model().(types.Model[T])
 	if !ok {
 		internal.Log().Warn("operation type not supported", "op", operation.Id())
 		return genericNil, errors.Errorf("operation type not supported: %s", operation.Id())
@@ -160,44 +168,77 @@ func Execute[T any](
 	return result, err
 }
 
-// CleanRegistry releases all resources held by registered models. It iterates through all models in the registry and
-// calls their Destroy method to clean up memory and other resources.
-//
-// This function should be called when the application is shutting down or when all model instances are no longer needed
-// to prevent resource leaks. It also forgets which execution provider was found to be unusable, so the next model
-// creation gives the requested one another chance - which is what makes cleaning the registry the way to apply a change
-// of execution provider.
-//
-// Destroying a model releases its underlying ONNX session, and freeing one while another goroutine is running inference
-// on it is a use-after-free in native code that terminates the process (see
-// https://github.com/vegidio/open-photo-ai/issues/34). This function therefore blocks until the inference in flight has
-// finished; callers don't have to coordinate anything themselves.
-func CleanRegistry() {
-	internal.InferenceMu.Lock()
-	defer internal.InferenceMu.Unlock()
+// cleanRegistryTimeout bounds how long CleanRegistry waits for models that are still in use. Reaching it means a run
+// has been in flight for half a minute, which is possible for a large upscale, so the wait is generous.
+const cleanRegistryTimeout = 30 * time.Second
 
+// CleanRegistry unloads every model currently held in memory, destroying the ONNX session behind each one. It also
+// forgets which execution provider was found to be unusable, so the next model creation gives the requested one
+// another chance.
+//
+// Models that are still in use are removed from the registry immediately but destroyed only once the work using them
+// finishes - freeing a session under a live inference is a use-after-free in native code that terminates the process
+// (see https://github.com/vegidio/open-photo-ai/issues/34). This function waits for that to happen, so when it returns
+// the memory really has been released.
+//
+// The waiting is load-bearing beyond tidiness: cmd/perf drains between benchmark runs precisely so the next run pays
+// full session construction, and a drain that returned before the sessions were gone would silently understate every
+// cold-start number the tool reports.
+//
+// Unlike the process-wide lock this used to take, waiting here only blocks on the models being torn down. Inference
+// that doesn't touch them runs straight through.
+func CleanRegistry() {
 	internal.ResetFallback()
 
-	drained := internal.Registry.Drain()
-	internal.Log().Debug("cleaning model registry", "count", len(drained))
+	drained := internal.Registry.DrainAll()
+	internal.Log().Debug("cleaning model registry", "destroyed_now", len(drained))
 
-	for _, model := range drained {
-		if destroyable, ok := model.(types.Destroyable); ok {
-			destroyable.Destroy()
-		}
+	internal.DestroyEntries(drained)
+
+	if !internal.Registry.WaitDrained(cleanRegistryTimeout) {
+		internal.Log().Warn("timed out waiting for in-use models to be released; they are destroyed when their work finishes",
+			"timeout", cleanRegistryTimeout)
 	}
 }
 
 // region - Private functions
 
+// leaseSet collects the model leases taken during one Process call so they can all be released together when the
+// operation chain finishes.
+//
+// It is not safe for concurrent use, and does not need to be: a Process call runs its operations sequentially on one
+// goroutine. An operation repeated in the same chain takes a second lease on the same model, which is correct - the
+// refcount goes up twice and comes back down twice.
+type leaseSet struct {
+	leases []*internal.Lease
+}
+
+func (s *leaseSet) add(lease *internal.Lease) {
+	s.leases = append(s.leases, lease)
+}
+
+func (s *leaseSet) releaseAll() {
+	for _, lease := range s.leases {
+		lease.Release()
+	}
+
+	s.leases = nil
+}
+
+// runInference runs one operation of a Process chain.
+//
+// The lease it takes is handed to leases rather than released here: the models of earlier operations must stay
+// resident until the whole chain finishes, or a concurrent admission could evict operation 1's model while operation 2
+// is still running.
 func runInference(
 	ctx context.Context,
+	leases *leaseSet,
 	img image.Image,
 	ep types.ExecutionProvider,
 	onProgress types.InferenceProgress,
 	operation types.Operation,
 ) (image.Image, error) {
-	model, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
+	lease, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
 		if onProgress != nil {
 			onProgress("dl", percent)
 		}
@@ -207,7 +248,9 @@ func runInference(
 		return nil, errors.Wrap(err, "error selecting model")
 	}
 
-	imageModel, ok := model.(types.Model[image.Image])
+	leases.add(lease)
+
+	imageModel, ok := lease.Model().(types.Model[image.Image])
 	if !ok {
 		internal.Log().Warn("operation type not supported", "op", operation.Id())
 		return nil, errors.Errorf("operation type not supported: %s", operation.Id())
@@ -234,16 +277,18 @@ func logModelRun(operation types.Operation, start time.Time) {
 	internal.Log().Debug("model run complete", "op", operation.Id(), "duration", time.Since(start))
 }
 
-// selectModel returns the model that implements the given operation, building it on first use. The registry lookup and
-// the fallback to the CPU live in internal.GetOrCreateModel, shared with the face detection used by
+// selectModel returns a lease on the model that implements the given operation, building it on first use. The registry
+// lookup and the fallback to the CPU live in internal.AcquireModel, shared with the face detection used by
 // SuggestEnhancements; all this adds is the switch that knows which model an operation maps to.
+//
+// The caller owns the returned lease and must release it.
 func selectModel(
 	ctx context.Context,
 	operation types.Operation,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
-) (any, error) {
-	return internal.GetOrCreateModel(operation.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
+) (*internal.Lease, error) {
+	return internal.AcquireModel(operation.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
 		return newModel(ctx, operation, ep, onProgress)
 	})
 }

@@ -19,15 +19,11 @@ import (
 func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.ModelType {
 	enhancementTypes := make([]types.ModelType, 0)
 
-	// The face-detection path runs a model out of the same registry CleanRegistry drains. See internal.InferenceMu.
-	internal.InferenceMu.RLock()
-	defer internal.InferenceMu.RUnlock()
-
 	if shouldFaceRecovery(ctx, input) {
 		enhancementTypes = append(enhancementTypes, types.ModelTypeFaceRecovery)
 	}
 
-	// The light and colour heuristics both need per-pixel statistics over the whole image, so they share one scan
+	// The light and color heuristics both need per-pixel statistics over the whole image, so they share one scan
 	// rather than walking every pixel twice.
 	stats := scanImage(input.Pixels)
 
@@ -50,11 +46,14 @@ func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.Mo
 // region - Private functions
 
 func shouldFaceRecovery(ctx context.Context, input *types.ImageData) bool {
-	model, err := facerecovery.GetDtModel(ctx, types.ExecutionProviderAuto)
+	model, lease, err := facerecovery.GetDtModel(ctx, types.ExecutionProviderAuto)
 	if err != nil {
 		internal.Log().Warn("face detection model unavailable; skipping face-recovery suggestion", "err", err)
 		return false
 	}
+
+	// Keeps the detection model alive for the extraction below.
+	defer lease.Release()
 
 	faces, err := facerecovery.ExtractFaces(ctx, model, input.Pixels, nil)
 	if err != nil {
@@ -145,10 +144,10 @@ func scanImage(img image.Image) imageStats {
 	if pix, stride, ok := utils.RgbPixBuffer(img); ok {
 		_, isNRGBA := img.(*image.NRGBA)
 
-		for y := 0; y < height; y++ {
+		for y := range height {
 			row := y * stride // Pix/Stride are already relative to Bounds().Min
 
-			for x := 0; x < width; x++ {
+			for x := range width {
 				r, g, b, _ := utils.Sample16(pix, row+x*4, isNRGBA)
 				accumulate(r, g, b)
 			}

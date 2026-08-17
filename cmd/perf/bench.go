@@ -113,8 +113,8 @@ func benchmark(
 
 	// A fresh registry per model: every resident session is destroyed, so this model's first run really is a cold
 	// start, GPU memory doesn't accumulate over a 14-model sweep, and the latched "this provider failed" flag is
-	// cleared so a downgrade is attributed to the model that hit it. CleanRegistry takes the write side of
-	// internal.InferenceMu, so it blocks until any in-flight inference has finished.
+	// cleared so a downgrade is attributed to the model that hit it. CleanRegistry waits for the models it removed to
+	// actually be destroyed, which is what stops the "cold" run below from quietly reusing a still-resident session.
 	//
 	// The recorder must be reset at this exact point. Reset it earlier and the flag the library latched is still set,
 	// so no downgrade is reported; don't reset it at all and the first downgrade is reported against every model that

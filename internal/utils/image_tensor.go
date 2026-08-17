@@ -28,11 +28,11 @@ func ImageToCHW(img image.Image, useOffset, standardize bool) []float32 {
 	if pix, stride, ok := RgbPixBuffer(img); ok && (useOffset || atOrigin) {
 		_, isNRGBA := img.(*image.NRGBA)
 
-		for y := 0; y < height; y++ {
+		for y := range height {
 			row := y * stride // bounds.Min already subtracted: Pix/Stride are relative to Min
 			dst := y * width
 
-			for x := 0; x < width; x++ {
+			for x := range width {
 				// Reconstruct the exact 16-bit values color.RGBA/NRGBA.RGBA() returns.
 				r16, g16, b16, _ := Sample16(pix, row+x*4, isNRGBA)
 				writeCHW(tensor, dst, gBase, bBase, r16, g16, b16, standardize)
@@ -44,10 +44,10 @@ func ImageToCHW(img image.Image, useOffset, standardize bool) []float32 {
 	}
 
 	// Generic fallback for any other image.Image implementation.
-	for y := 0; y < height; y++ {
+	for y := range height {
 		dst := y * width
 
-		for x := 0; x < width; x++ {
+		for x := range width {
 			var r, g, b uint32
 
 			if useOffset {
@@ -74,11 +74,11 @@ func CHWToImage(data []float32, width, height int, standardize bool) image.Image
 	plane := height * width
 	gBase, bBase := plane, 2*plane
 
-	for y := 0; y < height; y++ {
+	for y := range height {
 		dst := y * img.Stride
 		base := y * width
 
-		for x := 0; x < width; x++ {
+		for x := range width {
 			idx := base + x
 			var r, g, b float32
 

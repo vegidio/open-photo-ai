@@ -5,7 +5,6 @@ import { DetectFaces } from '@/bindings/gui/services/faceservice.ts';
 import { useEnhancementStore } from '@/stores/enhancements.ts';
 import { EMPTY_CROP } from '@/utils/constants.ts';
 import { cropToken } from '@/utils/crop.ts';
-import { withJob } from '@/utils/jobs.ts';
 
 const facesCache = new Map<string, Face[]>();
 
@@ -27,7 +26,7 @@ export const detectFaces = async (file: File, ep: ExecutionProvider, crop?: Crop
     let faces = facesCache.get(key);
 
     if (!faces) {
-        faces = await withJob(() => DetectFaces(file.Path, ep, crop ?? EMPTY_CROP));
+        faces = await DetectFaces(file.Path, ep, crop ?? EMPTY_CROP);
         facesCache.set(key, faces);
     }
 

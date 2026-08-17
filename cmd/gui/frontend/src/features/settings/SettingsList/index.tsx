@@ -8,7 +8,7 @@ import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { SettingsItemButton } from '@/features/settings/SettingsItemButton';
 import { SettingsItemSelect } from '@/features/settings/SettingsItemSelect';
 import { SettingsItemSwitch } from '@/features/settings/SettingsItemSwitch';
-import { selectIsBusy, useJobStore, useSettingsStore } from '@/stores';
+import { useSettingsStore } from '@/stores';
 
 export type SettingsListHandle = {
     scrollToSection: (itemId: string) => void;
@@ -175,15 +175,10 @@ const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
     const executionProvider = useSettingsStore((state) => state.executionProvider);
     const setExecutionProvider = useSettingsStore((state) => state.setExecutionProvider);
 
-    // Switching processors only takes effect by unloading every loaded model, so the option is locked while any
-    // enhancement, export or face detection is still using them.
-    const isBusy = useJobStore(selectIsBusy);
-
+    // No lock while work is running: loaded models are keyed by processor as well as operation, so switching is an
+    // ordinary cache miss. Work already in flight keeps the models it holds and finishes on the old processor; the
+    // next run picks up the new one.
     const description = useMemo(() => {
-        if (isBusy) {
-            return "The AI processor can't be changed while an image is being enhanced or exported. Wait for it to finish and try again.";
-        }
-
         const base = 'Select the AI processor that will orchestrate the models.';
 
         switch (executionProvider) {
@@ -202,7 +197,7 @@ const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
             default:
                 return base;
         }
-    }, [executionProvider, isBusy]);
+    }, [executionProvider]);
 
     return (
         <SettingsItemSelect
@@ -211,7 +206,6 @@ const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
             description={description}
             items={processorSelectItems}
             selected={executionProvider}
-            disabled={isBusy}
             onSelect={(value) => {
                 setExecutionProvider(value as ExecutionProvider);
                 track(AnalyticsEvent.ExecutionProviderChanged, { provider: value });
