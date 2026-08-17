@@ -9,14 +9,7 @@ import { Create as $Create } from "@wailsio/runtime";
  * Face represents a detected face with its properties
  */
 export class Face {
-    /**
-     * Rectangle for face bounds
-     */
     "BoundingBox": RectF;
-
-    /**
-     * 5 facial landmark points
-     */
     "Landmarks": PointF[];
     "Confidence": number;
 

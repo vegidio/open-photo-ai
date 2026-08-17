@@ -77,7 +77,18 @@ func InitializeNvidiaLib(
 		libTag, libName, runtime.GOOS, runtime.GOARCH)
 	destination := filepath.Join("libs", libName)
 
-	if err := utils.PrepareDependency(ctx, url, destination, fileCheck, onProgress); err != nil {
+	// Drop a library left over from an older tag. Without this it would be kept forever: the download's only staleness
+	// check is that the sentinel LICENSE file exists, so an outdated tree looks current - and an archive extracted over
+	// it would leave the previous version's shared objects behind for dlopen to find.
+	wiped, err := utils.CleanVersionedCache(destination, libTag)
+	if err != nil {
+		return errors.Wrapf(err, "failed to clean the %s library cache", libName)
+	}
+	if wiped {
+		internal.Log().Info("library cache invalidated", "lib", libName, "lib_tag", libTag)
+	}
+
+	if err = utils.PrepareDependency(ctx, url, destination, fileCheck, onProgress); err != nil {
 		return errors.Wrap(err, "failed to prepare NVIDIA library")
 	}
 

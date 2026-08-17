@@ -3,10 +3,8 @@ package opai
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -132,33 +130,15 @@ func Destroy() {
 // region - Private functions
 
 func cleanModelCache() error {
-	modelsDir, err := fs.MkUserConfigDir(internal.AppName, "models")
+	wiped, err := utils.CleanVersionedCache("models", onnxRuntimeTag)
 	if err != nil {
-		return errors.Wrap(err, "failed to resolve models directory")
+		return err
 	}
 
-	versionPath := filepath.Join(modelsDir, ".version")
-
-	current, readErr := os.ReadFile(versionPath)
-	if readErr == nil && strings.TrimSpace(string(current)) == onnxRuntimeTag {
-		return nil
+	if wiped {
+		internal.Log().Info("model cache invalidated", "onnx_tag", onnxRuntimeTag)
 	}
 
-	entries, err := os.ReadDir(modelsDir)
-	if err != nil {
-		return errors.Wrap(err, "failed to read models directory")
-	}
-	for _, e := range entries {
-		if err = os.RemoveAll(filepath.Join(modelsDir, e.Name())); err != nil {
-			return errors.Wrapf(err, "failed to remove %s from model cache", e.Name())
-		}
-	}
-
-	if err = os.WriteFile(versionPath, []byte(onnxRuntimeTag), 0o644); err != nil {
-		return errors.Wrap(err, "failed to write model cache version file")
-	}
-
-	internal.Log().Info("model cache invalidated", "onnx_tag", onnxRuntimeTag)
 	return nil
 }
 

@@ -66,9 +66,6 @@ export enum ImageFormat {
      */
     $zero = 0,
 
-    /**
-     * Constants for supported image formats.
-     */
     FormatAvif = 0,
     FormatBmp = 1,
     FormatGif = 2,

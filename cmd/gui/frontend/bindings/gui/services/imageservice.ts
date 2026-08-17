@@ -13,38 +13,20 @@ import * as types$1 from "../../github.com/vegidio/open-photo-ai/types/models.js
 import * as types$0 from "../types/models.js";
 
 /**
- * ExportImage runs inference operations on an image and saves the result to disk.
+ * ExportImage runs the operations named by opIds and writes the result to outputPath at full quality. Unless
+ * overwrite is set, an existing file is left alone and a "_N" suffix is added instead (see getOutputPath).
  * 
- * # Parameters:
- *   - inputPath: The path to the image file to process.
- *   - outputPath: The path to the output file to save the processed image.
- *   - format: The image format to use when saving the processed imag.
- *   - opIds: Variable number of operation IDs specifying the inference operations to apply to the image.
- *     Each operation ID encodes the model name, parameters, and precision.
- * 
- * # Returns:
- *   - error: An error if the inference fails, the image cannot be processed, or the file cannot be saved.
+ * Progress is reported through EventAppExport rather than the return value, keyed by file.Hash.
  */
 export function ExportImage(file: types$0.File, outputPath: string, ep: types$1.ExecutionProvider, overwrite: boolean, format: types$1.ImageFormat, params: types$0.InferenceParams, ...opIds: string[]): $CancellablePromise<void> {
     return $Call.ByID(1308095068, file, outputPath, ep, overwrite, format, params, opIds);
 }
 
 /**
- * GetImage loads an image from the specified file path and optionally resizes it.
+ * GetImage loads an image and returns it JPEG-encoded, together with its width and height.
  * 
- * # Parameters:
- *   - filePath: The path to the image file to load
- *   - size: The target size for the longest dimension of the image. If size is 0, the image is returned at its original
- *     dimensions. If size > 0, the image is resized proportionally so that its longest dimension (width or height)
- *     equals the specified size.
- *   - crop: The flip/rotate/crop to apply to the source image. It is only applied when size == 0 (the full-resolution
- *     preview); a zero CropInfo is a no-op.
- * 
- * # Returns:
- *   - []byte: The image data encoded as PNG bytes (lossless)
- *   - int: The width of the image
- *   - int: The height of the image
- *   - error: An error if the image cannot be loaded, processed, or encoded
+ * size caps the longest dimension, resizing proportionally; 0 returns the original dimensions. crop is only applied
+ * when size == 0 (the full-resolution preview), since the thumbnails are never cropped.
  */
 export function GetImage(filePath: string, size: number, crop: types$0.CropInfo): $CancellablePromise<[string, number, number]> {
     return $Call.ByID(2406933080, filePath, size, crop).then(($result: any) => {
@@ -54,18 +36,8 @@ export function GetImage(filePath: string, size: number, crop: types$0.CropInfo)
 }
 
 /**
- * ProcessImage runs inference operations on an image and returns the processed result.
- * 
- * # Parameters:
- *   - filePath: The path to the image file to process.
- *   - opIds: Variable number of operation IDs specifying the inference operations to apply to the image.
- *     Each operation ID encodes the model name, parameters, and precision.
- * 
- * # Returns:
- *   - []byte: The processed image data encoded as JPEG bytes for presentation purposes.
- *   - int: The width of the processed image.
- *   - int: The height of the processed image.
- *   - error: An error if the inference fails or the image cannot be processed.
+ * ProcessImage runs the operations named by opIds (see utils.IdsToOperations for the ID format) and returns the
+ * result JPEG-encoded for preview, together with its width and height.
  */
 export function ProcessImage(filePath: string, ep: types$1.ExecutionProvider, params: types$0.InferenceParams, ...opIds: string[]): $CancellablePromise<[string, number, number]> {
     return $Call.ByID(3391347795, filePath, ep, params, opIds).then(($result: any) => {
@@ -75,14 +47,7 @@ export function ProcessImage(filePath: string, ep: types$1.ExecutionProvider, pa
 }
 
 /**
- * SuggestEnhancements analyzes an image and returns suggestions for enhancement operations.
- * 
- * # Parameters:
- *   - filePath: The path to the image file to analyze
- * 
- * # Returns:
- *   - []types.ModelType: A list of suggested enhancement types to apply to the image.
- *   - error: An error if the image cannot be loaded.
+ * SuggestEnhancements analyzes an image and returns the enhancement types worth applying to it.
  */
 export function SuggestEnhancements(filePath: string): $CancellablePromise<types$1.ModelType[]> {
     return $Call.ByID(808798930, filePath).then(($result: any) => {

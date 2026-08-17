@@ -23,15 +23,6 @@ import * as types$1 from "../types/models.js";
  * resulting bounding boxes live in the cropped image's coordinate space — matching the cropped source that face
  * recovery and the preview operate on. Results are deterministic for a given image+crop, so the frontend caches them
  * by file hash plus a crop token.
- * 
- * # Parameters:
- *   - filePath: The path to the image file to analyze.
- *   - ep: The execution provider (CPU, CUDA, etc.) to use for inference.
- *   - crop: The flip/rotate/crop to apply before detection (zero value = no crop).
- * 
- * # Returns:
- *   - []detection.Face: The faces detected in the image (empty when none are found).
- *   - error: An error if the image cannot be loaded or detection fails.
  */
 export function DetectFaces(filePath: string, ep: types$0.ExecutionProvider, crop: types$1.CropInfo): $CancellablePromise<detection$0.Face[]> {
     return $Call.ByID(347646086, filePath, ep, crop).then(($result: any) => {
