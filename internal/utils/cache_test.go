@@ -8,41 +8,70 @@ import (
 	"github.com/vegidio/open-photo-ai/internal"
 )
 
-// TestCleanVersionedCache covers the invalidation rule both the model cache and the NVIDIA library caches rely on: a
-// stale stamp must clear the directory - files and subdirectories alike - while a matching one leaves it untouched.
-func TestCleanVersionedCache(t *testing.T) {
-	// setup redirects os.UserConfigDir at a fresh temp directory - HOME covers darwin, XDG_CONFIG_HOME linux and
-	// AppData windows - and returns the cache directory CleanVersionedCache will resolve.
-	setup := func(t *testing.T) string {
-		t.Helper()
+// setupConfigRoot redirects os.UserConfigDir at a fresh temp directory - HOME covers darwin, XDG_CONFIG_HOME linux and
+// AppData windows - and returns the application's directory inside it.
+func setupConfigRoot(t *testing.T) string {
+	t.Helper()
 
-		root := t.TempDir()
-		t.Setenv("HOME", root)
-		t.Setenv("XDG_CONFIG_HOME", root)
-		t.Setenv("AppData", root)
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", root)
+	t.Setenv("AppData", root)
 
-		internal.AppName = "opai-test"
+	internal.AppName = "opai-test"
 
-		dir, err := os.UserConfigDir()
-		if err != nil {
-			t.Fatalf("failed to resolve the user config directory: %v", err)
-		}
-
-		return filepath.Join(dir, internal.AppName, "libs", "cudnn")
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("failed to resolve the user config directory: %v", err)
 	}
 
-	// populate fills the cache with the two shapes that must be removed: a plain file and a non-empty subdirectory.
+	return filepath.Join(dir, internal.AppName)
+}
+
+// TestCleanEPCache covers the invalidation the compiled execution provider caches rely on: a stale stamp must clear the
+// directory, a matching one must leave it alone, and the models must survive either way.
+//
+// That last part is the behaviour being fixed. The cache used to live in the models directory, so invalidating it on a
+// runtime bump meant deleting every downloaded model - several gigabytes - to throw away engines that were the only
+// thing actually tied to the runtime version.
+func TestCleanEPCache(t *testing.T) {
+	setup := func(t *testing.T) (engines, models string) {
+		t.Helper()
+
+		root := setupConfigRoot(t)
+		return filepath.Join(root, internal.EngineCacheDir), filepath.Join(root, internal.ModelsDir)
+	}
+
+	// populate fills the cache with what the providers actually write: TensorRT drops loose engine and profile files,
+	// CoreML a compiled model directory.
 	populate := func(t *testing.T, dir string) {
 		t.Helper()
 
-		if err := os.MkdirAll(filepath.Join(dir, "stale-dir"), 0o755); err != nil {
-			t.Fatalf("failed to create the stale directory: %v", err)
+		if err := os.MkdirAll(filepath.Join(dir, "dn_stockholm_fp32", "13892371"), 0o755); err != nil {
+			t.Fatalf("failed to create the compiled model directory: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "stale-dir", "nested.so"), []byte("x"), 0o644); err != nil {
-			t.Fatalf("failed to write the nested file: %v", err)
+		if err := os.WriteFile(
+			filepath.Join(dir, "dn_stockholm_fp32", "13892371", "model.mlmodelc"), []byte("x"), 0o644,
+		); err != nil {
+			t.Fatalf("failed to write the compiled model: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "LICENSE.txt"), []byte("x"), 0o644); err != nil {
-			t.Fatalf("failed to write the sentinel file: %v", err)
+		if err := os.WriteFile(
+			filepath.Join(dir, "TensorrtExecutionProvider_TRTKernel_graph_x_0_0_deadbeef.engine"), []byte("x"), 0o644,
+		); err != nil {
+			t.Fatalf("failed to write the engine file: %v", err)
+		}
+	}
+
+	seedModels := func(t *testing.T, dir string) {
+		t.Helper()
+
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("failed to create the models directory: %v", err)
+		}
+		for _, name := range []string{"dn_stockholm_fp32.onnx", "up_osaka_fp16.onnx.data", ".up_kyoto_4x_fp32.json"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+				t.Fatalf("failed to write %s: %v", name, err)
+			}
 		}
 	}
 
@@ -72,88 +101,79 @@ func TestCleanVersionedCache(t *testing.T) {
 		}
 	}
 
-	t.Run("first run stamps an empty cache", func(t *testing.T) {
-		dir := setup(t)
+	assertModelsIntact := func(t *testing.T, dir string) {
+		t.Helper()
 
-		wiped, err := CleanVersionedCache("libs/cudnn", "cudnn/9.23.1")
+		for _, name := range []string{"dn_stockholm_fp32.onnx", "up_osaka_fp16.onnx.data", ".up_kyoto_4x_fp32.json"} {
+			if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+				t.Errorf("invalidating the engine cache must not touch %s: %v", name, err)
+			}
+		}
+	}
+
+	t.Run("first run stamps an empty cache", func(t *testing.T) {
+		engines, _ := setup(t)
+
+		wiped, err := CleanEPCache("runtime/1.26.0")
 		if err != nil {
-			t.Fatalf("CleanVersionedCache: %v", err)
+			t.Fatalf("CleanEPCache: %v", err)
 		}
 		if !wiped {
 			t.Error("wiped = false, want true on a cache with no version file")
 		}
 
-		assertStamp(t, dir, "cudnn/9.23.1")
+		assertStamp(t, engines, "runtime/1.26.0")
 	})
 
-	t.Run("an unstamped cache is wiped", func(t *testing.T) {
-		dir := setup(t)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+	t.Run("a stale stamp wipes engines and leaves the models", func(t *testing.T) {
+		engines, models := setup(t)
+		if err := os.MkdirAll(engines, 0o755); err != nil {
 			t.Fatalf("failed to create the cache directory: %v", err)
 		}
-		populate(t, dir)
-
-		wiped, err := CleanVersionedCache("libs/cudnn", "cudnn/9.23.1")
-		if err != nil {
-			t.Fatalf("CleanVersionedCache: %v", err)
-		}
-		if !wiped {
-			t.Error("wiped = false, want true")
-		}
-
-		assertEmpty(t, dir)
-		assertStamp(t, dir, "cudnn/9.23.1")
-	})
-
-	t.Run("a stale stamp is wiped", func(t *testing.T) {
-		dir := setup(t)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatalf("failed to create the cache directory: %v", err)
-		}
-		populate(t, dir)
-		if err := os.WriteFile(filepath.Join(dir, ".version"), []byte("cudnn/9.0.0"), 0o644); err != nil {
+		populate(t, engines)
+		seedModels(t, models)
+		if err := os.WriteFile(filepath.Join(engines, ".version"), []byte("runtime/1.25.0"), 0o644); err != nil {
 			t.Fatalf("failed to write the version file: %v", err)
 		}
 
-		wiped, err := CleanVersionedCache("libs/cudnn", "cudnn/9.23.1")
+		wiped, err := CleanEPCache("runtime/1.26.0")
 		if err != nil {
-			t.Fatalf("CleanVersionedCache: %v", err)
+			t.Fatalf("CleanEPCache: %v", err)
 		}
 		if !wiped {
 			t.Error("wiped = false, want true")
 		}
 
-		if _, err = os.Stat(dir); err != nil {
+		if _, err = os.Stat(engines); err != nil {
 			t.Errorf("the cache directory itself must survive the wipe: %v", err)
 		}
 
-		assertEmpty(t, dir)
-		assertStamp(t, dir, "cudnn/9.23.1")
+		assertEmpty(t, engines)
+		assertStamp(t, engines, "runtime/1.26.0")
+		assertModelsIntact(t, models)
 	})
 
-	// The stamp is compared trimmed, so an editor that appended a newline doesn't force a multi-GB re-download.
+	// The stamp is compared trimmed, so an editor that appended a newline doesn't force every engine to be rebuilt.
 	t.Run("a current stamp is a no-op", func(t *testing.T) {
-		dir := setup(t)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		engines, _ := setup(t)
+		if err := os.MkdirAll(engines, 0o755); err != nil {
 			t.Fatalf("failed to create the cache directory: %v", err)
 		}
-		populate(t, dir)
-		if err := os.WriteFile(filepath.Join(dir, ".version"), []byte("cudnn/9.23.1\n"), 0o644); err != nil {
+		populate(t, engines)
+		if err := os.WriteFile(filepath.Join(engines, ".version"), []byte("runtime/1.26.0\n"), 0o644); err != nil {
 			t.Fatalf("failed to write the version file: %v", err)
 		}
 
-		wiped, err := CleanVersionedCache("libs/cudnn", "cudnn/9.23.1")
+		wiped, err := CleanEPCache("runtime/1.26.0")
 		if err != nil {
-			t.Fatalf("CleanVersionedCache: %v", err)
+			t.Fatalf("CleanEPCache: %v", err)
 		}
 		if wiped {
 			t.Error("wiped = true, want false on a current cache")
 		}
 
-		if _, err = os.Stat(filepath.Join(dir, "stale-dir", "nested.so")); err != nil {
-			t.Errorf("a current cache must be left untouched: %v", err)
-		}
-		if _, err = os.Stat(filepath.Join(dir, "LICENSE.txt")); err != nil {
+		engine := filepath.Join(engines, "TensorrtExecutionProvider_TRTKernel_graph_x_0_0_deadbeef.engine")
+		if _, err = os.Stat(engine); err != nil {
 			t.Errorf("a current cache must be left untouched: %v", err)
 		}
 	})

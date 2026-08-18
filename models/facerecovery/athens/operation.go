@@ -3,7 +3,6 @@ package athens
 import (
 	"fmt"
 
-	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/models/facerecovery"
 	"github.com/vegidio/open-photo-ai/types"
@@ -20,10 +19,6 @@ func (o OpFrAthens) Id() string {
 
 func (o OpFrAthens) Precision() types.Precision {
 	return o.precision
-}
-
-func (o OpFrAthens) Hash() string {
-	return utils.GetModelHash(o.Id())
 }
 
 // Params exposes the pre-detected faces to Model.Run. Faces are not part of the operation's identity, so they are

@@ -8,7 +8,7 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.53.0
 	github.com/vegidio/avif-go v0.0.0-20260715095249-dbb32e4e0094
-	github.com/vegidio/go-sak v0.0.0-20260814193649-fcd3a5f91a14
+	github.com/vegidio/go-sak v0.0.0-20260818145652-355405d075ca
 	github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5
 	github.com/vegidio/raw-go v0.0.0-20260619122347-1fd4b5c63e43
 	github.com/vegidio/webp-go v0.0.0-20260614080129-a1efc50b59e1

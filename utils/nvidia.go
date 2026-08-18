@@ -2,9 +2,7 @@ package utils
 
 import (
 	"context"
-	"fmt"
-	"path/filepath"
-	"runtime"
+	"path"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -13,14 +11,8 @@ import (
 	"github.com/vegidio/go-sak/os"
 	"github.com/vegidio/go-sak/sysinfo"
 	"github.com/vegidio/open-photo-ai/internal"
-	"github.com/vegidio/open-photo-ai/internal/utils"
+	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/types"
-)
-
-const (
-	CudaTag     = "cuda/13.3.0"
-	CudnnTag    = "cudnn/9.23.1"
-	TensorrtTag = "tensorrt/10.14.1"
 )
 
 // IsCudaSupported reports whether the machine has an NVIDIA GPU, which is only a rough proxy for CUDA being usable:
@@ -62,33 +54,27 @@ func IsTensorRtSupported() bool {
 	return found
 }
 
-// InitializeNvidiaLib downloads an NVIDIA library (libName being "cuda", "cudnn" or "tensorrt", libTag its release
-// tag) into the user's config directory and appends it to PATH and LD_LIBRARY_PATH so the ONNX Runtime can dlopen it.
+// InitializeNvidiaLib downloads an NVIDIA library (libName being "cuda", "cudnn" or "tensorrt") into the user's config
+// directory and appends it to PATH and LD_LIBRARY_PATH so the ONNX Runtime can dlopen it.
+//
+// The release it comes from is not named here: libName is also the prefix of the published archive, so the tag, the
+// expected hash and the size all come from the pinned artifact table. Bumping a library version is a regeneration of
+// that table, with nothing to keep in sync at this end.
+//
+// Verification is against the pinned hash of the archive, which is the whole reason these are worth installing through
+// the manifest: a CUDA tree is several hundred files, and the previous check - "does a LICENSE.txt exist" - meant a
+// half-downloaded library was trusted forever. The manifest also replaces the version stamp that used to guard the
+// directory, and records what to delete when the tag moves rather than emptying the directory blindly.
 //
 // On Linux the LD_LIBRARY_PATH change only takes effect in a process started afterwards, since glibc reads the
 // variable once at exec time - see setLibPathAndRestart in cmd/gui.
-func InitializeNvidiaLib(
-	ctx context.Context,
-	libName, libTag string,
-	fileCheck *types.FileCheck,
-	onProgress types.DownloadProgress,
-) error {
-	url := fmt.Sprintf("https://github.com/vegidio/open-photo-ai/releases/download/%s/%s_%s_%s.7z",
-		libTag, libName, runtime.GOOS, runtime.GOARCH)
-	destination := filepath.Join("libs", libName)
-
-	// Drop a library left over from an older tag. Without this it would be kept forever: the download's only staleness
-	// check is that the sentinel LICENSE file exists, so an outdated tree looks current - and an archive extracted over
-	// it would leave the previous version's shared objects behind for dlopen to find.
-	wiped, err := utils.CleanVersionedCache(destination, libTag)
+func InitializeNvidiaLib(ctx context.Context, libName string, onProgress types.DownloadProgress) error {
+	dep, err := deps.ReleaseDependency(libName, libName, path.Join("libs", libName))
 	if err != nil {
-		return errors.Wrapf(err, "failed to clean the %s library cache", libName)
-	}
-	if wiped {
-		internal.Log().Info("library cache invalidated", "lib", libName, "lib_tag", libTag)
+		return errors.Wrap(err, "failed to describe the NVIDIA library dependency")
 	}
 
-	if err = utils.PrepareDependency(ctx, url, destination, fileCheck, onProgress); err != nil {
+	if err = deps.Install(ctx, dep, onProgress); err != nil {
 		return errors.Wrap(err, "failed to prepare NVIDIA library")
 	}
 

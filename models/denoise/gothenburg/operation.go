@@ -20,10 +20,6 @@ func (o OpDnGothenburg) Precision() types.Precision {
 	return o.precision
 }
 
-func (o OpDnGothenburg) Hash() string {
-	return utils.GetModelHash(o.Id())
-}
-
 // Params carries the per-run denoise intensity, which is not part of the operation identity.
 func (o OpDnGothenburg) Params() map[string]any {
 	return map[string]any{utils.ParamIntensity: o.intensity}

@@ -6,7 +6,7 @@ require (
 	github.com/cockroachdb/errors v1.14.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.53.0
-	github.com/vegidio/go-sak v0.0.0-20260814193649-fcd3a5f91a14
+	github.com/vegidio/go-sak v0.0.0-20260818145652-355405d075ca
 	github.com/vegidio/open-photo-ai v0.0.0-20260607083020-ddc25793bc45
 	github.com/wailsapp/wails/v3 v3.0.0-beta.8
 )

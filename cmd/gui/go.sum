@@ -128,8 +128,7 @@ github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD
 github.com/ulikunitz/xz v0.5.15 h1:9DNdB5s+SgV3bQ2ApL10xRc35ck0DuIX/isZvIk+ubY=
 github.com/ulikunitz/xz v0.5.15/go.mod h1:nbz6k7qbPmH4IRqmfOplQw/tblSgqTqBwxkY0oWt/14=
 github.com/vegidio/avif-go v0.0.0-20260715095249-dbb32e4e0094 h1:+t7sveCgIpd/Klx6RCx8wBAnPjiomGDVD/vdLxnBCIg=
-github.com/vegidio/go-sak v0.0.0-20260814193649-fcd3a5f91a14 h1:ZyyWbpib2mGKVluzhot30FOlHay0qHPXKK4KUGxtEl0=
-github.com/vegidio/go-sak v0.0.0-20260814193649-fcd3a5f91a14/go.mod h1:8RBuB+x2+DN02fY036coZh6rMazRcKkL4r9E8JkH3kY=
+github.com/vegidio/go-sak v0.0.0-20260818145652-355405d075ca h1:JEFutxBU8L/ZNOKOjd9JqhVlrbLhf0XXeA6YIWBLd3k=
 github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5 h1:YCwDwYnp35h/5B6I2ON4PLXkojttYeDYlw5AuTxKht0=
 github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5/go.mod h1:LIuf1LAlIL2EsPYMJgchx9xAXK6hjfhVZtAUGYHdaQ8=
 github.com/vegidio/open-photo-ai v0.0.0-20260607083020-ddc25793bc45 h1:GMeqRs59fe04BdsAJ68Jzmy5afpIB9bCVWSpDSLnRnU=

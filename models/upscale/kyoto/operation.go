@@ -3,7 +3,6 @@ package kyoto
 import (
 	"fmt"
 
-	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -18,10 +17,6 @@ func (o OpUpKyoto) Id() string {
 
 func (o OpUpKyoto) Precision() types.Precision {
 	return o.precision
-}
-
-func (o OpUpKyoto) Hash() string {
-	return utils.GetModelHash(o.Id())
 }
 
 var _ types.Operation = (*OpUpKyoto)(nil)

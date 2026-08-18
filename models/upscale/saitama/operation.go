@@ -3,7 +3,6 @@ package saitama
 import (
 	"fmt"
 
-	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -18,10 +17,6 @@ func (o OpUpSaitama) Id() string {
 
 func (o OpUpSaitama) Precision() types.Precision {
 	return o.precision
-}
-
-func (o OpUpSaitama) Hash() string {
-	return utils.GetModelHash(o.Id())
 }
 
 var _ types.Operation = (*OpUpSaitama)(nil)

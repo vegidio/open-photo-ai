@@ -6,6 +6,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
+	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
 	"golang.org/x/text/cases"
@@ -34,13 +35,8 @@ func LoadSessions(
 	for _, scale := range scales {
 		modelId := fmt.Sprintf("up_%s_%.4gx_%s", variant, float64(scale), precision)
 		modelFile := modelId + ".onnx"
-		url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-		fileCheck := &types.FileCheck{
-			Path: modelFile,
-			Hash: utils.GetModelHash(modelId),
-		}
 
-		if err := utils.PrepareDependency(ctx, url, "models", fileCheck, onProgress); err != nil {
+		if err := deps.Install(ctx, deps.ModelDependency(modelId), onProgress); err != nil {
 			return nil, errors.Wrapf(err, "failed to prepare %s model", variant)
 		}
 

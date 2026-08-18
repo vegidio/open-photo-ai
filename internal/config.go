@@ -18,16 +18,18 @@ type RemoteModelData struct {
 // ModelData is the remote model manifest. It is populated during Initialize and should not be modified directly.
 var ModelData []RemoteModelData
 
-// ModelsWithPrefix returns the manifest entries whose file name starts with id.
+// ModelFiles returns the manifest entries that make up the model behind id: the graph, plus any external-data blob
+// stored beside it.
 //
 // Prefix, not equality, is what groups a model split across several files: both `up_osaka_fp16.onnx` and its
-// `up_osaka_fp16.onnx.data` weights blob start with `up_osaka_fp16`. It is the one place that rule is written down, so
-// the size estimate and the hash lookup can't drift into matching different files for the same id.
-func ModelsWithPrefix(id string) []RemoteModelData {
+// `up_osaka_fp16.onnx.data` weights blob start with `up_osaka_fp16.onnx`. Matching on that whole stem rather than on id
+// alone is what keeps a future `up_osaka_fp16_v2` out of `up_osaka_fp16`'s file set. It is the one place the rule is
+// written down, so the size estimate and the download can't drift into matching different files for the same id.
+func ModelFiles(id string) []RemoteModelData {
 	var found []RemoteModelData
 
 	for _, model := range ModelData {
-		if strings.HasPrefix(model.Name, id) {
+		if strings.HasPrefix(model.Name, id+".onnx") {
 			found = append(found, model)
 		}
 	}
@@ -43,7 +45,7 @@ func ModelsWithPrefix(id string) []RemoteModelData {
 // best-effort. Callers must read 0 as "unknown", not "free"; the exact size is charged after the session is built.
 func EstimateModelBytes(id string) int64 {
 	var total int64
-	for _, model := range ModelsWithPrefix(id) {
+	for _, model := range ModelFiles(id) {
 		total += model.Size
 	}
 

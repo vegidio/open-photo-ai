@@ -112,6 +112,11 @@ func main() {
 // Every library that a provider links against must be listed here, even if its directory is still empty on a fresh
 // install — MkUserConfigDir creates it up front so the loader doesn't mark it as non-existing and skip it for the rest
 // of the process lifetime, which would break a provider downloaded later in the same session.
+//
+// The runtime directory is defence in depth rather than a requirement: ONNX Runtime finds its execution providers
+// relative to its own location, by resolving the address of a symbol inside itself, so they are found whether or not
+// the directory is on the search path. It is listed anyway because it costs nothing and because it gets the directory
+// created before Initialize runs, which is the hazard described above.
 func setLibPathAndRestart() {
 	// ReExec sets APP_REEXEC=1 in the child and no-ops when called again, so bail out before doing any work: the child
 	// would otherwise recreate the dirs and log a re-exec that never happens.
@@ -121,6 +126,9 @@ func setLibPathAndRestart() {
 
 	libPaths := make([]string, 0)
 
+	if path, err := fs.MkUserConfigDir(shared.AppName, "runtime"); err == nil {
+		libPaths = append(libPaths, path)
+	}
 	if path, err := fs.MkUserConfigDir(shared.AppName, "libs", "cuda"); err == nil {
 		libPaths = append(libPaths, path)
 	}

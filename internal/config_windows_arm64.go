@@ -1,6 +1,5 @@
 package internal
 
-const (
-	OnnxRuntimeName = "onnxruntime-1.26.0.dll"
-	OnnxRuntimeHash = "01bba4af5089b1951df8b6e6e960e77313103e872519d57304c0ddc3b002a33b"
-)
+// OnnxRuntimeName is the shared library inside the release archive for this platform. The archive itself is verified
+// against a pinned hash (see Artifacts), so this only has to name the file the loader is pointed at.
+const OnnxRuntimeName = "onnxruntime-1.26.0.dll"

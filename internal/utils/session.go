@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
+	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
+	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 	"golang.org/x/text/cases"
@@ -104,13 +106,8 @@ func LoadSingleSession(
 ) (*Session, error) {
 	modelId := fmt.Sprintf("%s_%s_%s", prefix, variant, precision)
 	modelFile := modelId + ".onnx"
-	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-	fileCheck := &types.FileCheck{
-		Path: modelFile,
-		Hash: GetModelHash(modelId),
-	}
 
-	if err := PrepareDependency(ctx, url, "models", fileCheck, onProgress); err != nil {
+	if err := deps.Install(ctx, deps.ModelDependency(modelId), onProgress); err != nil {
 		return nil, errors.Wrapf(err, "failed to prepare %s model", variant)
 	}
 
@@ -134,23 +131,35 @@ func FormatModelName(label string, precision types.Precision) string {
 func createSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*Session, error) {
 	internal.Log().Debug("creating session", "model_file", modelFile, "ep", ep)
 
-	configDir, err := os.UserConfigDir()
+	modelsPath, err := fs.MkUserConfigDir(internal.AppName, internal.ModelsDir)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to resolve user config directory")
+		return nil, errors.Wrap(err, "failed to resolve the models directory")
 	}
 
-	modelsPath := filepath.Join(configDir, internal.AppName, "models")
+	// The execution providers compile what they cache - a TensorRT engine, a CoreML MLProgram - from this model's
+	// weights, so the cache gets a directory of its own per model. Sharing one directory with the models, as this used
+	// to, made the cache impossible to invalidate: TensorRT drops its .engine and .profile files loose beside the
+	// models and names them after the graph inside the file rather than the file itself, so nothing said whose cache
+	// was whose. With a directory per model, replacing a model is enough to drop exactly its cache.
+	//
+	// The directory comes from EngineCacheFor, which is also what deps.Install clears when it replaces the weights.
+	stem := strings.TrimSuffix(modelFile, filepath.Ext(modelFile))
+	cachePath, err := fs.MkUserConfigDir(internal.AppName, strings.Split(internal.EngineCacheFor(stem), "/")...)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to resolve the engine cache directory")
+	}
+
 	var options *ort.SessionOptions
 
 	// The default case is what keeps `options` from staying nil below: without it an unsupported GOOS would fall
 	// through with a nil error and blow up on the deferred Destroy.
 	switch runtime.GOOS {
 	case "windows":
-		options, err = createWindowsOptions(modelsPath, ep)
+		options, err = createWindowsOptions(cachePath, ep)
 	case "linux":
-		options, err = createLinuxOptions(modelsPath, ep)
+		options, err = createLinuxOptions(cachePath, ep)
 	case "darwin":
-		options, err = createMacOptions(modelsPath, ep)
+		options, err = createMacOptions(cachePath, ep)
 	default:
 		return nil, errors.Errorf("unsupported platform: %s", runtime.GOOS)
 	}

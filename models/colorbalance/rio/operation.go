@@ -20,10 +20,6 @@ func (o OpCbRio) Precision() types.Precision {
 	return o.precision
 }
 
-func (o OpCbRio) Hash() string {
-	return utils.GetModelHash(o.Id())
-}
-
 // Params carries the per-run blend intensity, which is not part of the operation identity.
 func (o OpCbRio) Params() map[string]any {
 	return map[string]any{utils.ParamIntensity: o.intensity}

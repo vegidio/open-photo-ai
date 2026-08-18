@@ -7,8 +7,7 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
-	"github.com/vegidio/open-photo-ai/internal"
-	"github.com/vegidio/open-photo-ai/internal/utils"
+	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -43,13 +42,7 @@ func LoadModel(
 ) (string, error) {
 	modelFile := operation.Id() + ".onnx"
 
-	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
-	fileCheck := &types.FileCheck{
-		Path: modelFile,
-		Hash: operation.Hash(),
-	}
-
-	if err := utils.PrepareDependency(ctx, url, "models", fileCheck, onProgress); err != nil {
+	if err := deps.Install(ctx, deps.ModelDependency(operation.Id()), onProgress); err != nil {
 		return "", errors.Wrapf(err, "failed to prepare Face Recovery model %s", operation.Id())
 	}
 

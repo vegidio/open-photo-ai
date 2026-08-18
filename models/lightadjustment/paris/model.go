@@ -6,7 +6,7 @@ import (
 	"image"
 
 	"github.com/cockroachdb/errors"
-	"github.com/vegidio/open-photo-ai/internal"
+	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment"
 	"github.com/vegidio/open-photo-ai/types"
@@ -27,14 +27,8 @@ func New(ctx context.Context, operation types.Operation, ep types.ExecutionProvi
 	// resolves directly to the model file name.
 	modelFile := op.Id() + ".onnx"
 	name := fmt.Sprintf("Paris (%s)", cases.Upper(language.English).String(string(op.precision)))
-	url := fmt.Sprintf("%s/%s", internal.ModelBaseUrl, modelFile)
 
-	fileCheck := &types.FileCheck{
-		Path: modelFile,
-		Hash: op.Hash(),
-	}
-
-	if err := utils.PrepareDependency(ctx, url, "models", fileCheck, onProgress); err != nil {
+	if err := deps.Install(ctx, deps.ModelDependency(op.Id()), onProgress); err != nil {
 		return nil, errors.Wrap(err, "failed to prepare Paris model")
 	}
 
