@@ -3,7 +3,7 @@ import { ModelSelector, type ModelSelectorOption } from '@/features/enhancements
 import { OptionsPopover } from '@/features/enhancements/OptionsPopover';
 import { ScaleSelector } from '@/features/enhancements/ScaleSelector';
 import { useOptionEnhancement } from '@/hooks';
-import { Kyoto, Saitama, Tokyo } from '@/operations';
+import { Kyoto, Osaka, Saitama, Tokyo } from '@/operations';
 
 type OptionsUpscaleProps = {
     anchorEl: HTMLElement | undefined;
@@ -33,6 +33,16 @@ const options: ModelSelectorOption[] = [
             'Use this model for cartoon, drawings, line art, and digital illustrations. It preserves clean lines, flat colors, and stylized shading without introducing photo-like textures. Best when sharp edges and stylistic consistency matter more than realism.',
     },
     { value: 'saitama_fp16', label: 'Saitama Std.' },
+    // Osaka is published only as fp16, so the High slot is shown for consistency with the other models but cannot be
+    // selected. The description sits on the Std. entry rather than the High one, because a disabled MUI button gets
+    // `pointer-events: none` and its tooltip would never open.
+    { value: 'osaka_fp32', label: 'Osaka High', disabled: true },
+    {
+        value: 'osaka_fp16',
+        label: 'Osaka Std.',
+        description:
+            'A diffusion model that rebuilds detail instead of interpolating it, giving the most dramatic results on soft, small, or heavily compressed photos. It is in a different league for cost: a 7.3 GB download on first use, roughly 8 GB of GPU memory, and far slower than the other models — minutes rather than seconds on a good GPU, and impractically slow without one. Only a half-precision build is published, so "High" is unavailable.',
+    },
 ];
 
 export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps) => {
@@ -51,6 +61,8 @@ export const OptionsUpscale = ({ anchorEl, open, onClose }: OptionsUpscaleProps)
                     return new Kyoto(scale, precision);
                 case 'saitama':
                     return new Saitama(scale, precision);
+                case 'osaka':
+                    return new Osaka(scale, precision);
             }
         },
     );

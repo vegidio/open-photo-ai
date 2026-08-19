@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -81,12 +80,26 @@ func (s Sessions) Destroy() {
 
 // CreateSession builds an ONNX session for the given model file and execution provider.
 //
+// An optional EPProfile carries the per-model provider tuning; passing none applies the provider defaults, which is
+// what every fixed-shape model wants. Only the first profile is used - the parameter is variadic so that adding
+// per-model tuning did not have to touch the call sites that need none.
+//
 // Every failure it returns - the provider options, the session options and the model load alike - is marked with
 // internal.ErrCreateSession, so callers can tell "this session couldn't be built" apart from the failures around it,
 // such as a model that couldn't be downloaded. That's what lets AcquireModel decide a retry on the CPU is worth
 // attempting.
-func CreateSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*Session, error) {
-	session, err := createSession(modelFile, inputs, outputs, ep)
+func CreateSession(
+	modelFile string,
+	inputs, outputs []string,
+	ep types.ExecutionProvider,
+	profile ...EPProfile,
+) (*Session, error) {
+	var p EPProfile
+	if len(profile) > 0 {
+		p = profile[0]
+	}
+
+	session, err := createSession(modelFile, inputs, outputs, ep, p)
 	if err != nil {
 		return nil, errors.Mark(err, internal.ErrCreateSession)
 	}
@@ -128,7 +141,12 @@ func FormatModelName(label string, precision types.Precision) string {
 	return fmt.Sprintf("%s (%s)", label, cases.Upper(language.English).String(string(precision)))
 }
 
-func createSession(modelFile string, inputs, outputs []string, ep types.ExecutionProvider) (*Session, error) {
+func createSession(
+	modelFile string,
+	inputs, outputs []string,
+	ep types.ExecutionProvider,
+	p EPProfile,
+) (*Session, error) {
 	internal.Log().Debug("creating session", "model_file", modelFile, "ep", ep)
 
 	modelsPath, err := fs.MkUserConfigDir(internal.AppName, internal.ModelsDir)
@@ -149,33 +167,20 @@ func createSession(modelFile string, inputs, outputs []string, ep types.Executio
 		return nil, errors.Wrap(err, "failed to resolve the engine cache directory")
 	}
 
-	var options *ort.SessionOptions
-
-	// The default case is what keeps `options` from staying nil below: without it an unsupported GOOS would fall
-	// through with a nil error and blow up on the deferred Destroy.
-	switch runtime.GOOS {
-	case "windows":
-		options, err = createWindowsOptions(cachePath, ep)
-	case "linux":
-		options, err = createLinuxOptions(cachePath, ep)
-	case "darwin":
-		options, err = createMacOptions(cachePath, ep)
-	default:
-		return nil, errors.Errorf("unsupported platform: %s", runtime.GOOS)
-	}
-
+	options, err := createOptions(currentPlatform, cachePath, ep, p)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create session options")
 	}
 	defer options.Destroy()
 
-	// Extra session options
-	if err = options.SetGraphOptimizationLevel(ort.GraphOptimizationLevelEnableAll); err != nil {
-		return nil, errors.Wrap(err, "failed to set graph optimization level")
-	}
-
+	// Extra session options. The graph optimization level is applied by applyProfile below, since how far the graph
+	// may be rewritten is a per-model property.
 	if err = options.SetExecutionMode(ort.ExecutionModeParallel); err != nil {
 		return nil, errors.Wrap(err, "failed to set execution mode")
+	}
+
+	if err = applyProfile(options, p); err != nil {
+		return nil, err
 	}
 
 	modelPath := filepath.Join(modelsPath, modelFile)
@@ -227,164 +232,3 @@ func modelFileBytes(modelPath string) int64 {
 
 	return total
 }
-
-// region - OS specific options
-
-func createWindowsOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
-	options, err := ort.NewSessionOptions()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create Windows session options")
-	}
-
-	switch ep {
-	case types.ExecutionProviderCPU:
-		return options, nil
-	case types.ExecutionProviderTensorRT:
-		_ = getTensorRTEP(cachePath, options)
-	case types.ExecutionProviderCUDA:
-		_ = getCudaEP(cachePath, options)
-	case types.ExecutionProviderDirectML:
-		_ = getDirectMLEP(cachePath, options)
-	case types.ExecutionProviderOpenVINO:
-		_ = getOpenVINOEP(cachePath, options)
-	case types.ExecutionProviderAuto:
-		_ = getTensorRTEP(cachePath, options)
-		_ = getCudaEP(cachePath, options)
-		_ = getDirectMLEP(cachePath, options)
-		_ = getOpenVINOEP(cachePath, options)
-	default:
-		options.Destroy()
-		return nil, errors.Errorf("unsupported execution provider: %s", ep)
-	}
-
-	return options, nil
-}
-
-func createLinuxOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
-	options, err := ort.NewSessionOptions()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create Linux session options")
-	}
-
-	switch ep {
-	case types.ExecutionProviderCPU:
-		return options, nil
-	case types.ExecutionProviderTensorRT:
-		_ = getTensorRTEP(cachePath, options)
-	case types.ExecutionProviderCUDA:
-		_ = getCudaEP(cachePath, options)
-	case types.ExecutionProviderOpenVINO:
-		_ = getOpenVINOEP(cachePath, options)
-	case types.ExecutionProviderAuto:
-		_ = getTensorRTEP(cachePath, options)
-		_ = getCudaEP(cachePath, options)
-		_ = getOpenVINOEP(cachePath, options)
-	default:
-		options.Destroy()
-		return nil, errors.Errorf("unsupported execution provider: %s", ep)
-	}
-
-	return options, nil
-}
-
-func createMacOptions(cachePath string, ep types.ExecutionProvider) (*ort.SessionOptions, error) {
-	options, err := ort.NewSessionOptions()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create macOS session options")
-	}
-
-	switch ep {
-	case types.ExecutionProviderCPU:
-		return options, nil
-	case types.ExecutionProviderCoreML:
-		_ = getCoreMLEP(cachePath, options)
-	case types.ExecutionProviderOpenVINO:
-		_ = getOpenVINOEP(cachePath, options)
-	case types.ExecutionProviderAuto:
-		_ = getCoreMLEP(cachePath, options)
-		_ = getOpenVINOEP(cachePath, options)
-	default:
-		options.Destroy()
-		return nil, errors.Errorf("unsupported execution provider: %s", ep)
-	}
-
-	return options, nil
-}
-
-// endregion
-
-// region - Execution provider configuration
-
-func getTensorRTEP(cachePath string, options *ort.SessionOptions) error {
-	trtOptions, err := ort.NewTensorRTProviderOptions()
-	if err != nil {
-		return errors.Wrap(err, "failed to create TensorRT EP options")
-	}
-	defer trtOptions.Destroy()
-
-	// TODO: Review 'trt_cuda_graph_enable' in the future; it can drastically increase the performance, but it often
-	//  causes crashes when re-using the same session.
-	trtOptions.Update(map[string]string{
-		"device_id":                      "0",
-		"trt_max_workspace_size":         "4294967296",
-		"trt_fp16_enable":                "0",
-		"trt_int8_enable":                "0",
-		"trt_engine_hw_compatible":       "1",
-		"trt_cuda_graph_enable":          "0",
-		"trt_builder_optimization_level": "5",
-		"trt_engine_cache_enable":        "1",
-		"trt_engine_cache_path":          cachePath,
-	})
-
-	return options.AppendExecutionProviderTensorRT(trtOptions)
-}
-
-func getCudaEP(_ string, options *ort.SessionOptions) error {
-	cudaOptions, err := ort.NewCUDAProviderOptions()
-	if err != nil {
-		return errors.Wrap(err, "failed to create CUDA EP options")
-	}
-	defer cudaOptions.Destroy()
-
-	// TODO: Review 'enable_cuda_graph' in the future; it can drastically increase the performance, but it often
-	//  causes crashes when re-using the same session.
-	cudaOptions.Update(map[string]string{
-		"device_id":                    "0",
-		"do_copy_in_default_stream":    "1",
-		"cudnn_conv_algo_search":       "EXHAUSTIVE",
-		"cudnn_conv_use_max_workspace": "1",
-		"enable_cuda_graph":            "0",
-		"gpu_mem_limit":                "0",
-	})
-
-	return options.AppendExecutionProviderCUDA(cudaOptions)
-}
-
-func getDirectMLEP(_ string, options *ort.SessionOptions) error {
-	return options.AppendExecutionProviderDirectML(0)
-}
-
-func getCoreMLEP(cachePath string, options *ort.SessionOptions) error {
-	return options.AppendExecutionProviderCoreMLV2(map[string]string{
-		"ModelFormat":              "MLProgram",
-		"MLComputeUnits":           "ALL",
-		"RequireStaticInputShapes": "1",
-		"EnableOnSubgraphs":        "0",
-		"ModelCacheDirectory":      cachePath,
-	})
-}
-
-func getOpenVINOEP(cachePath string, options *ort.SessionOptions) error {
-	return nil
-
-	// TODO: Temporarily disable OpenVINO EP
-	//return options.AppendExecutionProviderOpenVINO(map[string]string{
-	//	"device_type":    "AUTO",
-	//	"precision":      "FP32",
-	//	"num_of_threads": fmt.Sprintf("%d", runtime.NumCPU()),
-	//	"num_streams":    "2",
-	//	"cache_dir":      cachePath,
-	//})
-}
-
-// endregion

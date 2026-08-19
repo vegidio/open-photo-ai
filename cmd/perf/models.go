@@ -21,6 +21,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/sharpen/novgorod"
 	"github.com/vegidio/open-photo-ai/models/sharpen/petersburg"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/models/upscale/osaka"
 	"github.com/vegidio/open-photo-ai/models/upscale/saitama"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
@@ -56,6 +57,10 @@ var catalog = []entry{
 	scaleEntry("tokyo", types.ModelTypeUpscale, tokyo.Op),
 	scaleEntry("kyoto", types.ModelTypeUpscale, kyoto.Op),
 	scaleEntry("saitama", types.ModelTypeUpscale, saitama.Op),
+
+	// Osaka is the diffusion upscaler: the first run downloads 7.3 GB, and it is orders of magnitude slower than
+	// the others on anything but a capable GPU.
+	scaleEntry("osaka", types.ModelTypeUpscale, osaka.Op),
 
 	// Denoise
 	intensityEntry("stockholm", types.ModelTypeDenoise, stockholm.Op),

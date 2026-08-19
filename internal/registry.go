@@ -493,6 +493,24 @@ func (r *ModelRegistry) Stats() types.ModelMemory {
 	}
 }
 
+// Available reports how many bytes are still under a pool's ceiling: budget - resident - reserved.
+//
+// It returns 0 for an unbounded pool, which callers must read as "unknown" rather than "nothing free" - and, since it
+// is a snapshot of a value other builds are moving, as advice rather than a guarantee. What it measures is also the
+// file-size proxy Stats reports, not real occupancy, so a caller sizing a workload against it needs its own margin on
+// top. It exists for the diffusion upscaler, which has to choose between one whole-image pass and a tiled one before
+// it allocates anything.
+func (r *ModelRegistry) Available(p types.MemoryPool) int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.budget[p] <= 0 {
+		return 0
+	}
+
+	return max(r.budget[p]-r.resident[p]-r.reserved[p], 0)
+}
+
 // StartJanitor begins the background sweep that reclaims idle models. It is safe to call more than once; only the
 // first call starts a goroutine.
 func (r *ModelRegistry) StartJanitor() {

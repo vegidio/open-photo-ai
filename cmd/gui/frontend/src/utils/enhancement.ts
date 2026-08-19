@@ -10,6 +10,7 @@ import {
     Moscow,
     Novgorod,
     type Operation,
+    Osaka,
     Paris,
     Petersburg,
     Rio,
@@ -100,6 +101,9 @@ export const getUpOp = (model: string, scale: number) => {
             return new Tokyo(scale, 'fp32');
         case 'saitama':
             return new Saitama(scale, 'fp32');
+        // Osaka is published only as fp16; there is no fp32 build to ask for.
+        case 'osaka':
+            return new Osaka(scale, 'fp16');
         default:
             return new Kyoto(scale, 'fp32');
     }

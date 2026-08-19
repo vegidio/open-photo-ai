@@ -10,6 +10,7 @@ import (
 	guitypes "gui/types"
 	"testing"
 
+	"github.com/vegidio/open-photo-ai/models/upscale/osaka"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -57,6 +58,10 @@ func TestIdsToOperationsIdentity(t *testing.T) {
 		"up_tokyo_4x_fp32":   "up_tokyo_4x_fp32",
 		"up_kyoto_2x_fp32":   "up_kyoto_2x_fp32",
 		"up_saitama_1x_fp16": "up_saitama_1x_fp16",
+		// ...except for osaka, whose sessions are over 7 GB and are the same whatever the scale, so the scale is a
+		// per-run parameter instead and the identity drops it. It also has no fp32 build, so the request is coerced.
+		"up_osaka_4x_fp16": "up_osaka_fp16",
+		"up_osaka_2x_fp32": "up_osaka_fp16",
 		// face recovery
 		"fr_athens_fp32":    "fr_athens_fp32",
 		"fr_santorini_fp16": "fr_santorini_fp16",
@@ -100,6 +105,49 @@ func TestIdsToOperationsCarriesIntensity(t *testing.T) {
 		if ck.CacheKey() != intensityCacheKey(want) {
 			t.Errorf("%q: CacheKey() = %q, want %q", id, ck.CacheKey(), intensityCacheKey(want))
 		}
+	}
+}
+
+// Osaka carries its scale the way the intensity models carry theirs: out of the identity, into Params, and folded
+// into the cache key so two scales cannot return each other's cached image.
+func TestIdsToOperationsCarriesOsakaScale(t *testing.T) {
+	cases := map[string]float64{
+		"up_osaka_1x_fp16":   1,
+		"up_osaka_2x_fp16":   2,
+		"up_osaka_4x_fp16":   4,
+		"up_osaka_2.5x_fp16": 2.5,
+		// the shared scale clamp still applies
+		"up_osaka_99x_fp16": 8,
+		"up_osaka_0x_fp16":  1,
+	}
+
+	seen := make(map[string]string)
+
+	for id, want := range cases {
+		op := parseOne(t, id)
+
+		p, ok := op.(types.Parameterized)
+		if !ok {
+			t.Fatalf("%q: operation is not Parameterized", id)
+		}
+		if got, _ := p.Params()[osaka.ParamScale].(float64); got != want {
+			t.Errorf("%q: scale = %v, want %v", id, got, want)
+		}
+
+		ck, ok := op.(types.CacheKeyer)
+		if !ok {
+			t.Fatalf("%q: operation is not a CacheKeyer", id)
+		}
+		if got := ck.CacheKey(); got != osaka.ScaleCacheKey(want) {
+			t.Errorf("%q: CacheKey() = %q, want %q", id, got, osaka.ScaleCacheKey(want))
+		}
+
+		// Every distinct scale must produce a distinct key, or the shared identity would let one scale serve
+		// another's cached result.
+		if prev, clash := seen[ck.CacheKey()]; clash && cases[prev] != want {
+			t.Errorf("%q and %q share cache key %q with different scales", id, prev, ck.CacheKey())
+		}
+		seen[ck.CacheKey()] = id
 	}
 }
 

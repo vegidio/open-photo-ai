@@ -1,0 +1,251 @@
+package osaka
+
+import (
+	"context"
+	"image"
+	"math"
+
+	"github.com/cockroachdb/errors"
+	"github.com/disintegration/imaging"
+	"github.com/vegidio/open-photo-ai/internal"
+	"github.com/vegidio/open-photo-ai/internal/utils"
+	"github.com/vegidio/open-photo-ai/types"
+	ort "github.com/yalue/onnxruntime_go"
+)
+
+// noiseSeed fixes the noise field across runs. A diffusion model with a fresh seed each time would hand the user a
+// different image every run, which the image cache would then memoize - so the cached result and a re-run would
+// disagree, and no A/B comparison of settings would mean anything.
+const noiseSeed uint64 = 0x5EEDBEEF
+
+// defaultDitConfig is the DiT's input convention, taken from the reference implementation rather than guessed.
+//
+// SeedVR2 builds the transformer input as concat([noise, encoded_latent, ones_mask]) - noise first, then the latent
+// of the image being restored, then a mask channel of ones - and drives it at the first timestep of a 1000-step
+// schedule. Nothing is rescaled on the way in: the VAE's output is used exactly as it comes out.
+var defaultDitConfig = ditConfig{
+	layout:      layoutNoiseCondTask,
+	taskValue:   1,
+	timestep:    1000,
+	latentScale: 1,
+}
+
+// runPipeline resamples the image to its target size and then restores detail at that size.
+//
+// The resampling is not a fallback for a model that cannot upscale - it is how SeedVR2 is meant to be driven. The
+// reference implementation resizes to the target resolution before inference with the comment that the model was only
+// trained at high resolution, and the network is resolution-preserving throughout: the VAE compresses 8x and expands
+// 8x, and the transformer between them does not change the token grid.
+func (m *Osaka) runPipeline(
+	ctx context.Context,
+	img image.Image,
+	scale float64,
+	onProgress types.InferenceProgress,
+) (image.Image, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Wrap(err, "context cancelled")
+	}
+
+	if onProgress != nil {
+		onProgress("up", 0)
+	}
+
+	bounds := img.Bounds()
+	targetW := int(math.Round(float64(bounds.Dx()) * scale))
+	targetH := int(math.Round(float64(bounds.Dy()) * scale))
+
+	// Lanczos both upsamples and, at scale 1, leaves the image alone. Either way this is the image the model is
+	// conditioned on and the reference the colour fix corrects towards.
+	base := imaging.Resize(img, targetW, targetH, imaging.Lanczos)
+
+	// Two constraints on the size handed to the model. Every dimension must be a multiple of 16, because the VAE
+	// compresses 8x and the DiT patchifies 2x on top of that. And neither dimension may be below one DiT region,
+	// since that graph accepts exactly one region size - an image smaller than a region has to be padded up rather
+	// than run at its own size.
+	//
+	// Padding rather than cropping keeps the edge pixels the user asked for; it is trimmed off at the end.
+	paddedW := max(ditRegionEdge, alignUp(targetW))
+	paddedH := max(ditRegionEdge, alignUp(targetH))
+	padded := utils.ReflectionPad(base, 0, 0, paddedW-targetW, paddedH-targetH)
+
+	// standardize=true is the [-1,1] range the reference pipeline normalizes to.
+	basePixels := utils.ImageToCHW(padded, false, true)
+
+	pool, available := Available(m.ep)
+	tile, fits := RegionSize(pool, available)
+
+	internal.Log().Debug("osaka pipeline",
+		"scale", scale, "target", []int{targetW, targetH}, "padded", []int{paddedW, paddedH},
+		"pool", pool, "available", available, "region", tile, "fits", fits)
+
+	restored, err := m.restore(ctx, basePixels, paddedW, paddedH, tile, onProgress)
+	if err != nil {
+		return nil, err
+	}
+
+	// Once, on the assembled image, against the resampled input. Per-tile correction would fix each tile to its own
+	// crop and bake the tile-to-tile drift in as a step at every boundary.
+	restored = waveletColorFix(restored, basePixels, paddedW, paddedH, defaultColorFixLevels)
+
+	out := utils.CHWToImage(restored, paddedW, paddedH, true)
+
+	if onProgress != nil {
+		onProgress("up", 1)
+	}
+
+	if paddedW != targetW || paddedH != targetH {
+		return imaging.Crop(out, image.Rect(0, 0, targetW, targetH)), nil
+	}
+
+	return out, nil
+}
+
+// restore runs the model over the image region by region. There is no whole-image path: the DiT accepts one size,
+// so even an image that would comfortably fit in memory is processed in fixed-size regions.
+func (m *Osaka) restore(
+	ctx context.Context,
+	pixels []float32,
+	width, height, tile int,
+	onProgress types.InferenceProgress,
+) ([]float32, error) {
+	grid := utils.TileGrid{Size: tile, Overlap: tileOverlap, Width: width, Height: height}
+	tiles := grid.Tiles()
+	canvas := newCanvas(width, height)
+
+	for i, rect := range tiles {
+		if err := ctx.Err(); err != nil {
+			return nil, errors.Wrap(err, "context cancelled")
+		}
+
+		region := cropCHW(pixels, width, height, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), 3)
+
+		out, err := m.restoreRegion(ctx, region, rect.Dx(), rect.Dy(), rect.Min.X, rect.Min.Y)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to restore tile %d of %d", i+1, len(tiles))
+		}
+
+		canvas.add(out, rect, tileOverlap)
+
+		if onProgress != nil {
+			onProgress("up", utils.ClampProgress(float64(i+1)/float64(len(tiles))))
+		}
+	}
+
+	return canvas.resolve(), nil
+}
+
+// restoreRegion is the model itself: encode to latent space, take one diffusion step, decode back.
+//
+// The region's dimensions must already be multiples of 16, which the caller guarantees - the image is padded to that
+// multiple, and every tile geometry is itself a multiple of 16, so no tile can be misaligned.
+func (m *Osaka) restoreRegion(ctx context.Context, pixels []float32, width, height, originX, originY int) ([]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Wrap(err, "context cancelled")
+	}
+
+	// The DiT accepts one region size and nothing else. Checking here turns what would otherwise surface as an
+	// opaque reshape failure from inside the runtime into a statement of the actual constraint.
+	if width != ditRegionEdge || height != ditRegionEdge {
+		return nil, errors.Errorf("region is %dx%d, but the model accepts only %dx%d",
+			width, height, ditRegionEdge, ditRegionEdge)
+	}
+
+	latentW, latentH := width/vaeStride, height/vaeStride
+	latentPlane := latentW * latentH
+
+	cond, err := runUnary(m.enc,
+		pixels,
+		ort.NewShape(1, 3, int64(height), int64(width)),
+		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to encode the region")
+	}
+
+	noise := gaussianNoise(latentChannels*latentPlane, originX, originY, noiseSeed)
+	vidInput := packVidInput(cond, noise, latentPlane, defaultDitConfig)
+
+	prediction, err := runStep(m.dit,
+		vidInput, defaultDitConfig.timestep,
+		ort.NewShape(1, ditChannels, int64(latentH), int64(latentW)),
+		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to run the diffusion step")
+	}
+
+	denoised := schedulerStep(prediction, noise)
+
+	out, err := runUnary(m.dec,
+		denoised,
+		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)),
+		ort.NewShape(1, 3, int64(height), int64(width)))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode the region")
+	}
+
+	return out, nil
+}
+
+// schedulerStep turns the transformer's prediction into the clean latent.
+//
+// The graph's output is named denoised_latent, but it is the flow-matching velocity, not the latent itself - the
+// reference implementation calls the same tensor "noise" and hands it to a scheduler. For a single step the schedule
+// runs from t=1000 to t=0, so the normalized time is 1 and the whole update collapses to
+//
+//	x0 = sample - t_norm * prediction = noise - prediction
+//
+// Skipping it is not a subtle error: the decoded result is the image buried under the velocity field, which scores
+// worse than the input it was given.
+func schedulerStep(prediction, noise []float32) []float32 {
+	out := make([]float32, len(prediction))
+	for i := range prediction {
+		out[i] = noise[i] - prediction[i]
+	}
+
+	return out
+}
+
+// runUnary runs a session that takes one tensor and returns one.
+func runUnary(session *utils.Session, in []float32, inShape, outShape ort.Shape) ([]float32, error) {
+	inTensor, err := ort.NewTensor(inShape, in)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create the input tensor")
+	}
+	defer inTensor.Destroy()
+
+	return runSession(session, []ort.Value{inTensor}, outShape)
+}
+
+// runStep runs the diffusion transformer, which takes the packed latent and the timestep.
+func runStep(session *utils.Session, vidInput []float32, timestep float32, inShape, outShape ort.Shape) ([]float32, error) {
+	vidTensor, err := ort.NewTensor(inShape, vidInput)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create the vid_input tensor")
+	}
+	defer vidTensor.Destroy()
+
+	stepTensor, err := ort.NewTensor(ort.NewShape(1), []float32{timestep})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create the timestep tensor")
+	}
+	defer stepTensor.Destroy()
+
+	return runSession(session, []ort.Value{vidTensor, stepTensor}, outShape)
+}
+
+func runSession(session *utils.Session, inputs []ort.Value, outShape ort.Shape) ([]float32, error) {
+	outTensor, err := ort.NewEmptyTensor[float32](outShape)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create the output tensor")
+	}
+	defer outTensor.Destroy()
+
+	if err = session.Run(inputs, []ort.Value{outTensor}); err != nil {
+		return nil, errors.Wrap(err, "failed to run the session")
+	}
+
+	// The tensor's buffer is freed by the deferred Destroy, so the data has to be copied out before returning.
+	out := make([]float32, len(outTensor.GetData()))
+	copy(out, outTensor.GetData())
+
+	return out, nil
+}

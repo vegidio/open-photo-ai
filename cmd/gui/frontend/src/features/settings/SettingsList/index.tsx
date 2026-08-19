@@ -158,6 +158,10 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
                         value: 'saitama',
                         label: 'Saitama',
                     },
+                    {
+                        value: 'osaka',
+                        label: 'Osaka',
+                    },
                 ]}
                 selected={upModel}
                 onSelect={(value) => setUpModel(value)}

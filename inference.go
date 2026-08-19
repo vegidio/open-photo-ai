@@ -20,6 +20,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/sharpen/novgorod"
 	"github.com/vegidio/open-photo-ai/models/sharpen/petersburg"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/models/upscale/osaka"
 	"github.com/vegidio/open-photo-ai/models/upscale/saitama"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
@@ -305,6 +306,8 @@ func newModel(
 		model, err = kyoto.New(ctx, operation, ep, onProgress)
 	case strings.HasPrefix(operation.Id(), "up_saitama"):
 		model, err = saitama.New(ctx, operation, ep, onProgress)
+	case strings.HasPrefix(operation.Id(), "up_osaka"):
+		model, err = osaka.New(ctx, operation, ep, onProgress)
 
 	// Denoise
 	case strings.HasPrefix(operation.Id(), "dn_stockholm"):

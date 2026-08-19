@@ -89,8 +89,9 @@ All enhancements available here come from open-source AI models that were adapte
 - **Tokyo**: use when you want a natural upscale without exaggeration. It focuses on preserving the original look and fine structures instead of "inventing" new details, making it ideal when realism and faithfulness matter more than sharpness.
 - **Kyoto**: use for real-world photos (people, landscapes, products). It excels at restoring details while handling noise, blur, and compression artifacts. Ideal for practical applications where images are imperfect, and you want visually pleasing, robust results fast.
 - **Saitama**: use for cartoon, drawings, line art, and digital illustrations. It preserves clean lines, flat colors, and stylized shading without introducing photo-like textures. Best when sharp edges and stylistic consistency matter more than realism.
+- **Osaka**: use when you want the best possible quality upscale available. It rebuilds detail rather than just sharpening it, going furthest on photos that are soft or heavily compressed. It's slow, though, and needs a powerful GPU to run well.
 
-*Verdict*: start with **Tokyo** if you have a powerful GPU, then try **Kyoto** it's taking too long.
+*Verdict*: start with **Tokyo** if you have a powerful GPU, then try **Kyoto** if it's taking too long. Reach for **Osaka** only when the others leave the image looking soft, and you can afford the wait.
 
 ### Denoise
 
@@ -98,11 +99,15 @@ All enhancements available here come from open-source AI models that were adapte
 - **Gothenburg**: use when your photos contain real-world sensor noise, the kind produced by shooting in low light or at high ISO with a smartphone or DSLR. It handles complex noise patterns that cameras produce, making it the right choice for photography.
 - **Malmö**: use to remove rain streaks from outdoor images, whether captured in light drizzle or heavy downpour. It handles rain of varying scale, density, and direction, restoring fine details behind streaks. A good choice when weather artifacts obscure the scene.
 
+*Verdict*: for regular sensor noise, start with **Gothenburg** for the best quality, then switch to **Stockholm** if speed matters more; reach for **Malmö** only when you need to remove rain streaks.
+
 ### Sharpen
 
 - **Moscow**: use when blur comes from the camera being out of focus rather than from movement — e.g. portraits with a blurry background or foreground, macro photography gone soft, or any scene where a lens failed to focus on the right plane.
 - **St. Petersburg**: use when you need fast, lightweight motion deblurring and efficiency matters more than squeezing out every last bit of quality. It's well-suited for action footage and handheld camera shake, and it's a solid choice when running on limited hardware.
 - **Novgorod**: use when blur is caused by camera shake or fast-moving subjects — e.g. sports, handheld shots in low light, or any photo where something moved during exposure. It prioritizes maximum restoration quality over speed; good when results matter most.
+
+*Verdict*: use **Moscow** for out-of-focus blur; for motion blur, start with **Novgorod** for the best quality, or fall back to **St. Petersburg** if speed matters more.
 
 ## 🛣️ Roadmap
 
@@ -117,10 +122,10 @@ These are the features I plan to implement in the future, in no particular order
 - [x] Add new model for color balance.
 - [x] Add new models for denoise, sharpening.
 - [x] Crop and rotate images in the GUI.
+- [x] Attempt to include diffusion-based models (this will be hard!)
 - [ ] Rework the architecture of some models to improve performance.
 - [ ] Add new model to colorize black and white photos.
 - [ ] Add new model to fix imperfections and remove objects from photos.
-- [ ] Attempt to include diffusion-based models (this will be hard!)
 - [ ] CLI implementation.
 - [ ] Improve documentation for the library.
 - [ ] Internationalization to other languages.
@@ -159,15 +164,15 @@ If someday this project receives enough funds/donations then I will pay for a be
 
 When you open the app for the first time, if it detects that TensorRT is available on your system, it will prompt you to enable it or not. If you choose to enable it, all models will run with TensorRT acceleration.
 
-This is one of the fastest ways to run the models, however TensorRT needs to optimize the model graphs the first time it's used, which can take a few minutes. This is why it seems to be taking too long or even stuck when you run the models for the first time. But on subsequent runs, when the TensorRT optimization is already done, all enhancements will run much faster.
+This is one of the fastest ways to run the models; however, TensorRT needs to optimize the model graphs the first time it's used, which can take a few minutes. This is why it seems to be taking too long or even stuck when you run the models for the first time. But on subsequent runs, when the TensorRT optimization is already done, all enhancements will run much faster.
 
 If you don't want to use TensorRT acceleration, you can disable it in the app Settings.
 
 ## 🐞 Known Issues
 
 1. Using half-precision (FP16) models with CPU execution provider often doesn't give any performance boost; a bug fix for this is expected to be available in the next ONNX release.
-2. The ONNX Runtime has a [bug](https://github.com/microsoft/onnxruntime/pull/26443) when running half-precision (FP16) models on Apple's M-series chip; a bug fix for this is expected to be available in the next ONNX release. Meanwhile, all image processing on Macs will be done in full precision, which gives the best quality possible, but it's often unnecessarily slow.
-3. The **Tokyo** model doesn't work with Apple's CoreML. This is a limitation on CoreML's architecture, so any upscaling using this model on a Mac will be slow.
+2. The **Tokyo** and **Osaka** models don't work with Apple's CoreML, so on a Mac they run on the CPU and will be slow. For Osaka this is a limitation of CoreML itself rather than of the model: it cannot load the two VAE graphs at all, and on the main graph it either fails outright or returns a visibly wrong result, so the app doesn't offer it.
+3. The **Osaka** model processes the image in fixed 960x960 regions. This is a property of the published model file rather than a choice: the graph is traced at one size and cannot run at another.
 
 ## 🐛 Error Reporting
 

@@ -23,6 +23,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/sharpen/novgorod"
 	"github.com/vegidio/open-photo-ai/models/sharpen/petersburg"
 	"github.com/vegidio/open-photo-ai/models/upscale/kyoto"
+	"github.com/vegidio/open-photo-ai/models/upscale/osaka"
 	"github.com/vegidio/open-photo-ai/models/upscale/saitama"
 	"github.com/vegidio/open-photo-ai/models/upscale/tokyo"
 	"github.com/vegidio/open-photo-ai/types"
@@ -96,6 +97,10 @@ var operationBuilders = map[string]operationBuilder{
 	"tokyo":   scaleBuilder(tokyo.Op),
 	"kyoto":   scaleBuilder(kyoto.Op),
 	"saitama": scaleBuilder(saitama.Op),
+
+	// Osaka parses like the others, but its Op drops the scale from the identity: SeedVR2 restores at whatever size
+	// it is handed, so one set of sessions serves every scale and the scale travels in Params instead.
+	"osaka": scaleBuilder(osaka.Op),
 }
 
 // Each model's Op returns its own concrete operation type, so the builders below are generic over that type rather
