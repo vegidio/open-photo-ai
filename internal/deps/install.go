@@ -17,6 +17,7 @@ import (
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/types"
+	"golang.org/x/sync/errgroup"
 )
 
 // downloadClient has bounded connect and header timeouts so a stalled server can't hang Initialize indefinitely. Body
@@ -53,7 +54,7 @@ var locks sync.Map
 // and gets reinstalled on the next call. That is also why there is no staging directory - it would double peak disk
 // for a multi-gigabyte archive to close a window this ordering already closes.
 func Install(ctx context.Context, dep Dependency, onProgress types.DownloadProgress) error {
-	mu, _ := locks.LoadOrStore(dep.Destination+"/"+dep.Manifest, &sync.Mutex{})
+	mu, _ := locks.LoadOrStore(dep.Destination+"/"+dep.manifestName(), &sync.Mutex{})
 	mu.(*sync.Mutex).Lock()
 	defer mu.(*sync.Mutex).Unlock()
 
@@ -74,7 +75,7 @@ func Install(ctx context.Context, dep Dependency, onProgress types.DownloadProgr
 
 	want := fingerprint(dep)
 
-	old, hasOld := readManifest(dir, dep.Manifest)
+	old, hasOld := readManifest(dir, dep.manifestName())
 	if hasOld && old.Fingerprint == want && old.intact(dir) {
 		internal.Log().Debug("dependency present", "dep", dep.Name, "dir", dep.Destination)
 		return nil
@@ -88,7 +89,7 @@ func Install(ctx context.Context, dep Dependency, onProgress types.DownloadProgr
 	// model acquisition.
 	sweepRenamed(dir)
 
-	if err = os.Remove(filepath.Join(dir, dep.Manifest)); err != nil && !os.IsNotExist(err) {
+	if err = os.Remove(filepath.Join(dir, dep.manifestName())); err != nil && !os.IsNotExist(err) {
 		return errors.Wrap(err, "failed to drop the previous manifest")
 	}
 
@@ -119,12 +120,12 @@ func Install(ctx context.Context, dep Dependency, onProgress types.DownloadProgr
 	}
 
 	if dep.Exclusive {
-		if installed, err = hashTree(dir, dep.Manifest); err != nil {
+		if installed, err = recordTree(dir, dep.manifestName()); err != nil {
 			return err
 		}
 	}
 
-	if err = writeManifest(dir, dep.Manifest, Manifest{
+	if err = writeManifest(dir, dep.manifestName(), Manifest{
 		Schema:      manifestSchema,
 		Name:        dep.Name,
 		Version:     dep.Version,
@@ -150,10 +151,6 @@ func validate(dep Dependency) error {
 		return errors.Newf("dependency %s has no sources", dep.Name)
 	}
 
-	if dep.Manifest == "" {
-		return errors.Newf("dependency %s has no manifest name", dep.Name)
-	}
-
 	if !dep.Exclusive {
 		for _, src := range dep.Sources {
 			if isArchive(src.FileName()) {
@@ -171,52 +168,83 @@ func isArchive(name string) bool {
 	return strings.EqualFold(filepath.Ext(name), ".7z")
 }
 
+// maxParallelDownloads is how many sources are fetched at once. Osaka's three graphs and the NVIDIA libraries are
+// several gigabytes over separate connections, and a single stream rarely saturates the link - but past a handful the
+// per-connection share drops without the total improving, and every extra stream is another partial file to clean up
+// if the install fails.
+const maxParallelDownloads = 3
+
 // fetch downloads every source into dir, expanding archives, and returns what it wrote. The return value only covers
-// files downloaded directly; an archive's contents are read back off the disk by hashTree, since extraction is the one
+// files downloaded directly; an archive's contents are read back off the disk by recordTree, since extraction is the one
 // step that produces files nobody declared.
+//
+// Downloading and expanding are two phases on purpose. The transfers run concurrently, because they are independent and
+// network-bound; the extraction that follows runs in declared order, one at a time, because two archives expanding into
+// one directory would be writing the same paths with nothing to arbitrate. Keeping the disk mutation serial is what
+// makes the concurrency above it safe to reason about.
 func fetch(ctx context.Context, dir string, dep Dependency, onProgress types.DownloadProgress) ([]File, error) {
 	prog := newAggregate(dep, onProgress)
-	installed := make([]File, 0, len(dep.Sources))
 
-	for _, src := range dep.Sources {
-		name := src.FileName()
-		part := filepath.Join(dir, "."+name+partSuffix)
+	// Indexed rather than appended: the manifest should list the sources in the order the dependency declares them,
+	// which is not the order concurrent downloads finish in.
+	fetched := make([]File, len(dep.Sources))
 
-		sum, size, err := downloadTo(ctx, src.URL, part, prog)
-		if err != nil {
-			os.Remove(part)
-			return nil, errors.Wrapf(err, "failed to download %s", name)
-		}
-		prog.advance(size)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(maxParallelDownloads)
 
-		if src.Sha256 != "" && sum != src.Sha256 {
-			os.Remove(part)
+	for i, src := range dep.Sources {
+		group.Go(func() error {
+			name := src.FileName()
+			part := filepath.Join(dir, "."+name+partSuffix)
 
-			if !dep.SkipVerify {
-				return nil, errors.Newf("hash mismatch for %s: expected %s, got %s", name, src.Sha256, sum)
+			sum, size, err := downloadTo(groupCtx, src.URL, part, prog)
+			if err != nil {
+				os.Remove(part)
+				return errors.Wrapf(err, "failed to download %s", name)
 			}
 
-			internal.Log().Warn("hash mismatch ignored", "artifact", name, "expected", src.Sha256, "got", sum)
-		}
+			if src.Sha256 != "" && sum != src.Sha256 {
+				os.Remove(part)
 
-		final := filepath.Join(dir, name)
-		if err = os.Rename(part, final); err != nil {
-			os.Remove(part)
-			return nil, errors.Wrapf(err, "failed to place %s", name)
-		}
+				if !dep.SkipVerify {
+					return errors.Newf("hash mismatch for %s: expected %s, got %s", name, src.Sha256, sum)
+				}
 
-		if isArchive(name) {
-			internal.Log().Info("extracting archive", "file", name)
-
-			if err = un7zip(final, dir); err != nil {
-				return nil, errors.Wrapf(err, "failed to extract %s", name)
+				internal.Log().Warn("hash mismatch ignored", "artifact", name, "expected", src.Sha256, "got", sum)
 			}
 
-			os.Remove(final)
+			final := filepath.Join(dir, name)
+			if err = os.Rename(part, final); err != nil {
+				os.Remove(part)
+				return errors.Wrapf(err, "failed to place %s", name)
+			}
+
+			fetched[i] = File{Path: name, Size: size, Sha256: sum}
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	installed := make([]File, 0, len(fetched))
+
+	for _, file := range fetched {
+		if !isArchive(file.Path) {
+			installed = append(installed, file)
 			continue
 		}
 
-		installed = append(installed, File{Path: name, Size: size, Sha256: sum})
+		internal.Log().Info("extracting archive", "file", file.Path)
+
+		final := filepath.Join(dir, file.Path)
+		if err := un7zip(final, dir); err != nil {
+			return nil, errors.Wrapf(err, "failed to extract %s", file.Path)
+		}
+
+		os.Remove(final)
 	}
 
 	prog.finish()
@@ -270,7 +298,8 @@ func sourcesPresent(dir string, dep Dependency) bool {
 		}
 	}
 
-	return len(dep.Sources) > 0
+	// validate has already rejected a dependency with no sources, so reaching here means every one of them is present.
+	return true
 }
 
 // EmptyDir removes every entry in dir without removing dir itself.

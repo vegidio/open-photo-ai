@@ -41,14 +41,38 @@ const shutdownDrainTimeout = 30 * time.Second
 func Initialize(ctx context.Context, name string, onProgress types.DownloadProgress) error {
 	internal.AppName = name
 
+	onnxTag, _ := internal.ReleaseTag("onnx")
+
 	internal.Log().Info("initializing OPAI",
-		"app_name", name, "onnx_tag", internal.ReleaseTag("onnx"), "os", runtime.GOOS, "arch", runtime.GOARCH)
+		"app_name", name, "onnx_tag", onnxTag, "os", runtime.GOOS, "arch", runtime.GOARCH)
 
 	cache, err := internal.NewCache(500)
 	if err != nil {
 		return errors.Wrap(err, "failed to create image cache")
 	}
 	internal.ImageCache = cache
+
+	// Two slow, independent lookups nothing below needs until much later: the model manifest is an HTTPS request with a
+	// five second timeout, and the memory budgets shell out to the OS. Started here, they run while the ONNX Runtime
+	// downloads - which on a first launch is 175 MB - instead of adding their seconds after it. Both write only what
+	// the joins below read.
+	var (
+		modelData []internal.RemoteModelData
+		modelErr  error
+		device    int64
+		host      int64
+		preludeWg sync.WaitGroup
+	)
+
+	preludeWg.Add(2)
+	go func() {
+		defer preludeWg.Done()
+		modelData, modelErr = utils.LoadModelData()
+	}()
+	go func() {
+		defer preludeWg.Done()
+		device, host = internal.DefaultBudgets()
+	}()
 
 	// Drop what the execution providers compiled against an older runtime; the models themselves are plain ONNX graphs
 	// and survive a runtime bump untouched.
@@ -71,13 +95,15 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 	// loaded, since the runtime now in use is the one under RuntimeDir.
 	pruneLegacyLayout()
 
-	// Load model data. Without it there are no expected hashes, so every model downloaded this session is installed
-	// unverified - worth saying plainly, since it used to be the silent outcome of a slow network.
-	if modelData, err := utils.LoadModelData(); err == nil {
+	// Join the prelude. Without the manifest there are no expected hashes, so every model downloaded this session is
+	// installed unverified - worth saying plainly, since it used to be the silent outcome of a slow network.
+	preludeWg.Wait()
+
+	if modelErr == nil {
 		internal.ModelData = modelData
 	} else {
 		internal.Log().Warn("no model manifest is available; models will be downloaded without verification this "+
-			"session", "err", err)
+			"session", "err", modelErr)
 	}
 
 	// Initialize the ONNX runtime
@@ -85,9 +111,8 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 		return err
 	}
 
-	// Bound how much stays resident. The defaults are derived from the machine here, once, because the probes behind
-	// them shell out to the OS; an embedder that wants different ceilings calls SetModelBudget afterwards.
-	device, host := internal.DefaultBudgets()
+	// Bound how much stays resident. The defaults were derived from the machine by the prelude above; an embedder that
+	// wants different ceilings calls SetModelBudget afterwards.
 	internal.Registry.SetBudget(types.MemoryPoolDevice, device)
 	internal.Registry.SetBudget(types.MemoryPoolHost, host)
 	internal.Registry.SetIdleTTL(internal.DefaultIdleTTL)
@@ -131,7 +156,10 @@ func Destroy() {
 // region - Private functions
 
 func cleanEngineCache() error {
-	tag := internal.ReleaseTag("onnx")
+	tag, found := internal.ReleaseTag("onnx")
+	if !found {
+		return errors.New("the ONNX Runtime is not pinned to a release")
+	}
 
 	wiped, err := utils.CleanEPCache(tag)
 	if err != nil {
@@ -166,7 +194,12 @@ func startRuntime() error {
 		return errors.Wrap(err, "failed to create config directory")
 	}
 
-	runtimePath := filepath.Join(configDir, internal.OnnxRuntimeName)
+	pinned, found := internal.PinnedArchive("onnx")
+	if !found || pinned.Lib == "" {
+		return errors.Newf("no ONNX Runtime is published for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	runtimePath := filepath.Join(configDir, pinned.Lib)
 	ort.SetSharedLibraryPath(runtimePath)
 	if err = ort.InitializeEnvironment(); err != nil {
 		return errors.Wrap(err, "failed to initialize ONNX Runtime")

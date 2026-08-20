@@ -4,7 +4,6 @@ import (
 	"context"
 	"image"
 	"image/draw"
-	"math"
 
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
@@ -13,10 +12,10 @@ import (
 )
 
 const (
-	// DefaultTileSize and DefaultTileOverlap are the geometry every fixed-shape model shipped today was tuned
-	// against. A caller that passes no WithTileGeometry option gets exactly these, unchanged.
-	DefaultTileSize    = 256
-	DefaultTileOverlap = 16
+	// defaultTileSize and defaultTileOverlap are the geometry every fixed-shape model shipped today was tuned
+	// against. They are the only geometry RunTiledInference uses; a model needing its own drives TileGrid directly.
+	defaultTileSize    = 256
+	defaultTileOverlap = 16
 )
 
 // TileOption configures an optional behavior of RunTiledInference.
@@ -24,8 +23,6 @@ type TileOption func(*tileConfig)
 
 type tileConfig struct {
 	divergenceThreshold float32 // <=0 disables the per-tile divergence guard
-	size                int     // tile edge in input pixels
-	overlap             int     // overlap between adjacent tiles, in input pixels
 }
 
 // WithDivergenceGuard enables the per-tile divergence guard: if a tile's RAW model output exceeds threshold in absolute
@@ -35,33 +32,17 @@ func WithDivergenceGuard(threshold float32) TileOption {
 	return func(c *tileConfig) { c.divergenceThreshold = threshold }
 }
 
-// WithTileGeometry overrides the tile size and overlap for one model, in input pixels.
-//
-// The right geometry is a property of the model, not of the driver: 256x256 suits the fixed-shape convolutional
-// models, whose receptive field is a few dozen pixels, but is far too small for an architecture whose context spans
-// hundreds of pixels. Rather than move the constants, each model states what it needs and the ones that say nothing
-// keep exactly what they were tuned against.
-//
-// An invalid geometry (non-positive size, negative overlap, or an overlap that leaves no forward progress) is
-// ignored rather than clamped: a silently corrected value would produce a tiling nobody chose, whereas ignoring it
-// falls back to the known-good default. Both fields are validated together, in one option, so there is no ordering
-// in which a caller can leave the pair half-applied.
-func WithTileGeometry(size, overlap int) TileOption {
-	return func(c *tileConfig) {
-		if size <= 0 || overlap < 0 || overlap >= size {
-			return
-		}
-
-		c.size, c.overlap = size, overlap
-	}
-}
-
 // RunTiledInference runs a fixed-shape ONNX session over an image in overlapping 256x256 tiles and stitches the results
 // back together with soft blending. scale is the model's output scale factor (1 for denoise, N for an NxN upscale), so
 // the result has dimensions width*scale x height*scale. opId is the progress key (e.g. "dn"/"up").
 //
 // The caller is responsible for emitting the initial onProgress(opId, 0): upscale invokes this once per scale pass and
 // must not reset progress to 0 on each pass.
+//
+// This is the tiling path a model should take. A custom driver gives up the divergence guard, the blending, the
+// progress accounting and the partitioning rule all at once, and every one of those then has to be kept correct in a
+// second place. Write one only when this driver genuinely cannot express what the model needs - and say in its doc
+// comment what that was. Osaka is the one current exception; see Osaka.restore.
 func RunTiledInference(
 	ctx context.Context,
 	session *Session,
@@ -75,7 +56,7 @@ func RunTiledInference(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	cfg := tileConfig{size: DefaultTileSize, overlap: DefaultTileOverlap}
+	var cfg tileConfig
 	for _, opt := range opts {
 		opt(&cfg)
 	}
@@ -85,64 +66,45 @@ func RunTiledInference(
 	height := bounds.Dy()
 
 	result := image.NewRGBA(image.Rect(0, 0, width*scale, height*scale))
-	stride := cfg.size - cfg.overlap
 
-	step := 1 / (math.Ceil(float64(height)/float64(stride)) * math.Ceil(float64(width)/float64(stride)))
+	// The partitioning - including the rule that shifts an out-of-bounds tile back in rather than shrinking it - comes
+	// from TileGrid, so this driver and the ones that cannot use it agree on where the tiles are by construction.
+	grid := TileGrid{Size: defaultTileSize, Overlap: defaultTileOverlap, Width: width, Height: height}
+	tiles := grid.Tiles()
+	columns := len(grid.offsets(width))
+
+	step := 1 / float64(len(tiles))
 	total := 0.0
 
-	for y := 0; y < height; y += stride {
-		for x := 0; x < width; x += stride {
-			if err := ctx.Err(); err != nil {
-				return nil, errors.Wrap(err, "context cancelled")
-			}
+	for i, rect := range tiles {
+		if err := ctx.Err(); err != nil {
+			return nil, errors.Wrap(err, "context cancelled")
+		}
 
-			tileX, tileY, tileW, tileH := calculateTileBounds(x, y, width, height, cfg.size)
+		tileX, tileY := rect.Min.X, rect.Min.Y
+		tileW, tileH := rect.Dx(), rect.Dy()
 
-			paddedTile := prepareTileForInference(img, tileX, tileY, tileW, tileH, cfg.size)
+		paddedTile := prepareTileForInference(img, tileX, tileY, tileW, tileH, defaultTileSize)
 
-			processedTile, err := processTile(session, paddedTile, tileW, tileH, scale, cfg.divergenceThreshold)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to process tile")
-			}
+		processedTile, err := processTile(session, paddedTile, tileW, tileH, scale, cfg.divergenceThreshold)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to process tile")
+		}
 
-			outputX := tileX * scale
-			outputY := tileY * scale
-			blendTileWithOverlap(result, processedTile, outputX, outputY, cfg.overlap*scale, x > 0, y > 0)
+		// Ramp the edges that meet an already-written neighbour: every tile but the first of its row has one to the
+		// left, and every tile but the first row has one above.
+		blendLeft, blendTop := i%columns > 0, i >= columns
 
-			if onProgress != nil {
-				total += step
-				onProgress(opId, ClampProgress(total))
-			}
+		blendTileWithOverlap(result, processedTile, tileX*scale, tileY*scale, defaultTileOverlap*scale,
+			blendLeft, blendTop)
+
+		if onProgress != nil {
+			total += step
+			onProgress(opId, ClampProgress(total))
 		}
 	}
 
 	return result, nil
-}
-
-// calculateTileBounds clamps a tile to the image, shifting it back in-bounds rather than shrinking it when it fits.
-func calculateTileBounds(x, y, imgWidth, imgHeight, tileSize int) (tileX, tileY, tileW, tileH int) {
-	tileX = x
-	tileY = y
-	tileW = tileSize
-	tileH = tileSize
-
-	if tileX+tileW > imgWidth {
-		tileX = imgWidth - tileW
-		if tileX < 0 {
-			tileX = 0
-			tileW = imgWidth
-		}
-	}
-
-	if tileY+tileH > imgHeight {
-		tileY = imgHeight - tileH
-		if tileY < 0 {
-			tileY = 0
-			tileH = imgHeight
-		}
-	}
-
-	return
 }
 
 // TileGrid enumerates the tiles covering a Width x Height image at a given geometry.
@@ -182,18 +144,18 @@ func (g TileGrid) Tiles() []image.Rectangle {
 // extent is the tile size along one axis: the configured size, or the whole length when the geometry is invalid or
 // the image is smaller than one tile.
 func (g TileGrid) extent(length int) int {
-	if g.Size <= 0 || g.Overlap < 0 || g.Overlap >= g.Size || g.Size >= length {
+	if !g.valid(length) {
 		return length
 	}
 
 	return g.Size
 }
 
-// Count reports how many tiles Tiles will return, without building them.
-func (g TileGrid) Count() int {
-	xs, ys := g.offsets(g.Width), g.offsets(g.Height)
-
-	return len(xs) * len(ys)
+// valid reports whether the configured geometry actually partitions an axis of the given length: a positive tile, an
+// overlap that leaves forward progress, and a tile smaller than what it is covering. It is one predicate rather than
+// three copies so extent and offsets cannot drift into disagreeing about what a degenerate geometry means.
+func (g TileGrid) valid(length int) bool {
+	return g.Size > 0 && g.Overlap >= 0 && g.Overlap < g.Size && g.Size < length
 }
 
 // offsets returns the tile start positions along one axis.
@@ -207,7 +169,7 @@ func (g TileGrid) offsets(length int) []int {
 	if length <= 0 {
 		return nil
 	}
-	if g.Size <= 0 || g.Overlap < 0 || g.Overlap >= g.Size || g.Size >= length {
+	if !g.valid(length) {
 		return []int{0}
 	}
 
@@ -231,12 +193,6 @@ func (g TileGrid) offsets(length int) []int {
 	return out
 }
 
-// ReflectionPad extends an image by mirroring its edge pixels outwards. It is exported for the drivers that pad to a
-// model's alignment requirement rather than to a fixed tile size.
-func ReflectionPad(img image.Image, left, top, right, bottom int) image.Image {
-	return reflectionPad(img, left, top, right, bottom)
-}
-
 // prepareTileForInference extracts a tile and reflection-pads it out to tileSize, which the fixed-shape sessions
 // require even for the partial tiles at the right and bottom edges.
 func prepareTileForInference(img image.Image, tileX, tileY, tileW, tileH, tileSize int) image.Image {
@@ -253,7 +209,7 @@ func prepareTileForInference(img image.Image, tileX, tileY, tileW, tileH, tileSi
 	}
 
 	if padRight > 0 || padBottom > 0 {
-		return reflectionPad(tile, 0, 0, padRight, padBottom)
+		return ReflectionPad(tile, 0, 0, padRight, padBottom)
 	}
 
 	return tile
@@ -324,7 +280,9 @@ func runTileInference(session *Session, tile image.Image, scale int, divergenceT
 	return CHWToImage(outputData, outW, outH, false), nil
 }
 
-func reflectionPad(img image.Image, left, top, right, bottom int) image.Image {
+// ReflectionPad extends an image by mirroring its edge pixels outwards. It is exported for the drivers that pad to a
+// model's alignment requirement rather than to a fixed tile size.
+func ReflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 	bounds := img.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
 

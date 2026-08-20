@@ -56,7 +56,7 @@ func TestModelDependency(t *testing.T) {
 	// The manifest is named after the model because models/ is shared: a single record per directory would make two
 	// concurrent model installs a read-modify-write race over one file.
 	t.Run("the manifest is named after the model", func(t *testing.T) {
-		if got := ModelDependency("dn_stockholm_fp32").Manifest; got != ".dn_stockholm_fp32.json" {
+		if got := ModelDependency("dn_stockholm_fp32").manifestName(); got != ".dn_stockholm_fp32.json" {
 			t.Errorf("manifest = %q, want a name scoped to the model", got)
 		}
 	})

@@ -44,7 +44,12 @@ func bootstrap(t *testing.T) {
 		t.Fatalf("runtime dir: %v", err)
 	}
 
-	ort.SetSharedLibraryPath(filepath.Join(dir, internal.OnnxRuntimeName))
+	pinned, found := internal.PinnedArchive("onnx")
+	if !found {
+		t.Fatalf("no ONNX Runtime is published for this platform")
+	}
+
+	ort.SetSharedLibraryPath(filepath.Join(dir, pinned.Lib))
 	if err = ort.InitializeEnvironment(); err != nil {
 		t.Fatalf("initialize ONNX Runtime: %v", err)
 	}

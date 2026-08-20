@@ -19,6 +19,9 @@ var legacyRuntimeGlobs = []string{
 	"LICENSE*", "ThirdPartyNotices*", "VERSION_NUMBER", "GIT_COMMIT_ID", "Privacy.md", "README*",
 }
 
+// legacyRuntimePruned marks that the sweep below has run. It is what stops it running again - see PruneLegacyRuntime.
+const legacyRuntimePruned = ".runtime-pruned"
+
 // modelExtensions are the files that belong to models/ rather than to an execution provider's cache. Everything else
 // there is a leftover engine, profile or compiled model from the layout that shared the two.
 var modelExtensions = []string{".onnx", ".onnx.data", ".onnx_data"}
@@ -26,13 +29,26 @@ var modelExtensions = []string{".onnx", ".onnx.data", ".onnx_data"}
 // PruneLegacyRuntime removes the ONNX Runtime an older version left at the root of the config directory. It reports how
 // many files it deleted.
 //
-// It is safe to call on every start: after the first success nothing matches, and a fresh installation never had those
-// files to begin with. Failures are worth logging but not worth failing a launch over - the runtime now in use is the
-// one in RuntimeDir, and a stale file at the root is wasted disk rather than a hazard.
+// It runs at most once per installation, gated on a marker file, in the same spirit as PruneLegacyEPCache's `.version`
+// stamp. The gate is about safety rather than the cost of the walk: the patterns it matches include `*.dll`, `*.so`,
+// `*.dylib` and `README*` at the config root, which describe what the pre-RuntimeDir layout put there but would just
+// as happily match something a later feature puts there on purpose. A migration that has already done its job should
+// not keep watching a directory it no longer understands.
+//
+// This whole function can be deleted once installations predating the RuntimeDir layout are no longer in the wild;
+// the marker it leaves behind is harmless either way.
+//
+// Failures are worth logging but not worth failing a launch over - the runtime now in use is the one in RuntimeDir,
+// and a stale file at the root is wasted disk rather than a hazard.
 func PruneLegacyRuntime() (int, error) {
 	root, err := fs.MkUserConfigDir(internal.AppName)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to resolve the config directory")
+	}
+
+	marker := filepath.Join(root, legacyRuntimePruned)
+	if fs.FileExists(marker) {
+		return 0, nil
 	}
 
 	entries, err := os.ReadDir(root)
@@ -57,6 +73,12 @@ func PruneLegacyRuntime() (int, error) {
 
 	if removed > 0 {
 		internal.Log().Info("removed the runtime left at the config root by an older version", "files", removed)
+	}
+
+	// Written last, so an interrupted sweep runs again rather than leaving half the tree behind forever. An empty file
+	// is enough - only its existence is ever read.
+	if err = os.WriteFile(marker, nil, 0o644); err != nil {
+		return removed, errors.Wrap(err, "failed to mark the legacy runtime sweep as done")
 	}
 
 	return removed, nil

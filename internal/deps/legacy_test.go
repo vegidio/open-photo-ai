@@ -73,6 +73,45 @@ func TestPruneLegacyRuntime(t *testing.T) {
 // TestPruneLegacyEPCache covers the sweep of the provider caches that used to share the models directory. Install
 // cannot do this itself: models/ is shared by every model, so it only ever touches the paths its own manifest names,
 // and these files were named by nobody.
+// The sweep is a one-time migration, so it must stop looking once it has run. Its globs describe the old layout but
+// would also match a `*.dll` or `README` a later feature legitimately puts at the config root.
+func TestPruneLegacyRuntimeRunsOnlyOnce(t *testing.T) {
+	root := setup(t)
+
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("failed to create the config directory: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "onnxruntime.1.26.0.dylib"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("failed to write the stale runtime: %v", err)
+	}
+
+	removed, err := PruneLegacyRuntime()
+	if err != nil {
+		t.Fatalf("PruneLegacyRuntime: %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("first sweep removed %d files, want 1", removed)
+	}
+
+	// A file a later feature might legitimately place at the config root, matching the same globs.
+	later := filepath.Join(root, "README.md")
+	if err = os.WriteFile(later, []byte("docs"), 0o644); err != nil {
+		t.Fatalf("failed to write the later file: %v", err)
+	}
+
+	if removed, err = PruneLegacyRuntime(); err != nil {
+		t.Fatalf("second PruneLegacyRuntime: %v", err)
+	}
+	if removed != 0 {
+		t.Fatalf("second sweep removed %d files, want 0", removed)
+	}
+
+	if _, err = os.Stat(later); err != nil {
+		t.Errorf("the second sweep removed a file written after the migration had already run: %v", err)
+	}
+}
+
 func TestPruneLegacyEPCache(t *testing.T) {
 	seed := func(t *testing.T, dir string, stamped bool) {
 		t.Helper()

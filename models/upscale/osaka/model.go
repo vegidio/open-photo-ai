@@ -17,8 +17,8 @@ type Osaka struct {
 	ep        types.ExecutionProvider
 	utils.Sessions
 
-	// Aliases into Sessions, for readability at the call sites. They are not counted twice: ResidentBytes and Destroy
-	// are promoted from the embedded slice, which is the only owner.
+	// Aliases into Sessions, bound by name in loadSessions. They are not counted twice: ResidentBytes and Destroy are
+	// promoted from the embedded slice, which is the only owner.
 	dit *utils.Session
 	enc *utils.Session
 	dec *utils.Session
@@ -32,7 +32,7 @@ func New(
 ) (*Osaka, error) {
 	op := operation.(OpUpOsaka)
 
-	sessions, err := loadSessions(ctx, op.precision, ep, onProgress)
+	g, err := loadSessions(ctx, op.precision, ep, onProgress)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load Osaka sessions")
 	}
@@ -43,10 +43,10 @@ func New(
 		name:      utils.FormatModelName("Upscale", op.precision),
 		operation: op,
 		ep:        ep,
-		Sessions:  sessions,
-		dit:       sessions[0],
-		enc:       sessions[1],
-		dec:       sessions[2],
+		Sessions:  g.Sessions,
+		dit:       g.dit,
+		enc:       g.enc,
+		dec:       g.dec,
 	}, nil
 }
 

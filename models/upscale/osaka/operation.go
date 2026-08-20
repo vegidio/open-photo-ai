@@ -3,17 +3,12 @@ package osaka
 import (
 	"fmt"
 
+	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
 // ParamScale is the map key carrying the per-run scale factor to Model.Run.
 const ParamScale = "scale"
-
-// minScale and maxScale bound what the UI may ask for, matching the other upscalers.
-const (
-	minScale = 1.0
-	maxScale = 8.0
-)
 
 // OpUpOsaka is the SeedVR2-backed diffusion upscaler.
 //
@@ -59,7 +54,7 @@ var (
 func Op(scale float64, _ types.Precision) OpUpOsaka {
 	return OpUpOsaka{
 		precision: types.PrecisionFp16,
-		scale:     clampScale(scale),
+		scale:     upscale.ClampScale(scale),
 	}
 }
 
@@ -67,7 +62,7 @@ func Op(scale float64, _ types.Precision) OpUpOsaka {
 // A scale of 1.0 still runs the model: SeedVR2 restores detail at the input size.
 func ScaleFromParams(params map[string]any) float64 {
 	if v, ok := params[ParamScale].(float64); ok {
-		return clampScale(v)
+		return upscale.ClampScale(v)
 	}
 
 	return 1.0
@@ -76,15 +71,4 @@ func ScaleFromParams(params map[string]any) float64 {
 // ScaleCacheKey is the stable per-run signature folded into the image cache key.
 func ScaleCacheKey(scale float64) string {
 	return fmt.Sprintf("s=%.4g", scale)
-}
-
-func clampScale(scale float64) float64 {
-	if scale < minScale {
-		return minScale
-	}
-	if scale > maxScale {
-		return maxScale
-	}
-
-	return scale
 }

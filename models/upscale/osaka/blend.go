@@ -75,24 +75,27 @@ func (c *canvas) add(tile []float32, rect image.Rectangle, feather int) {
 }
 
 // resolve divides the accumulated sums by their weights, returning planar CHW data ready for CHWToImage.
+//
+// The division is in place: the accumulator is the result, and the canvas is dropped by its caller immediately after.
+// A second buffer would double peak float32 image memory - around 2.3 GB on a 4x pass over a 12 MP photo - on a
+// machine that is already holding a 7 GB model.
 func (c *canvas) resolve() []float32 {
-	out := make([]float32, len(c.sum))
 	plane := c.width * c.height
 
 	for i := range plane {
 		w := c.weight[i]
 		if w <= 0 {
 			// Unreachable while every pixel is covered by at least one tile, which the grid guarantees. Leaving the
-			// pixel at zero rather than dividing keeps a hole visible instead of turning it into an infinity.
+			// pixel at its accumulated zero rather than dividing keeps a hole visible instead of an infinity.
 			continue
 		}
 
-		out[i] = c.sum[i] / w
-		out[plane+i] = c.sum[plane+i] / w
-		out[2*plane+i] = c.sum[2*plane+i] / w
+		c.sum[i] /= w
+		c.sum[plane+i] /= w
+		c.sum[2*plane+i] /= w
 	}
 
-	return out
+	return c.sum
 }
 
 // edgeWeights builds the per-axis weight ramp for a tile of the given length.

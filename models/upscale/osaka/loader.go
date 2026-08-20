@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cockroachdb/errors"
-	"github.com/vegidio/open-photo-ai/internal"
-	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -76,44 +73,56 @@ func modelId(suffix string, precision types.Precision) string {
 	return fmt.Sprintf("up_osaka%s_%s", suffix, precision)
 }
 
-// loadSessions downloads and opens the three graphs, in the order sessionSpecs lists them.
+// graphs is the three stages of one Osaka pass, held both as a set to destroy and measure as a unit and as named
+// fields for the pipeline to call.
+//
+// The names are what matter: binding them by position to the order of sessionSpecs would make reordering that literal
+// swap the encoder and the decoder, which compiles, runs, and returns a wrong image with nothing to catch it.
+type graphs struct {
+	utils.Sessions
+
+	dit *utils.Session
+	enc *utils.Session
+	dec *utils.Session
+}
+
+// loadSessions downloads and opens the three graphs and binds each to its role by name.
 func loadSessions(
 	ctx context.Context,
 	precision types.Precision,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
-) (_ utils.Sessions, retErr error) {
-	sessions := make(utils.Sessions, 0, len(sessionSpecs))
-
-	// Release whatever opened successfully if a later graph fails; the DiT alone is nearly 7 GB, so leaking it while
-	// returning an error would leave the process holding memory nothing can reach.
-	defer func() {
-		if retErr != nil {
-			sessions.Destroy()
-		}
-	}()
-
-	profile := profileFor()
-
+) (graphs, error) {
+	specs := make([]utils.SessionSpec, 0, len(sessionSpecs))
 	for _, spec := range sessionSpecs {
-		id := modelId(spec.suffix, precision)
-
-		if err := deps.Install(ctx, deps.ModelDependency(id), onProgress); err != nil {
-			return nil, errors.Wrapf(err, "failed to prepare the %s model", id)
-		}
-
-		internal.Log().Debug("loading model session", "model_id", id)
-
-		session, err := utils.CreateSession(id+".onnx", spec.inputs, spec.outputs, ep, profile)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to create the %s session", id)
-		}
-
-		internal.Log().Debug("model session ready", "model_id", id)
-		sessions = append(sessions, session)
+		specs = append(specs, utils.SessionSpec{
+			ModelId: modelId(spec.suffix, precision),
+			Inputs:  spec.inputs,
+			Outputs: spec.outputs,
+		})
 	}
 
-	return sessions, nil
+	// The shared loader destroys a partially-opened set for us, so a failure here leaks nothing - which matters most
+	// for this model, whose DiT alone is nearly 7 GB.
+	sessions, err := utils.LoadSessions(ctx, specs, ep, profileFor(), onProgress)
+	if err != nil {
+		return graphs{}, err
+	}
+
+	// LoadSessions returns the sessions in spec order, and specs was built from sessionSpecs just above, so the two
+	// are index-aligned by construction within this function - unlike the fields below, which are read from another
+	// file and so are bound by name.
+	bySuffix := make(map[string]*utils.Session, len(sessionSpecs))
+	for i, spec := range sessionSpecs {
+		bySuffix[spec.suffix] = sessions[i]
+	}
+
+	return graphs{
+		Sessions: sessions,
+		dit:      bySuffix[ditSuffix],
+		enc:      bySuffix[encSuffix],
+		dec:      bySuffix[decSuffix],
+	}, nil
 }
 
 // brokenOptimizers are the ONNX Runtime graph transformers that miscompile this DiT.

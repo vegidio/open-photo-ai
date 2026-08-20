@@ -31,7 +31,6 @@ func ModelDependency(id string) Dependency {
 	return Dependency{
 		Name:        id,
 		Destination: internal.ModelsDir,
-		Manifest:    "." + id + ".json",
 		Sources:     sources,
 		SkipVerify:  internal.SkipModelVerification(),
 

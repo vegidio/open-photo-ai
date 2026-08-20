@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
-	"github.com/vegidio/go-sak/crypto"
 	"github.com/vegidio/open-photo-ai/internal"
 )
 
@@ -31,14 +30,22 @@ const (
 // File is one installed file, with its path relative to the dependency's destination and always slash-separated so a
 // manifest written on Windows reads the same everywhere.
 type File struct {
-	Path   string `json:"path"`
-	Size   int64  `json:"size"`
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+
+	// Sha256 is recorded only for a file downloaded directly, where the hash was computed in-stream and cost nothing.
+	// It is absent for anything extracted from an archive - see recordTree - and nothing reads it back; it is there to
+	// be read by a human diagnosing an install.
 	Sha256 string `json:"sha256,omitempty"`
 }
 
 // Manifest records what a dependency put on disk.
 type Manifest struct {
-	Schema  int    `json:"schema"`
+	Schema int `json:"schema"`
+
+	// Name and Version are written for whoever opens the file, not for this package: nothing reads them back, and
+	// Fingerprint below is what any decision is made on. They are what makes a manifest identifiable by hand, which is
+	// the only way to tell whose record a stray `.something.json` in models/ is.
 	Name    string `json:"name"`
 	Version string `json:"version"`
 
@@ -178,8 +185,13 @@ func subdirs(files []File) []string {
 	return dirs
 }
 
-// hashTree records every file under dir, which is how an archive's contents are captured: extraction produces a list
+// recordTree records every file under dir, which is how an archive's contents are captured: extraction produces a list
 // nobody declared, so the list is read back off the disk afterwards.
+//
+// Only the path and size are recorded. Hashing each extracted file would be a second full read of the expanded tree -
+// TensorRT alone is 1.78 GB compressed and more on disk - to produce a value nothing reads: intact compares sizes, and
+// deliberately so, while the bytes as downloaded were already verified in-stream against the pinned hash of the
+// archive they came out of, which is the check that actually establishes the contents are genuine.
 //
 // Enumerating the result rather than diffing the directory before and after is deliberate - an archive that overwrites
 // a file already present would be missing from a diff, and the manifest has to name every file it owns for the next
@@ -189,7 +201,7 @@ func subdirs(files []File) []string {
 // already walked with - and the size is on that entry, served from the same readdir batch. Asking for it again is a
 // second lstat per file, which on a CUDA tree of several hundred is a directory walk's worth of syscalls for
 // information already in hand.
-func hashTree(dir, manifest string) ([]File, error) {
+func recordTree(dir, manifest string) ([]File, error) {
 	var files []File
 
 	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, walkErr error) error {
@@ -216,12 +228,7 @@ func hashTree(dir, manifest string) ([]File, error) {
 			return errors.Wrapf(err, "failed to stat %s", p)
 		}
 
-		sum, err := crypto.Sha256File(p)
-		if err != nil {
-			return errors.Wrapf(err, "failed to hash %s", p)
-		}
-
-		files = append(files, File{Path: rel, Size: info.Size(), Sha256: sum})
+		files = append(files, File{Path: rel, Size: info.Size()})
 		return nil
 	})
 	if err != nil {

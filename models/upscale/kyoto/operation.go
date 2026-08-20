@@ -3,6 +3,7 @@ package kyoto
 import (
 	"fmt"
 
+	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -22,15 +23,8 @@ func (o OpUpKyoto) Precision() types.Precision {
 var _ types.Operation = (*OpUpKyoto)(nil)
 
 func Op(scale float64, precision types.Precision) OpUpKyoto {
-	if scale < 1 {
-		scale = 1
-	}
-	if scale > 8 {
-		scale = 8
-	}
-
 	return OpUpKyoto{
 		precision: precision,
-		scale:     scale,
+		scale:     upscale.ClampScale(scale),
 	}
 }

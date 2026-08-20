@@ -6,75 +6,19 @@ import (
 	"math/rand/v2"
 )
 
-// The DiT takes 33 channels: a noise latent, the latent of the image being restored, and a mask channel. The
-// convention is not discoverable from the graph - all 33 channels go through a single projection, so nothing in the
-// structure says which group is which - and getting it wrong does not fail loudly, it just returns a worse image.
+// The DiT takes 33 channels, laid out as concat([noise, encoded_latent, ones_mask]) - noise first, then the latent of
+// the image being restored, then a mask channel of ones - and driven at the first timestep of a 1000-step schedule.
 //
-// The values are taken from SeedVR2's reference implementation, which builds the input as
-// concat([noise, encoded_latent, ones_mask]) and drives it at t=1000. ditConfig remains a struct rather than four
-// constants only so the sweep in sweep_manual_test.go can still enumerate alternatives if a future export changes
-// the convention.
-type ditConfig struct {
-	layout    channelLayout
-	taskValue float32
-	timestep  float32
-
-	// latentScale multiplies the condition latent on the way into the DiT. SeedVR2's VAE declares a scaling factor
-	// of 0.9152, but the reference pipeline does not apply it - the encoder's output goes in untouched - so this is
-	// 1 in practice and exists only to make that explicit rather than implicit.
-	latentScale float32
-}
-
-// channelLayout is the order of the three groups within vid_input's 33 channels.
-type channelLayout int
-
+// The convention is not discoverable from the graph: all 33 channels go through a single projection, so nothing in the
+// structure says which group is which, and getting it wrong does not fail loudly - it just returns a worse image. The
+// values below are taken from SeedVR2's reference implementation rather than guessed.
+//
+// Nothing is rescaled on the way in. SeedVR2's VAE declares a scaling factor of 0.9152, but the reference pipeline
+// does not apply it - the encoder's output goes into the DiT untouched.
 const (
-	layoutNoiseCondTask channelLayout = iota
-	layoutCondNoiseTask
-	layoutTaskNoiseCond
-	layoutTaskCondNoise
-	layoutNoiseTaskCond
-	layoutCondTaskNoise
+	taskValue   float32 = 1
+	ditTimestep float32 = 1000
 )
-
-func (l channelLayout) String() string {
-	switch l {
-	case layoutNoiseCondTask:
-		return "noise|cond|task"
-	case layoutCondNoiseTask:
-		return "cond|noise|task"
-	case layoutTaskNoiseCond:
-		return "task|noise|cond"
-	case layoutTaskCondNoise:
-		return "task|cond|noise"
-	case layoutNoiseTaskCond:
-		return "noise|task|cond"
-	case layoutCondTaskNoise:
-		return "cond|task|noise"
-	default:
-		return "unknown"
-	}
-}
-
-// offsets returns the starting channel of the noise, condition and task groups for this layout.
-func (l channelLayout) offsets() (noise, cond, task int) {
-	switch l {
-	case layoutNoiseCondTask:
-		return 0, latentChannels, 2 * latentChannels
-	case layoutCondNoiseTask:
-		return latentChannels, 0, 2 * latentChannels
-	case layoutTaskNoiseCond:
-		return 1, 1 + latentChannels, 0
-	case layoutTaskCondNoise:
-		return 1 + latentChannels, 1, 0
-	case layoutNoiseTaskCond:
-		return 0, 1 + latentChannels, latentChannels
-	case layoutCondTaskNoise:
-		return 1 + latentChannels, 0, latentChannels
-	default:
-		return 0, latentChannels, 2 * latentChannels
-	}
-}
 
 const (
 	latentChannels = 16
@@ -85,30 +29,19 @@ const (
 // packVidInput builds the DiT's 33-channel input from a condition latent and a noise latent.
 //
 // All three tensors are planar, so each group is a contiguous run of channel planes and packing is a set of copies
-// rather than an interleave.
-func packVidInput(cond, noise []float32, plane int, cfg ditConfig) []float32 {
+// rather than an interleaving.
+func packVidInput(cond, noise []float32, plane int) []float32 {
 	out := make([]float32, ditChannels*plane)
-	noiseAt, condAt, taskAt := cfg.layout.offsets()
-
-	scale := cfg.latentScale
-	if scale == 0 {
-		scale = 1
-	}
+	noiseAt, condAt, taskAt := 0, latentChannels, 2*latentChannels
 
 	for c := range latentChannels {
 		copy(out[(noiseAt+c)*plane:], noise[c*plane:(c+1)*plane])
-
-		dst := out[(condAt+c)*plane : (condAt+c+1)*plane]
-		src := cond[c*plane : (c+1)*plane]
-
-		for i := range dst {
-			dst[i] = src[i] * scale
-		}
+		copy(out[(condAt+c)*plane:], cond[c*plane:(c+1)*plane])
 	}
 
 	task := out[taskAt*plane : (taskAt+1)*plane]
 	for i := range task {
-		task[i] = cfg.taskValue
+		task[i] = taskValue
 	}
 
 	return out
@@ -118,7 +51,7 @@ func packVidInput(cond, noise []float32, plane int, cfg ditConfig) []float32 {
 //
 // It is seeded from the region's position rather than from a global source so that a run is reproducible. The image
 // cache memoizes results by input hash and operation, so a nondeterministic model would hand the user a result they
-// could not reproduce, and would make any A/B comparison of tiling settings meaningless. Deriving the seed from the
+// could not reproduce and would make any A/B comparison of tiling settings meaningless. Deriving the seed from the
 // origin also means a tile's noise does not depend on how many tiles preceded it, so changing the tile size does not
 // reshuffle the noise of the tiles that kept their position.
 func gaussianNoise(n, originX, originY int, seed uint64) []float32 {

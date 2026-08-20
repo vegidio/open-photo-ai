@@ -75,11 +75,22 @@ func TestPinnedArchiveReportsAbsence(t *testing.T) {
 
 // TestReleaseTag covers the value the execution provider cache is stamped with.
 func TestReleaseTag(t *testing.T) {
-	if ReleaseTag("onnx") == "" {
+	tag, found := ReleaseTag("onnx")
+	if !found || tag == "" {
 		t.Error("the ONNX Runtime has no tag to stamp the engine cache with")
 	}
 
-	if ReleaseTag("openvino") != "" {
-		t.Error("an unpinned dependency must report no tag")
+	if _, found = ReleaseTag("openvino"); found {
+		t.Error("an unpinned dependency must report that it is not pinned")
+	}
+}
+
+// Every platform the runtime is published for must name the shared library inside its archive: it is what the loader
+// is pointed at, and an empty one would send it looking for a file called "".
+func TestEveryOnnxArchiveNamesItsLibrary(t *testing.T) {
+	for platform, artifact := range Releases["onnx"].Archives {
+		if artifact.Lib == "" {
+			t.Errorf("the onnx archive for %s does not name its shared library", platform)
+		}
 	}
 }

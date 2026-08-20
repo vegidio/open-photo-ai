@@ -65,6 +65,20 @@ type ScaleBucket struct {
 	Passes []int
 }
 
+// MinScale and MaxScale bound what any upscale operation may be asked for. They live here, beside the scale matrices,
+// because they are a property of the family rather than of any one model - a variant that disagreed would let the UI
+// offer a scale its siblings reject.
+const (
+	MinScale = 1.0
+	MaxScale = 8.0
+)
+
+// ClampScale bounds a requested scale to what the upscalers accept. Every variant's Op runs its argument through this,
+// so an out-of-range request is corrected identically no matter which model receives it.
+func ClampScale(scale float64) float64 {
+	return min(max(scale, MinScale), MaxScale)
+}
+
 // DefaultScaleBuckets is shared by variants with only a native 4x model (tokyo, saitama).
 var DefaultScaleBuckets = []ScaleBucket{
 	{Max: 4, Passes: []int{4}},

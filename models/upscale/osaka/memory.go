@@ -46,12 +46,12 @@ const (
 	vaeBytesPerPixel = 1280
 )
 
-// EstimateActivationBytes predicts the peak activation footprint of one pass over a region of the given output size,
+// estimateActivationBytes predicts the peak activation footprint of one pass over a region of the given output size,
 // excluding the weights, which the registry already accounts for.
 //
 // The two terms are added rather than maxed: the DiT's peak and the decoder's peak do not coincide, but the latents
 // bridging them stay live across both, and adding is the conservative reading.
-func EstimateActivationBytes(width, height int) int64 {
+func estimateActivationBytes(width, height int) int64 {
 	if width <= 0 || height <= 0 {
 		return 0
 	}
@@ -63,23 +63,29 @@ func EstimateActivationBytes(width, height int) int64 {
 	return tokens*ditBytesPerToken + pixels*vaeBytesPerPixel
 }
 
-// RegionSize reports the region edge the pipeline must use, and whether the memory pool is expected to cope.
+// warnIfMemoryTight logs when a run looks likely to exhaust the pool it will be charged to.
 //
-// It takes no decision about the size - the graph has already made that - but it is the one place that notices when a
-// run is heading for a pool it will not fit in, which on the host pool matters: exhausting device memory returns an
-// error that can be handled, while exhausting host memory takes the process down through ONNX Runtime's allocator
-// with nothing to catch.
-func RegionSize(pool types.MemoryPool, available int64) (edge int, ok bool) {
-	need := int64(float64(EstimateActivationBytes(ditRegionEdge, ditRegionEdge)) * marginFor(pool))
+// It decides nothing - the region size is fixed by the graph - but on the host pool the distinction matters:
+// exhausting device memory returns an error that can be handled, while exhausting host memory takes the process down
+// through ONNX Runtime's allocator with nothing to catch. Saying so before an hour of work beats discovering it after.
+//
+// A pool with no known budget reports 0, which means "unknown" rather than "nothing free", so it is not judged.
+func warnIfMemoryTight(ep types.ExecutionProvider) {
+	pool := internal.PoolOf(ep)
+	available := internal.Registry.Available(pool)
 
-	if available > 0 && need > available {
+	if need, tight := memoryLooksTight(pool, available); tight {
 		internal.Log().Warn("the model may not fit in the available memory for this pool",
 			"pool", pool, "available", available, "estimated_need", need, "region", ditRegionEdge)
-
-		return ditRegionEdge, false
 	}
+}
 
-	return ditRegionEdge, true
+// memoryLooksTight reports the estimated requirement for one region, and whether the pool is expected to struggle
+// with it. An available of 0 means the budget is unknown rather than exhausted, so it is never judged as tight.
+func memoryLooksTight(pool types.MemoryPool, available int64) (need int64, tight bool) {
+	need = int64(float64(estimateActivationBytes(ditRegionEdge, ditRegionEdge)) * marginFor(pool))
+
+	return need, available > 0 && need > available
 }
 
 // marginFor is how much slack to demand over the estimate. The host pool gets more because its failure mode is worse:
@@ -90,20 +96,4 @@ func marginFor(pool types.MemoryPool) float64 {
 	}
 
 	return 3.0
-}
-
-// Available reports the memory the registry believes is still free in the pool a given provider is charged to.
-func Available(ep types.ExecutionProvider) (types.MemoryPool, int64) {
-	pool := internal.PoolOf(ep)
-
-	return pool, internal.Registry.Available(pool)
-}
-
-// alignUp rounds a dimension up to the model's required multiple.
-func alignUp(v int) int {
-	if r := v % alignment; r != 0 {
-		return v + alignment - r
-	}
-
-	return v
 }

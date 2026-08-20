@@ -13,6 +13,12 @@ type Artifact struct {
 	// Size is the published size in bytes. It is only used to report download progress before the response declares a
 	// length.
 	Size int64
+
+	// Lib is the shared library inside the archive that the loader must be pointed at, empty for a dependency that has
+	// none. It carries the version too, so it lives here beside the hash of the archive it comes out of rather than in
+	// a per-platform constant: a bump that edited one and forgot the other would verify a correct archive and then
+	// point at a file that no longer exists.
+	Lib string
 }
 
 // Release is one dependency pinned to one published release.
@@ -31,6 +37,7 @@ type Pinned struct {
 	Tag  string // the release it belongs to, e.g. "cuda/13.3.0"
 	Hash string
 	Size int64
+	Lib  string // the shared library inside the archive, e.g. "onnxruntime.so.1.26.0"; empty when there is none
 }
 
 // PinnedArchive resolves a dependency to the archive published for the running platform, reporting false when the
@@ -57,11 +64,21 @@ func PinnedArchive(prefix string) (Pinned, bool) {
 		Tag:  release.Tag,
 		Hash: artifact.Hash,
 		Size: artifact.Size,
+		Lib:  artifact.Lib,
 	}, true
 }
 
-// ReleaseTag is the version a dependency is pinned to, empty when it isn't pinned at all. It is what stamps the
-// execution provider cache, which is invalidated whenever the runtime it was compiled against moves.
-func ReleaseTag(prefix string) string {
-	return Releases[prefix].Tag
+// ReleaseTag is the version a dependency is pinned to. It is what stamps the execution provider cache, which is
+// invalidated whenever the runtime it was compiled against moves.
+//
+// Like PinnedArchive it reports whether the dependency is pinned at all, rather than returning an empty tag: the two
+// accessors read the same table, and one of them answering a missing key with a zero value is how an unverified
+// install slipped through once already.
+func ReleaseTag(prefix string) (string, bool) {
+	release, found := Releases[prefix]
+	if !found {
+		return "", false
+	}
+
+	return release.Tag, true
 }

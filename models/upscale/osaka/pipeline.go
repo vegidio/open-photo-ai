@@ -18,18 +18,6 @@ import (
 // disagree, and no A/B comparison of settings would mean anything.
 const noiseSeed uint64 = 0x5EEDBEEF
 
-// defaultDitConfig is the DiT's input convention, taken from the reference implementation rather than guessed.
-//
-// SeedVR2 builds the transformer input as concat([noise, encoded_latent, ones_mask]) - noise first, then the latent
-// of the image being restored, then a mask channel of ones - and drives it at the first timestep of a 1000-step
-// schedule. Nothing is rescaled on the way in: the VAE's output is used exactly as it comes out.
-var defaultDitConfig = ditConfig{
-	layout:      layoutNoiseCondTask,
-	taskValue:   1,
-	timestep:    1000,
-	latentScale: 1,
-}
-
 // runPipeline resamples the image to its target size and then restores detail at that size.
 //
 // The resampling is not a fallback for a model that cannot upscale - it is how SeedVR2 is meant to be driven. The
@@ -64,21 +52,20 @@ func (m *Osaka) runPipeline(
 	// than run at its own size.
 	//
 	// Padding rather than cropping keeps the edge pixels the user asked for; it is trimmed off at the end.
-	paddedW := max(ditRegionEdge, alignUp(targetW))
-	paddedH := max(ditRegionEdge, alignUp(targetH))
+	paddedW := max(ditRegionEdge, utils.RoundUpTo16(targetW))
+	paddedH := max(ditRegionEdge, utils.RoundUpTo16(targetH))
 	padded := utils.ReflectionPad(base, 0, 0, paddedW-targetW, paddedH-targetH)
 
 	// standardize=true is the [-1,1] range the reference pipeline normalizes to.
 	basePixels := utils.ImageToCHW(padded, false, true)
 
-	pool, available := Available(m.ep)
-	tile, fits := RegionSize(pool, available)
+	warnIfMemoryTight(m.ep)
 
 	internal.Log().Debug("osaka pipeline",
 		"scale", scale, "target", []int{targetW, targetH}, "padded", []int{paddedW, paddedH},
-		"pool", pool, "available", available, "region", tile, "fits", fits)
+		"region", ditRegionEdge)
 
-	restored, err := m.restore(ctx, basePixels, paddedW, paddedH, tile, onProgress)
+	restored, err := m.restore(ctx, basePixels, paddedW, paddedH, onProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -102,13 +89,21 @@ func (m *Osaka) runPipeline(
 
 // restore runs the model over the image region by region. There is no whole-image path: the DiT accepts one size,
 // so even an image that would comfortably fit in memory is processed in fixed-size regions.
+//
+// This is a custom driver rather than utils.RunTiledInference, which is the path every other model takes and the one
+// to prefer. Four of that driver's assumptions are hardwired, and all four are wrong here: it drives a single session
+// (Osaka runs a VAE encode, a DiT step and a VAE decode); it feeds [1,3,H,W] in [0,1] (Osaka needs [-1,1]); it takes
+// an integer output scale (SeedVR2 does not change resolution - the image is resampled first and restored at that
+// size); and it pads blindly to the tile size (Osaka must pad to a multiple of 16, for the 8x VAE and the 2x patchify
+// on top of it). What can be shared is shared: the partitioning rule via utils.TileGrid and the padding via
+// utils.ReflectionPad. The blending is deliberately its own - see canvas in blend.go.
 func (m *Osaka) restore(
 	ctx context.Context,
 	pixels []float32,
-	width, height, tile int,
+	width, height int,
 	onProgress types.InferenceProgress,
 ) ([]float32, error) {
-	grid := utils.TileGrid{Size: tile, Overlap: tileOverlap, Width: width, Height: height}
+	grid := utils.TileGrid{Size: ditRegionEdge, Overlap: tileOverlap, Width: width, Height: height}
 	tiles := grid.Tiles()
 	canvas := newCanvas(width, height)
 
@@ -162,10 +157,10 @@ func (m *Osaka) restoreRegion(ctx context.Context, pixels []float32, width, heig
 	}
 
 	noise := gaussianNoise(latentChannels*latentPlane, originX, originY, noiseSeed)
-	vidInput := packVidInput(cond, noise, latentPlane, defaultDitConfig)
+	vidInput := packVidInput(cond, noise, latentPlane)
 
 	prediction, err := runStep(m.dit,
-		vidInput, defaultDitConfig.timestep,
+		vidInput, ditTimestep,
 		ort.NewShape(1, ditChannels, int64(latentH), int64(latentW)),
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)))
 	if err != nil {

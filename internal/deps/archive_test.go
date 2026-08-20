@@ -35,7 +35,6 @@ func TestInstallExtractsARealArchive(t *testing.T) {
 		Name:        "onnx-runtime",
 		Version:     "runtime/1.26.0",
 		Destination: internal.RuntimeDir,
-		Manifest:    ManifestName,
 		Exclusive:   true,
 		Sources:     []Source{{URL: srv.URL + "/tree.7z", Sha256: sum}},
 	}
@@ -91,7 +90,6 @@ func TestInstallDoesNotExtractAMismatchedArchive(t *testing.T) {
 		Name:        "onnx-runtime",
 		Version:     "runtime/1.26.0",
 		Destination: internal.RuntimeDir,
-		Manifest:    ManifestName,
 		Exclusive:   true,
 		Sources: []Source{{
 			URL:    srv.URL + "/tree.7z",

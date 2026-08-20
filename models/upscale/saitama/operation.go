@@ -3,6 +3,7 @@ package saitama
 import (
 	"fmt"
 
+	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -22,15 +23,8 @@ func (o OpUpSaitama) Precision() types.Precision {
 var _ types.Operation = (*OpUpSaitama)(nil)
 
 func Op(scale float64, precision types.Precision) OpUpSaitama {
-	if scale < 1 {
-		scale = 1
-	}
-	if scale > 8 {
-		scale = 8
-	}
-
 	return OpUpSaitama{
 		precision: precision,
-		scale:     scale,
+		scale:     upscale.ClampScale(scale),
 	}
 }

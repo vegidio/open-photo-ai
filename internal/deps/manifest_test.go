@@ -35,7 +35,7 @@ func TestManifestRoundTrip(t *testing.T) {
 		t.Errorf("an empty hash must round-trip as empty, got %q", got.Files[1].Sha256)
 	}
 
-	// The temporary file the write goes through must not be left behind, or hashTree would record it as content.
+	// The temporary file the write goes through must not be left behind, or recordTree would record it as content.
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("failed to read the directory: %v", err)

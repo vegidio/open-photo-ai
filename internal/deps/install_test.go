@@ -2,10 +2,13 @@ package deps
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -91,7 +94,6 @@ func TestInstallRecordsWhatItWrote(t *testing.T) {
 	dep := Dependency{
 		Name:        "model",
 		Destination: internal.ModelsDir,
-		Manifest:    ".model.json",
 		Sources:     []Source{{URL: srv.URL + "/model.onnx", Sha256: sha256Of(t, "weights")}},
 	}
 
@@ -131,7 +133,6 @@ func TestInstallRejectsAnArchiveInASharedDirectory(t *testing.T) {
 	dep := Dependency{
 		Name:        "model",
 		Destination: internal.ModelsDir,
-		Manifest:    ".model.json",
 		Sources:     []Source{{URL: "https://example.test/model.7z"}},
 	}
 
@@ -147,7 +148,6 @@ func TestInstallRejectsAHashMismatch(t *testing.T) {
 	dep := Dependency{
 		Name:        "model",
 		Destination: internal.ModelsDir,
-		Manifest:    ".model.json",
 		Sources:     []Source{{URL: srv.URL + "/model.onnx", Sha256: sha256Of(t, "expected")}},
 	}
 
@@ -182,7 +182,6 @@ func TestInstallLeavesNothingWhenCancelled(t *testing.T) {
 	dep := Dependency{
 		Name:        "model",
 		Destination: internal.ModelsDir,
-		Manifest:    ".model.json",
 		Sources:     []Source{{URL: srv.URL + "/model.onnx"}},
 	}
 
@@ -206,7 +205,6 @@ func TestInstallReplacesOnlyItsOwnFiles(t *testing.T) {
 	first := Dependency{
 		Name:        "model",
 		Destination: internal.ModelsDir,
-		Manifest:    ".model.json",
 		Sources:     []Source{{URL: srv.URL + "/old.onnx", Sha256: sha256Of(t, "v1")}},
 	}
 	if err := Install(context.Background(), first, nil); err != nil {
@@ -246,7 +244,6 @@ func TestInstallRepairsDamagedFiles(t *testing.T) {
 	dep := Dependency{
 		Name:        "model",
 		Destination: internal.ModelsDir,
-		Manifest:    ".model.json",
 		Sources:     []Source{{URL: srv.URL + "/model.onnx", Sha256: sha256Of(t, "weights")}},
 	}
 
@@ -311,7 +308,6 @@ func TestInstallEmptiesAnUnmanagedExclusiveDirectory(t *testing.T) {
 		Name:        "cudnn",
 		Version:     "cudnn/9.23.1",
 		Destination: "libs/cudnn",
-		Manifest:    ManifestName,
 		Exclusive:   true,
 		Sources:     []Source{{URL: srv.URL + "/cudnn.txt", Sha256: sha256Of(t, "new")}},
 	}
@@ -349,7 +345,6 @@ func TestInstallRecordsEveryExtractedFile(t *testing.T) {
 		Name:        "onnx-runtime",
 		Version:     "runtime/1.26.0",
 		Destination: internal.RuntimeDir,
-		Manifest:    ManifestName,
 		Exclusive:   true,
 		Sources:     []Source{{URL: srv.URL + "/onnx.7z", Sha256: sha256Of(t, "archive")}},
 	}
@@ -371,8 +366,14 @@ func TestInstallRecordsEveryExtractedFile(t *testing.T) {
 			t.Errorf("manifest names %q, which the archive never produced", f.Path)
 			continue
 		}
-		if f.Size != int64(len(body)) || f.Sha256 != sha256Of(t, body) {
-			t.Errorf("entry for %q = %+v, want size %d and the payload's hash", f.Path, f, len(body))
+		// Size only: an extracted file is not re-hashed, because the archive it came out of was already verified
+		// in-stream against its pinned hash and nothing reads a per-file hash back.
+		if f.Size != int64(len(body)) {
+			t.Errorf("entry for %q = %+v, want size %d", f.Path, f, len(body))
+		}
+		if f.Sha256 != "" {
+			t.Errorf("entry for %q recorded a hash %q; extracted files must not be re-read to hash them",
+				f.Path, f.Sha256)
 		}
 	}
 
@@ -397,7 +398,6 @@ func TestInstallRemovesTheOldArchiveContents(t *testing.T) {
 		Name:        "onnx-runtime",
 		Version:     "runtime/1.25.0",
 		Destination: internal.RuntimeDir,
-		Manifest:    ManifestName,
 		Exclusive:   true,
 		Sources:     []Source{{URL: srv.URL + "/v1.7z", Sha256: sha256Of(t, "one")}},
 	}
@@ -444,7 +444,6 @@ func TestInstallHandlesAMultiFileDependency(t *testing.T) {
 	dep := Dependency{
 		Name:        "m",
 		Destination: internal.ModelsDir,
-		Manifest:    ".m.json",
 		Sources: []Source{
 			{URL: srv.URL + "/m.onnx", Sha256: sha256Of(t, "graph"), Size: int64(len("graph"))},
 			{URL: srv.URL + "/m.onnx.data", Sha256: sha256Of(t, "weights-blob"), Size: int64(len("weights-blob"))},
@@ -476,6 +475,85 @@ func TestInstallHandlesAMultiFileDependency(t *testing.T) {
 	}
 }
 
+// Sources are downloaded concurrently, past the parallelism limit, so the reporting has to survive several readers at
+// once: the callback must never be entered twice over, the percentage must not go backwards, and the manifest must
+// still list the files in the order the dependency declared them rather than the order they finished arriving.
+func TestInstallDownloadsSourcesConcurrently(t *testing.T) {
+	root := setup(t)
+
+	const count = maxParallelDownloads * 2
+
+	payloads := make(map[string]string, count)
+	sources := make([]Source, 0, count)
+	names := make([]string, 0, count)
+
+	for i := range count {
+		name := fmt.Sprintf("part%d.bin", i)
+		// Descending sizes, so the declared order is not the order they finish in.
+		body := strings.Repeat("x", (count-i)*4096)
+
+		payloads[name] = body
+		names = append(names, name)
+	}
+
+	srv := newServer(t, payloads)
+	for _, name := range names {
+		sources = append(sources, Source{
+			URL:    srv.URL + "/" + name,
+			Sha256: sha256Of(t, payloads[name]),
+			Size:   int64(len(payloads[name])),
+		})
+	}
+
+	var (
+		mu        sync.Mutex
+		inside    int
+		overlap   bool
+		last      float64
+		monotonic = true
+	)
+
+	onProgress := func(_, _ int64, percent float64) {
+		mu.Lock()
+		inside++
+		if inside > 1 {
+			overlap = true
+		}
+		if percent < last {
+			monotonic = false
+		}
+		last = percent
+		inside--
+		mu.Unlock()
+	}
+
+	dep := Dependency{Name: "many", Destination: internal.ModelsDir, Sources: sources}
+
+	if err := Install(context.Background(), dep, onProgress); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	if overlap {
+		t.Error("two progress callbacks ran at once; callers are written for one at a time")
+	}
+	if !monotonic {
+		t.Error("progress went backwards across concurrent sources")
+	}
+	if last != 1 {
+		t.Errorf("final progress = %v, want 1", last)
+	}
+
+	m := readManifestFor(t, filepath.Join(root, internal.ModelsDir), ".many.json")
+	if len(m.Files) != count {
+		t.Fatalf("manifest records %d files, want %d", len(m.Files), count)
+	}
+	for i, f := range m.Files {
+		if f.Path != names[i] {
+			t.Errorf("manifest entry %d = %q, want %q - declared order was not preserved", i, f.Path, names[i])
+		}
+	}
+}
+
 // Replacing a model must drop what the execution providers compiled from the weights being replaced, and only that
 // model's: an engine built for one set of weights means nothing for another.
 func TestInstallClearsTheDerivedCache(t *testing.T) {
@@ -501,7 +579,6 @@ func TestInstallClearsTheDerivedCache(t *testing.T) {
 	dep := Dependency{
 		Name:        "mine",
 		Destination: internal.ModelsDir,
-		Manifest:    ".mine.json",
 		Sources:     []Source{{URL: srv.URL + "/a.onnx", Sha256: sha256Of(t, "v1")}},
 		Derived:     []string{internal.EngineCacheDir + "/mine"},
 	}
@@ -542,7 +619,6 @@ func TestInstallSkipVerifyAcceptsWhatIsOnDisk(t *testing.T) {
 	dep := Dependency{
 		Name:        "model",
 		Destination: internal.ModelsDir,
-		Manifest:    ".model.json",
 		SkipVerify:  true,
 		Sources:     []Source{{URL: srv.URL + "/model.onnx", Sha256: sha256Of(t, "something else")}},
 	}

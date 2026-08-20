@@ -107,9 +107,72 @@ func CreateSession(
 	return session, nil
 }
 
+// SessionSpec describes one graph to load: the model ID it is downloaded and opened under, and the tensor names it
+// takes and returns.
+type SessionSpec struct {
+	ModelId string
+	Inputs  []string
+	Outputs []string
+}
+
+// ModelSpec is the spec for a conventionally-exported graph - one tensor in named "input", one out named "output" -
+// which is every fixed-shape model this codebase ships.
+func ModelSpec(modelId string) SessionSpec {
+	return SessionSpec{ModelId: modelId, Inputs: []string{"input"}, Outputs: []string{"output"}}
+}
+
+// LoadSessions downloads and opens every graph in specs, in the order given, and returns them as one set.
+//
+// It is the single place that knows how to turn model IDs into open sessions, so the families that load one session,
+// one per scale factor, or three stages of a pipeline all share the same behaviour - in particular the guarantee
+// below, which is the one worth centralising: a partially-loaded set is destroyed rather than leaked. The diffusion
+// upscaler's first graph alone is nearly 7 GB, so returning an error while still holding it would strand memory
+// nothing can reach.
+//
+// The returned sessions are in the same order as specs, which is what lets a caller needing named roles bind them.
+//
+// The specs are installed one at a time. Within a single model the files already download concurrently - a graph and
+// its external-data blob are one dependency with two sources, which is where the several gigabytes actually are - but
+// two deps.Install calls sharing one onProgress would report from two goroutines into a callback written for one, and
+// each keeps its own 0-100% aggregate, so their percentages would interleave rather than combine. Overlapping them
+// needs a progress aggregator spanning dependencies; until there is one, this stays serial.
+func LoadSessions(
+	ctx context.Context,
+	specs []SessionSpec,
+	ep types.ExecutionProvider,
+	profile EPProfile,
+	onProgress types.DownloadProgress,
+) (_ Sessions, retErr error) {
+	sessions := make(Sessions, 0, len(specs))
+
+	defer func() {
+		if retErr != nil {
+			sessions.Destroy()
+		}
+	}()
+
+	for _, spec := range specs {
+		if err := deps.Install(ctx, deps.ModelDependency(spec.ModelId), onProgress); err != nil {
+			return nil, errors.Wrapf(err, "failed to prepare the %s model", spec.ModelId)
+		}
+
+		internal.Log().Debug("loading model session", "model_id", spec.ModelId)
+
+		session, err := CreateSession(spec.ModelId+".onnx", spec.Inputs, spec.Outputs, ep, profile)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to create the %s session", spec.ModelId)
+		}
+
+		internal.Log().Debug("model session ready", "model_id", spec.ModelId)
+
+		sessions = append(sessions, session)
+	}
+
+	return sessions, nil
+}
+
 // LoadSingleSession downloads and opens the one session behind a model whose ID is `<prefix>_<variant>_<precision>`,
-// e.g. `dn_stockholm_fp16`. It covers the fixed-shape families that have no scale matrix - denoise and sharpen - which
-// otherwise carry a byte-identical copy of this function each.
+// e.g. `dn_stockholm_fp16`. It covers the fixed-shape families that have no scale matrix - denoise and sharpen.
 func LoadSingleSession(
 	ctx context.Context,
 	prefix, variant string,
@@ -118,22 +181,13 @@ func LoadSingleSession(
 	onProgress types.DownloadProgress,
 ) (*Session, error) {
 	modelId := fmt.Sprintf("%s_%s_%s", prefix, variant, precision)
-	modelFile := modelId + ".onnx"
 
-	if err := deps.Install(ctx, deps.ModelDependency(modelId), onProgress); err != nil {
-		return nil, errors.Wrapf(err, "failed to prepare %s model", variant)
-	}
-
-	internal.Log().Debug("loading model session", "model_id", modelId)
-
-	session, err := CreateSession(modelFile, []string{"input"}, []string{"output"}, ep)
+	sessions, err := LoadSessions(ctx, []SessionSpec{ModelSpec(modelId)}, ep, EPProfile{}, onProgress)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create %s session", variant)
+		return nil, err
 	}
 
-	internal.Log().Debug("model session ready", "model_id", modelId)
-
-	return session, nil
+	return sessions[0], nil
 }
 
 // FormatModelName builds the display name a model family shows in the UI, e.g. "Denoise (FP16)".

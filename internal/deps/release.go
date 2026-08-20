@@ -36,7 +36,6 @@ func ReleaseDependency(name, prefix, destination string) (Dependency, error) {
 		Name:        name,
 		Version:     pinned.Tag,
 		Destination: destination,
-		Manifest:    ManifestName,
 		Exclusive:   true,
 		Sources: []Source{{
 			URL:    fmt.Sprintf(releaseUrl, pinned.Tag, pinned.Name),

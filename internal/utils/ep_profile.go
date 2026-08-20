@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -20,6 +21,11 @@ import (
 //
 // The zero value reproduces the behaviour that shipped before profiles existed, which is what lets every existing
 // call site keep passing no profile at all.
+//
+// Not every field is driven by a model yet: today only Osaka builds a profile, and it sets DynamicShapes,
+// DisableMemPattern, DisableOptimizers and ExcludeEPs. The rest are reserved for per-model TensorRT and precision
+// tuning that is already planned - they are deliberately kept rather than trimmed to what has a caller today, so
+// treat "no setter" here as "not wired up yet", not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -37,7 +43,7 @@ type EPProfile struct {
 	TrtShapes map[string]string
 
 	// DisableMemPattern turns off ONNX Runtime's static memory planner. The planner assumes shapes repeat between
-	// runs; when they vary it over-allocates and never returns what it reserved.
+	// runs; when they vary, it over-allocates and never returns what it reserved.
 	DisableMemPattern bool
 
 	// ExcludeEPs names providers this model must not run on. It is advisory: the next provider in the platform's
@@ -91,13 +97,7 @@ func (g GraphOptimization) level() ort.GraphOptimizationLevel {
 const disableOptimizersKey = "optimization.disable_specified_optimizers"
 
 func (p EPProfile) excludes(ep types.ExecutionProvider) bool {
-	for _, e := range p.ExcludeEPs {
-		if e == ep {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(p.ExcludeEPs, ep)
 }
 
 // providerAppender configures one execution provider onto a set of session options.
@@ -150,11 +150,8 @@ func resolveProviders(goos string, ep types.ExecutionProvider, p EPProfile) ([]t
 	}
 
 	var supported bool
-	for _, candidate := range chain {
-		if candidate == ep {
-			supported = true
-			break
-		}
+	if slices.Contains(chain, ep) {
+		supported = true
 	}
 
 	if !supported {
@@ -362,5 +359,5 @@ func appendOpenVINO(_ string, _ *ort.SessionOptions, _ EPProfile) error {
 
 // endregion
 
-// currentPlatform is a variable so tests can exercise the per-platform chains without cross-compiling.
+// currentPlatform is a variable, so tests can exercise the per-platform chains without cross-compiling.
 var currentPlatform = runtime.GOOS

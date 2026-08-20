@@ -5,40 +5,9 @@ import (
 	"testing"
 )
 
-// allLayouts is every permutation of the three groups. Only layoutNoiseCondTask is used in production; the rest
-// exist so the packing below is tested as a general function of its layout rather than in the one arrangement that
-// happens to be correct.
-var allLayouts = []channelLayout{
-	layoutNoiseCondTask,
-	layoutCondNoiseTask,
-	layoutTaskNoiseCond,
-	layoutTaskCondNoise,
-	layoutNoiseTaskCond,
-	layoutCondTaskNoise,
-}
-
-// Every layout must place the three groups in disjoint channel ranges that exactly fill the 33.
-func TestLayoutOffsetsPartitionTheChannels(t *testing.T) {
-	for _, layout := range allLayouts {
-		t.Run(layout.String(), func(t *testing.T) {
-			noise, cond, task := layout.offsets()
-
-			seen := make([]int, ditChannels)
-			for c := range latentChannels {
-				seen[noise+c]++
-				seen[cond+c]++
-			}
-			seen[task]++
-
-			for c, n := range seen {
-				if n != 1 {
-					t.Fatalf("channel %d claimed %d times by %s", c, n, layout)
-				}
-			}
-		})
-	}
-}
-
+// The three groups must occupy disjoint channel ranges that exactly fill the 33, and each must carry the values the
+// caller handed over. Getting this wrong is silent - all 33 channels go through one projection, so a misplaced group
+// degrades the image rather than failing - which is why it is pinned here.
 func TestPackVidInputPlacesEachGroup(t *testing.T) {
 	const plane = 4
 
@@ -52,36 +21,44 @@ func TestPackVidInputPlacesEachGroup(t *testing.T) {
 		}
 	}
 
-	for _, layout := range allLayouts {
-		t.Run(layout.String(), func(t *testing.T) {
-			cfg := ditConfig{layout: layout, taskValue: 0.5, latentScale: 1}
-			got := packVidInput(cond, noise, plane, cfg)
+	got := packVidInput(cond, noise, plane)
+	if len(got) != ditChannels*plane {
+		t.Fatalf("got %d values, want %d", len(got), ditChannels*plane)
+	}
 
-			if len(got) != ditChannels*plane {
-				t.Fatalf("got %d values, want %d", len(got), ditChannels*plane)
-			}
+	noiseAt, condAt, taskAt := 0, latentChannels, 2*latentChannels
 
-			noiseAt, condAt, taskAt := layout.offsets()
+	seen := make([]int, ditChannels)
+	for c := range latentChannels {
+		seen[noiseAt+c]++
+		seen[condAt+c]++
 
-			for c := range latentChannels {
-				if v := got[(condAt+c)*plane]; v != float32(100+c) {
-					t.Fatalf("condition channel %d landed at %f", c, v)
-				}
-				if v := got[(noiseAt+c)*plane]; v != float32(-(100 + c)) {
-					t.Fatalf("noise channel %d landed at %f", c, v)
-				}
-			}
+		if v := got[(condAt+c)*plane]; v != float32(100+c) {
+			t.Fatalf("condition channel %d landed at %f", c, v)
+		}
+		if v := got[(noiseAt+c)*plane]; v != float32(-(100 + c)) {
+			t.Fatalf("noise channel %d landed at %f", c, v)
+		}
+	}
+	seen[taskAt]++
 
-			for i := range plane {
-				if v := got[taskAt*plane+i]; v != 0.5 {
-					t.Fatalf("task channel value %f", v)
-				}
-			}
-		})
+	for c, n := range seen {
+		if n != 1 {
+			t.Fatalf("channel %d claimed %d times", c, n)
+		}
+	}
+
+	for i := range plane {
+		if v := got[taskAt*plane+i]; v != taskValue {
+			t.Fatalf("task channel value %f, want %f", v, taskValue)
+		}
 	}
 }
 
-func TestPackVidInputAppliesTheLatentScale(t *testing.T) {
+// The reference pipeline feeds the encoder's output into the DiT untouched, despite the VAE declaring a 0.9152
+// scaling factor. Applying it is a plausible-looking change that quietly degrades the output, so the absence of any
+// rescaling is asserted rather than left implicit.
+func TestPackVidInputDoesNotRescaleTheCondition(t *testing.T) {
 	const plane = 2
 
 	cond := make([]float32, latentChannels*plane)
@@ -91,17 +68,9 @@ func TestPackVidInputAppliesTheLatentScale(t *testing.T) {
 		cond[i] = 2
 	}
 
-	scaled := packVidInput(cond, noise, plane, ditConfig{taskValue: 1, latentScale: 0.9152})
-	_, condAt, _ := layoutNoiseCondTask.offsets()
-
-	if got := scaled[condAt*plane]; math.Abs(float64(got)-2*0.9152) > 1e-6 {
-		t.Fatalf("latent scale not applied: %f", got)
-	}
-
-	// A zero scale is a caller that never set the field; it must mean "unscaled", not "zero everything out".
-	unset := packVidInput(cond, noise, plane, ditConfig{taskValue: 1})
-	if got := unset[condAt*plane]; got != 2 {
-		t.Fatalf("an unset latent scale changed the condition: %f", got)
+	got := packVidInput(cond, noise, plane)
+	if v := got[latentChannels*plane]; v != 2 {
+		t.Fatalf("the condition latent was rescaled: %f", v)
 	}
 }
 

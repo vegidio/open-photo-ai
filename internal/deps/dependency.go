@@ -50,9 +50,6 @@ type Dependency struct {
 	// Destination is a slash-separated path under the user's config directory: "runtime", "libs/cuda", "models".
 	Destination string
 
-	// Manifest is the file name the record is written to, inside Destination.
-	Manifest string
-
 	Sources []Source
 
 	// Exclusive marks a destination that belongs to this dependency alone. Only an exclusive destination may hold an
@@ -72,4 +69,18 @@ type Dependency struct {
 	// silently wrong. Nothing recreates them here - the execution providers rebuild their own cache on the next
 	// session.
 	Derived []string
+}
+
+// manifestName is the file the record is written to, inside Destination.
+//
+// It is derived rather than stored because the rule has only two cases and both follow from Exclusive: a dependency
+// that owns its directory uses the shared name, while one sharing a destination - models/ - names its manifest after
+// itself so two concurrent installs never write to the same file. A stored field would be one more thing every
+// Dependency author has to get right, with a wrong value silently making two dependencies fight over one record.
+func (d Dependency) manifestName() string {
+	if d.Exclusive {
+		return ManifestName
+	}
+
+	return "." + d.Name + ".json"
 }

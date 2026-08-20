@@ -5,53 +5,40 @@ import (
 	"testing"
 )
 
-// applyOpts mirrors what RunTiledInference does: seed the defaults, then let the options override them.
-func applyOpts(opts ...TileOption) tileConfig {
-	cfg := tileConfig{size: DefaultTileSize, overlap: DefaultTileOverlap}
-	for _, opt := range opts {
-		opt(&cfg)
+// The divergence guard is the only option left, and it must not disturb anything else in the config.
+func TestWithDivergenceGuard(t *testing.T) {
+	var cfg tileConfig
+	if cfg.divergenceThreshold != 0 {
+		t.Fatalf("the zero config must disable the guard, got %f", cfg.divergenceThreshold)
 	}
 
-	return cfg
-}
-
-func TestTileGeometryDefaults(t *testing.T) {
-	cfg := applyOpts()
-
-	if cfg.size != DefaultTileSize || cfg.overlap != DefaultTileOverlap {
-		t.Fatalf("no option must keep %d/%d, got %d/%d",
-			DefaultTileSize, DefaultTileOverlap, cfg.size, cfg.overlap)
-	}
-
-	// The divergence guard must not disturb the geometry: the models that use it rely on the defaults.
-	if cfg = applyOpts(WithDivergenceGuard(10)); cfg.size != DefaultTileSize || cfg.overlap != DefaultTileOverlap {
-		t.Fatalf("divergence guard changed the geometry: %d/%d", cfg.size, cfg.overlap)
+	WithDivergenceGuard(10)(&cfg)
+	if cfg.divergenceThreshold != 10 {
+		t.Fatalf("threshold = %f, want 10", cfg.divergenceThreshold)
 	}
 }
 
-func TestWithTileGeometry(t *testing.T) {
-	tests := []struct {
-		name            string
-		size, overlap   int
-		wantSize, wantO int
-	}{
-		{"applied", 1024, 128, 1024, 128},
-		{"zero overlap is valid", 512, 0, 512, 0},
-		{"non-positive size ignored", 0, 16, DefaultTileSize, DefaultTileOverlap},
-		{"negative size ignored", -1, 16, DefaultTileSize, DefaultTileOverlap},
-		{"negative overlap ignored", 512, -1, DefaultTileSize, DefaultTileOverlap},
-		{"overlap equal to size ignored", 512, 512, DefaultTileSize, DefaultTileOverlap},
-		{"overlap larger than size ignored", 512, 600, DefaultTileSize, DefaultTileOverlap},
+// RunTiledInference partitions through TileGrid, so the geometry it drives has to be the one the fixed-shape models
+// were tuned against - a change here silently reshapes every denoise, sharpen and convolutional upscale pass.
+func TestDriverGeometryIsTheTunedDefault(t *testing.T) {
+	if defaultTileSize != 256 || defaultTileOverlap != 16 {
+		t.Fatalf("driver geometry is %d/%d, want 256/16", defaultTileSize, defaultTileOverlap)
+	}
+}
+
+// The last tile is shifted back to end flush with the image rather than shrunk. When that shift lands it exactly on
+// the previous tile's position the duplicate is dropped, because running the model twice over identical pixels is
+// pure waste. At 512/128 a 1280px side is three tiles, not four.
+func TestTileGridDropsADuplicateFinalTile(t *testing.T) {
+	grid := TileGrid{Size: 512, Overlap: 128, Width: 1280, Height: 512}
+
+	if got := len(grid.offsets(1280)); got != 3 {
+		t.Fatalf("1280px at 512/128 gave %d offsets, want 3", got)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := applyOpts(WithTileGeometry(tt.size, tt.overlap))
-
-			if cfg.size != tt.wantSize || cfg.overlap != tt.wantO {
-				t.Fatalf("want %d/%d, got %d/%d", tt.wantSize, tt.wantO, cfg.size, cfg.overlap)
-			}
-		})
+	// The progress accounting divides by the tile count, so a stale count would make progress overshoot or stall.
+	if got := len(grid.Tiles()); got != 3 {
+		t.Fatalf("Tiles() returned %d tiles, want 3", got)
 	}
 }
 
@@ -74,9 +61,6 @@ func TestTileGridCoversEveryPixel(t *testing.T) {
 
 			if len(tiles) != tt.wantN {
 				t.Fatalf("want %d tiles, got %d", tt.wantN, len(tiles))
-			}
-			if g.Count() != len(tiles) {
-				t.Fatalf("Count()=%d disagrees with len(Tiles())=%d", g.Count(), len(tiles))
 			}
 
 			// Every pixel must be covered by at least one tile, and no tile may leave the image.
@@ -114,9 +98,6 @@ func TestTileGridEmptyImage(t *testing.T) {
 	} {
 		if tiles := g.Tiles(); tiles != nil {
 			t.Fatalf("want no tiles for %+v, got %d", g, len(tiles))
-		}
-		if n := g.Count(); n != 0 {
-			t.Fatalf("want count 0 for %+v, got %d", g, n)
 		}
 	}
 }
@@ -173,10 +154,6 @@ func TestTileGridHasNoDuplicates(t *testing.T) {
 						t.Fatalf("size=%d overlap=%d w=%d emitted %v twice", size, overlap, w, key)
 					}
 					seen[key] = true
-				}
-
-				if g.Count() != len(g.Tiles()) {
-					t.Fatalf("size=%d overlap=%d w=%d: Count()=%d but %d tiles", size, overlap, w, g.Count(), len(g.Tiles()))
 				}
 			}
 		}
