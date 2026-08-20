@@ -8,8 +8,8 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// The three graphs behind one Osaka model. Unlike the convolutional upscalers, which hold one session per scale
-// factor, these are three stages of a single pass and are always loaded together.
+// The three graphs behind one Osaka model. Unlike the convolutional upscalers, which hold one session per scale factor,
+// these are three stages of a single pass and are always loaded together.
 const (
 	ditSuffix = ""
 	encSuffix = "_vae_encoder"

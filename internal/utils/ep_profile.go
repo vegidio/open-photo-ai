@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"maps"
 	"runtime"
 	"slices"
 	"strings"
@@ -269,10 +270,7 @@ func tensorRTOptions(cachePath string, p EPProfile) map[string]string {
 		"trt_engine_cache_path":          cachePath,
 	}
 
-	for key, value := range p.TrtShapes {
-		options[key] = value
-	}
-
+	maps.Copy(options, p.TrtShapes)
 	return options
 }
 

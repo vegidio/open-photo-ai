@@ -27,7 +27,7 @@ const (
 	// bytesPerReportedMB converts what sysinfo.MemoryInfo actually returns into bytes.
 	//
 	// Its field is documented as bytes, but every platform backend divides by 1,000,000 before returning - decimal
-	// megabytes, not bytes and not mebibytes. Taking the doc comment at its word makes a 64 GB machine look like 68 KB
+	// megabytes, not bytes, and not mebibytes. Taking the doc comment at its word makes a 64 GB machine look like 68 KB
 	// of RAM. Verified against the darwin (`sysctl hw.memsize`), linux (`/proc/meminfo`) and windows (CIM) paths.
 	bytesPerReportedMB = int64(1_000_000)
 

@@ -17,7 +17,7 @@ const (
 	gibibyte = int64(1) << 30
 
 	// deviceBudgetFraction leaves headroom rather than filling the card. TensorRT alone is configured for a 4 GiB
-	// workspace per session and cuDNN is allowed its maximum workspace, none of which shows up in the file sizes the
+	// workspace per session, and cuDNN is allowed its maximum workspace, none of which shows up in the file sizes the
 	// budget counts.
 	deviceBudgetFraction = 70
 
@@ -90,12 +90,10 @@ func DefaultBudgets() (device, host int64) {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		device = defaultDeviceBudget()
-	}()
+	})
 
 	host = defaultHostBudget()
 	wg.Wait()

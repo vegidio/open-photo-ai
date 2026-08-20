@@ -7,7 +7,7 @@ import "github.com/vegidio/open-photo-ai/internal/utils"
 // of the tonal drift being corrected.
 const defaultColorFixLevels = 5
 
-// waveletColorFix replaces the low-frequency content of result with that of reference, keeping result's high
+// waveletColorFix replaces the low-frequency content of the result with that of reference, keeping result's high
 // frequencies. Both are planar CHW float32 of the same dimensions; result is modified in place and returned.
 //
 // A single diffusion step drifts in overall colour and brightness. Left uncorrected the output carries a cast, and -
@@ -52,9 +52,9 @@ func waveletColorFix(result, reference []float32, width, height, levels int) []f
 // whose taps are spread further apart at each level. scratch is working space of the same length; both it and dst are
 // overwritten.
 //
-// This is the à trous ("with holes") transform: the kernel is never subsampled, so every level stays at full
-// resolution and the result aligns with the input pixel for pixel. That alignment is the point - a decimated wavelet
-// would need interpolation back up, which reintroduces exactly the low-frequency error being measured.
+// This is the transform "with holes": the kernel is never subsampled, so every level stays at full resolution and the
+// result aligns with the input pixel for pixel. That alignment is the point - a decimated wavelet would need
+// interpolation back up, which reintroduces exactly the low-frequency error being measured.
 func lowFrequency(dst, plane, scratch []float32, width, height, levels int) {
 	copy(dst, plane)
 

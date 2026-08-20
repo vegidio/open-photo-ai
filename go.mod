@@ -4,6 +4,7 @@ go 1.26.1
 
 require (
 	github.com/DeRuina/timberjack v1.4.6
+	github.com/bodgit/sevenzip v1.6.4
 	github.com/cockroachdb/errors v1.14.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.53.0
@@ -21,7 +22,6 @@ require (
 require (
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/bodgit/plumbing v1.3.0 // indirect
-	github.com/bodgit/sevenzip v1.6.4 // indirect
 	github.com/bodgit/windows v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

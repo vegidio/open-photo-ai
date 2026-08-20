@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// The extension lists are package-level so a membership test doesn't rebuild them. IsSupportedFile and IsRawExtension
+// The extension lists are package-level, so a membership test doesn't rebuild them. IsSupportedFile and IsRawExtension
 // run once per dropped file and on every image load, and returning a fresh slice from each call meant allocating ~60
 // strings per check. The exported accessors hand out clones so a caller can't mutate the shared backing arrays.
 var (

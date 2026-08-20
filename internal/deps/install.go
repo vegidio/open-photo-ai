@@ -2,9 +2,6 @@ package deps
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -21,9 +18,19 @@ import (
 )
 
 // downloadClient has bounded connect and header timeouts so a stalled server can't hang Initialize indefinitely. Body
-// reads are left unbounded because a dependency can be a couple of gigabytes on a slow link.
+// reads are left unbounded because a dependency can be a couple of gigabytes on a slow link; what bounds those is the
+// stall watchdog in copyBody, which times the silence rather than the transfer.
+//
+// Proxy is not a tuning knob but a correctness fix: a hand-built Transport does not inherit ProxyFromEnvironment the
+// way http.DefaultTransport has it, so behind a corporate proxy the model manifest - fetched with http.DefaultClient in
+// internal/utils/model_data.go - would load and then every artifact download would fail.
+//
+// HTTP/2 is deliberately left off. Setting DialContext already disables Go's automatic upgrade, and measuring both
+// hosts over repeated alternating trials found h2 a wash to slightly worse for bulk transfer, so this is the intended
+// state rather than an oversight to be corrected.
 var downloadClient = &http.Client{
 	Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -32,12 +39,17 @@ var downloadClient = &http.Client{
 		ResponseHeaderTimeout: 30 * time.Second,
 		IdleConnTimeout:       90 * time.Second,
 		ExpectContinueTimeout: 5 * time.Second,
+
+		// The default is two, below the number of sources fetched at once, so every third transfer
+		// used to hand back a connection that was closed rather than pooled.
+		MaxIdleConnsPerHost: 8,
+		ReadBufferSize:      64 * 1024,
 	},
 }
 
 // un7zip is a variable so tests can install a stub and exercise the manifest around extraction without carrying a
-// binary fixture for every case.
-var un7zip = fs.Un7zip
+// binary fixture for every case. Its callback receives the uncompressed bytes on disk so far and the total expected.
+var un7zip = extractArchive
 
 // locks serialises installs that share a manifest. Two different models install into the same directory concurrently,
 // and an install is a read-modify-write of the directory as much as of its record.
@@ -87,7 +99,7 @@ func Install(ctx context.Context, dep Dependency, onProgress types.DownloadProgr
 	// Only now that an install is certain: a `.old` file is the leftover of a previous one, so there is nothing to
 	// sweep on the steady-state path above, where this would have listed the whole shared models directory on every
 	// model acquisition.
-	sweepRenamed(dir)
+	sweepTransient(dir, dep.Sources)
 
 	if err = os.Remove(filepath.Join(dir, dep.manifestName())); err != nil && !os.IsNotExist(err) {
 		return errors.Wrap(err, "failed to drop the previous manifest")
@@ -194,32 +206,12 @@ func fetch(ctx context.Context, dir string, dep Dependency, onProgress types.Dow
 
 	for i, src := range dep.Sources {
 		group.Go(func() error {
-			name := src.FileName()
-			part := filepath.Join(dir, "."+name+partSuffix)
-
-			sum, size, err := downloadTo(groupCtx, src.URL, part, prog)
+			file, err := acquire(groupCtx, dir, src, dep.SkipVerify, prog)
 			if err != nil {
-				os.Remove(part)
-				return errors.Wrapf(err, "failed to download %s", name)
+				return errors.Wrapf(err, "failed to download %s", src.FileName())
 			}
 
-			if src.Sha256 != "" && sum != src.Sha256 {
-				os.Remove(part)
-
-				if !dep.SkipVerify {
-					return errors.Newf("hash mismatch for %s: expected %s, got %s", name, src.Sha256, sum)
-				}
-
-				internal.Log().Warn("hash mismatch ignored", "artifact", name, "expected", src.Sha256, "got", sum)
-			}
-
-			final := filepath.Join(dir, name)
-			if err = os.Rename(part, final); err != nil {
-				os.Remove(part)
-				return errors.Wrapf(err, "failed to place %s", name)
-			}
-
-			fetched[i] = File{Path: name, Size: size, Sha256: sum}
+			fetched[i] = file
 
 			return nil
 		})
@@ -240,7 +232,7 @@ func fetch(ctx context.Context, dir string, dep Dependency, onProgress types.Dow
 		internal.Log().Info("extracting archive", "file", file.Path)
 
 		final := filepath.Join(dir, file.Path)
-		if err := un7zip(final, dir); err != nil {
+		if err := un7zip(ctx, final, dir, prog.extract); err != nil {
 			return nil, errors.Wrapf(err, "failed to extract %s", file.Path)
 		}
 
@@ -250,43 +242,6 @@ func fetch(ctx context.Context, dir string, dep Dependency, onProgress types.Dow
 	prog.finish()
 
 	return installed, nil
-}
-
-// downloadTo streams a URL to disk and returns the SHA-256 and size of what arrived.
-//
-// The hash is computed from the bytes as they pass through, not by reading the file back: the artifact is verified
-// without ever being read twice, which on a multi-gigabyte archive is the difference between one pass over the data and
-// three. O_TRUNC matters as much - without it a shorter artifact overwriting a longer leftover would keep the tail.
-func downloadTo(ctx context.Context, url, dst string, prog *aggregate) (string, int64, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", 0, errors.Wrap(err, "failed to build the request")
-	}
-
-	resp, err := downloadClient.Do(req)
-	if err != nil {
-		return "", 0, errors.Wrap(err, "failed to send the request")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", 0, errors.Newf("bad status: %s", resp.Status)
-	}
-
-	file, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
-	if err != nil {
-		return "", 0, errors.Wrap(err, "failed to create the destination file")
-	}
-	defer file.Close()
-
-	hash := sha256.New()
-
-	size, err := io.Copy(io.MultiWriter(file, hash), prog.wrap(resp.Body, resp.ContentLength))
-	if err != nil {
-		return "", 0, errors.Wrap(err, "failed to write the file")
-	}
-
-	return hex.EncodeToString(hash.Sum(nil)), size, nil
 }
 
 // sourcesPresent reports whether every source already has a file on disk under its own name. It backs the debug
@@ -308,6 +263,11 @@ func sourcesPresent(dir string, dep Dependency) bool {
 // process re-execs (see setLibPathAndRestart in cmd/gui) and the loader permanently skips a search path it finds
 // missing, so a directory deleted here would stay unusable for the rest of the process lifetime. Manifest.remove keeps
 // dir for the same reason.
+//
+// Downloads in progress are kept too, and for a less obvious reason. This runs for an exclusive destination that has no
+// manifest - which is exactly the state a first install leaves behind when it is interrupted partway through. Clearing
+// the part files here would mean a large dependency could never be resumed, only ever restarted, since every retry
+// would arrive to find its own progress swept.
 func EmptyDir(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -315,6 +275,10 @@ func EmptyDir(dir string) error {
 	}
 
 	for _, e := range entries {
+		if isTransient(e.Name()) {
+			continue
+		}
+
 		if err = os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
 			return errors.Wrapf(err, "failed to remove %s from %s", e.Name(), dir)
 		}
@@ -353,18 +317,48 @@ func removeDerived(dep Dependency) error {
 	return nil
 }
 
-// sweepRenamed deletes the files a previous install had to rename aside because Windows held them open. By the time
-// another install runs, the process that had them mapped is long gone.
-func sweepRenamed(dir string) {
+// sweepTransient deletes the bookkeeping a previous install left behind: files it had to rename aside because Windows
+// held them open, and partial downloads nothing is going to resume.
+//
+// The rename case is unconditional - by the time another install runs, the process that had those files mapped is long
+// gone. Partial downloads are not, because they are now the thing that makes an interrupted install cheap to finish.
+// Only the ones this install is about to supersede go immediately; the rest have to age out, since models/ is shared
+// and another dependency's transfer may be in flight in a second copy of the app.
+func sweepTransient(dir string, keep []Source) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
 
+	current := make(map[string]struct{}, len(keep)*2)
+	for _, src := range keep {
+		part, state := partPaths(dir, src.FileName())
+		current[filepath.Base(part)] = struct{}{}
+		current[filepath.Base(state)] = struct{}{}
+	}
+
 	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), oldSuffix) {
-			os.Remove(filepath.Join(dir, e.Name()))
+		name := e.Name()
+
+		switch {
+		// Renamed aside by an install that could not delete it; whatever held it open is long gone.
+		case strings.HasSuffix(name, oldSuffix):
+
+		case strings.HasSuffix(name, partSuffix), strings.HasSuffix(name, partStateSuffix):
+			if _, mine := current[name]; mine {
+				continue
+			}
+
+			info, statErr := e.Info()
+			if statErr != nil || time.Since(info.ModTime()) < stalePartAge {
+				continue
+			}
+
+		default:
+			continue
 		}
+
+		os.Remove(filepath.Join(dir, name))
 	}
 }
 

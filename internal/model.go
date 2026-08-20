@@ -137,8 +137,8 @@ func buildAndInstall(
 		model, err = cpuModel, cpuErr
 	}
 
-	// We can't check `model != nil` here because model is an interface and in Go a variable is only nil if both its
-	// type and value are nil. In this case, even though the value is nil, the variable has a concrete type.
+	// We can't check `model != nil` here because the model is an interface, and in Go a variable is only nil if both
+	// its type and value are nil. In this case, even though the value is nil, the variable has a concrete type.
 	if err != nil {
 		Log().Warn("model creation failed", "op", id, "ep", ep, "err", err)
 		Registry.releaseReservation(pool, estimate)

@@ -65,10 +65,12 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 	)
 
 	preludeWg.Add(2)
+
 	go func() {
 		defer preludeWg.Done()
 		modelData, modelErr = utils.LoadModelData()
 	}()
+
 	go func() {
 		defer preludeWg.Done()
 		device, host = internal.DefaultBudgets()

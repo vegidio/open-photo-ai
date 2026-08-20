@@ -19,12 +19,15 @@ import (
 const manifestSchema = 1
 
 // The suffixes marking a file as bookkeeping rather than installed content. They are declared together because they
-// are a contract between the code that creates them and the two places that recognise them - isTransient, which keeps
-// them out of a manifest, and sweepRenamed, which deletes what Windows left behind.
+// are a contract between the code that creates them and the three places that recognise them - isTransient, which keeps
+// them out of a manifest and out of EmptyDir's reach, and sweepTransient, which deletes what an earlier install left
+// behind.
 const (
-	partSuffix = ".part" // a download in progress
-	tmpSuffix  = ".tmp"  // a JSON document mid-write
-	oldSuffix  = ".old"  // renamed aside because it could not be deleted; see removeFile
+	partSuffix      = ".part" // a download in progress
+	stateSuffix     = ".json" // appended to a part file: what that download is of; see partState
+	tmpSuffix       = ".tmp"  // a JSON document mid-write
+	oldSuffix       = ".old"  // renamed aside because it could not be deleted; see removeFile
+	partStateSuffix = partSuffix + stateSuffix
 )
 
 // File is one installed file, with its path relative to the dependency's destination and always slash-separated so a
@@ -240,12 +243,16 @@ func recordTree(dir, manifest string) ([]File, error) {
 	return files, nil
 }
 
-// isTransient reports whether a path is bookkeeping rather than installed content: a partial download, a JSON document
-// being written, or a file renamed aside because Windows had it open.
+// isTransient reports whether a path is bookkeeping rather than installed content: a partial download, the record of
+// what that download is of, a JSON document being written, or a file renamed aside because Windows had it open.
+//
+// partStateSuffix has to be listed in its own right. It ends in ".json", not ".part", so a suffix match on the latter
+// misses it - and a sidecar left in an exclusive destination would be walked up by recordTree and written into the
+// manifest as though it were installed content.
 func isTransient(rel string) bool {
 	base := path.Base(rel)
 
-	for _, suffix := range []string{partSuffix, tmpSuffix, oldSuffix} {
+	for _, suffix := range []string{partSuffix, partStateSuffix, tmpSuffix, oldSuffix} {
 		if strings.HasSuffix(base, suffix) {
 			return true
 		}

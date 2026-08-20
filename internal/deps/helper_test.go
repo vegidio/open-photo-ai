@@ -1,6 +1,7 @@
 package deps
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,7 +17,17 @@ func stubUn7zip(t *testing.T, files map[string]string) func() {
 
 	original := un7zip
 
-	un7zip = func(_, target string) error {
+	un7zip = func(_ context.Context, _, target string, onProgress func(done, total int64)) error {
+		total := int64(0)
+		for _, body := range files {
+			total += int64(len(body))
+		}
+
+		var done int64
+		if onProgress != nil {
+			onProgress(0, total)
+		}
+
 		for name, body := range files {
 			path := filepath.Join(target, filepath.FromSlash(name))
 
@@ -25,6 +36,11 @@ func stubUn7zip(t *testing.T, files map[string]string) func() {
 			}
 			if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 				return err
+			}
+
+			done += int64(len(body))
+			if onProgress != nil {
+				onProgress(done, total)
 			}
 		}
 

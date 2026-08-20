@@ -17,7 +17,7 @@ import (
 //
 // Logs are written in human-readable text to <config dir>/logs/opai.log, rotated daily at midnight, gzip-compressed,
 // keeping at most 7 days of history. It wires both sinks at once:
-//   - the opai library logger (via opai.SetLogger), and
+//   - the OPAI library logger (via opai.SetLogger), and
 //   - the process-wide slog default (via slog.SetDefault), used by the application's own code.
 //
 // The default level is INFO; set OPAI_LOG_LEVEL=debug|info|warn|error to override. The returned io.Closer must be
