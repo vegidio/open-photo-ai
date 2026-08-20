@@ -20,6 +20,7 @@ function configure() {
         "app:export": $$createType3,
         "app:fallback": $$createType4,
         "app:progress": $$createType5,
+        "app:unsupportedFiles": $$createType6,
     }));
 }
 
@@ -30,5 +31,6 @@ const $$createType2 = services$0.DownloadProgress.createFrom;
 const $$createType3 = services$0.ExportUpdate.createFrom;
 const $$createType4 = services$0.ProviderFallback.createFrom;
 const $$createType5 = services$0.InferenceProgress.createFrom;
+const $$createType6 = services$0.UnsupportedFiles.createFrom;
 
 configure();

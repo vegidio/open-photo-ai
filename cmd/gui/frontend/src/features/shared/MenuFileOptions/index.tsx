@@ -1,4 +1,5 @@
 import { Divider, ListItemText, Menu, MenuItem, type PopoverOrigin } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { useFileManager } from '@/hooks';
@@ -22,6 +23,7 @@ export const MenuFileOptions = ({
     open,
     onMenuClose,
 }: MenuFileOptionsProps) => {
+    const { t } = useTranslation();
     const { removeFile, clearAll } = useFileManager();
     const setOpen = useDrawerStore((state) => state.setOpen);
 
@@ -45,13 +47,19 @@ export const MenuFileOptions = ({
         onMenuClose();
     };
 
-    const fmName = os === 'darwin' ? 'Finder' : os === 'windows' ? 'Explorer' : 'File Manager';
-
     const options = [
-        { name: 'Close image', action: onCloseImage },
-        { name: 'Close all images', action: onCloseAllImages },
+        { name: t('menu.file.close'), action: onCloseImage },
+        { name: t('menu.file.closeAll'), action: onCloseAllImages },
         { name: undefined },
-        { name: `Show in ${fmName}`, action: onReveal },
+        // i18next context rather than interpolating the file manager's name: the whole sentence has to be one
+        // translatable unit, since word order around an app name isn't universal. An undefined context falls back
+        // to the base key, so there's no _linux variant to keep in sync.
+        {
+            name: t('menu.file.showIn', {
+                context: os === 'darwin' ? 'darwin' : os === 'windows' ? 'windows' : undefined,
+            }),
+            action: onReveal,
+        },
     ];
 
     return (

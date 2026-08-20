@@ -1,6 +1,7 @@
 import { type ChangeEvent, type MouseEvent, memo, useEffect, useState } from 'react';
 import { Checkbox, IconButton, Typography } from '@mui/material';
 import { basename } from 'pathe';
+import { useTranslation } from 'react-i18next';
 import { IoIosMore } from 'react-icons/io';
 import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
@@ -19,6 +20,7 @@ type FileListItemProps = {
 // clicking any item re-renders the entire strip. The index is passed back through onClick so the parent can hold a
 // single stable handler rather than allocating a closure per item on every render.
 const DrawerItemComponent = ({ file, index, current = false, onClick }: FileListItemProps) => {
+    const { t } = useTranslation();
     const isSelected = useFileStore((state) =>
         state.selectedFiles.some((selectedFile) => selectedFile.Path === file.Path),
     );
@@ -55,7 +57,7 @@ const DrawerItemComponent = ({ file, index, current = false, onClick }: FileList
             className={`h-full aspect-square rounded ${current ? 'outline-3 outline-blue-500' : ''}`}
         >
             <div className='relative size-full'>
-                <img alt='Preview' src={image} className='size-full object-cover rounded' />
+                <img alt={t('common.previewAlt')} src={image} className='size-full object-cover rounded' />
 
                 <Checkbox
                     size='small'

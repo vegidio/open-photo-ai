@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CircularProgress, IconButton, LinearProgress, TableCell, TableRow } from '@mui/material';
 import { Events } from '@wailsio/runtime';
+import { useTranslation } from 'react-i18next';
 import { RiFolderImageLine } from 'react-icons/ri';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
@@ -18,6 +19,7 @@ type ExportQueueRowProps = {
 };
 
 export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
+    const { t } = useTranslation();
     const format = useExportStore((state) => state.format);
     const prefix = useExportStore((state) => state.prefix);
     const suffix = useExportStore((state) => state.suffix);
@@ -82,7 +84,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
             <TableRow>
                 {/* Image */}
                 <TableCell rowSpan={2}>
-                    <img alt='Preview' src={image} className='h-14 aspect-square object-cover' />
+                    <img alt={t('common.previewAlt')} src={image} className='h-14 aspect-square object-cover' />
                 </TableCell>
 
                 {/* Filename & Dimensions */}
@@ -91,6 +93,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                         <span>{fileName}</span>
                         <div>
                             <span className='text-[#b0b0b0]'>{oldDims}</span>
+                            {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                             {oldDims !== newDims && <span> → {newDims}</span>}
                         </div>
                     </div>
@@ -99,9 +102,11 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                 {/* Old & New Size */}
                 <TableCell>
                     <div className='flex flex-col text-[13px] gap-1'>
+                        {/* biome-ignore lint/style/noJsxLiterals: never rendered — a spacer that reserves the row's first line */}
                         <span className='invisible'>invisible</span>
                         <div>
                             <span className='text-[#b0b0b0]'>{oldSize}</span>
+                            {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                             {newSize && <span> → {newSize}</span>}
                         </div>
                     </div>
@@ -113,6 +118,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                         <ExportQueueState state={state} />
                         <div>
                             <span className='text-[#b0b0b0]'>{file.Extension.toUpperCase()}</span>
+                            {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                             {file.Extension !== newExt && <span> → {newExt.toUpperCase()}</span>}
                         </div>
                     </div>

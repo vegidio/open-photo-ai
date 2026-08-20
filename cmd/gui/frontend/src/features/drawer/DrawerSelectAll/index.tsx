@@ -1,5 +1,6 @@
 import type { ChangeEvent } from 'react';
 import { Checkbox, FormControlLabel } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { useFileStore } from '@/stores';
 
@@ -8,6 +9,7 @@ type DrawerSelectAllProps = TailwindProps & {
 };
 
 export const DrawerSelectAll = ({ disabled = false, className = '' }: DrawerSelectAllProps) => {
+    const { t } = useTranslation();
     const state = useFileStore((state) => {
         if (state.selectedFiles.length > 0) {
             return state.files.length === state.selectedFiles.length ? 'all' : 'indeterminate';
@@ -40,7 +42,7 @@ export const DrawerSelectAll = ({ disabled = false, className = '' }: DrawerSele
                     onChange={onSelectAll}
                 />
             }
-            label={state === 'all' ? 'Unselect all' : 'Select all'}
+            label={state === 'all' ? t('drawer.unselectAll') : t('drawer.selectAll')}
             disabled={disabled}
             className={`${className}`}
             slotProps={{

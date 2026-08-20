@@ -6,9 +6,10 @@ import { EnhancementProgress } from '@/features/preview/EnhancementProgress';
 import { PreviewEmpty } from '@/features/preview/PreviewEmpty';
 import { PreviewImage } from '@/features/preview/PreviewImage';
 import { useCurrentFile, useFileCrop, useFileDisabledFaces, useFileOperations, useNotify } from '@/hooks';
+import i18n from '@/i18n';
 import { useDrawerStore, useFileStore, useImageStore, useSettingsStore } from '@/stores';
 import { DOTTED_BACKGROUND } from '@/utils/constants.ts';
-import { getErrorMessage, userFriendlyErrorMessage } from '@/utils/errors.ts';
+import { getErrorMessage, userFriendlyErrorKey } from '@/utils/errors.ts';
 import { getEnhancedImage, getImage, type ImageData } from '@/utils/image.ts';
 
 export const Preview = ({ className = '' }: TailwindProps) => {
@@ -67,8 +68,9 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                         // was cancelled, and a snackbar about a file the user has navigated away from is noise.
                         if (!isCancelled && !(e instanceof CancelError)) {
                             track(AnalyticsEvent.ProcessFailed, { reason: getErrorMessage(e) });
-                            const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to enhance image.');
-                            enqueueSnackbar(msg, { variant: 'error' });
+                            enqueueSnackbar(i18n.t(userFriendlyErrorKey(e, 'errors.enhanceFailed')), {
+                                variant: 'error',
+                            });
                         }
                     } finally {
                         if (!isCancelled) setIsRunning(false);

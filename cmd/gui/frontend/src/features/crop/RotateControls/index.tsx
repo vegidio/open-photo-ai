@@ -1,4 +1,5 @@
 import { Slider } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Button } from '@/components/atoms/Button';
 import { IconButton } from '@/components/atoms/IconButton';
@@ -24,6 +25,7 @@ export const RotateControls = ({
     onReset,
     className,
 }: RotateControlsProps) => {
+    const { t } = useTranslation();
     return (
         <div className={`flex flex-row items-center gap-4 px-4 py-2 ${className}`}>
             <IconButton option='rotate' size='small' onClick={onRotate90} className='shrink-0' />
@@ -47,7 +49,7 @@ export const RotateControls = ({
             />
 
             <Button option='tertiary' className='w-28' onClick={onReset}>
-                Reset
+                {t('common.reset')}
             </Button>
         </div>
     );

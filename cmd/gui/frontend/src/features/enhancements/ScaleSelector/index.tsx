@@ -1,5 +1,6 @@
 import type { ChangeEvent, MouseEvent } from 'react';
 import { ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/atoms/Button';
 import { TextField } from '@/components/atoms/TextField';
 
@@ -9,6 +10,7 @@ type ScaleSelectorProps = {
 };
 
 export const ScaleSelector = ({ value, onChange }: ScaleSelectorProps) => {
+    const { t } = useTranslation();
     const onTextChange = (e: ChangeEvent<HTMLInputElement>) => {
         const inputValue = e.target.value.trim();
 
@@ -39,7 +41,7 @@ export const ScaleSelector = ({ value, onChange }: ScaleSelectorProps) => {
 
     return (
         <div className='flex flex-col gap-2'>
-            <Typography variant='body2'>Scale</Typography>
+            <Typography variant='body2'>{t('enhancements.scale.title')}</Typography>
 
             <div className='flex flex-row gap-2 items-center'>
                 <TextField
@@ -48,24 +50,28 @@ export const ScaleSelector = ({ value, onChange }: ScaleSelectorProps) => {
                     className='flex-3 m-0'
                     slotProps={{
                         input: {
+                            // biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy
                             endAdornment: <Typography>x</Typography>,
                         },
                     }}
                 />
 
                 <Button option='secondary' size='small' className='h-8.5 flex-1' onClick={() => onChange?.('8')}>
-                    Max
+                    {t('enhancements.scale.max')}
                 </Button>
             </div>
 
             <ToggleButtonGroup value={value} exclusive onChange={onButtonClick} className='bg-[#171717] gap-1 p-1 flex'>
                 <ToggleButton size='small' value='1' className='flex-1 border-0 rounded'>
+                    {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                     <Typography className='text-[13px] normal-case font-normal'>1x</Typography>
                 </ToggleButton>
                 <ToggleButton size='small' value='2' className='flex-1 border-0 rounded'>
+                    {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                     <Typography className='text-[13px] normal-case font-normal'>2x</Typography>
                 </ToggleButton>
                 <ToggleButton size='small' value='4' className='flex-1 border-0 rounded'>
+                    {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                     <Typography className='text-[13px] normal-case font-normal'>4x</Typography>
                 </ToggleButton>
                 <ToggleButton
@@ -73,7 +79,9 @@ export const ScaleSelector = ({ value, onChange }: ScaleSelectorProps) => {
                     value={['1', '2', '4'].includes(value) ? '-' : value}
                     className='flex-2 border-0 rounded'
                 >
-                    <Typography className='text-[13px] normal-case font-normal'>Custom</Typography>
+                    <Typography className='text-[13px] normal-case font-normal'>
+                        {t('enhancements.scale.custom')}
+                    </Typography>
                 </ToggleButton>
             </ToggleButtonGroup>
         </div>

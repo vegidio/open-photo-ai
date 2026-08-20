@@ -1,4 +1,5 @@
 import { Divider, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
@@ -13,9 +14,10 @@ export type ExportSettingsProps = TailwindProps & {
 };
 
 export const ExportSettings = ({ enhancements, onClose, className }: ExportSettingsProps) => {
+    const { t } = useTranslation();
     return (
         <div className={`${className} p-3 flex flex-col gap-4`}>
-            <Typography variant='subtitle2'>Export Settings</Typography>
+            <Typography variant='subtitle2'>{t('export.settings.title')}</Typography>
 
             <ExportSettingsFilename />
 

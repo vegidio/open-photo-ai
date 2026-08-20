@@ -1,5 +1,6 @@
 import { type Ref, useImperativeHandle, useMemo, useRef } from 'react';
 import { List, ListSubheader } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { TailwindProps } from '@/utils/TailwindProps';
 import { AnalyticsEvent, track } from '@/analytics';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
@@ -8,6 +9,7 @@ import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { SettingsItemButton } from '@/features/settings/SettingsItemButton';
 import { SettingsItemSelect } from '@/features/settings/SettingsItemSelect';
 import { SettingsItemSwitch } from '@/features/settings/SettingsItemSwitch';
+import { LANGUAGE_NAMES, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n/languages';
 import { useSettingsStore } from '@/stores';
 
 export type SettingsListHandle = {
@@ -20,6 +22,7 @@ type SettingsListProps = TailwindProps & {
 };
 
 export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
+    const { t } = useTranslation();
     const containerRef = useRef<HTMLUListElement>(null);
 
     const dnModel = useSettingsStore((state) => state.dnModel);
@@ -45,21 +48,22 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
     return (
         <List ref={containerRef} className={`${className} py-0 w-full scroll-pt-12`}>
             <ListSubheader id='app' className='bg-[#2b2b2b] text-[#f2f2f2]'>
-                Application
+                {t('settings.sections.app')}
             </ListSubheader>
 
+            <ItemLanguage id='app_language' />
             <ItemAiProcessor id='app_processor' />
             <ItemAnalytics id='app_analytics' />
             <ItemLogs id='app_logs' />
 
             <ListSubheader id='enhancements' className='bg-[#2b2b2b] text-[#f2f2f2]'>
-                Enhancements
+                {t('settings.sections.enhancements')}
             </ListSubheader>
 
             <SettingsItemSelect
                 id='enh_denoise'
-                title='Denoise'
-                description='The default Denoise model to use when adding this enhancement.'
+                title={t('settings.enhancements.denoise.title')}
+                description={t('settings.enhancements.denoise.description')}
                 items={[
                     {
                         value: 'stockholm',
@@ -80,8 +84,8 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
 
             <SettingsItemSelect
                 id='enh_face'
-                title='Face Recovery'
-                description='The default Face Recovery model to use when adding this enhancement.'
+                title={t('settings.enhancements.faceRecovery.title')}
+                description={t('settings.enhancements.faceRecovery.description')}
                 items={[
                     {
                         value: 'athens',
@@ -98,8 +102,8 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
 
             <SettingsItemSelect
                 id='enh_light'
-                title='Light Adjustment'
-                description='The default Light Adjustment model to use when adding this enhancement.'
+                title={t('settings.enhancements.lightAdjustment.title')}
+                description={t('settings.enhancements.lightAdjustment.description')}
                 items={[
                     {
                         value: 'paris',
@@ -112,8 +116,8 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
 
             <SettingsItemSelect
                 id='enh_color'
-                title='Color Balance'
-                description='The default Color Balance model to use when adding this enhancement.'
+                title={t('settings.enhancements.colorBalance.title')}
+                description={t('settings.enhancements.colorBalance.description')}
                 items={[
                     {
                         value: 'rio',
@@ -126,8 +130,8 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
 
             <SettingsItemSelect
                 id='enh_sharpen'
-                title='Sharpen'
-                description='The default Sharpen model to use when adding this enhancement.'
+                title={t('settings.enhancements.sharpen.title')}
+                description={t('settings.enhancements.sharpen.description')}
                 items={[
                     {
                         value: 'moscow',
@@ -148,8 +152,8 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
 
             <SettingsItemSelect
                 id='enh_upscale'
-                title='Upscale'
-                description='The default Upscale model to use when adding this enhancement.'
+                title={t('settings.enhancements.upscale.title')}
+                description={t('settings.enhancements.upscale.description')}
                 items={[
                     {
                         value: 'tokyo',
@@ -175,45 +179,83 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
     );
 };
 
+type ItemLanguageProps = {
+    id?: string;
+};
+
+const ItemLanguage = ({ id }: ItemLanguageProps) => {
+    const { t } = useTranslation();
+    const language = useSettingsStore((state) => state.language);
+    const setLanguage = useSettingsStore((state) => state.setLanguage);
+
+    // Endonyms rather than catalog entries, so the list reads the same whatever language the app is currently in —
+    // see i18n/languages.ts. Only writes the store; Save is what actually switches the app over.
+    const items = useMemo(() => SUPPORTED_LANGUAGES.map((lng) => ({ value: lng, label: LANGUAGE_NAMES[lng] })), []);
+
+    return (
+        <SettingsItemSelect
+            id={id}
+            title={t('settings.app.language.title')}
+            description={t('settings.app.language.description')}
+            items={items}
+            selected={language}
+            onSelect={(value) => setLanguage(value as SupportedLanguage)}
+        />
+    );
+};
+
 type ItemAiProcessorProps = {
     id?: string;
 };
 
 const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
-    const processorSelectItems = useSettingsStore((state) => state.processorSelectItems);
+    const { t } = useTranslation();
+    const processorOptions = useSettingsStore((state) => state.processorOptions);
     const executionProvider = useSettingsStore((state) => state.executionProvider);
     const setExecutionProvider = useSettingsStore((state) => state.setExecutionProvider);
 
+    // Each branch is a whole sentence in the catalog rather than a shared prefix plus a clause: a translator has to be
+    // free to reorder, merge or re-punctuate the two halves, which string concatenation would prevent.
+    //
     // No lock while work is running: loaded models are keyed by processor as well as operation, so switching is an
     // ordinary cache miss. Work already in flight keeps the models it holds and finishes on the old processor; the
     // next run picks up the new one.
     const description = useMemo(() => {
-        const base = 'Select the AI processor that will orchestrate the models.';
-
         switch (executionProvider) {
             case ExecutionProvider.ExecutionProviderAuto:
-                return `${base} "Auto" will try to detect the best processor for your system.`;
+                return t('settings.app.aiProcessor.description_auto');
             case ExecutionProvider.ExecutionProviderTensorRT:
-                return `${base} TensorRT is very fast, but on the first run it will take some time to create the model graph; on subsequent runs it will be much faster.`;
+                return t('settings.app.aiProcessor.description_tensorrt');
             case ExecutionProvider.ExecutionProviderCUDA:
-                return `${base} CUDA has strong performance and flexibility, good default if TensorRT is unavailable.`;
+                return t('settings.app.aiProcessor.description_cuda');
             case ExecutionProvider.ExecutionProviderDirectML:
-                return `${base} DirectML is a good option when you don't have a dedicated GPU.`;
+                return t('settings.app.aiProcessor.description_directml');
             case ExecutionProvider.ExecutionProviderCoreML:
-                return `${base} CoreML is usually much faster than CPU, but it doesn't support all models.`;
+                return t('settings.app.aiProcessor.description_coreml');
             case ExecutionProvider.ExecutionProviderCPU:
-                return `${base} CPU is the slowest option, but it supports all models.`;
+                return t('settings.app.aiProcessor.description_cpu');
             default:
-                return base;
+                return t('settings.app.aiProcessor.description');
         }
-    }, [executionProvider]);
+    }, [executionProvider, t]);
+
+    // Built here rather than in the store: the store is persisted, so a label written into it would be frozen in
+    // whatever language was active at the time. "Auto" is the only real word — the rest are product names.
+    const items = useMemo(
+        () =>
+            processorOptions.map((ep) => ({
+                value: ep,
+                label: ep === ExecutionProvider.ExecutionProviderAuto ? t('settings.app.aiProcessor.auto') : ep,
+            })),
+        [processorOptions, t],
+    );
 
     return (
         <SettingsItemSelect
             id={id}
-            title='AI Processor'
+            title={t('settings.app.aiProcessor.title')}
             description={description}
-            items={processorSelectItems}
+            items={items}
             selected={executionProvider}
             onSelect={(value) => {
                 setExecutionProvider(value as ExecutionProvider);
@@ -228,6 +270,7 @@ type ItemAnalyticsProps = {
 };
 
 const ItemAnalytics = ({ id }: ItemAnalyticsProps) => {
+    const { t } = useTranslation();
     const analyticsEnabled = useSettingsStore((state) => state.analyticsEnabled);
     const setAnalyticsEnabled = useSettingsStore((state) => state.setAnalyticsEnabled);
 
@@ -235,8 +278,8 @@ const ItemAnalytics = ({ id }: ItemAnalyticsProps) => {
     return (
         <SettingsItemSwitch
             id={id}
-            title='Analytics'
-            description='Help improve the app by sending anonymous usage analytics. No images or personal data are ever collected.'
+            title={t('settings.app.analytics.title')}
+            description={t('settings.app.analytics.description')}
             checked={analyticsEnabled}
             onChange={setAnalyticsEnabled}
         />
@@ -248,6 +291,8 @@ type ItemLogsProps = {
 };
 
 const ItemLogs = ({ id }: ItemLogsProps) => {
+    const { t } = useTranslation();
+
     const onShowLogs = async () => {
         const path = await GetLogsPath();
         await RevealInFileManager(path);
@@ -256,9 +301,9 @@ const ItemLogs = ({ id }: ItemLogsProps) => {
     return (
         <SettingsItemButton
             id={id}
-            title='Logs'
-            description='Open the location of the app logs, that can be used to investigate problems in the app.'
-            button='Show logs'
+            title={t('settings.app.logs.title')}
+            description={t('settings.app.logs.description')}
+            button={t('settings.app.logs.button')}
             onClick={onShowLogs}
         />
     );

@@ -20,6 +20,7 @@ declare module "@wailsio/runtime" {
             "app:export": services$0.ExportUpdate;
             "app:fallback": services$0.ProviderFallback;
             "app:progress": services$0.InferenceProgress;
+            "app:unsupportedFiles": services$0.UnsupportedFiles;
         }
     }
 }

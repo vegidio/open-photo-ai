@@ -1,30 +1,35 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LinearProgress, Paper, Typography } from '@mui/material';
 import { Events } from '@wailsio/runtime';
+import { useTranslation } from 'react-i18next';
 
 export const EnhancementProgress = () => {
-    const [progress, setProgress] = useState({ name: 'Enhancing', value: 0 });
+    const { t } = useTranslation();
+    const [progress, setProgress] = useState({ name: t('preview.progress.enhancing'), value: 0 });
 
-    const getOperationName = useCallback((id: string) => {
-        switch (true) {
-            case id.startsWith('dl'):
-                return 'Downloading';
-            case id.startsWith('dn'):
-                return 'Denoise';
-            case id.startsWith('fr'):
-                return 'Face Recovery';
-            case id.startsWith('la'):
-                return 'Light Adjust';
-            case id.startsWith('cb'):
-                return 'Color Balance';
-            case id.startsWith('up'):
-                return 'Upscale';
-            case id.startsWith('sh'):
-                return 'Sharpen';
-            default:
-                return 'Enhancing';
-        }
-    }, []);
+    const getOperationName = useCallback(
+        (id: string) => {
+            switch (true) {
+                case id.startsWith('dl'):
+                    return t('preview.progress.downloading');
+                case id.startsWith('dn'):
+                    return t('preview.progress.denoise');
+                case id.startsWith('fr'):
+                    return t('preview.progress.faceRecovery');
+                case id.startsWith('la'):
+                    return t('preview.progress.lightAdjustment');
+                case id.startsWith('cb'):
+                    return t('preview.progress.colorBalance');
+                case id.startsWith('up'):
+                    return t('preview.progress.upscale');
+                case id.startsWith('sh'):
+                    return t('preview.progress.sharpen');
+                default:
+                    return t('preview.progress.enhancing');
+            }
+        },
+        [t],
+    );
 
     useEffect(() => {
         // Returns the per-listener unsubscribe; `Events.Off` is global across every listener for the name.

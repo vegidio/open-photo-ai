@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Button } from '@mui/material';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
+import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { AnalyticsEvent, track } from '@/analytics';
@@ -15,6 +16,7 @@ type ExportSettingsButtonsProps = {
 };
 
 export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsButtonsProps) => {
+    const { t } = useTranslation();
     const format = useExportStore((state) => state.format);
     const prefix = useExportStore((state) => state.prefix);
     const suffix = useExportStore((state) => state.suffix);
@@ -117,7 +119,11 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
                 className='flex-1 bg-[#353535] hover:bg-[#171717] text-[#f2f2f2] normal-case font-normal'
                 onClick={handleCancel}
             >
-                {state === 'idle' ? 'Cancel' : state === 'processing' ? 'Abort' : 'Close'}
+                {state === 'idle'
+                    ? t('common.cancel')
+                    : state === 'processing'
+                      ? t('export.settings.abort')
+                      : t('common.close')}
             </Button>
 
             <Button
@@ -126,7 +132,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
                 className={`flex-1 ${state === 'completed' ? 'bg-[#353535] hover:bg-[#171717]' : 'bg-[#009aff] hover:bg-[#007eff]'} disabled:opacity-50 text-[#f2f2f2] normal-case font-normal`}
                 onClick={handleExport}
             >
-                {state === 'completed' ? 'Export again' : 'Save'}
+                {state === 'completed' ? t('export.settings.exportAgain') : t('common.save')}
             </Button>
         </div>
     );

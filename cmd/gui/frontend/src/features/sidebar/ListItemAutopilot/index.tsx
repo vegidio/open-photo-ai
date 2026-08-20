@@ -1,6 +1,8 @@
 import { CircularProgress, ListItem, ListItemIcon, ListItemText } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 export const ListItemAutopilot = () => {
+    const { t } = useTranslation();
     return (
         <ListItem disablePadding className='py-2 px-4'>
             <ListItemIcon className='ml-6 min-w-10'>
@@ -18,7 +20,7 @@ export const ListItemAutopilot = () => {
             </ListItemIcon>
 
             <ListItemText
-                primary='Analysing image...'
+                primary={t('sidebar.analysing')}
                 slotProps={{
                     primary: {
                         className: 'text-[#009aff] font-bold',

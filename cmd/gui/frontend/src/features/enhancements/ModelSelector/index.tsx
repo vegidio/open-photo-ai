@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
 import { ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '@/components/atoms/Icon';
 
 export type ModelSelectorOption = {
@@ -16,13 +17,14 @@ type ModelSelectorProps = {
 };
 
 export const ModelSelector = ({ options, value, onChange }: ModelSelectorProps) => {
+    const { t } = useTranslation();
     const onButtonClick = (_: MouseEvent<HTMLElement>, newValue: string) => {
         if (newValue) onChange?.(newValue);
     };
 
     return (
         <div className='flex flex-col gap-2'>
-            <Typography variant='body2'>AI Model</Typography>
+            <Typography variant='body2'>{t('enhancements.modelSelector')}</Typography>
 
             <ToggleButtonGroup
                 value={value}

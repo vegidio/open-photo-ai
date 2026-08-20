@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { List } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { AnalyticsEvent, track } from '@/analytics';
@@ -8,9 +9,10 @@ import { ListItemAutopilot } from '@/features/sidebar/ListItemAutopilot';
 import { useAddEnhancements, useCurrentFile, useFileOperations, useNotify } from '@/hooks';
 import { useEnhancementStore, useSettingsStore } from '@/stores';
 import { getEnhancementType, suggestEnhancement } from '@/utils/enhancement.ts';
-import { userFriendlyErrorMessage } from '@/utils/errors.ts';
+import { userFriendlyErrorKey } from '@/utils/errors.ts';
 
 export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
+    const { t } = useTranslation();
     const { enqueueSnackbar } = useNotify();
 
     const file = useCurrentFile();
@@ -53,8 +55,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
                 await addEnhancements(currentFile, suggestions);
                 track(AnalyticsEvent.AutopilotRun, { count: suggestions.length });
             } catch (e) {
-                const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to run autopilot.');
-                enqueueSnackbar(msg, { variant: 'error' });
+                enqueueSnackbar(t(userFriendlyErrorKey(e, 'errors.autopilotFailed')), { variant: 'error' });
             } finally {
                 setIsAnalysing(false);
             }

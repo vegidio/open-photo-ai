@@ -16,6 +16,7 @@ export const DownloadProgress = ({ name, value, className = '' }: DependencyProg
             <div className='flex flex-row flex-1 items-center'>
                 <LinearProgress variant='determinate' value={value} className='flex-1' />
                 <Typography variant='caption' align='right' className='text-[#b0b0b0] w-10'>
+                    {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                     {value.toFixed(0)}%
                 </Typography>
             </div>

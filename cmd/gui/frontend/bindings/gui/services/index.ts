@@ -19,5 +19,6 @@ export {
     ExportUpdate,
     InferenceProgress,
     ProviderFallback,
-    SupportedEPs
+    SupportedEPs,
+    UnsupportedFiles
 } from "./models.js";

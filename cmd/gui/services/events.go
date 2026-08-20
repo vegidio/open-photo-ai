@@ -19,6 +19,8 @@ const (
 	EventAppExport       = "app:export"
 	EventAppFilesDropped = "app:FilesDropped"
 	EventAppFallback     = "app:fallback"
+
+	EventAppUnsupportedFiles = "app:unsupportedFiles"
 )
 
 // DownloadProgress is the payload of EventAppDownload. Emitted while a required runtime dependency
@@ -54,10 +56,18 @@ type ProviderFallback struct {
 	Provider string `json:"provider"`
 }
 
+// UnsupportedFiles is the payload of EventAppUnsupportedFiles. Emitted when a drag-and-drop included files the
+// decoder can't read. Only the base names are sent: the frontend renders the message, so the wording - and its plural
+// form, which the "len == 1" test here could only ever get right for English - lives in the i18n catalog instead.
+type UnsupportedFiles struct {
+	Names []string `json:"names"`
+}
+
 func init() {
 	application.RegisterEvent[DownloadProgress](EventAppDownload)
 	application.RegisterEvent[ProviderFallback](EventAppFallback)
 	application.RegisterEvent[InferenceProgress](EventAppProgress)
 	application.RegisterEvent[ExportUpdate](EventAppExport)
 	application.RegisterEvent[[]guitypes.File](EventAppFilesDropped)
+	application.RegisterEvent[UnsupportedFiles](EventAppUnsupportedFiles)
 }

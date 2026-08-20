@@ -1,4 +1,5 @@
 import { Dialog } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { CropSettings } from '@/features/crop/CropSettings';
 import { ImageCropper } from '@/features/crop/ImageCropper';
@@ -12,6 +13,7 @@ type CropRotateProps = {
 };
 
 export const CropRotate = ({ open, onClose }: CropRotateProps) => {
+    const { t } = useTranslation();
     const {
         cropperRef,
         baseImage,
@@ -49,7 +51,7 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
                 },
             }}
         >
-            <ModalTitle title='Crop/Rotate' onClose={onClose} />
+            <ModalTitle title={t('crop.title')} onClose={onClose} />
 
             <div className={`flex-1 flex flex-row overflow-hidden ${DOTTED_BACKGROUND}`}>
                 {/* Left */}

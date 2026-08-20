@@ -1,8 +1,9 @@
 import { useCallback } from 'react';
 import type { File } from '@/bindings/gui/types';
 import { useNotify } from '@/hooks/useNotify.ts';
+import i18n from '@/i18n';
 import { useCropStore, useEnhancementStore, useSettingsStore } from '@/stores';
-import { userFriendlyErrorMessage } from '@/utils/errors.ts';
+import { userFriendlyErrorKey } from '@/utils/errors.ts';
 import { detectFaces } from '@/utils/face.ts';
 
 /**
@@ -27,8 +28,9 @@ export const useSyncFaces = () => {
                 setFaces(file, faces);
             } catch (e) {
                 setFaces(file, []);
-                const msg = userFriendlyErrorMessage(e, 'Something went wrong. Failed to detect faces.');
-                enqueueSnackbar(msg, { variant: 'error' });
+                // The i18n singleton rather than useTranslation's t: this callback is memoised with a dependency
+                // list, and adding t would rebuild it on every language change for no benefit.
+                enqueueSnackbar(i18n.t(userFriendlyErrorKey(e, 'errors.faceDetectFailed')), { variant: 'error' });
             }
         },
         [setFaces, ep, enqueueSnackbar],

@@ -5,6 +5,8 @@ minimumReleaseAgeExclude:
   - '@vitejs/plugin-react@6.1.0'
   - vite@8.2.2
   - '@wailsio/runtime@3.0.0-beta.10'
+  - i18next@26.4.0
+  - react-i18next@17.0.12
 onlyBuiltDependencies:
   - '@firebase/util'
   - '@tailwindcss/oxide'

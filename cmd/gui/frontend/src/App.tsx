@@ -9,6 +9,7 @@ import { Navbar } from '@/features/navbar';
 import { Preview } from '@/features/preview';
 import { Sidebar } from '@/features/sidebar';
 import { useNotify } from '@/hooks';
+import i18n from '@/i18n';
 import { useSettingsStore } from '@/stores';
 import { getErrorMessage } from '@/utils/errors.ts';
 
@@ -16,7 +17,7 @@ export const App = () => {
     const { enqueueSnackbar } = useNotify();
 
     const isFirstTensorRT = useSettingsStore((state) => state.isFirstTensorRT);
-    const setProcessorSelectItems = useSettingsStore((state) => state.setProcessorSelectItems);
+    const setProcessorOptions = useSettingsStore((state) => state.setProcessorOptions);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const [isContainerReady, setIsContainerReady] = useState(false);
@@ -41,12 +42,29 @@ export const App = () => {
             const provider = event.data?.provider ?? '';
             track(AnalyticsEvent.ProviderFallback, { provider });
 
-            const reason =
+            // Two complete sentences behind a ternary rather than one built from a shared tail: the clause about
+            // the processor and the clause about the consequence have to be free to reorder in translation.
+            //
+            // i18n.t rather than useTranslation's t throughout this effect: it's registered once with an empty
+            // dependency list, and adding t would tear down and re-register every Wails listener on a language change.
+            const message =
                 provider && provider !== ExecutionProvider.ExecutionProviderAuto
-                    ? `${provider} couldn't be used on this system`
-                    : 'No GPU processor could be used on this system';
+                    ? i18n.t('toasts.cpuFallbackProvider', { provider })
+                    : i18n.t('toasts.cpuFallbackAuto');
 
-            enqueueSnackbar(`${reason}, so the CPU is being used instead. Enhancements will be slower.`, {
+            enqueueSnackbar(message, {
+                variant: 'warning',
+                autoHideDuration: 10000,
+            });
+        });
+
+        // Emitted when a drag-and-drop included files the decoder can't read. The backend sends only the base names
+        // and leaves the wording here, where the catalog can pick the right plural form for the active language.
+        const offUnsupported = Events.On('app:unsupportedFiles', (event) => {
+            const names: string[] = event.data?.names ?? [];
+            if (names.length === 0) return;
+
+            enqueueSnackbar(i18n.t('toasts.unsupportedFiles', { count: names.length, names: names.join(', ') }), {
                 variant: 'warning',
                 autoHideDuration: 10000,
             });
@@ -55,7 +73,7 @@ export const App = () => {
         const initDependencies = async () => {
             try {
                 const supportedEps = await Initialize();
-                setProcessorSelectItems(supportedEps);
+                setProcessorOptions(supportedEps);
                 setOpenDownload(false);
                 track(AnalyticsEvent.AppInitialized, {
                     execution_provider: useSettingsStore.getState().executionProvider,
@@ -75,6 +93,7 @@ export const App = () => {
         return () => {
             offDownload();
             offFallback();
+            offUnsupported();
         };
     }, []);
 

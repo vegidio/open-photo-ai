@@ -1,8 +1,11 @@
+import { useMemo } from 'react';
 import { Divider } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { IntensitySelector } from '@/features/enhancements/IntensitySelector';
 import { ModelSelector, type ModelSelectorOption } from '@/features/enhancements/ModelSelector';
 import { OptionsPopover } from '@/features/enhancements/OptionsPopover';
 import { useOptionEnhancement } from '@/hooks';
+import { modelLabel } from '@/i18n/format';
 import { Gothenburg, Malmo, Stockholm } from '@/operations';
 
 type OptionsDenoiseProps = {
@@ -11,31 +14,35 @@ type OptionsDenoiseProps = {
     onClose: () => void;
 };
 
-const options: ModelSelectorOption[] = [
-    {
-        value: 'stockholm_fp32',
-        label: 'Stockholm High',
-        description:
-            "Use this model when you need fast, high-quality denoising of real sensor noise and computational efficiency matters. It's a good choice when throughput and resource constraints are real concerns, keeping inference times low without sacrificing quality.",
-    },
-    { value: 'stockholm_fp16', label: 'Stockholm Std.' },
-    {
-        value: 'gothenburg_fp32',
-        label: 'Gothenburg High',
-        description:
-            'Use this model when your photos contain real-world sensor noise, the kind produced by shooting in low light or at high ISO with a smartphone or DSLR. It handles complex noise patterns that cameras produce, making it the right choice for photography.',
-    },
-    { value: 'gothenburg_fp16', label: 'Gothenburg Std.' },
-    {
-        value: 'malmo_fp32',
-        label: 'Malmö High',
-        description:
-            'Use this model to remove rain streaks from outdoor images, whether captured in light drizzle or heavy downpour. It handles rain of varying scale, density, and direction, restoring fine details behind streaks. A good choice when weather artifacts obscure the scene.',
-    },
-    { value: 'malmo_fp16', label: 'Malmö Std.' },
-];
-
 export const OptionsDenoise = ({ anchorEl, open, onClose }: OptionsDenoiseProps) => {
+    const { t } = useTranslation();
+
+    // Built here rather than at module scope: t() called at module-evaluation time would freeze the labels
+    // and descriptions in whatever language was active on the first import and never follow a change.
+    const options = useMemo<ModelSelectorOption[]>(
+        () => [
+            {
+                value: 'stockholm_fp32',
+                label: modelLabel(t, 'Stockholm', 'fp32'),
+                description: t('enhancements.denoise.models.stockholm'),
+            },
+            { value: 'stockholm_fp16', label: modelLabel(t, 'Stockholm', 'fp16') },
+            {
+                value: 'gothenburg_fp32',
+                label: modelLabel(t, 'Gothenburg', 'fp32'),
+                description: t('enhancements.denoise.models.gothenburg'),
+            },
+            { value: 'gothenburg_fp16', label: modelLabel(t, 'Gothenburg', 'fp16') },
+            {
+                value: 'malmo_fp32',
+                label: modelLabel(t, 'Malmö', 'fp32'),
+                description: t('enhancements.denoise.models.malmo'),
+            },
+            { value: 'malmo_fp16', label: modelLabel(t, 'Malmö', 'fp16') },
+        ],
+        [t],
+    );
+
     const { model, amount, onModelChange, onAmountChange } = useOptionEnhancement(
         'dn',
         (op) => (Number(op?.options.intensity) * 100).toString(),
@@ -55,7 +62,7 @@ export const OptionsDenoise = ({ anchorEl, open, onClose }: OptionsDenoiseProps)
     );
 
     return (
-        <OptionsPopover title='Denoise' anchorEl={anchorEl} open={open} onClose={onClose}>
+        <OptionsPopover title={t('enhancements.denoise.name')} anchorEl={anchorEl} open={open} onClose={onClose}>
             <div className='flex flex-col mt-1 p-3 gap-4'>
                 <ModelSelector options={options} value={model} onChange={onModelChange} />
 

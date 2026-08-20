@@ -38,6 +38,9 @@
             "suspicious": {
                 "noArrayIndexKey": "off"
             },
+            "style": {
+                "noJsxLiterals": "error"
+            },
             "preset": "recommended"
         }
     },

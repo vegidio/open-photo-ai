@@ -1,0 +1,301 @@
+{
+    "common": {
+        "cancel": "Cancel",
+        "save": "Save",
+        "close": "Close",
+        "apply": "Apply",
+        "reset": "Reset",
+        "yes": "Yes",
+        "no": "No",
+        "or": "OR",
+        "previewAlt": "Preview"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "MD"
+        }
+    },
+    "settings": {
+        "title": "Settings",
+        "sections": {
+            "app": "Application",
+            "enhancements": "Enhancements"
+        },
+        "app": {
+            "language": {
+                "title": "Language",
+                "description": "The language used throughout the app. The change is applied when you click Save."
+            },
+            "aiProcessor": {
+                "title": "AI Processor",
+                "auto": "Auto",
+                "description": "Select the AI processor that will orchestrate the models.",
+                "description_auto": "Select the AI processor that will orchestrate the models. \"Auto\" will try to detect the best processor for your system.",
+                "description_tensorrt": "Select the AI processor that will orchestrate the models. TensorRT is very fast, but on the first run it will take some time to create the model graph; on subsequent runs it will be much faster.",
+                "description_cuda": "Select the AI processor that will orchestrate the models. CUDA has strong performance and flexibility, good default if TensorRT is unavailable.",
+                "description_directml": "Select the AI processor that will orchestrate the models. DirectML is a good option when you don't have a dedicated GPU.",
+                "description_coreml": "Select the AI processor that will orchestrate the models. CoreML is usually much faster than CPU, but it doesn't support all models.",
+                "description_cpu": "Select the AI processor that will orchestrate the models. CPU is the slowest option, but it supports all models."
+            },
+            "analytics": {
+                "title": "Analytics",
+                "description": "Help improve the app by sending anonymous usage analytics. No images or personal data are ever collected."
+            },
+            "logs": {
+                "title": "Logs",
+                "description": "Open the location of the app logs, that can be used to investigate problems in the app.",
+                "button": "Show logs"
+            }
+        },
+        "enhancements": {
+            "denoise": {
+                "title": "Denoise",
+                "description": "The default Denoise model to use when adding this enhancement."
+            },
+            "faceRecovery": {
+                "title": "Face Recovery",
+                "description": "The default Face Recovery model to use when adding this enhancement."
+            },
+            "lightAdjustment": {
+                "title": "Light Adjustment",
+                "description": "The default Light Adjustment model to use when adding this enhancement."
+            },
+            "colorBalance": {
+                "title": "Color Balance",
+                "description": "The default Color Balance model to use when adding this enhancement."
+            },
+            "sharpen": {
+                "title": "Sharpen",
+                "description": "The default Sharpen model to use when adding this enhancement."
+            },
+            "upscale": {
+                "title": "Upscale",
+                "description": "The default Upscale model to use when adding this enhancement."
+            }
+        }
+    },
+    "navbar": {
+        "settings": "Settings",
+        "about": "About",
+        "updateAvailable": "Update Available",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Dimensions",
+            "original": "Original",
+            "cropped": "Cropped",
+            "output": "Output"
+        },
+        "about_dialog": {
+            "title": "About",
+            "iconAlt": "App Icon",
+            "version": "Version {{version}}",
+            "copyright": "© 2025—2026, Vinicius Egidio",
+            "github": "Github",
+            "website": "vinicius.io"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Autopilot",
+        "analysing": "Analysing image...",
+        "exportImage": "Export image",
+        "noPreview": "No preview available",
+        "zoomCropAlt": "Zoom & Crop"
+    },
+    "drawer": {
+        "addImages": "Add images",
+        "selectAll": "Select all",
+        "unselectAll": "Unselect all",
+        "preview": {
+            "full": "Full",
+            "sideBySide": "Side by Side",
+            "split": "Split"
+        }
+    },
+    "faces": {
+        "selectFaces": "Select faces",
+        "toggleFace": "Toggle face {{number}}",
+        "originalAlt": "Original"
+    },
+    "crop": {
+        "title": "Crop/Rotate",
+        "aspectRatio": "Aspect Ratio",
+        "dimensions": "Dimensions",
+        "zoomHint": "You can use the mouse wheel or the trackpad pinch to zoom in and out the image on the left.",
+        "ratio": {
+            "free": "Free",
+            "square": "Square"
+        },
+        "width": "w",
+        "height": "h"
+    },
+    "export": {
+        "title": "Export",
+        "settings": {
+            "title": "Export Settings",
+            "filename": {
+                "title": "Filename",
+                "prefix": "Prefix",
+                "suffix": "Suffix",
+                "allowOverwrite": "Allow overwriting?",
+                "sameLocationOverwrite": "When file location and extension are the same, your original file will be overwritten. This cannot be reverted.",
+                "sameLocationRename": "When file location and extension are the same, new filenames will add a number instead of overwriting your original."
+            },
+            "format": {
+                "title": "Format",
+                "preserve": "Preserve"
+            },
+            "location": {
+                "title": "Save to",
+                "original": "Original directory",
+                "browse": "Browse..."
+            },
+            "abort": "Abort",
+            "exportAgain": "Export again"
+        },
+        "queue": {
+            "title": "Queue ({{count}})",
+            "image": "Image",
+            "output": "Output",
+            "size": "Size",
+            "type": "Type",
+            "processing": "Processing",
+            "completed": "Completed",
+            "error": "Error",
+            "errorTooltip": "Something went wrong...",
+            "errorDownloadTooltip": "Failed to download AI model"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Select Image",
+            "selectDirectory": "Select Directory",
+            "imagesFilter": "Images"
+        },
+        "tensorRT": {
+            "title": "TensorRT Detected",
+            "logoAlt": "TensorRT",
+            "intro": "We detected a GPU that supports TensorRT. TensorRT is an NVIDIA technology that can run AI models significantly faster than CUDA.",
+            "optimization": "When TensorRT is enabled, it must first optimize the model graph into a format it understands. <b>This optimization step can take a few minutes the first time it runs</b>; subsequent runs will be much faster.",
+            "question": "Would you like to enable TensorRT?",
+            "footer": "Regardless of what you choose now, you can update your choice at any time in the <b>Settings</b> dialog, under <u>AI processor</u>."
+        },
+        "download": {
+            "downloading": "Downloading dependencies...",
+            "pleaseWait": "Please wait!",
+            "error": "Error downloading the dependencies.",
+            "errorDetail": "The app cannot start until all dependencies are downloaded!",
+            "tryAgain": "Try again",
+            "working": "Working..."
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_one": "The file \"{{names}}\" is not supported.",
+        "unsupportedFiles_other": "{{count}} files are not supported: {{names}}",
+        "cpuFallbackProvider": "{{provider}} couldn't be used on this system, so the CPU is being used instead. Enhancements will be slower.",
+        "cpuFallbackAuto": "No GPU processor could be used on this system, so the CPU is being used instead. Enhancements will be slower."
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Denoise",
+            "models": {
+                "stockholm": "Use this model when you need fast, high-quality denoising of real sensor noise and computational efficiency matters. It's a good choice when throughput and resource constraints are real concerns, keeping inference times low without sacrificing quality.",
+                "gothenburg": "Use this model when your photos contain real-world sensor noise, the kind produced by shooting in low light or at high ISO with a smartphone or DSLR. It handles complex noise patterns that cameras produce, making it the right choice for photography.",
+                "malmo": "Use this model to remove rain streaks from outdoor images, whether captured in light drizzle or heavy downpour. It handles rain of varying scale, density, and direction, restoring fine details behind streaks. A good choice when weather artifacts obscure the scene."
+            }
+        },
+        "faceRecovery": {
+            "name": "Face Recovery",
+            "models": {
+                "athens": "Use this model when identity fidelity matters most. It lets you preserve facial structure while restoring details, even on heavily degraded faces. Best when you want restoration without changing the person.",
+                "santorini": "Use this model when you want aggressive, fast enhancement and can tolerate identity drift. It produces sharp, visually pleasing faces on moderate degradation, but may hallucinate features and alter identity on very low-quality inputs."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Light Adjustment",
+            "models": {
+                "paris": "Use this model when working with images affected by poor or uneven lighting, such as night scenes, backlit photos, shadows, or overexposed areas. It's useful when you need to enhance visibility and contrast so that images look clearer."
+            }
+        },
+        "colorBalance": {
+            "name": "Color Balance",
+            "models": {
+                "rio": "Use this model when your photos look too orange, too blue, or just have an off, unnatural tint, like indoor shots under warm lamps, cloudy outdoor scenes, or pictures taken in mixed lighting conditions where the colors simply don't look natural."
+            }
+        },
+        "sharpen": {
+            "name": "Sharpen",
+            "models": {
+                "moscow": "Use this model when blur comes from the camera being out of focus rather than from movement — e.g. portraits with a blurry background or foreground, macro photography gone soft, or any scene where a lens failed to focus on the right plane.",
+                "petersburg": "Use this model when you need fast, lightweight motion deblurring and efficiency matters more than squeezing out every last bit of quality. It's well-suited for action footage and handheld camera shake, and it's a solid choice when running on limited hardware.",
+                "novgorod": "Use this model when blur is caused by camera shake or fast-moving subjects — e.g. sports, handheld shots in low light, or any photo where something moved during exposure. It prioritizes maximum restoration quality over speed; good when results matter most."
+            }
+        },
+        "upscale": {
+            "name": "Upscale",
+            "models": {
+                "tokyo": "Use this model when you want a natural upscale without exaggeration. It focuses on preserving the original look and fine structures instead of \"inventing\" new details, making it ideal when realism and faithfulness matter more than sharpness.",
+                "kyoto": "Use this model for real-world photos (people, landscapes, products). It excels at restoring details while handling noise, blur, and compression artifacts. Ideal for practical applications where images are imperfect, and you want visually pleasing, robust results fast.",
+                "saitama": "Use this model for cartoon, drawings, line art, and digital illustrations. It preserves clean lines, flat colors, and stylized shading without introducing photo-like textures. Best when sharp edges and stylistic consistency matter more than realism.",
+                "osaka": "A diffusion model that rebuilds detail instead of interpolating it, giving the most dramatic results on soft, small, or heavily compressed photos. It is in a different league for cost: a 7.3 GB download on first use, roughly 8 GB of GPU memory, and far slower than the other models — minutes rather than seconds on a good GPU, and impractically slow without one. Only a half-precision build is published, so \"HD\" is unavailable."
+            }
+        },
+        "add": "Add enhancement",
+        "modelSelector": "AI Model",
+        "intensity": "Intensity",
+        "scale": {
+            "title": "Scale",
+            "max": "Max",
+            "custom": "Custom"
+        },
+        "faces_one": "{{count}} Face",
+        "faces_other": "{{count}} Faces",
+        "faces_partial_one": "{{enabled}}/{{count}} Face",
+        "faces_partial_other": "{{enabled}}/{{count}} Faces",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "faceSelector": {
+            "title": "Faces",
+            "help": "You can select individual<br/>faces that you want to enhance.",
+            "button": "Select faces ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Drag and drop images<br/>to start editing them",
+            "browse": "Browse images"
+        },
+        "progress": {
+            "downloading": "Downloading",
+            "denoise": "Denoise",
+            "faceRecovery": "Face Recovery",
+            "lightAdjustment": "Light Adjust",
+            "colorBalance": "Color Balance",
+            "upscale": "Upscale",
+            "sharpen": "Sharpen",
+            "enhancing": "Enhancing"
+        }
+    },
+    "menu": {
+        "file": {
+            "close": "Close image",
+            "closeAll": "Close all images",
+            "showIn": "Show in File Manager",
+            "showIn_darwin": "Show in Finder",
+            "showIn_windows": "Show in Explorer"
+        }
+    },
+    "errors": {
+        "boundary": {
+            "title": "Something went wrong",
+            "message": "Open Photo AI hit an unexpected error and can't continue. Reloading usually fixes it; your settings are kept, but any unsaved work in the current session is lost.",
+            "reload": "Reload"
+        },
+        "modelDownload": "Failed to download AI model. Check your internet connection and try again.",
+        "autopilotFailed": "Something went wrong. Failed to run autopilot.",
+        "enhanceFailed": "Something went wrong. Failed to enhance image.",
+        "faceDetectFailed": "Something went wrong. Failed to detect faces."
+    }
+}

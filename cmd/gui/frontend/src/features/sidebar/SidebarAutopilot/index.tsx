@@ -1,4 +1,5 @@
 import { Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Toggle } from '@/components/atoms/Toggle';
 import { useEnhancementStore } from '@/stores';
@@ -8,6 +9,7 @@ type SidebarAutopilotProps = TailwindProps & {
 };
 
 export const SidebarAutopilot = ({ className = '' }: SidebarAutopilotProps) => {
+    const { t } = useTranslation();
     const autopilot = useEnhancementStore((state) => state.autopilot);
     const toggle = useEnhancementStore((state) => state.toggle);
 
@@ -15,7 +17,7 @@ export const SidebarAutopilot = ({ className = '' }: SidebarAutopilotProps) => {
         <Toggle
             label={
                 <Typography variant='subtitle2' className='text-[#79e800]'>
-                    Autopilot
+                    {t('sidebar.autopilot')}
                 </Typography>
             }
             initialValue={autopilot}

@@ -1,4 +1,5 @@
 import { Dialog, Divider } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
@@ -12,6 +13,7 @@ type ExportProps = {
 };
 
 export const Export = ({ enhancements, open, onClose }: ExportProps) => {
+    const { t } = useTranslation();
     return (
         <Dialog
             open={open}
@@ -26,7 +28,7 @@ export const Export = ({ enhancements, open, onClose }: ExportProps) => {
                 },
             }}
         >
-            <ModalTitle title='Export' onClose={onClose} />
+            <ModalTitle title={t('export.title')} onClose={onClose} />
 
             <div className='flex flex-row h-full overflow-hidden'>
                 <ExportQueue enhancements={enhancements} className='flex-1' />

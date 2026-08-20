@@ -1,0 +1,301 @@
+{
+    "common": {
+        "cancel": "Cancelar",
+        "save": "Salvar",
+        "close": "Fechar",
+        "apply": "Aplicar",
+        "reset": "Redefinir",
+        "yes": "Sim",
+        "no": "Não",
+        "or": "OU",
+        "previewAlt": "Prévia"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "MD"
+        }
+    },
+    "settings": {
+        "title": "Configurações",
+        "sections": {
+            "app": "Aplicativo",
+            "enhancements": "Melhorias"
+        },
+        "app": {
+            "language": {
+                "title": "Idioma",
+                "description": "O idioma usado em todo o aplicativo. A mudança é aplicada quando você clica em Salvar."
+            },
+            "aiProcessor": {
+                "title": "Processador de IA",
+                "auto": "Automático",
+                "description": "Selecione o processador de IA que vai orquestrar os modelos.",
+                "description_auto": "Selecione o processador de IA que vai orquestrar os modelos. \"Automático\" vai tentar detectar o melhor processador para o seu sistema.",
+                "description_tensorrt": "Selecione o processador de IA que vai orquestrar os modelos. O TensorRT é muito rápido, mas na primeira execução leva algum tempo para criar o grafo do modelo; nas execuções seguintes ele fica bem mais rápido.",
+                "description_cuda": "Selecione o processador de IA que vai orquestrar os modelos. O CUDA tem ótimo desempenho e flexibilidade, sendo uma boa escolha padrão quando o TensorRT não está disponível.",
+                "description_directml": "Selecione o processador de IA que vai orquestrar os modelos. O DirectML é uma boa opção quando você não tem uma GPU dedicada.",
+                "description_coreml": "Selecione o processador de IA que vai orquestrar os modelos. O CoreML costuma ser muito mais rápido que a CPU, mas não é compatível com todos os modelos.",
+                "description_cpu": "Selecione o processador de IA que vai orquestrar os modelos. A CPU é a opção mais lenta, mas é compatível com todos os modelos."
+            },
+            "analytics": {
+                "title": "Análise de uso",
+                "description": "Ajude a melhorar o aplicativo enviando dados anônimos de uso. Nenhuma imagem ou dado pessoal é coletado."
+            },
+            "logs": {
+                "title": "Logs",
+                "description": "Abre a pasta dos logs do aplicativo, que podem ser usados para investigar problemas.",
+                "button": "Mostrar logs"
+            }
+        },
+        "enhancements": {
+            "denoise": {
+                "title": "Redução de ruído",
+                "description": "O modelo de Redução de ruído usado por padrão ao adicionar esta melhoria."
+            },
+            "faceRecovery": {
+                "title": "Recuperação de rostos",
+                "description": "O modelo de Recuperação de rostos usado por padrão ao adicionar esta melhoria."
+            },
+            "lightAdjustment": {
+                "title": "Ajuste de luz",
+                "description": "O modelo de Ajuste de luz usado por padrão ao adicionar esta melhoria."
+            },
+            "colorBalance": {
+                "title": "Equilíbrio de cores",
+                "description": "O modelo de Equilíbrio de cores usado por padrão ao adicionar esta melhoria."
+            },
+            "sharpen": {
+                "title": "Nitidez",
+                "description": "O modelo de Nitidez usado por padrão ao adicionar esta melhoria."
+            },
+            "upscale": {
+                "title": "Ampliação",
+                "description": "O modelo de Ampliação usado por padrão ao adicionar esta melhoria."
+            }
+        }
+    },
+    "navbar": {
+        "settings": "Configurações",
+        "about": "Sobre",
+        "updateAvailable": "Atualização disponível",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Dimensões",
+            "original": "Original",
+            "cropped": "Recortada",
+            "output": "Saída"
+        },
+        "about_dialog": {
+            "title": "Sobre",
+            "iconAlt": "Ícone do aplicativo",
+            "version": "Versão {{version}}",
+            "copyright": "© 2025—2026, Vinicius Egidio",
+            "github": "Github",
+            "website": "vinicius.io"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Piloto automático",
+        "analysing": "Analisando imagem...",
+        "exportImage": "Exportar imagem",
+        "noPreview": "Nenhuma prévia disponível",
+        "zoomCropAlt": "Zoom e recorte"
+    },
+    "drawer": {
+        "addImages": "Adicionar imagens",
+        "selectAll": "Selecionar todas",
+        "unselectAll": "Desmarcar todas",
+        "preview": {
+            "full": "Completa",
+            "sideBySide": "Lado a lado",
+            "split": "Dividida"
+        }
+    },
+    "faces": {
+        "selectFaces": "Selecionar rostos",
+        "toggleFace": "Alternar rosto {{number}}",
+        "originalAlt": "Original"
+    },
+    "crop": {
+        "title": "Recortar/Girar",
+        "aspectRatio": "Proporção",
+        "dimensions": "Dimensões",
+        "zoomHint": "Você pode usar a roda do mouse ou o gesto de pinça no trackpad para aproximar e afastar a imagem à esquerda.",
+        "ratio": {
+            "free": "Livre",
+            "square": "Quadrada"
+        },
+        "width": "l",
+        "height": "a"
+    },
+    "export": {
+        "title": "Exportar",
+        "settings": {
+            "title": "Configurações de exportação",
+            "filename": {
+                "title": "Nome do arquivo",
+                "prefix": "Prefixo",
+                "suffix": "Sufixo",
+                "allowOverwrite": "Permitir sobrescrever?",
+                "sameLocationOverwrite": "Quando a pasta e a extensão do arquivo forem as mesmas, o arquivo original será sobrescrito. Isso não pode ser desfeito.",
+                "sameLocationRename": "Quando a pasta e a extensão do arquivo forem as mesmas, os novos arquivos receberão um número em vez de sobrescrever o original."
+            },
+            "format": {
+                "title": "Formato",
+                "preserve": "Preservar"
+            },
+            "location": {
+                "title": "Salvar em",
+                "original": "Pasta original",
+                "browse": "Procurar..."
+            },
+            "abort": "Interromper",
+            "exportAgain": "Exportar novamente"
+        },
+        "queue": {
+            "title": "Fila ({{count}})",
+            "image": "Imagem",
+            "output": "Saída",
+            "size": "Tamanho",
+            "type": "Tipo",
+            "processing": "Processando",
+            "completed": "Concluído",
+            "error": "Erro",
+            "errorTooltip": "Algo deu errado...",
+            "errorDownloadTooltip": "Falha ao baixar o modelo de IA"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Selecionar imagem",
+            "selectDirectory": "Selecionar pasta",
+            "imagesFilter": "Imagens"
+        },
+        "tensorRT": {
+            "title": "TensorRT detectado",
+            "logoAlt": "TensorRT",
+            "intro": "Detectamos uma GPU compatível com TensorRT. O TensorRT é uma tecnologia da NVIDIA que executa modelos de IA bem mais rápido que o CUDA.",
+            "optimization": "Quando o TensorRT está ativado, ele precisa primeiro otimizar o grafo do modelo para um formato que entende. <b>Essa otimização pode levar alguns minutos na primeira execução</b>; nas execuções seguintes será muito mais rápido.",
+            "question": "Deseja ativar o TensorRT?",
+            "footer": "Independentemente do que você escolher agora, pode mudar essa opção a qualquer momento na janela de <b>Configurações</b>, em <u>Processador de IA</u>."
+        },
+        "download": {
+            "downloading": "Baixando dependências...",
+            "pleaseWait": "Aguarde!",
+            "error": "Erro ao baixar as dependências.",
+            "errorDetail": "O aplicativo não pode iniciar até que todas as dependências sejam baixadas!",
+            "tryAgain": "Tentar novamente",
+            "working": "Trabalhando..."
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_one": "O arquivo \"{{names}}\" não é compatível.",
+        "unsupportedFiles_other": "{{count}} arquivos não são compatíveis: {{names}}",
+        "cpuFallbackProvider": "Não foi possível usar {{provider}} neste sistema, então a CPU está sendo usada no lugar. As melhorias serão mais lentas.",
+        "cpuFallbackAuto": "Nenhum processador de GPU pôde ser usado neste sistema, então a CPU está sendo usada no lugar. As melhorias serão mais lentas."
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Redução de ruído",
+            "models": {
+                "stockholm": "Use este modelo quando você precisa de uma redução de ruído rápida e de alta qualidade em ruído real de sensor e a eficiência computacional importa. É uma boa escolha quando vazão e limites de recursos são preocupações reais, mantendo o tempo de inferência baixo sem sacrificar a qualidade.",
+                "gothenburg": "Use este modelo quando suas fotos têm ruído real de sensor, o tipo produzido ao fotografar com pouca luz ou ISO alto em um smartphone ou DSLR. Ele lida com os padrões complexos de ruído que as câmeras produzem, sendo a escolha certa para fotografia.",
+                "malmo": "Use este modelo para remover riscos de chuva em imagens externas, seja em uma garoa leve ou em um temporal. Ele lida com chuva de diferentes escalas, densidades e direções, restaurando os detalhes finos atrás dos riscos. Uma boa escolha quando artefatos do clima encobrem a cena."
+            }
+        },
+        "faceRecovery": {
+            "name": "Recuperação de rostos",
+            "models": {
+                "athens": "Use este modelo quando a fidelidade à identidade é o mais importante. Ele preserva a estrutura facial enquanto restaura detalhes, mesmo em rostos muito degradados. Melhor quando você quer restaurar sem mudar a pessoa.",
+                "santorini": "Use este modelo quando você quer uma melhoria agressiva e rápida e pode tolerar mudanças na identidade. Ele produz rostos nítidos e agradáveis em degradação moderada, mas pode inventar traços e alterar a identidade em imagens de qualidade muito baixa."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Ajuste de luz",
+            "models": {
+                "paris": "Use este modelo em imagens com iluminação ruim ou irregular, como cenas noturnas, fotos em contraluz, sombras ou áreas superexpostas. É útil quando você precisa melhorar a visibilidade e o contraste para deixar a imagem mais clara."
+            }
+        },
+        "colorBalance": {
+            "name": "Equilíbrio de cores",
+            "models": {
+                "rio": "Use este modelo quando suas fotos parecem laranjas ou azuis demais, ou têm um tom estranho e artificial, como fotos internas sob lâmpadas quentes, cenas externas nubladas ou imagens feitas sob iluminação mista, em que as cores simplesmente não parecem naturais."
+            }
+        },
+        "sharpen": {
+            "name": "Nitidez",
+            "models": {
+                "moscow": "Use este modelo quando o desfoque vem de a câmera estar fora de foco, e não de movimento — por exemplo, retratos com fundo ou primeiro plano borrado, macrofotografia que saiu suave, ou qualquer cena em que a lente não focou no plano certo.",
+                "petersburg": "Use este modelo quando você precisa remover desfoque de movimento de forma rápida e leve, e a eficiência importa mais do que extrair cada última gota de qualidade. Funciona bem em imagens de ação e tremor de câmera na mão, e é uma boa escolha em hardware limitado.",
+                "novgorod": "Use este modelo quando o desfoque vem do tremor da câmera ou de objetos em movimento rápido — por exemplo, esportes, fotos na mão com pouca luz, ou qualquer imagem em que algo se moveu durante a exposição. Ele prioriza a máxima qualidade de restauração em vez da velocidade; bom quando o resultado é o que mais importa."
+            }
+        },
+        "upscale": {
+            "name": "Ampliação",
+            "models": {
+                "tokyo": "Use este modelo quando você quer uma ampliação natural, sem exageros. Ele foca em preservar a aparência original e as estruturas finas em vez de \"inventar\" novos detalhes, sendo ideal quando realismo e fidelidade importam mais do que nitidez.",
+                "kyoto": "Use este modelo em fotos do mundo real (pessoas, paisagens, produtos). Ele é excelente em restaurar detalhes enquanto lida com ruído, desfoque e artefatos de compressão. Ideal para uso prático, quando as imagens são imperfeitas e você quer resultados agradáveis e robustos rapidamente.",
+                "saitama": "Use este modelo para desenhos, arte de linha, quadrinhos e ilustrações digitais. Ele preserva linhas limpas, cores chapadas e sombreamento estilizado sem introduzir texturas fotográficas. Melhor quando bordas nítidas e consistência de estilo importam mais do que realismo.",
+                "osaka": "Um modelo de difusão que reconstrói o detalhe em vez de interpolá-lo, dando os resultados mais impressionantes em fotos suaves, pequenas ou muito comprimidas. O custo é de outro nível: 7,3 GB de download no primeiro uso, cerca de 8 GB de memória de GPU e muito mais lento que os outros modelos — minutos em vez de segundos numa boa GPU, e lento demais para uso sem uma. Só existe uma versão em meia precisão, então \"HD\" não está disponível."
+            }
+        },
+        "add": "Adicionar melhoria",
+        "modelSelector": "Modelo de IA",
+        "intensity": "Intensidade",
+        "scale": {
+            "title": "Escala",
+            "max": "Máx",
+            "custom": "Personalizada"
+        },
+        "faces_one": "{{count}} rosto",
+        "faces_other": "{{count}} rostos",
+        "faces_partial_one": "{{enabled}}/{{count}} rosto",
+        "faces_partial_other": "{{enabled}}/{{count}} rostos",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "faceSelector": {
+            "title": "Rostos",
+            "help": "Você pode selecionar rostos<br/>individuais para melhorar.",
+            "button": "Selecionar rostos ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Arraste e solte imagens<br/>para começar a editá-las",
+            "browse": "Procurar imagens"
+        },
+        "progress": {
+            "downloading": "Baixando",
+            "denoise": "Redução de ruído",
+            "faceRecovery": "Recuperação de rostos",
+            "lightAdjustment": "Ajuste de luz",
+            "colorBalance": "Equilíbrio de cores",
+            "upscale": "Ampliação",
+            "sharpen": "Nitidez",
+            "enhancing": "Melhorando"
+        }
+    },
+    "menu": {
+        "file": {
+            "close": "Fechar imagem",
+            "closeAll": "Fechar todas as imagens",
+            "showIn": "Mostrar no gerenciador de arquivos",
+            "showIn_darwin": "Mostrar no Finder",
+            "showIn_windows": "Mostrar no Explorador de Arquivos"
+        }
+    },
+    "errors": {
+        "boundary": {
+            "title": "Algo deu errado",
+            "message": "O Open Photo AI encontrou um erro inesperado e não pode continuar. Recarregar normalmente resolve; suas configurações são mantidas, mas qualquer trabalho não salvo nesta sessão será perdido.",
+            "reload": "Recarregar"
+        },
+        "modelDownload": "Falha ao baixar o modelo de IA. Verifique sua conexão com a internet e tente novamente.",
+        "autopilotFailed": "Algo deu errado. Falha ao executar o piloto automático.",
+        "enhanceFailed": "Algo deu errado. Falha ao melhorar a imagem.",
+        "faceDetectFailed": "Algo deu errado. Falha ao detectar rostos."
+    }
+}

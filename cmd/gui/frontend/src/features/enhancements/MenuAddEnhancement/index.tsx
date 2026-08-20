@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
 import { useAddEnhancements, useCurrentFile, useFileOperations } from '@/hooks';
@@ -13,6 +14,7 @@ type MenuAddEnhancementProps = {
 };
 
 export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhancementProps) => {
+    const { t } = useTranslation();
     const dnModel = useSettingsStore((state) => state.dnModel);
     const frModel = useSettingsStore((state) => state.frModel);
     const laModel = useSettingsStore((state) => state.laModel);
@@ -38,41 +40,41 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
             {
                 type: 'dn',
                 icon: <Icon option='denoise' />,
-                name: 'Denoise',
+                name: t('enhancements.denoise.name'),
                 op: getDnOp(dnModel),
             },
             {
                 type: 'fr',
                 icon: <Icon option='face_recovery' />,
-                name: 'Face Recovery',
+                name: t('enhancements.faceRecovery.name'),
                 op: getFrOp(frModel),
             },
             {
                 type: 'la',
                 icon: <Icon option='light_adjustment' />,
-                name: 'Light Adjustment',
+                name: t('enhancements.lightAdjustment.name'),
                 op: getLaOp(laModel),
             },
             {
                 type: 'cb',
                 icon: <Icon option='color_balance' />,
-                name: 'Color Balance',
+                name: t('enhancements.colorBalance.name'),
                 op: getCbOp(cbModel),
             },
             {
                 type: 'sh',
                 icon: <Icon option='sharpen' />,
-                name: 'Sharpen',
+                name: t('enhancements.sharpen.name'),
                 op: getShOp(shModel),
             },
             {
                 type: 'up',
                 icon: <Icon option='upscale' />,
-                name: 'Upscale',
+                name: t('enhancements.upscale.name'),
                 op: getUpOp(upModel, scale),
             },
         ];
-    }, [dnModel, frModel, laModel, upModel, currentFile?.Dimensions, cbModel, shModel]);
+    }, [dnModel, frModel, laModel, upModel, currentFile?.Dimensions, cbModel, shModel, t]);
 
     return (
         <Menu

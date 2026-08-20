@@ -2,8 +2,8 @@ import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 import type { SupportedEPs } from '@/bindings/gui/services';
-import type { SelectItem } from '@/components/atoms/Select';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
+import { DEFAULT_LANGUAGE, detectLanguage, isSupportedLanguage, type SupportedLanguage } from '@/i18n/languages';
 import { os } from '@/utils/constants';
 
 const {
@@ -17,9 +17,10 @@ const {
 
 type SettingsStore = {
     isFirstTensorRT: boolean;
-    processorSelectItems: SelectItem[];
+    processorOptions: ExecutionProvider[];
     executionProvider: ExecutionProvider;
     analyticsEnabled: boolean;
+    language: SupportedLanguage;
 
     dnModel: string;
     frModel: string;
@@ -29,9 +30,10 @@ type SettingsStore = {
     shModel: string;
 
     setIsFirstTensorRT: (isFirstRun: boolean) => void;
-    setProcessorSelectItems: (supportedEps: SupportedEPs) => void;
+    setProcessorOptions: (supportedEps: SupportedEPs) => void;
     setExecutionProvider: (ep: ExecutionProvider) => void;
     setAnalyticsEnabled: (enabled: boolean) => void;
+    setLanguage: (language: SupportedLanguage) => void;
     setDnModel: (model: string) => void;
     setFrModel: (model: string) => void;
     setLaModel: (model: string) => void;
@@ -47,9 +49,10 @@ type SettingsStore = {
 // compile-time-safe: adding a new data field or renaming one forces this list to update.
 const SNAPSHOT_KEYS = [
     'isFirstTensorRT',
-    'processorSelectItems',
+    'processorOptions',
     'executionProvider',
     'analyticsEnabled',
+    'language',
     'dnModel',
     'frModel',
     'laModel',
@@ -68,9 +71,11 @@ export const useSettingsStore = create(
 
             return {
                 isFirstTensorRT: true,
-                processorSelectItems: [],
+                processorOptions: [],
                 executionProvider: ExecutionProviderAuto,
                 analyticsEnabled: true,
+                // Only used on first launch; `persist` replaces it with the stored choice on every later boot.
+                language: detectLanguage(),
                 dnModel: 'stockholm',
                 frModel: 'athens',
                 laModel: 'paris',
@@ -84,27 +89,26 @@ export const useSettingsStore = create(
                     });
                 },
 
-                setProcessorSelectItems: (supportedEps: SupportedEPs) => {
-                    const items: SelectItem[] = [{ label: ExecutionProviderAuto, value: ExecutionProviderAuto }];
+                // Holds values only, never display labels: the store is persisted, and a label baked into localStorage
+                // would keep showing the language it was written in. The Settings item builds the labels at render.
+                setProcessorOptions: (supportedEps: SupportedEPs) => {
+                    const options: ExecutionProvider[] = [ExecutionProviderAuto];
 
-                    if (supportedEps.TensorRT)
-                        items.push({ label: ExecutionProviderTensorRT, value: ExecutionProviderTensorRT });
-                    if (supportedEps.CUDA) items.push({ label: ExecutionProviderCUDA, value: ExecutionProviderCUDA });
-                    if (supportedEps.CoreML)
-                        items.push({ label: ExecutionProviderCoreML, value: ExecutionProviderCoreML });
-                    if (os === 'windows')
-                        items.push({ label: ExecutionProviderDirectML, value: ExecutionProviderDirectML });
+                    if (supportedEps.TensorRT) options.push(ExecutionProviderTensorRT);
+                    if (supportedEps.CUDA) options.push(ExecutionProviderCUDA);
+                    if (supportedEps.CoreML) options.push(ExecutionProviderCoreML);
+                    if (os === 'windows') options.push(ExecutionProviderDirectML);
 
-                    items.push({ label: ExecutionProviderCPU, value: ExecutionProviderCPU });
+                    options.push(ExecutionProviderCPU);
 
                     set((state) => {
-                        state.processorSelectItems = items;
+                        state.processorOptions = options;
 
                         // The chosen processor is persisted, but the hardware behind it may be gone on the next run
                         // (a GPU driver that broke or was uninstalled, a machine the settings were copied to). Without
                         // this the app would keep asking for a processor that is no longer offered — and no longer
                         // works — making every enhancement fail.
-                        if (!items.some((item) => item.value === state.executionProvider)) {
+                        if (!options.includes(state.executionProvider)) {
                             state.executionProvider = ExecutionProviderAuto;
                         }
                     });
@@ -119,6 +123,15 @@ export const useSettingsStore = create(
                 setAnalyticsEnabled: (enabled: boolean) => {
                     set((state) => {
                         state.analyticsEnabled = enabled;
+                    });
+                },
+
+                // Only writes the store. i18n.changeLanguage() is deliberately left to the Settings dialog's Save
+                // handler: the language must apply on Save, and Cancel's restoreSnapshot() has to be able to undo the
+                // choice without anything outside the store having observed it.
+                setLanguage: (language: SupportedLanguage) => {
+                    set((state) => {
+                        state.language = language;
                     });
                 },
 
@@ -188,6 +201,13 @@ export const useSettingsStore = create(
         }),
         {
             name: 'settings-storage',
+
+            // Same reasoning as the executionProvider guard above: a language persisted by an older build whose
+            // catalog no longer ships (or a hand-edited value) would leave the Settings select on an option that
+            // isn't in its item list, and every t() call falling back key-by-key.
+            onRehydrateStorage: () => (state) => {
+                if (state && !isSupportedLanguage(state.language)) state.language = DEFAULT_LANGUAGE;
+            },
         },
     ),
 );

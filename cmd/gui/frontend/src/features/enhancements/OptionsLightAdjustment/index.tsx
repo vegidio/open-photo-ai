@@ -1,8 +1,11 @@
+import { useMemo } from 'react';
 import { Divider } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { IntensitySelector } from '@/features/enhancements/IntensitySelector';
 import { ModelSelector, type ModelSelectorOption } from '@/features/enhancements/ModelSelector';
 import { OptionsPopover } from '@/features/enhancements/OptionsPopover';
 import { useOptionEnhancement } from '@/hooks';
+import { modelLabel } from '@/i18n/format';
 import { Paris } from '@/operations';
 
 type OptionsLightAdjustmentProps = {
@@ -11,17 +14,23 @@ type OptionsLightAdjustmentProps = {
     onClose: () => void;
 };
 
-const options: ModelSelectorOption[] = [
-    {
-        value: 'paris_fp32',
-        label: 'Paris High',
-        description:
-            "Use this model when working with images affected by poor or uneven lighting, such as night scenes, backlit photos, shadows, or overexposed areas. It's useful when you need to enhance visibility and contrast so that images look clearer.",
-    },
-    { value: 'paris_fp16', label: 'Paris Std.' },
-];
-
 export const OptionsLightAdjustment = ({ anchorEl, open, onClose }: OptionsLightAdjustmentProps) => {
+    const { t } = useTranslation();
+
+    // Built here rather than at module scope: t() called at module-evaluation time would freeze the labels
+    // and descriptions in whatever language was active on the first import and never follow a change.
+    const options = useMemo<ModelSelectorOption[]>(
+        () => [
+            {
+                value: 'paris_fp32',
+                label: modelLabel(t, 'Paris', 'fp32'),
+                description: t('enhancements.lightAdjustment.models.paris'),
+            },
+            { value: 'paris_fp16', label: modelLabel(t, 'Paris', 'fp16') },
+        ],
+        [t],
+    );
+
     const { model, amount, onModelChange, onAmountChange } = useOptionEnhancement(
         'la',
         (op) => (Number(op?.options.intensity) * 100).toString(),
@@ -37,7 +46,12 @@ export const OptionsLightAdjustment = ({ anchorEl, open, onClose }: OptionsLight
     );
 
     return (
-        <OptionsPopover title='Light Adjustment' anchorEl={anchorEl} open={open} onClose={onClose}>
+        <OptionsPopover
+            title={t('enhancements.lightAdjustment.name')}
+            anchorEl={anchorEl}
+            open={open}
+            onClose={onClose}
+        >
             <div className='flex flex-col mt-1 p-3 gap-4'>
                 <ModelSelector options={options} value={model} onChange={onModelChange} />
 

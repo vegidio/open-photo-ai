@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Dialog, Divider, Typography } from '@mui/material';
 import { Events } from '@wailsio/runtime';
+import { useTranslation } from 'react-i18next';
 import { Initialize } from '@/bindings/gui/services/appservice.ts';
 import { DownloadAnimation } from '@/features/dialogs/DownloadAnimation';
 import { DownloadProgress } from '@/features/dialogs/DownloadProgress';
@@ -12,6 +13,7 @@ type DialogDownloadProps = {
 };
 
 export const DialogDownload = ({ open, hasError = false, onClose }: DialogDownloadProps) => {
+    const { t } = useTranslation();
     const [downloads, setDownloads] = useState<Record<string, number>>({});
     const [error, setError] = useState(false);
 
@@ -30,16 +32,16 @@ export const DialogDownload = ({ open, hasError = false, onClose }: DialogDownlo
     const { message1, message2 } = useMemo(() => {
         if (error) {
             return {
-                message1: 'Error downloading the dependencies.',
-                message2: 'The app cannot start until all dependencies are downloaded!',
+                message1: t('dialogs.download.error'),
+                message2: t('dialogs.download.errorDetail'),
             };
         } else {
             return {
-                message1: 'Downloading dependencies...',
-                message2: 'Please wait!',
+                message1: t('dialogs.download.downloading'),
+                message2: t('dialogs.download.pleaseWait'),
             };
         }
-    }, [error]);
+    }, [error, t]);
 
     const onTryAgain = async () => {
         setError(false);
@@ -81,7 +83,7 @@ export const DialogDownload = ({ open, hasError = false, onClose }: DialogDownlo
                 })}
 
                 <Button color='error' disabled={!error} onClick={onTryAgain}>
-                    {error ? 'Try again' : 'Working...'}
+                    {error ? t('dialogs.download.tryAgain') : t('dialogs.download.working')}
                 </Button>
             </div>
         </Dialog>

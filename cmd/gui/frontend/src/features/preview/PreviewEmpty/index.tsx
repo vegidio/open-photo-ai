@@ -1,15 +1,20 @@
 import { Typography } from '@mui/material';
+import { Trans, useTranslation } from 'react-i18next';
 import { MdFolderOpen } from 'react-icons/md';
 import { DialogService } from '@/bindings/gui/services';
 import { Button } from '@/components/atoms/Button';
 import { useFileStore } from '@/stores';
 
 export const PreviewEmpty = () => {
+    const { t } = useTranslation();
     const addFiles = useFileStore((state) => state.addFiles);
 
     const onBrowseClick = async () => {
         try {
-            const files = await DialogService.OpenFileDialog();
+            const files = await DialogService.OpenFileDialog(
+                t('dialogs.native.selectImage'),
+                t('dialogs.native.imagesFilter'),
+            );
             addFiles(files);
         } catch (e) {
             console.error(e);
@@ -21,18 +26,18 @@ export const PreviewEmpty = () => {
             <MdFolderOpen className='size-20 text-[#009aff]' />
 
             <div className='flex flex-col text-center gap-3 mb-4 bg-[#171717]'>
+                {/* The line break is part of the centred two-line layout, so it sits in the catalog where a
+                    translator can move or drop it — <br/> is one of i18next's default kept nodes. */}
                 <Typography className='text-[#f2f2f2]'>
-                    Drag and drop images
-                    <br />
-                    to start editing them
+                    <Trans i18nKey='preview.empty.title' />
                 </Typography>
 
                 <Typography variant='subtitle2' className='text-[#979797]'>
-                    OR
+                    {t('common.or')}
                 </Typography>
             </div>
 
-            <Button onClick={onBrowseClick}>Browse images</Button>
+            <Button onClick={onBrowseClick}>{t('preview.empty.browse')}</Button>
         </div>
     );
 };

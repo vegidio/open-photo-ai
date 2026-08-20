@@ -11,6 +11,11 @@ import './style.css';
 import { SnackbarProvider } from 'notistack';
 import { AnalyticsEvent, initAnalytics, setAnalyticsEnabled, track } from '@/analytics';
 import { ErrorBoundary } from '@/features/shared/ErrorBoundary';
+// Side-effect import: initialises i18next from the persisted language. Biome sorts this among the other path
+// imports, which is fine — ESM evaluates every import before this module's body, so i18n is always ready before
+// createRoot().render() runs. The rule it imposes on the rest of the app is that t() is never called at module
+// scope, since that would capture the language at evaluation time and never update.
+import '@/i18n';
 import { useSettingsStore } from '@/stores';
 
 // Initialize analytics before the app mounts, honoring the user's persisted opt-out, then record the app open.

@@ -1,5 +1,6 @@
 import { type ChangeEvent, type MouseEvent, useEffect, useState } from 'react';
 import { Slider, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { TextField } from '@/components/atoms/TextField';
 
 type IntensitySelectorProps = {
@@ -19,6 +20,7 @@ export const IntensitySelector = ({
     step = 5,
     marks = [{ value: 0, label: '0' }],
 }: IntensitySelectorProps) => {
+    const { t } = useTranslation();
     const [sliderValue, setSliderValue] = useState(value === '' || value === '-' ? 0 : parseFloat(value));
 
     // Keep the slider in sync when the value changes externally (e.g. typed in the textfield).
@@ -57,13 +59,14 @@ export const IntensitySelector = ({
     return (
         <div className='flex flex-col gap-2'>
             <div className='flex flex-row justify-between items-center'>
-                <Typography variant='body2'>Intensity</Typography>
+                <Typography variant='body2'>{t('enhancements.intensity')}</Typography>
                 <TextField
                     value={value}
                     onChange={onTextChange}
                     className='w-20 m-0'
                     slotProps={{
                         input: {
+                            // biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy
                             endAdornment: <Typography>%</Typography>,
                         },
                     }}

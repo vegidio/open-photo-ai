@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import { useFileFaces } from '@/hooks';
 
@@ -23,6 +24,7 @@ export const FaceBoxes = ({
     disabled,
     onToggle,
 }: FaceBoxesProps) => {
+    const { t } = useTranslation();
     const faces = useFileFaces(file);
 
     if (originalWidth <= 0 || originalHeight <= 0) return undefined;
@@ -41,7 +43,7 @@ export const FaceBoxes = ({
                     <button
                         key={i}
                         type='button'
-                        aria-label={`Toggle face ${i + 1}`}
+                        aria-label={t('faces.toggleFace', { number: i + 1 })}
                         className={`absolute box-border cursor-pointer appearance-none border-[3px] rounded-md bg-transparent p-0 ${
                             isDisabled ? 'border-gray-500' : 'border-yellow-400'
                         }`}

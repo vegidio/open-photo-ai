@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button, Paper, Typography } from '@mui/material';
 import { AnalyticsEvent, track } from '@/analytics';
+import i18n from '@/i18n';
 import { getErrorMessage } from '@/utils/errors.ts';
 
 type ErrorBoundaryProps = {
@@ -36,11 +37,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         return (
             <div className='flex h-screen items-center justify-center bg-[#353535] p-8'>
                 <Paper elevation={8} className='flex max-w-lg flex-col gap-4 p-6'>
-                    <Typography variant='h6'>Something went wrong</Typography>
+                    <Typography variant='h6'>{i18n.t('errors.boundary.title')}</Typography>
 
+                    {/* A class component, so no hooks: this reads the i18n singleton directly. It also doesn't
+                        need withTranslation() — the boundary renders once, after a fatal error, and there is no way
+                        to reach Settings from here, so it never has to react to a language change. */}
                     <Typography variant='body2' color='text.secondary'>
-                        Open Photo AI hit an unexpected error and can't continue. Reloading usually fixes it; your
-                        settings are kept, but any unsaved work in the current session is lost.
+                        {i18n.t('errors.boundary.message')}
                     </Typography>
 
                     <Typography variant='caption' color='text.secondary' className='break-words font-mono'>
@@ -48,7 +51,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                     </Typography>
 
                     <Button variant='contained' onClick={() => window.location.reload()} className='self-start'>
-                        Reload
+                        {i18n.t('errors.boundary.reload')}
                     </Button>
                 </Paper>
             </div>

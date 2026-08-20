@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { type ReactZoomPanPinchRef, TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
 import type { ImageData } from '@/utils/image.ts';
 import { type ImageTransform, useImageStore } from '@/stores';
@@ -10,6 +11,7 @@ type ZoomImageProps = {
 };
 
 export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
+    const { t } = useTranslation();
     const tRef = useRef<ReactZoomPanPinchRef>(null);
     const setImageTransform = useImageStore((state) => state.setImageTransform);
     const setViewport = useImageStore((state) => state.setViewport);
@@ -70,11 +72,7 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
         if (!tRef.current || !container) return;
 
         const { width: containerWidth, height: containerHeight } = container.getBoundingClientRect();
-        const {
-            scale: currentScale,
-            positionX: currentPosX,
-            positionY: currentPosY,
-        } = tRef.current.instance.state;
+        const { scale: currentScale, positionX: currentPosX, positionY: currentPosY } = tRef.current.instance.state;
         const { scale: newScale, positionX, positionY } = imageTransform;
         const scaledWidth = dimensions.width * newScale;
         const scaledHeight = dimensions.height * newScale;
@@ -135,7 +133,7 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
                 }}
             >
                 <img
-                    alt='Preview'
+                    alt={t('common.previewAlt')}
                     src={image.url}
                     style={{
                         width: dimensions.width || 'auto',

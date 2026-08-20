@@ -1,5 +1,6 @@
 import { type MouseEvent, useState } from 'react';
 import { Divider, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Button } from '@/components/atoms/Button';
@@ -12,6 +13,7 @@ type NavbarDimensionsProps = TailwindProps & {
 };
 
 export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps) => {
+    const { t } = useTranslation();
     const operations = useFileOperations(file);
     const scaleStr = operations.find((op) => op.id.startsWith('up'))?.options?.scale ?? '1';
     const scale = parseFloat(scaleStr);
@@ -46,7 +48,7 @@ export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps
                     className={`flex flex-col items-center px-3 py-0.5`}
                 >
                     <Typography variant='caption' className='text-[#f2f2f2]'>
-                        Dimensions
+                        {t('navbar.dimensions.title')}
                     </Typography>
 
                     <Typography variant='caption' className='text-[#b0b0b0]'>

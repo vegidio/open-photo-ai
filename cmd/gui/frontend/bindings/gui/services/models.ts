@@ -154,3 +154,36 @@ export class SupportedEPs {
         return new SupportedEPs($$parsedSource as Partial<SupportedEPs>);
     }
 }
+
+/**
+ * UnsupportedFiles is the payload of EventAppUnsupportedFiles. Emitted when a drag-and-drop included files the
+ * decoder can't read. Only the base names are sent: the frontend renders the message, so the wording - and its plural
+ * form, which the "len == 1" test here could only ever get right for English - lives in the i18n catalog instead.
+ */
+export class UnsupportedFiles {
+    "names": string[];
+
+    /** Creates a new UnsupportedFiles instance. */
+    constructor($$source: Partial<UnsupportedFiles> = {}) {
+        if (!("names" in $$source)) {
+            this["names"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UnsupportedFiles instance from a string or object.
+     */
+    static createFrom($$source: any = {}): UnsupportedFiles {
+        const $$createField0_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("names" in $$parsedSource) {
+            $$parsedSource["names"] = $$createField0_0($$parsedSource["names"]);
+        }
+        return new UnsupportedFiles($$parsedSource as Partial<UnsupportedFiles>);
+    }
+}
+
+// Private type creation functions
+const $$createType0 = $Create.Array($Create.Any);

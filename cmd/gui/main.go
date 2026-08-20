@@ -194,10 +194,18 @@ func eventDragAndDrop(app *application.App, win *application.WebviewWindow) {
 			paths := event.Context().DroppedFiles()
 			supported, unsupported := utils.PartitionSupportedFiles(paths)
 
-			// Warn about and surface any unsupported files, but still load the supported ones.
+			// Warn about and surface any unsupported files, but still load the supported ones. The frontend renders
+			// the warning rather than a native dialog: nothing on the JS side calls this handler, so it can't be
+			// passed translated strings, and the message needs a plural form that only the i18n catalog gets right
+			// for languages with more than two.
 			if len(unsupported) > 0 {
 				slog.Warn("unsupported files dropped", "count", len(unsupported))
-				showUnsupportedFilesDialog(app, unsupported)
+
+				names := lo.Map(unsupported, func(path string, _ int) string {
+					return filepath.Base(path)
+				})
+
+				app.Event.Emit(services.EventAppUnsupportedFiles, services.UnsupportedFiles{Names: names})
 			}
 
 			if len(supported) == 0 {
@@ -208,22 +216,4 @@ func eventDragAndDrop(app *application.App, win *application.WebviewWindow) {
 			slog.Info("files dropped", "count", len(files))
 			app.Event.Emit(services.EventAppFilesDropped, files)
 		})
-}
-
-func showUnsupportedFilesDialog(app *application.App, unsupported []string) {
-	var message string
-	if len(unsupported) == 1 {
-		message = fmt.Sprintf("The file %q is not supported.", filepath.Base(unsupported[0]))
-	} else {
-		names := make([]string, len(unsupported))
-		for i, path := range unsupported {
-			names[i] = "  • " + filepath.Base(path)
-		}
-		message = "The following files are not supported:\n\n" + strings.Join(names, "\n")
-	}
-
-	dialog := app.Dialog.Error()
-	dialog.SetTitle("Unsupported File(s)")
-	dialog.SetMessage(message)
-	dialog.Show()
 }

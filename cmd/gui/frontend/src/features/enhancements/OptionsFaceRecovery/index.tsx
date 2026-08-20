@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Divider } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { FaceSelector } from '@/features/enhancements/FaceSelector';
 import { ModelSelector, type ModelSelectorOption } from '@/features/enhancements/ModelSelector';
 import { OptionsPopover } from '@/features/enhancements/OptionsPopover';
 import { FaceToggle } from '@/features/faces';
 import { useCurrentFile, useFileDisabledFaces, useFileFaces, useFileOperations } from '@/hooks';
+import { modelLabel } from '@/i18n/format';
 import { Athens, Santorini } from '@/operations';
 import { useEnhancementStore } from '@/stores';
 
@@ -14,24 +16,29 @@ type OptionsFaceRecoveryProps = {
     onClose: () => void;
 };
 
-const options: ModelSelectorOption[] = [
-    {
-        value: 'athens_fp32',
-        label: 'Athens High',
-        description:
-            'Use this model when identity fidelity matters most. It lets you preserve facial structure while restoring details, even on heavily degraded faces. Best when you want restoration without changing the person.',
-    },
-    { value: 'athens_fp16', label: 'Athens Std.' },
-    {
-        value: 'santorini_fp32',
-        label: 'Santorini High',
-        description:
-            'Use this model when you want aggressive, fast enhancement and can tolerate identity drift. It produces sharp, visually pleasing faces on moderate degradation, but may hallucinate features and alter identity on very low-quality inputs.',
-    },
-    { value: 'santorini_fp16', label: 'Santorini Std.' },
-];
-
 export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceRecoveryProps) => {
+    const { t } = useTranslation();
+
+    // Built here rather than at module scope: t() called at module-evaluation time would freeze the labels
+    // and descriptions in whatever language was active on the first import and never follow a change.
+    const options = useMemo<ModelSelectorOption[]>(
+        () => [
+            {
+                value: 'athens_fp32',
+                label: modelLabel(t, 'Athens', 'fp32'),
+                description: t('enhancements.faceRecovery.models.athens'),
+            },
+            { value: 'athens_fp16', label: modelLabel(t, 'Athens', 'fp16') },
+            {
+                value: 'santorini_fp32',
+                label: modelLabel(t, 'Santorini', 'fp32'),
+                description: t('enhancements.faceRecovery.models.santorini'),
+            },
+            { value: 'santorini_fp16', label: modelLabel(t, 'Santorini', 'fp16') },
+        ],
+        [t],
+    );
+
     const file = useCurrentFile();
     const operations = useFileOperations(file);
     const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
@@ -59,7 +66,13 @@ export const OptionsFaceRecovery = ({ anchorEl, open, onClose }: OptionsFaceReco
     };
 
     return (
-        <OptionsPopover title='Face Recovery' anchorEl={anchorEl} open={open} onClose={onClose} hideBackdrop={false}>
+        <OptionsPopover
+            title={t('enhancements.faceRecovery.name')}
+            anchorEl={anchorEl}
+            open={open}
+            onClose={onClose}
+            hideBackdrop={false}
+        >
             <div className='flex flex-col mt-1 p-3 gap-4'>
                 <ModelSelector options={options} value={selectedModel} onChange={onModelChange} />
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Dialog } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { FaceBoxes } from '@/features/faces/FaceBoxes';
@@ -18,6 +19,7 @@ const TITLE = 41;
 const MARGIN = 32;
 
 export const FaceToggle = ({ file, open, onClose }: FaceToggleProps) => {
+    const { t } = useTranslation();
     const originalImage = useImageStore((state) => state.originalImage);
     const { disabled, toggle, commit } = useFaceSelection(file, open);
     const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -56,10 +58,10 @@ export const FaceToggle = ({ file, open, onClose }: FaceToggleProps) => {
                 },
             }}
         >
-            <ModalTitle title='Select faces' onClose={handleClose} />
+            <ModalTitle title={t('faces.selectFaces')} onClose={handleClose} />
 
             <div className='flex-1 overflow-hidden relative'>
-                <img alt='Original' src={originalImage.url} className='w-full h-full object-contain' />
+                <img alt={t('faces.originalAlt')} src={originalImage.url} className='w-full h-full object-contain' />
 
                 <FaceBoxes
                     file={file}

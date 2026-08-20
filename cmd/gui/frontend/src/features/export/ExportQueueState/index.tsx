@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Tooltip } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '@/components/atoms/Icon';
 
 type ExportQueueStateProps = {
@@ -7,25 +8,29 @@ type ExportQueueStateProps = {
 };
 
 export const ExportQueueState = ({ state }: ExportQueueStateProps) => {
+    const { t } = useTranslation();
+
     const [msg, color] = useMemo(() => {
         switch (state) {
             case 'RUNNING':
-                return ['Processing', 'text-[#009aff]'];
+                return [t('export.queue.processing'), 'text-[#009aff]'];
             case 'COMPLETED':
-                return ['Completed', 'text-[#009aff]'];
+                return [t('export.queue.completed'), 'text-[#009aff]'];
             case 'ERROR':
             case 'ERROR_DOWNLOAD':
-                return ['Error', 'text-[#ff5555]'];
+                return [t('export.queue.error'), 'text-[#ff5555]'];
             default:
                 return ['<Invisible>', ''];
         }
-    }, [state]);
+    }, [state, t]);
 
     return (
         <div className={`flex flex-row items-center gap-1 ${color}`}>
             <span className={`${state === 'IDLE' ? 'invisible' : ''}`}>{msg}</span>
             {state.startsWith('ERROR') && (
-                <Tooltip title={state === 'ERROR' ? 'Something went wrong...' : 'Failed to download AI model'}>
+                <Tooltip
+                    title={state === 'ERROR' ? t('export.queue.errorTooltip') : t('export.queue.errorDownloadTooltip')}
+                >
                     <span>
                         <Icon option='info' className='size-3.5' />
                     </span>

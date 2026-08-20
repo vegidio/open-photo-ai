@@ -8,6 +8,9 @@ import { CropInfo } from '@/bindings/gui/types';
 // sequentially so that costs one round trip over the Wails bridge on startup instead of three.
 export const [version, os, arch] = await Promise.all([Version(), GetOS(), GetArch()]);
 
+// Brand name: intentionally not in the i18n catalogs, since it must read identically in every language.
+export const APP_NAME = 'Open Photo AI';
+
 export const EMPTY_OPERATIONS: Operation[] = [];
 export const EMPTY_FACES: Face[] = [];
 export const EMPTY_DISABLED: ReadonlySet<number> = new Set();

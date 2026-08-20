@@ -1,22 +1,24 @@
 import { useState } from 'react';
 import { Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/atoms/Button';
 import { Icon } from '@/components/atoms/Icon';
 import { CropRotate } from '@/features/crop';
 import { useImageStore } from '@/stores';
 
 export const SidebarImage = () => {
+    const { t } = useTranslation();
     const originalImage = useImageStore((state) => state.originalImage);
     const viewport = useImageStore((state) => state.viewport);
     const [cropOpen, setCropOpen] = useState(false);
 
     return (
         <div className='h-36 flex items-center justify-center relative'>
-            {!originalImage && <Typography className='text-[#545454] text-sm'>No preview available</Typography>}
+            {!originalImage && <Typography className='text-[#545454] text-sm'>{t('sidebar.noPreview')}</Typography>}
 
             {originalImage && (
                 <div className='relative'>
-                    <img alt='Zoom & Crop' src={originalImage.url} className='block max-h-36 max-w-full' />
+                    <img alt={t('sidebar.zoomCropAlt')} src={originalImage.url} className='block max-h-36 max-w-full' />
                     {viewport && (
                         <div
                             className='absolute box-border border-2 border-white pointer-events-none'

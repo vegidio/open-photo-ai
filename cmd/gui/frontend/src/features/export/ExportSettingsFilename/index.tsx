@@ -1,9 +1,11 @@
 import { Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { TextField } from '@/components/atoms/TextField';
 import { Toggle } from '@/components/atoms/Toggle';
 import { useExportStore } from '@/stores';
 
 export const ExportSettingsFilename = () => {
+    const { t } = useTranslation();
     const prefix = useExportStore((state) => state.prefix);
     const setPrefix = useExportStore((state) => state.setPrefix);
     const suffix = useExportStore((state) => state.suffix);
@@ -14,17 +16,25 @@ export const ExportSettingsFilename = () => {
     return (
         <div className='flex flex-col'>
             <Typography variant='body2' className='text-[#b0b0b0]'>
-                Filename
+                {t('export.settings.filename.title')}
             </Typography>
 
-            <TextField label='Prefix' value={prefix} onChange={(e) => setPrefix(e.target.value)} />
+            <TextField
+                label={t('export.settings.filename.prefix')}
+                value={prefix}
+                onChange={(e) => setPrefix(e.target.value)}
+            />
 
-            <TextField label='Suffix' value={suffix} onChange={(e) => setSuffix(e.target.value)} />
+            <TextField
+                label={t('export.settings.filename.suffix')}
+                value={suffix}
+                onChange={(e) => setSuffix(e.target.value)}
+            />
 
             <Toggle
                 label={
                     <Typography variant='body2' className='text-[#b0b0b0]'>
-                        Allow overwriting?
+                        {t('export.settings.filename.allowOverwrite')}
                     </Typography>
                 }
                 initialValue={overwrite}
@@ -34,10 +44,11 @@ export const ExportSettingsFilename = () => {
             />
 
             <Typography variant='caption' className={`${overwrite ? 'text-[#ffcc00]' : ''} mt-1.5`}>
-                When file location and extension are the same,
-                {overwrite
-                    ? ' your original file will be overwritten. This cannot be reverted.'
-                    : ' new filenames will add a number instead of overwriting your original.'}
+                {t(
+                    overwrite
+                        ? 'export.settings.filename.sameLocationOverwrite'
+                        : 'export.settings.filename.sameLocationRename',
+                )}
             </Typography>
         </div>
     );

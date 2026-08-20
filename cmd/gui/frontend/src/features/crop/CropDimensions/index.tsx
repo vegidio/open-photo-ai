@@ -1,5 +1,6 @@
 import { type ChangeEvent, type KeyboardEvent, useEffect, useState } from 'react';
 import { Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { IconButton } from '@/components/atoms/IconButton';
 import { TextField } from '@/components/atoms/TextField';
@@ -74,11 +75,12 @@ export const CropDimensions = ({
     onSwap,
     className,
 }: CropDimensionsProps) => {
+    const { t } = useTranslation();
     return (
         <div className={`flex flex-row items-center gap-2 ${className ?? ''}`}>
-            <DimensionField label='w' value={width} onCommit={onWidthCommit} />
+            <DimensionField label={t('crop.width')} value={width} onCommit={onWidthCommit} />
             <IconButton option='swap' size='small' onClick={onSwap} className='shrink-0' />
-            <DimensionField label='h' value={height} onCommit={onHeightCommit} />
+            <DimensionField label={t('crop.height')} value={height} onCommit={onHeightCommit} />
         </div>
     );
 };
