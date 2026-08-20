@@ -16,12 +16,11 @@ export const DialogDownload = ({ open, hasError = false, onClose }: DialogDownlo
     const [error, setError] = useState(false);
 
     useEffect(() => {
-        Events.On('app:download', (event) => {
+        // Returns the per-listener unsubscribe; `Events.Off('app:download')` would also tear down App's listener.
+        return Events.On('app:download', (event) => {
             const { dependency, percent } = event.data;
             setDownloads((prev) => ({ ...prev, [dependency]: percent }));
         });
-
-        return () => Events.Off('app:download');
     }, []);
 
     useEffect(() => {

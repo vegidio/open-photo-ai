@@ -31,6 +31,14 @@ const (
 )
 
 func main() {
+	stdos.Exit(run())
+}
+
+// run holds what would otherwise be main's body so that every deferred cleanup — the log file, the OTLP exporter, and
+// the Wails services — actually runs before the process exits. Calling os.Exit (or log.Fatal) directly from main skips
+// deferred calls, which meant a fatal startup error was reported to telemetry and then dropped when the batching
+// exporter was never flushed.
+func run() int {
 	// TODO: Workaround for Linux to set LD_LIBRARY_PATH; I must revisit this approach in the future
 	if runtime.GOOS == "linux" {
 		setLibPathAndRestart()
@@ -101,8 +109,11 @@ func main() {
 	if err != nil {
 		otel.LogError("Error running the app", nil, err)
 		slog.Error("error running the app", "err", err)
-		log.Fatalf("%+v", err)
+		log.Printf("%+v", err)
+		return 1
 	}
+
+	return 0
 }
 
 // setLibPathAndRestart re-executes the process with LD_LIBRARY_PATH pointing at the bundled NVIDIA libraries, because

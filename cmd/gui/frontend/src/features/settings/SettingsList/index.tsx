@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
+import { type Ref, useImperativeHandle, useMemo, useRef } from 'react';
 import { List, ListSubheader } from '@mui/material';
 import type { TailwindProps } from '@/utils/TailwindProps';
 import { AnalyticsEvent, track } from '@/analytics';
@@ -14,7 +14,12 @@ export type SettingsListHandle = {
     scrollToSection: (itemId: string) => void;
 };
 
-export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ className = '' }, ref) => {
+// React 19 passes ref through as an ordinary prop, so the imperative handle no longer needs forwardRef to reach it.
+type SettingsListProps = TailwindProps & {
+    ref?: Ref<SettingsListHandle>;
+};
+
+export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
     const containerRef = useRef<HTMLUListElement>(null);
 
     const dnModel = useSettingsStore((state) => state.dnModel);
@@ -168,7 +173,7 @@ export const SettingsList = forwardRef<SettingsListHandle, TailwindProps>(({ cla
             />
         </List>
     );
-});
+};
 
 type ItemAiProcessorProps = {
     id?: string;

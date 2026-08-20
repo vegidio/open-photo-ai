@@ -30,11 +30,14 @@ export const App = () => {
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: N/A
     useEffect(() => {
-        Events.Once('app:download', (_) => setOpenDownload(true));
+        // `Events.Off(name)` removes *every* listener for that name, including ones other components registered
+        // (DialogDownload also listens for `app:download`). `On`/`Once` return an unsubscribe for just this listener,
+        // which is what cleanup must use.
+        const offDownload = Events.Once('app:download', (_) => setOpenDownload(true));
 
         // The backend downgrades to the CPU when the selected processor can't run a model (broken/outdated GPU
         // driver, no free VRAM). It's emitted once per run, so the message isn't repeated on every enhancement.
-        Events.On('app:fallback', (event) => {
+        const offFallback = Events.On('app:fallback', (event) => {
             const provider = event.data?.provider ?? '';
             track(AnalyticsEvent.ProviderFallback, { provider });
 
@@ -70,8 +73,8 @@ export const App = () => {
         initDependencies();
 
         return () => {
-            Events.Off('app:download');
-            Events.Off('app:fallback');
+            offDownload();
+            offFallback();
         };
     }, []);
 

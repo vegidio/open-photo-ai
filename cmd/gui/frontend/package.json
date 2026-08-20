@@ -19,8 +19,8 @@
         "@mui/material": "9.3.1",
         "@mui/x-tree-view": "9.11.0",
         "@tailwindcss/vite": "4.3.3",
-        "@wailsio/runtime": "3.0.0-beta.8",
-        "immer": "11.1.16",
+        "@wailsio/runtime": "3.0.0-beta.10",
+        "immer": "11.1.18",
         "lru-cache": "11.5.2",
         "notistack": "3.0.2",
         "pathe": "2.0.3",
@@ -35,15 +35,15 @@
         "zustand": "5.0.15"
     },
     "devDependencies": {
-        "@biomejs/biome": "2.5.8",
+        "@biomejs/biome": "2.5.9",
         "@types/node": "26.2.0",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.4",
-        "@vitejs/plugin-react": "6.0.5",
+        "@vitejs/plugin-react": "6.1.0",
         "globals": "17.11.0",
         "jiti": "2.7.0",
         "tailwind-scrollbar": "4.0.2",
         "typescript": "7.0.2",
-        "vite": "8.2.1"
+        "vite": "8.2.2"
     }
 }

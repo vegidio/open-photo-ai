@@ -32,12 +32,21 @@ export function GetLogsPath(): $CancellablePromise<string> {
     return $Call.ByID(2055045473);
 }
 
+/**
+ * Initialize boots the AI runtime and reports which execution providers this machine can actually use. It downloads
+ * the ONNX Runtime on first run, emitting EventAppDownload as it goes, so the frontend can show progress before any
+ * enhancement is possible. Callers must await it before invoking any inference service.
+ */
 export function Initialize(): $CancellablePromise<$models.SupportedEPs> {
     return $Call.ByID(3426585365).then(($result: any) => {
         return $$createType0($result);
     });
 }
 
+/**
+ * IsOutdated reports whether a newer release exists on GitHub. It makes a network call, so the frontend treats it as
+ * best-effort: a false result means "no newer release known", not "definitely up to date".
+ */
 export function IsOutdated(): $CancellablePromise<boolean> {
     return $Call.ByID(2990044471);
 }
@@ -67,6 +76,9 @@ export function SetExecutionProvider(): $CancellablePromise<void> {
     return $Call.ByID(2521312780);
 }
 
+/**
+ * Version returns the application version this build was stamped with, for the about dialog and bug reports.
+ */
 export function Version(): $CancellablePromise<string> {
     return $Call.ByID(3408143585);
 }

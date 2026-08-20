@@ -2,6 +2,8 @@ import { useCallback } from 'react';
 import type { File } from '@/bindings/gui/types';
 import { AnalyticsEvent, track } from '@/analytics';
 import { useCropStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
+import { clearFacesCache } from '@/utils/face.ts';
+import { clearCache as clearImageCache } from '@/utils/image.ts';
 
 // useFileManager is the single place callers should go to remove files or clear the workspace.
 // It keeps the file list, enhancements, crops, and per-image transforms in sync without coupling the
@@ -34,6 +36,12 @@ export const useFileManager = () => {
         clearEnhancements();
         clearCrops();
         clearImageState();
+
+        // The stores hold references to files; the caches hold the decoded pixels behind them. Clearing only the
+        // stores leaves the object URLs and detection results resident for files the user can no longer reach.
+        clearImageCache();
+        clearFacesCache();
+
         track(AnalyticsEvent.FilesCleared);
     }, [clearFileList, clearEnhancements, clearCrops, clearImageState]);
 

@@ -40,6 +40,9 @@ func NewAppService(app *application.App, otel *o11y.Telemetry) *AppService {
 	}
 }
 
+// Initialize boots the AI runtime and reports which execution providers this machine can actually use. It downloads
+// the ONNX Runtime on first run, emitting EventAppDownload as it goes, so the frontend can show progress before any
+// enhancement is possible. Callers must await it before invoking any inference service.
 func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	supportedEPs := SupportedEPs{}
 
@@ -130,10 +133,13 @@ func (s *AppService) ModelMemory() types.ModelMemory {
 	return opai.ModelMemoryStats()
 }
 
+// Version returns the application version this build was stamped with, for the about dialog and bug reports.
 func (s *AppService) Version() string {
 	return shared.Version
 }
 
+// IsOutdated reports whether a newer release exists on GitHub. It makes a network call, so the frontend treats it as
+// best-effort: a false result means "no newer release known", not "definitely up to date".
 func (s *AppService) IsOutdated(ctx context.Context) bool {
 	return github.IsOutdatedRelease(ctx, "vegidio", "open-photo-ai", shared.Version)
 }

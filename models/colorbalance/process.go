@@ -176,20 +176,37 @@ func applyMapping(img image.Image, w [11][3]float32) image.Image {
 
 	out := image.NewRGBA(image.Rect(0, 0, width, height))
 
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			pr, pg, pb, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
-			r := float32(pr) / 65535.0
-			g := float32(pg) / 65535.0
-			b := float32(pb) / 65535.0
+	// Fast path: the polynomial is evaluated at full photo resolution, so the generic path spends an interface
+	// dispatch and a color.Color boxing per pixel on top of the arithmetic. RgbPixBuffer offsets are already relative
+	// to Bounds().Min, which is exactly the (Min.X+x, Min.Y+y) indexing the fallback uses, so a non-origin source
+	// stays on the fast path. Sample16 reproduces At().RGBA() bit-for-bit, making both paths output-identical.
+	pix, stride, fast := utils.RgbPixBuffer(img)
+	_, isNRGBA := img.(*image.NRGBA)
 
-			k := kernelP(r, g, b)
-			var nr, ng, nb float32
-			for i := 0; i < 11; i++ {
-				nr += k[i] * w[i][0]
-				ng += k[i] * w[i][1]
-				nb += k[i] * w[i][2]
+	if fast {
+		for y := range height {
+			row := y * stride
+			dst := y * out.Stride
+
+			for x := range width {
+				pr, pg, pb, _ := utils.Sample16(pix, row+x*4, isNRGBA)
+				nr, ng, nb := mapPixel(pr, pg, pb, w)
+
+				out.Pix[dst] = uint8(utils.Clamp255(nr * 255.0))
+				out.Pix[dst+1] = uint8(utils.Clamp255(ng * 255.0))
+				out.Pix[dst+2] = uint8(utils.Clamp255(nb * 255.0))
+				out.Pix[dst+3] = 255
+				dst += 4
 			}
+		}
+
+		return out
+	}
+
+	for y := range height {
+		for x := range width {
+			pr, pg, pb, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+			nr, ng, nb := mapPixel(pr, pg, pb, w)
 
 			out.Set(x, y, color.RGBA{
 				R: uint8(utils.Clamp255(nr * 255.0)),
@@ -201,4 +218,21 @@ func applyMapping(img image.Image, w [11][3]float32) image.Image {
 	}
 
 	return out
+}
+
+// mapPixel evaluates the fitted polynomial for one pixel, taking the 16-bit channel values that both the fast and the
+// generic path produce so the two cannot drift apart.
+func mapPixel(pr, pg, pb uint32, w [11][3]float32) (nr, ng, nb float32) {
+	r := float32(pr) / 65535.0
+	g := float32(pg) / 65535.0
+	b := float32(pb) / 65535.0
+
+	k := kernelP(r, g, b)
+	for i := range 11 {
+		nr += k[i] * w[i][0]
+		ng += k[i] * w[i][1]
+		nb += k[i] * w[i][2]
+	}
+
+	return nr, ng, nb
 }

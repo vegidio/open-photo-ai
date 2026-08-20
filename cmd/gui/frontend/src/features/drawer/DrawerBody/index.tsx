@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { DrawerItem } from '@/features/drawer/DrawerItem';
 import { useFileStore } from '@/stores';
 
@@ -10,9 +11,9 @@ export const DrawerBody = ({ drawerHeight }: FileListBodyProps) => {
     const currentIndex = useFileStore((state) => state.currentIndex);
     const setCurrentIndex = useFileStore((state) => state.setCurrentIndex);
 
-    const onImageClicked = (index: number) => {
-        setCurrentIndex(index);
-    };
+    // One stable handler for the whole strip: an inline closure per item would give every memoized DrawerItem a new
+    // prop on each render, defeating the memo and re-rendering every thumbnail on every navigation click.
+    const onImageClicked = useCallback((index: number) => setCurrentIndex(index), [setCurrentIndex]);
 
     return (
         <div
@@ -23,8 +24,9 @@ export const DrawerBody = ({ drawerHeight }: FileListBodyProps) => {
                 <DrawerItem
                     key={file.Hash}
                     file={file}
+                    index={index}
                     current={index === currentIndex}
-                    onClick={() => onImageClicked(index)}
+                    onClick={onImageClicked}
                 />
             ))}
         </div>

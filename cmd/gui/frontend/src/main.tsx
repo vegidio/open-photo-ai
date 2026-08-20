@@ -10,6 +10,7 @@ import { App } from './App.tsx';
 import './style.css';
 import { SnackbarProvider } from 'notistack';
 import { AnalyticsEvent, initAnalytics, setAnalyticsEnabled, track } from '@/analytics';
+import { ErrorBoundary } from '@/features/shared/ErrorBoundary';
 import { useSettingsStore } from '@/stores';
 
 // Initialize analytics before the app mounts, honoring the user's persisted opt-out, then record the app open.
@@ -59,7 +60,9 @@ const Main = () => {
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
                     TransitionComponent={Grow}
                 >
-                    <App />
+                    <ErrorBoundary>
+                        <App />
+                    </ErrorBoundary>
                 </SnackbarProvider>
             </StyledEngineProvider>
         </ThemeProvider>

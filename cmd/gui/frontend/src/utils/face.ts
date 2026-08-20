@@ -38,6 +38,14 @@ export const detectFaces = (file: File, ep: ExecutionProvider, crop?: CropInfo):
 };
 
 /**
+ * Drops every cached detection. Unlike the image cache this Map is unbounded — one entry per file hash and crop, held
+ * for the lifetime of the session — so clearing the workspace has to release it explicitly.
+ */
+export const clearFacesCache = () => {
+    facesCache.clear();
+};
+
+/**
  * Reports whether any of the given operation IDs is a face-recovery operation (and therefore needs detected faces).
  */
 export const hasFaceRecovery = (opIds: string[]): boolean => opIds.some((id) => id.startsWith('fr_'));

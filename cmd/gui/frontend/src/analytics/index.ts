@@ -1,6 +1,6 @@
 import { init, trackEvent } from '@aptabase/web';
-import { version } from '@/utils/constants.ts';
 import { aptabaseAppKey } from './config.ts';
+import { version } from '@/utils/constants.ts';
 
 // Single source of truth for analytics event names. Add new events here so every `track()` call site stays type-checked.
 export const AnalyticsEvent = {
@@ -21,6 +21,7 @@ export const AnalyticsEvent = {
     ExportFailed: 'export_failed',
     ExecutionProviderChanged: 'execution_provider_changed',
     ProviderFallback: 'provider_fallback',
+    RenderCrashed: 'render_crashed',
 } as const;
 
 export type AnalyticsEvent = (typeof AnalyticsEvent)[keyof typeof AnalyticsEvent];

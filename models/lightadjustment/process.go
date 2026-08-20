@@ -88,17 +88,55 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 // buildResult applies the low-res relighting as a per-pixel multiplicative gain map on the full-resolution original.
 // Both the smoothed input the model saw (inUp) and its relit output (outUp) are upsampled to full size; the ratio
 // outUp/inUp is the low-frequency gain, applied to the full-res detail in img.
+// buildResult applies the low-res relighting as a per-pixel multiplicative gain map on the full-resolution original.
+// Both the smoothed input the model saw (inUp) and its relit output (outUp) are upsampled to full size; the ratio
+// outUp/inUp is the low-frequency gain, applied to the full-res detail in img.
 func buildResult(img, resized, outLR image.Image) image.Image {
 	bounds := img.Bounds()
 	fullW, fullH := bounds.Dx(), bounds.Dy()
 
+	// imaging.Resize always returns an origin-based *image.NRGBA, so both upsampled sources are already on the fast
+	// path; only img's concrete type is unknown.
 	inUp := imaging.Resize(resized, fullW, fullH, imaging.Lanczos)
 	outUp := imaging.Resize(outLR, fullW, fullH, imaging.Lanczos)
 
 	out := image.NewRGBA(image.Rect(0, 0, fullW, fullH))
 
-	for y := 0; y < fullH; y++ {
-		for x := 0; x < fullW; x++ {
+	// Fast path: this loop runs at full photo resolution over three sources, so the generic path costs four interface
+	// dispatches per pixel (~96M on a 24MP image). Sample16 reproduces the exact 16-bit values At().RGBA() would
+	// return, so the direct-Pix path is bit-identical to the fallback below.
+	//
+	// The generic path indexes img with absolute coordinates starting at 0, so it only agrees with a Pix-relative
+	// fast path when img sits at the origin. Anything else falls through to At().
+	fPix, fStride, fFast := utils.RgbPixBuffer(img)
+	_, fIsNRGBA := img.(*image.NRGBA)
+
+	if fFast && bounds.Min == (image.Point{}) {
+		for y := range fullH {
+			fRow := y * fStride
+			iRow := y * inUp.Stride
+			oRow := y * outUp.Stride
+			dst := y * out.Stride
+
+			for x := range fullW {
+				off := x * 4
+				fr, fg, fb, _ := utils.Sample16(fPix, fRow+off, fIsNRGBA)
+				ir, ig, ib, _ := utils.Sample16(inUp.Pix, iRow+off, true)
+				or, og, ob, _ := utils.Sample16(outUp.Pix, oRow+off, true)
+
+				out.Pix[dst] = uint8(applyGain(float32(fr), float32(ir), float32(or)))
+				out.Pix[dst+1] = uint8(applyGain(float32(fg), float32(ig), float32(og)))
+				out.Pix[dst+2] = uint8(applyGain(float32(fb), float32(ib), float32(ob)))
+				out.Pix[dst+3] = 255
+				dst += 4
+			}
+		}
+
+		return out
+	}
+
+	for y := range fullH {
+		for x := range fullW {
 			fr, fg, fb, _ := img.At(x, y).RGBA()
 			ir, ig, ib, _ := inUp.At(x, y).RGBA()
 			or, og, ob, _ := outUp.At(x, y).RGBA()

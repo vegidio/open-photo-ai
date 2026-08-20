@@ -9,10 +9,18 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as types$0 from "../types/models.js";
 
+/**
+ * OpenDirDialog prompts the user to pick a single directory, used as the destination for a batch export. The path is
+ * empty when the user cancels, which is not an error.
+ */
 export function OpenDirDialog(): $CancellablePromise<string> {
     return $Call.ByID(690693041);
 }
 
+/**
+ * OpenFileDialog prompts the user to pick one or more images, filtered to the formats the decoder supports, and
+ * returns them as loaded File records. The slice is empty when the user cancels, which is not an error.
+ */
 export function OpenFileDialog(): $CancellablePromise<types$0.File[]> {
     return $Call.ByID(3411436064).then(($result: any) => {
         return $$createType1($result);

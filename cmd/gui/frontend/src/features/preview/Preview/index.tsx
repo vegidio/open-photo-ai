@@ -99,12 +99,11 @@ export const Preview = ({ className = '' }: TailwindProps) => {
     // Native file drops (any state) arrive via the Wails `app:FilesDropped` event; the drop zone is the
     // always-mounted `#preview` div below, so this works whether or not an image is already loaded.
     useEffect(() => {
-        Events.On('app:FilesDropped', (event) => {
+        // Returns the per-listener unsubscribe; `Events.Off` is global across every listener for the name.
+        return Events.On('app:FilesDropped', (event) => {
             addFiles(event.data);
             if (event.data?.length > 0) track(AnalyticsEvent.FilesAdded, { count: event.data.length, source: 'drop' });
         });
-
-        return () => Events.Off('app:FilesDropped');
     }, [addFiles]);
 
     return (

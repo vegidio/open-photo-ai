@@ -1,10 +1,12 @@
-import { forwardRef } from 'react';
+import type { Ref } from 'react';
 import { Cropper, type CropperRef, type CropperState } from 'react-advanced-cropper';
 import 'react-advanced-cropper/dist/style.css';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { CROP_ZOOM_WHEEL_RATIO } from '@/utils/constants.ts';
 
 type ImageCropperProps = TailwindProps & {
+    // React 19 passes ref through as an ordinary prop, so forwardRef is no longer needed to reach the Cropper.
+    ref?: Ref<CropperRef>;
     src: string;
     aspectRatio?: number;
     onChange?: (cropper: CropperRef) => void;
@@ -16,24 +18,22 @@ const defaultSize = ({ imageSize }: CropperState) => ({
     height: imageSize.height,
 });
 
-export const ImageCropper = forwardRef<CropperRef, ImageCropperProps>(
-    ({ src, aspectRatio, onChange, onReady, className }, ref) => {
-        return (
-            <Cropper
-                ref={ref}
-                src={src}
-                defaultSize={defaultSize}
-                backgroundWrapperProps={{ scaleImage: { wheel: { ratio: CROP_ZOOM_WHEEL_RATIO } } }}
-                onChange={onChange}
-                onReady={onReady}
-                stencilProps={{
-                    grid: true,
-                    aspectRatio,
-                    overlayClassName: 'text-transparent!',
-                    gridClassName: 'opacity-100!',
-                }}
-                className={`size-full bg-transparent! object-contain p-1.5! ${className}`}
-            />
-        );
-    },
-);
+export const ImageCropper = ({ ref, src, aspectRatio, onChange, onReady, className }: ImageCropperProps) => {
+    return (
+        <Cropper
+            ref={ref}
+            src={src}
+            defaultSize={defaultSize}
+            backgroundWrapperProps={{ scaleImage: { wheel: { ratio: CROP_ZOOM_WHEEL_RATIO } } }}
+            onChange={onChange}
+            onReady={onReady}
+            stencilProps={{
+                grid: true,
+                aspectRatio,
+                overlayClassName: 'text-transparent!',
+                gridClassName: 'opacity-100!',
+            }}
+            className={`size-full bg-transparent! object-contain p-1.5! ${className}`}
+        />
+    );
+};

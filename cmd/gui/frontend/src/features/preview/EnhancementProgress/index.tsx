@@ -27,12 +27,11 @@ export const EnhancementProgress = () => {
     }, []);
 
     useEffect(() => {
-        Events.On('app:progress', (event) => {
+        // Returns the per-listener unsubscribe; `Events.Off` is global across every listener for the name.
+        return Events.On('app:progress', (event) => {
             const { name, progress } = event.data;
             setProgress({ name: getOperationName(name), value: progress * 100 });
         });
-
-        return () => Events.Off('app:progress');
     }, [getOperationName]);
 
     return (

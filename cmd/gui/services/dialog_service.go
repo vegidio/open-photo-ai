@@ -22,6 +22,8 @@ func NewDialogService(app *application.App, otel *o11y.Telemetry) *DialogService
 	return &DialogService{app: app, otel: otel}
 }
 
+// OpenFileDialog prompts the user to pick one or more images, filtered to the formats the decoder supports, and
+// returns them as loaded File records. The slice is empty when the user cancels, which is not an error.
 func (s *DialogService) OpenFileDialog() ([]types.File, error) {
 	extensions := lo.Map(utils.SupportedInputExtensions(), func(ext string, _ int) string {
 		return "*." + ext
@@ -44,6 +46,8 @@ func (s *DialogService) OpenFileDialog() ([]types.File, error) {
 	return files, nil
 }
 
+// OpenDirDialog prompts the user to pick a single directory, used as the destination for a batch export. The path is
+// empty when the user cancels, which is not an error.
 func (s *DialogService) OpenDirDialog() (string, error) {
 	dialog := s.app.Dialog.OpenFile()
 	dialog.SetTitle("Select Directory")

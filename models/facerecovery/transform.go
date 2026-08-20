@@ -29,9 +29,44 @@ func invertAffine(transform AffineMatrix) AffineMatrix {
 	}
 }
 
+// sampler reads 16-bit RGBA channel values from an image, using direct Pix indexing for the concrete RGBA-family
+// types and falling back to At() for anything else. Building it once outside a loop is the whole point:
+// bilinearInterpolate reads four pixels per call, so it multiplies whatever the per-pixel dispatch cost is by four.
+type sampler struct {
+	img     image.Image
+	bounds  image.Rectangle
+	pix     []uint8
+	stride  int
+	fast    bool
+	isNRGBA bool
+}
+
+func newSampler(img image.Image) *sampler {
+	pix, stride, fast := utils.RgbPixBuffer(img)
+	_, isNRGBA := img.(*image.NRGBA)
+
+	return &sampler{
+		img:     img,
+		bounds:  img.Bounds(),
+		pix:     pix,
+		stride:  stride,
+		fast:    fast,
+		isNRGBA: isNRGBA,
+	}
+}
+
+// at returns exactly what img.At(px, py).RGBA() would, for coordinates already reflected or clamped into bounds.
+// Sample16 is bit-identical to RGBA(), so the choice of path never changes the result.
+func (s *sampler) at(px, py int) (r, g, b, a uint32) {
+	if s.fast {
+		return utils.Sample16(s.pix, (py-s.bounds.Min.Y)*s.stride+(px-s.bounds.Min.X)*4, s.isNRGBA)
+	}
+
+	return s.img.At(px, py).RGBA()
+}
+
 func warpAffine(img image.Image, transform AffineMatrix, width, height int) image.Image {
 	result := imaging.New(width, height, color.NRGBA{})
-	bounds := img.Bounds()
 
 	// Compute inverse transform to map from destination to source
 	invTransform := invertAffine(transform)
@@ -40,18 +75,24 @@ func warpAffine(img image.Image, transform AffineMatrix, width, height int) imag
 	pix := result.Pix
 	stride := result.Stride
 
+	// Hoisted out of the loop: every destination pixel samples the same source image, so the buffer lookup and the
+	// concrete-type check only need to happen once.
+	src := newSampler(img)
+
 	// Cache matrix values to avoid repeated array lookups
 	m00, m01, m02 := invTransform[0][0], invTransform[0][1], invTransform[0][2]
 	m10, m11, m12 := invTransform[1][0], invTransform[1][1], invTransform[1][2]
 
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			// Destination coords -> source coords
+	for y := range height {
+		for x := range width {
+			// Destination coords -> source coords. Kept as a single expression rather than hoisting the y terms out
+			// of the row: float addition is not associative, so regrouping these could shift a result by one ulp and
+			// change an output pixel, which would defeat the point of the fast path below.
 			srcX := m00*float32(x) + m01*float32(y) + m02
 			srcY := m10*float32(x) + m11*float32(y) + m12
 
 			// Bilinear interpolation with reflection padding
-			nrgba := bilinearInterpolate(img, srcX, srcY, bounds, true)
+			nrgba := bilinearInterpolate(src, srcX, srcY, true)
 
 			i := y*stride + x*4
 			pix[i+0] = nrgba.R
@@ -65,7 +106,9 @@ func warpAffine(img image.Image, transform AffineMatrix, width, height int) imag
 }
 
 // bilinearInterpolate performs bilinear interpolation at floating point coordinates
-func bilinearInterpolate(img image.Image, x, y float32, bounds image.Rectangle, reflect bool) color.NRGBA {
+func bilinearInterpolate(src *sampler, x, y float32, reflect bool) color.NRGBA {
+	bounds := src.bounds
+
 	// Calculate integer coordinates of the four surrounding pixels
 	x0 := int(math.Floor(float64(x)))
 	y0 := int(math.Floor(float64(y)))
@@ -78,28 +121,24 @@ func bilinearInterpolate(img image.Image, x, y float32, bounds image.Rectangle, 
 	wx0 := 1.0 - wx
 	wy0 := 1.0 - wy
 
-	// Helper function to get pixel with boundary handling
-	getPixel := func(px, py int) color.Color {
-		if reflect {
-			px = reflectCoord(px, bounds.Min.X, bounds.Max.X)
-			py = reflectCoord(py, bounds.Min.Y, bounds.Max.Y)
-		} else {
-			px = utils.ClampInt(px, bounds.Min.X, bounds.Max.X-1)
-			py = utils.ClampInt(py, bounds.Min.Y, bounds.Max.Y-1)
-		}
-		return img.At(px, py)
+	// Map the four sample coordinates into bounds with the requested padding mode
+	if reflect {
+		x0 = reflectCoord(x0, bounds.Min.X, bounds.Max.X)
+		x1 = reflectCoord(x1, bounds.Min.X, bounds.Max.X)
+		y0 = reflectCoord(y0, bounds.Min.Y, bounds.Max.Y)
+		y1 = reflectCoord(y1, bounds.Min.Y, bounds.Max.Y)
+	} else {
+		x0 = utils.ClampInt(x0, bounds.Min.X, bounds.Max.X-1)
+		x1 = utils.ClampInt(x1, bounds.Min.X, bounds.Max.X-1)
+		y0 = utils.ClampInt(y0, bounds.Min.Y, bounds.Max.Y-1)
+		y1 = utils.ClampInt(y1, bounds.Min.Y, bounds.Max.Y-1)
 	}
 
-	c00 := getPixel(x0, y0)
-	c10 := getPixel(x1, y0)
-	c01 := getPixel(x0, y1)
-	c11 := getPixel(x1, y1)
-
 	// Extract RGBA components (returns 16-bit values 0-65535)
-	r00, g00, b00, a00 := c00.RGBA()
-	r10, g10, b10, a10 := c10.RGBA()
-	r01, g01, b01, a01 := c01.RGBA()
-	r11, g11, b11, a11 := c11.RGBA()
+	r00, g00, b00, a00 := src.at(x0, y0)
+	r10, g10, b10, a10 := src.at(x1, y0)
+	r01, g01, b01, a01 := src.at(x0, y1)
+	r11, g11, b11, a11 := src.at(x1, y1)
 
 	// Two-step lerp: first along x-axis, then along y-axis
 	lerp2D := func(v00, v01, v10, v11 uint32) uint8 {

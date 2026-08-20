@@ -8,7 +8,7 @@ require (
 	github.com/samber/lo v1.53.0
 	github.com/vegidio/go-sak v0.0.0-20260818145652-355405d075ca
 	github.com/vegidio/open-photo-ai v0.0.0-20260607083020-ddc25793bc45
-	github.com/wailsapp/wails/v3 v3.0.0-beta.8
+	github.com/wailsapp/wails/v3 v3.0.0-beta.10
 )
 
 require (

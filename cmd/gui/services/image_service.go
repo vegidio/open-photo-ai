@@ -7,12 +7,12 @@ import (
 	guiutils "gui/utils"
 	"image"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
-	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/o11y"
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/types"
@@ -194,12 +194,14 @@ func (s *ImageService) saveAndEmit(
 		return errors.Wrap(err, "context cancelled")
 	}
 
-	finalPath := getOutputPath(outputPath, overwrite)
+	finalPath, release := getOutputPath(outputPath, overwrite)
 	size, err := utils.SaveImage(&types.ImageData{
 		FilePath: finalPath,
 		Pixels:   pixels,
 	}, format, exportMaxQuality)
 	if err != nil {
+		// The name was claimed before encoding; drop the empty placeholder so a failed export leaves nothing behind.
+		release()
 		s.otel.LogError("Error saving image", nil, err)
 		slog.Error("error saving image", "output_path", finalPath, "err", err)
 		return errors.Wrap(err, "failed to save image")
@@ -256,9 +258,20 @@ func (s *ImageService) destroy() {}
 
 // region - Private functions
 
-func getOutputPath(filePath string, overwrite bool) string {
-	if overwrite || !fs.FileExists(filePath) {
-		return filePath
+// getOutputPath resolves the file an export should write to, appending a "_N" suffix when the requested path is taken
+// and overwrite is off. It returns the path plus a release func the caller must invoke if the write never happens.
+//
+// Each candidate is claimed by creating it with O_EXCL rather than probing with a stat first: two exports of different
+// images that resolve to the same name would otherwise both observe "_1" as free, and the second write would silently
+// destroy the first. Claiming the name makes the filesystem, not a racy check, decide the winner — at the cost of an
+// empty placeholder that release removes on the failure path.
+func getOutputPath(filePath string, overwrite bool) (string, func()) {
+	if overwrite {
+		return filePath, func() {}
+	}
+
+	if release, ok := claimPath(filePath); ok {
+		return filePath, release
 	}
 
 	ext := filepath.Ext(filePath)
@@ -266,14 +279,27 @@ func getOutputPath(filePath string, overwrite bool) string {
 
 	for count := 1; count <= maxOutputDedupTries; count++ {
 		candidate := fmt.Sprintf("%s_%d%s", basePath, count, ext)
-		if !fs.FileExists(candidate) {
-			return candidate
+		if release, ok := claimPath(candidate); ok {
+			return candidate, release
 		}
 	}
 
 	// Exhausted the dedup suffix range; fall back to the last candidate and let the caller's
 	// write fail loudly rather than looping forever.
-	return fmt.Sprintf("%s_%d%s", basePath, maxOutputDedupTries, ext)
+	return fmt.Sprintf("%s_%d%s", basePath, maxOutputDedupTries, ext), func() {}
+}
+
+// claimPath creates path exclusively, reporting whether this caller now owns the name. Only an already-exists error
+// means "taken": any other failure (a missing directory, no write permission) is left for the real write to surface
+// with a message about the path the user actually asked for.
+func claimPath(path string) (release func(), ok bool) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, !errors.Is(err, os.ErrExist)
+	}
+
+	_ = f.Close()
+	return func() { _ = os.Remove(path) }, true
 }
 
 // endregion

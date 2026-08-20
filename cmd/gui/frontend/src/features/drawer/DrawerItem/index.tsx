@@ -1,4 +1,4 @@
-import { type ChangeEvent, type MouseEvent, useEffect, useState } from 'react';
+import { type ChangeEvent, type MouseEvent, memo, useEffect, useState } from 'react';
 import { Checkbox, IconButton, Typography } from '@mui/material';
 import { basename } from 'pathe';
 import { IoIosMore } from 'react-icons/io';
@@ -10,11 +10,15 @@ import { getImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
     file: File;
+    index: number;
     current?: boolean;
-    onClick?: () => void;
+    onClick?: (index: number) => void;
 };
 
-export const DrawerItem = ({ file, current = false, onClick }: FileListItemProps) => {
+// Memoized because the drawer renders one of these per open file and each one loads its own thumbnail: without it,
+// clicking any item re-renders the entire strip. The index is passed back through onClick so the parent can hold a
+// single stable handler rather than allocating a closure per item on every render.
+const DrawerItemComponent = ({ file, index, current = false, onClick }: FileListItemProps) => {
     const isSelected = useFileStore((state) =>
         state.selectedFiles.some((selectedFile) => selectedFile.Path === file.Path),
     );
@@ -47,7 +51,7 @@ export const DrawerItem = ({ file, current = false, onClick }: FileListItemProps
         // biome-ignore lint/a11y/noStaticElementInteractions: N/A
         // biome-ignore lint/a11y/useKeyWithClickEvents: N/A
         <div
-            onClick={onClick}
+            onClick={() => onClick?.(index)}
             className={`h-full aspect-square rounded ${current ? 'outline-3 outline-blue-500' : ''}`}
         >
             <div className='relative size-full'>
@@ -65,6 +69,8 @@ export const DrawerItem = ({ file, current = false, onClick }: FileListItemProps
         </div>
     );
 };
+
+export const DrawerItem = memo(DrawerItemComponent);
 
 type BottomBarProps = TailwindProps & {
     file: File;

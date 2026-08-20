@@ -127,8 +127,13 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 	a10, a11, a12 := transform[1][0], transform[1][1], transform[1][2]
 
 	tileSizeFloat := float32(tileSize)
-	restoredBounds := restored.Bounds()
-	maskBounds := mask.Bounds()
+
+	// Hoisted out of the loop: each of the three sources is sampled once per destination pixel (the mask and the
+	// restored face four times each, through bilinearInterpolate), so resolving the pixel buffer once here removes
+	// the bulk of the interface dispatch from the blend.
+	maskSrc := newSampler(mask)
+	restoredSrc := newSampler(restored)
+	originalSrc := newSampler(original)
 
 	// Get direct access to pixel buffer for faster writes
 	stride := result.Stride
@@ -151,13 +156,12 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 
 			if alignedX >= 0 && alignedX < tileSizeFloat &&
 				alignedY >= 0 && alignedY < tileSizeFloat {
-				alpha := float32(bilinearInterpolate(mask, alignedX, alignedY, maskBounds, false).A) / 255.0
+				alpha := float32(bilinearInterpolate(maskSrc, alignedX, alignedY, false).A) / 255.0
 
 				if alpha > minBlendAlpha {
-					restoredCol := bilinearInterpolate(restored, alignedX, alignedY, restoredBounds, false)
-					originalCol := original.At(x, y)
+					restoredCol := bilinearInterpolate(restoredSrc, alignedX, alignedY, false)
 
-					or, og, ob, _ := originalCol.RGBA()
+					or, og, ob, _ := originalSrc.at(x, y)
 					rr, rg, rb, _ := restoredCol.RGBA()
 
 					oneMinusAlpha := 1 - alpha
