@@ -1,13 +1,22 @@
-import { MenuItem, Select, type SelectChangeEvent, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
+import { Select, type SelectItem } from '@/components/atoms/Select';
 import { useExportStore } from '@/stores';
+
+const items: SelectItem[] = [
+    { value: 'preserve', label: 'Preserve' },
+    { value: 'avif', label: 'AVIF' },
+    { value: 'bmp', label: 'BMP' },
+    { value: 'gif', label: 'GIF' },
+    { value: 'heic', label: 'HEIC' },
+    { value: 'jpg', label: 'JPG' },
+    { value: 'png', label: 'PNG' },
+    { value: 'tiff', label: 'TIFF' },
+    { value: 'webp', label: 'WEBP' },
+];
 
 export const ExportSettingsFormat = () => {
     const format = useExportStore((state) => state.format);
     const setFormat = useExportStore((state) => state.setFormat);
-
-    const handleChange = (event: SelectChangeEvent) => {
-        setFormat(event.target.value);
-    };
 
     return (
         <div className='flex flex-col gap-2'>
@@ -15,44 +24,7 @@ export const ExportSettingsFormat = () => {
                 Format
             </Typography>
 
-            <Select
-                value={format}
-                onChange={handleChange}
-                size='small'
-                slotProps={{
-                    input: {
-                        className: 'text-sm',
-                    },
-                }}
-            >
-                <MenuItem value='preserve' className='text-sm'>
-                    Preserve
-                </MenuItem>
-                <MenuItem value='avif' className='text-sm'>
-                    AVIF
-                </MenuItem>
-                <MenuItem value='bmp' className='text-sm'>
-                    BMP
-                </MenuItem>
-                <MenuItem value='gif' className='text-sm'>
-                    GIF
-                </MenuItem>
-                <MenuItem value='heic' className='text-sm'>
-                    HEIC
-                </MenuItem>
-                <MenuItem value='jpg' className='text-sm'>
-                    JPG
-                </MenuItem>
-                <MenuItem value='png' className='text-sm'>
-                    PNG
-                </MenuItem>
-                <MenuItem value='tiff' className='text-sm'>
-                    TIFF
-                </MenuItem>
-                <MenuItem value='webp' className='text-sm'>
-                    WEBP
-                </MenuItem>
-            </Select>
+            <Select items={items} value={format} onValueChange={setFormat} />
         </div>
     );
 };

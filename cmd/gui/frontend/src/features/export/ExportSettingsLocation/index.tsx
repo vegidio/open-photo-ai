@@ -1,18 +1,24 @@
 import { useState } from 'react';
-import { MenuItem, Select, type SelectChangeEvent, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
 import { DialogService } from '@/bindings/gui/services';
+import { Select, type SelectItem } from '@/components/atoms/Select';
 import { useExportStore } from '@/stores';
 
 type LocationType = 'hidden' | 'original' | 'browse';
+
+const items: SelectItem[] = [
+    // This hidden item is chosen when a directory is selected
+    { value: 'hidden', label: '', hidden: true },
+    { value: 'original', label: 'Original directory' },
+    { value: 'browse', label: 'Browse...' },
+];
 
 export const ExportSettingsLocation = () => {
     const location = useExportStore((state) => state.location);
     const setLocation = useExportStore((state) => state.setLocation);
     const [value, setValue] = useState<LocationType>(location ? 'hidden' : 'original');
 
-    const handleChange = async (event: SelectChangeEvent) => {
-        const newValue = event.target.value;
-
+    const handleChange = async (newValue: string) => {
         if (newValue !== 'browse') {
             setValue(newValue as LocationType);
             setLocation(undefined);
@@ -41,26 +47,11 @@ export const ExportSettingsLocation = () => {
             </Typography>
 
             <Select
+                items={items}
                 value={value}
-                onChange={handleChange}
-                size='small'
+                onValueChange={handleChange}
                 renderValue={() => (value === 'hidden' ? location : 'Original directory')}
-                slotProps={{
-                    input: {
-                        className: 'text-sm',
-                    },
-                }}
-            >
-                {/* This hidden item is chosen when a directory is selected */}
-                <MenuItem value='hidden' className='hidden' />
-
-                <MenuItem value='original' className='text-sm'>
-                    Original directory
-                </MenuItem>
-                <MenuItem value='browse' className='text-sm'>
-                    Browse...
-                </MenuItem>
-            </Select>
+            />
         </div>
     );
 };

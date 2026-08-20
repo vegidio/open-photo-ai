@@ -1,4 +1,5 @@
-import { TextField, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
+import { TextField } from '@/components/atoms/TextField';
 import { Toggle } from '@/components/atoms/Toggle';
 import { useExportStore } from '@/stores';
 
@@ -16,47 +17,9 @@ export const ExportSettingsFilename = () => {
                 Filename
             </Typography>
 
-            <TextField
-                label='Prefix'
-                variant='outlined'
-                size='small'
-                margin='dense'
-                value={prefix}
-                onChange={(e) => setPrefix(e.target.value)}
-                slotProps={{
-                    input: {
-                        className: 'text-sm',
-                    },
-                    inputLabel: {
-                        className: 'text-sm',
-                    },
-                    htmlInput: {
-                        autoCapitalize: 'off',
-                        autoCorrect: 'off',
-                    },
-                }}
-            />
+            <TextField label='Prefix' value={prefix} onChange={(e) => setPrefix(e.target.value)} />
 
-            <TextField
-                label='Suffix'
-                variant='outlined'
-                size='small'
-                margin='dense'
-                value={suffix}
-                onChange={(e) => setSuffix(e.target.value)}
-                slotProps={{
-                    input: {
-                        className: 'text-sm',
-                    },
-                    inputLabel: {
-                        className: 'text-sm',
-                    },
-                    htmlInput: {
-                        autoCapitalize: 'off',
-                        autoCorrect: 'off',
-                    },
-                }}
-            />
+            <TextField label='Suffix' value={suffix} onChange={(e) => setSuffix(e.target.value)} />
 
             <Toggle
                 label={
