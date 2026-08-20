@@ -118,7 +118,9 @@ func (m Manifest) intact(dir string) bool {
 	}
 
 	for _, f := range m.Files {
-		info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(f.Path)))
+		// Lstat, not Stat: recordTree sized each file with an lstat, and for a symlink - the Linux runtime archives
+		// carry libfoo.so -> libfoo.so.N chains - the two calls disagree, which read as corruption on every launch.
+		info, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(f.Path)))
 		if err != nil || info.IsDir() || info.Size() != f.Size {
 			return false
 		}

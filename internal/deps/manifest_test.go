@@ -143,6 +143,25 @@ func TestManifestIntact(t *testing.T) {
 			t.Error("intact = true, want false for a manifest naming no files")
 		}
 	})
+
+	// The Linux runtime archives carry libfoo.so -> libfoo.so.N symlinks. recordTree sizes them with an lstat, so
+	// intact has to read them back the same way; following the link to its megabytes-large target read as corruption
+	// and reinstalled every dependency on every launch.
+	t.Run("a recorded symlink stays intact", func(t *testing.T) {
+		dir := setupDir(t)
+		if err := os.Symlink("a.so", filepath.Join(dir, "lib.so")); err != nil {
+			t.Skipf("cannot create a symlink here: %v", err)
+		}
+
+		files, err := recordTree(dir, ManifestName)
+		if err != nil {
+			t.Fatalf("recordTree failed: %v", err)
+		}
+
+		if !(Manifest{Files: files}).intact(dir) {
+			t.Error("intact = false, want true; a symlink must verify against its recorded lstat size")
+		}
+	})
 }
 
 func TestManifestRemove(t *testing.T) {
