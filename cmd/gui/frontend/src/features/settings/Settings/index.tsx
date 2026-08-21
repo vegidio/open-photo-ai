@@ -10,12 +10,11 @@ import i18n from '@/i18n';
 import { useSettingsStore } from '@/stores';
 
 type SettingsProps = {
-    section: 'application' | 'models';
     open: boolean;
     onClose: () => void;
 };
 
-export const Settings = ({ section: _section, open, onClose }: SettingsProps) => {
+export const Settings = ({ open, onClose }: SettingsProps) => {
     const { t } = useTranslation();
     const saveSnapshot = useSettingsStore((state) => state.saveSnapshot);
     const restoreSnapshot = useSettingsStore((state) => state.restoreSnapshot);

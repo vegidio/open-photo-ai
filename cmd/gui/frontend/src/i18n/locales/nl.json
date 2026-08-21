@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "Ruisonderdrukking",
                 "description": "Het standaardmodel voor ruisonderdrukking dat wordt gebruikt bij het toevoegen van deze verbetering."
             },
             "faceRecovery": {
-                "title": "Gezichtsherstel",
                 "description": "Het standaardmodel voor gezichtsherstel dat wordt gebruikt bij het toevoegen van deze verbetering."
             },
             "lightAdjustment": {
-                "title": "Lichtaanpassing",
                 "description": "Het standaardmodel voor lichtaanpassing dat wordt gebruikt bij het toevoegen van deze verbetering."
             },
             "colorBalance": {
-                "title": "Kleurbalans",
                 "description": "Het standaardmodel voor kleurbalans dat wordt gebruikt bij het toevoegen van deze verbetering."
             },
             "sharpen": {
-                "title": "Verscherpen",
                 "description": "Het standaardmodel voor verscherpen dat wordt gebruikt bij het toevoegen van deze verbetering."
             },
             "upscale": {
-                "title": "Opschalen",
                 "description": "Het standaardmodel voor opschalen dat wordt gebruikt bij het toevoegen van deze verbetering."
             }
         }
     },
     "navbar": {
-        "settings": "Instellingen",
         "about": "Over",
         "updateAvailable": "Update beschikbaar",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "Uitvoer"
         },
         "about_dialog": {
-            "title": "Over",
             "iconAlt": "App-pictogram",
-            "version": "Versie {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "Versie {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "Gezichten selecteren",
-        "toggleFace": "Gezicht {{number}} aan/uit",
-        "originalAlt": "Origineel"
+        "toggleFace": "Gezicht {{number}} aan/uit"
     },
     "crop": {
         "title": "Bijsnijden/draaien",
         "aspectRatio": "Beeldverhouding",
-        "dimensions": "Afmetingen",
         "zoomHint": "Je kunt met het muiswiel of de knijpbeweging op het trackpad in- en uitzoomen op de afbeelding links.",
         "ratio": {
             "free": "Vrij",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "Wachtrij ({{count}})",
             "image": "Afbeelding",
-            "output": "Uitvoer",
             "size": "Grootte",
             "type": "Type",
             "processing": "Bezig",

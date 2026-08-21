@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "Brusreducering",
                 "description": "Standardmodellen för Brusreducering som används när du lägger till den här förbättringen."
             },
             "faceRecovery": {
-                "title": "Ansiktsåterställning",
                 "description": "Standardmodellen för Ansiktsåterställning som används när du lägger till den här förbättringen."
             },
             "lightAdjustment": {
-                "title": "Ljusjustering",
                 "description": "Standardmodellen för Ljusjustering som används när du lägger till den här förbättringen."
             },
             "colorBalance": {
-                "title": "Färgbalans",
                 "description": "Standardmodellen för Färgbalans som används när du lägger till den här förbättringen."
             },
             "sharpen": {
-                "title": "Skärpa",
                 "description": "Standardmodellen för Skärpa som används när du lägger till den här förbättringen."
             },
             "upscale": {
-                "title": "Uppskalning",
                 "description": "Standardmodellen för Uppskalning som används när du lägger till den här förbättringen."
             }
         }
     },
     "navbar": {
-        "settings": "Inställningar",
         "about": "Om",
         "updateAvailable": "Uppdatering tillgänglig",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "Utdata"
         },
         "about_dialog": {
-            "title": "Om",
             "iconAlt": "Appikon",
-            "version": "Version {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "Version {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "Välj ansikten",
-        "toggleFace": "Växla ansikte {{number}}",
-        "originalAlt": "Original"
+        "toggleFace": "Växla ansikte {{number}}"
     },
     "crop": {
         "title": "Beskär/Rotera",
         "aspectRatio": "Bildförhållande",
-        "dimensions": "Mått",
         "zoomHint": "Du kan använda mushjulet eller nypgesten på styrplattan för att zooma in och ut på bilden till vänster.",
         "ratio": {
             "free": "Fri",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "Kö ({{count}})",
             "image": "Bild",
-            "output": "Utdata",
             "size": "Storlek",
             "type": "Typ",
             "processing": "Bearbetar",

@@ -1,47 +1,52 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LinearProgress, Paper, Typography } from '@mui/material';
 import { Events } from '@wailsio/runtime';
 import { useTranslation } from 'react-i18next';
+import { Phase } from '@/bindings/github.com/vegidio/open-photo-ai/types';
+import { ENHANCEMENTS, getEnhancementType } from '@/utils/enhancement';
+
+type ProgressState = {
+    operation: string;
+    phase: Phase | '';
+    fraction: number;
+    value: number;
+};
+
+const INITIAL: ProgressState = { operation: '', phase: '', fraction: 0, value: 0 };
 
 export const EnhancementProgress = () => {
     const { t } = useTranslation();
-    const [progress, setProgress] = useState({ name: t('preview.progress.enhancing'), value: 0 });
-
-    const getOperationName = useCallback(
-        (id: string, phase: string, fraction: number) => {
-            // The download is the one phase whose own percentage is worth spelling out: the bar tracks the whole
-            // pipeline, so a download barely moves it, and without the number it reads as if nothing is happening.
-            if (phase === 'download') {
-                return t('preview.progress.downloading', { percent: Math.round(fraction * 100) });
-            }
-
-            switch (true) {
-                case id.startsWith('dn'):
-                    return t('preview.progress.denoise');
-                case id.startsWith('fr'):
-                    return t('preview.progress.faceRecovery');
-                case id.startsWith('la'):
-                    return t('preview.progress.lightAdjustment');
-                case id.startsWith('cb'):
-                    return t('preview.progress.colorBalance');
-                case id.startsWith('up'):
-                    return t('preview.progress.upscale');
-                case id.startsWith('sh'):
-                    return t('preview.progress.sharpen');
-                default:
-                    return t('preview.progress.enhancing');
-            }
-        },
-        [t],
-    );
+    const [progress, setProgress] = useState<ProgressState>(INITIAL);
 
     useEffect(() => {
         // Returns the per-listener unsubscribe; `Events.Off` is global across every listener for the name.
+        //
+        // Only the raw event is stored, never a translated label: keeping t() out of here is what lets the dependency
+        // list stay empty, so a language change doesn't tear down and re-register the listener.
         return Events.On('app:progress', (event) => {
             const { name, phase, progress, fraction } = event.data;
-            setProgress({ name: getOperationName(name, phase, fraction), value: progress * 100 });
+            const value = Math.round(progress * 100);
+
+            // This fires once per tile - thousands of times on a large upscale - but the bar only has 100 distinct
+            // positions. Returning the previous object when nothing visible changed bails React out of the re-render.
+            setProgress((prev) =>
+                prev.value === value && prev.operation === name && prev.phase === phase
+                    ? prev
+                    : { operation: name, phase, fraction, value },
+            );
         });
-    }, [getOperationName]);
+    }, []);
+
+    const name = useMemo(() => {
+        // The download is the one phase whose own percentage is worth spelling out: the bar tracks the whole
+        // pipeline, so a download barely moves it, and without the number it reads as if nothing is happening.
+        if (progress.phase === Phase.PhaseDownload) {
+            return t('preview.progress.downloading', { percent: Math.round(progress.fraction * 100) });
+        }
+
+        const enhancement = ENHANCEMENTS[getEnhancementType(progress.operation)];
+        return enhancement ? t(enhancement.shortNameKey) : t('preview.progress.enhancing');
+    }, [progress.phase, progress.fraction, progress.operation, t]);
 
     return (
         <Paper
@@ -56,7 +61,7 @@ export const EnhancementProgress = () => {
                 variant='subtitle2'
                 className='absolute inset-0 flex items-center justify-center whitespace-nowrap px-1 text-gray-700'
             >
-                {progress.name}
+                {name}
             </Typography>
         </Paper>
     );

@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "Redução de ruído",
                 "description": "O modelo de Redução de ruído usado por padrão ao adicionar esta melhoria."
             },
             "faceRecovery": {
-                "title": "Recuperação de rostos",
                 "description": "O modelo de Recuperação de rostos usado por padrão ao adicionar esta melhoria."
             },
             "lightAdjustment": {
-                "title": "Ajuste de luz",
                 "description": "O modelo de Ajuste de luz usado por padrão ao adicionar esta melhoria."
             },
             "colorBalance": {
-                "title": "Equilíbrio de cores",
                 "description": "O modelo de Equilíbrio de cores usado por padrão ao adicionar esta melhoria."
             },
             "sharpen": {
-                "title": "Nitidez",
                 "description": "O modelo de Nitidez usado por padrão ao adicionar esta melhoria."
             },
             "upscale": {
-                "title": "Ampliação",
                 "description": "O modelo de Ampliação usado por padrão ao adicionar esta melhoria."
             }
         }
     },
     "navbar": {
-        "settings": "Configurações",
         "about": "Sobre",
         "updateAvailable": "Atualização disponível",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "Saída"
         },
         "about_dialog": {
-            "title": "Sobre",
             "iconAlt": "Ícone do aplicativo",
-            "version": "Versão {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "Versão {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "Selecionar rostos",
-        "toggleFace": "Alternar rosto {{number}}",
-        "originalAlt": "Original"
+        "toggleFace": "Alternar rosto {{number}}"
     },
     "crop": {
         "title": "Recortar/Girar",
         "aspectRatio": "Proporção",
-        "dimensions": "Dimensões",
         "zoomHint": "Você pode usar a roda do mouse ou o gesto de pinça no trackpad para aproximar e afastar a imagem à esquerda.",
         "ratio": {
             "free": "Livre",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "Fila ({{count}})",
             "image": "Imagem",
-            "output": "Saída",
             "size": "Tamanho",
             "type": "Tipo",
             "processing": "Processando",

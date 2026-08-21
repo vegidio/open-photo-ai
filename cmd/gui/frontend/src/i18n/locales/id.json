@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "Reduksi Noise",
                 "description": "Model Reduksi Noise bawaan yang digunakan saat menambahkan peningkatan ini."
             },
             "faceRecovery": {
-                "title": "Pemulihan Wajah",
                 "description": "Model Pemulihan Wajah bawaan yang digunakan saat menambahkan peningkatan ini."
             },
             "lightAdjustment": {
-                "title": "Penyesuaian Cahaya",
                 "description": "Model Penyesuaian Cahaya bawaan yang digunakan saat menambahkan peningkatan ini."
             },
             "colorBalance": {
-                "title": "Keseimbangan Warna",
                 "description": "Model Keseimbangan Warna bawaan yang digunakan saat menambahkan peningkatan ini."
             },
             "sharpen": {
-                "title": "Penajaman",
                 "description": "Model Penajaman bawaan yang digunakan saat menambahkan peningkatan ini."
             },
             "upscale": {
-                "title": "Perbesaran",
                 "description": "Model Perbesaran bawaan yang digunakan saat menambahkan peningkatan ini."
             }
         }
     },
     "navbar": {
-        "settings": "Pengaturan",
         "about": "Tentang",
         "updateAvailable": "Pembaruan Tersedia",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "Keluaran"
         },
         "about_dialog": {
-            "title": "Tentang",
             "iconAlt": "Ikon Aplikasi",
-            "version": "Versi {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "Versi {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "Pilih wajah",
-        "toggleFace": "Alihkan wajah {{number}}",
-        "originalAlt": "Asli"
+        "toggleFace": "Alihkan wajah {{number}}"
     },
     "crop": {
         "title": "Potong/Putar",
         "aspectRatio": "Rasio Aspek",
-        "dimensions": "Dimensi",
         "zoomHint": "Anda dapat menggunakan roda mouse atau cubitan trackpad untuk memperbesar dan memperkecil gambar di sebelah kiri.",
         "ratio": {
             "free": "Bebas",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "Antrean ({{count}})",
             "image": "Gambar",
-            "output": "Keluaran",
             "size": "Ukuran",
             "type": "Tipe",
             "processing": "Memproses",

@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "降噪",
                 "description": "添加此增强时默认使用的降噪模型。"
             },
             "faceRecovery": {
-                "title": "人脸修复",
                 "description": "添加此增强时默认使用的人脸修复模型。"
             },
             "lightAdjustment": {
-                "title": "光线调整",
                 "description": "添加此增强时默认使用的光线调整模型。"
             },
             "colorBalance": {
-                "title": "色彩平衡",
                 "description": "添加此增强时默认使用的色彩平衡模型。"
             },
             "sharpen": {
-                "title": "锐化",
                 "description": "添加此增强时默认使用的锐化模型。"
             },
             "upscale": {
-                "title": "放大",
                 "description": "添加此增强时默认使用的放大模型。"
             }
         }
     },
     "navbar": {
-        "settings": "设置",
         "about": "关于",
         "updateAvailable": "有可用更新",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "输出"
         },
         "about_dialog": {
-            "title": "关于",
             "iconAlt": "应用图标",
-            "version": "版本 {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "版本 {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "选择人脸",
-        "toggleFace": "切换人脸 {{number}}",
-        "originalAlt": "原图"
+        "toggleFace": "切换人脸 {{number}}"
     },
     "crop": {
         "title": "裁剪/旋转",
         "aspectRatio": "宽高比",
-        "dimensions": "尺寸",
         "zoomHint": "你可以使用鼠标滚轮或触控板双指缩放来放大和缩小左侧的图片。",
         "ratio": {
             "free": "自由",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "队列（{{count}}）",
             "image": "图片",
-            "output": "输出",
             "size": "大小",
             "type": "类型",
             "processing": "处理中",

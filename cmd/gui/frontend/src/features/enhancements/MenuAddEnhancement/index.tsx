@@ -5,7 +5,20 @@ import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
 import { useAddEnhancements, useCurrentFile, useFileOperations } from '@/hooks';
 import { useSettingsStore } from '@/stores';
-import { getCbOp, getDnOp, getFrOp, getLaOp, getShOp, getUpOp } from '@/utils/enhancement';
+import {
+    ENHANCEMENTS,
+    type EnhancementType,
+    getCbOp,
+    getDnOp,
+    getFrOp,
+    getLaOp,
+    getShOp,
+    getUpOp,
+} from '@/utils/enhancement';
+
+// The order the menu lists enhancements in. Separate from ENHANCEMENTS because object key order is not something to
+// rely on for presentation.
+const ENHANCEMENT_ORDER: EnhancementType[] = ['dn', 'fr', 'la', 'cb', 'sh', 'up'];
 
 type MenuAddEnhancementProps = {
     anchorEl: HTMLElement | undefined;
@@ -36,44 +49,23 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
         const mp = width * height;
         const scale = mp <= 1_048_576 ? 4 : mp <= 4_194_304 ? 2 : 1;
 
-        return [
-            {
-                type: 'dn',
-                icon: <Icon option='denoise' />,
-                name: t('enhancements.denoise.name'),
-                op: getDnOp(dnModel),
-            },
-            {
-                type: 'fr',
-                icon: <Icon option='face_recovery' />,
-                name: t('enhancements.faceRecovery.name'),
-                op: getFrOp(frModel),
-            },
-            {
-                type: 'la',
-                icon: <Icon option='light_adjustment' />,
-                name: t('enhancements.lightAdjustment.name'),
-                op: getLaOp(laModel),
-            },
-            {
-                type: 'cb',
-                icon: <Icon option='color_balance' />,
-                name: t('enhancements.colorBalance.name'),
-                op: getCbOp(cbModel),
-            },
-            {
-                type: 'sh',
-                icon: <Icon option='sharpen' />,
-                name: t('enhancements.sharpen.name'),
-                op: getShOp(shModel),
-            },
-            {
-                type: 'up',
-                icon: <Icon option='upscale' />,
-                name: t('enhancements.upscale.name'),
-                op: getUpOp(upModel, scale),
-            },
-        ];
+        // Name and icon come from the ENHANCEMENTS registry; only the operation each row builds is specific to this
+        // menu, since that is what depends on the user's default model for the enhancement.
+        const ops: Record<EnhancementType, Operation> = {
+            dn: getDnOp(dnModel),
+            fr: getFrOp(frModel),
+            la: getLaOp(laModel),
+            cb: getCbOp(cbModel),
+            sh: getShOp(shModel),
+            up: getUpOp(upModel, scale),
+        };
+
+        return ENHANCEMENT_ORDER.map((type) => ({
+            type,
+            icon: <Icon option={ENHANCEMENTS[type].icon} />,
+            name: t(ENHANCEMENTS[type].nameKey),
+            op: ops[type],
+        }));
     }, [dnModel, frModel, laModel, upModel, currentFile?.Dimensions, cbModel, shModel, t]);
 
     return (

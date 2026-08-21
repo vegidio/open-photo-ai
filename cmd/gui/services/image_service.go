@@ -244,7 +244,7 @@ func (s *ImageService) runInference(
 	outputData, err := opai.Process(ctx, inputImage, ep, func(progress types.Progress) {
 		s.app.Event.Emit(EventAppProgress, InferenceProgress{
 			Name:     progress.Operation,
-			Phase:    string(progress.Phase),
+			Phase:    progress.Phase,
 			Progress: progress.Total,
 			Fraction: progress.Fraction,
 		})

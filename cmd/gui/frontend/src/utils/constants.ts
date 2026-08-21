@@ -8,8 +8,13 @@ import { CropInfo } from '@/bindings/gui/types';
 // sequentially so that costs one round trip over the Wails bridge on startup instead of three.
 export const [version, os, arch] = await Promise.all([Version(), GetOS(), GetArch()]);
 
-// Brand name: intentionally not in the i18n catalogs, since it must read identically in every language.
+// Brand name, author line and links: intentionally not in the i18n catalogs, since they must read identically in
+// every language. A name, a domain and a service's brand are not translatable, and carrying them in 13 catalogs only
+// creates 13 chances for one of them to be "translated".
 export const APP_NAME = 'Open Photo AI';
+export const APP_COPYRIGHT = '© 2025—2026, Vinicius Egidio';
+export const APP_REPOSITORY = { label: 'Github', url: 'https://github.com/vegidio/open-photo-ai' };
+export const APP_WEBSITE = { label: 'vinicius.io', url: 'https://vinicius.io' };
 
 export const EMPTY_OPERATIONS: Operation[] = [];
 export const EMPTY_FACES: Face[] = [];

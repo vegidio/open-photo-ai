@@ -7,5 +7,6 @@ export {
     MemoryPool,
     ModelMemory,
     ModelType,
+    Phase,
     PoolMemory
 } from "./models.js";

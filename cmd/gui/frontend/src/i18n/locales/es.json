@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "Reducción de ruido",
                 "description": "El modelo de Reducción de ruido predeterminado al añadir esta mejora."
             },
             "faceRecovery": {
-                "title": "Recuperación de rostros",
                 "description": "El modelo de Recuperación de rostros predeterminado al añadir esta mejora."
             },
             "lightAdjustment": {
-                "title": "Ajuste de luz",
                 "description": "El modelo de Ajuste de luz predeterminado al añadir esta mejora."
             },
             "colorBalance": {
-                "title": "Balance de color",
                 "description": "El modelo de Balance de color predeterminado al añadir esta mejora."
             },
             "sharpen": {
-                "title": "Enfoque",
                 "description": "El modelo de Enfoque predeterminado al añadir esta mejora."
             },
             "upscale": {
-                "title": "Escalado",
                 "description": "El modelo de Escalado predeterminado al añadir esta mejora."
             }
         }
     },
     "navbar": {
-        "settings": "Ajustes",
         "about": "Acerca de",
         "updateAvailable": "Actualización disponible",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "Salida"
         },
         "about_dialog": {
-            "title": "Acerca de",
             "iconAlt": "Icono de la aplicación",
-            "version": "Versión {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "Versión {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "Seleccionar rostros",
-        "toggleFace": "Alternar rostro {{number}}",
-        "originalAlt": "Original"
+        "toggleFace": "Alternar rostro {{number}}"
     },
     "crop": {
         "title": "Recortar/Girar",
         "aspectRatio": "Proporción",
-        "dimensions": "Dimensiones",
         "zoomHint": "Puedes usar la rueda del ratón o el gesto de pellizco en el panel táctil para acercar y alejar la imagen de la izquierda.",
         "ratio": {
             "free": "Libre",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "Cola ({{count}})",
             "image": "Imagen",
-            "output": "Salida",
             "size": "Tamaño",
             "type": "Tipo",
             "processing": "Procesando",

@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "Rauschreduzierung",
                 "description": "Das Standardmodell für die Rauschreduzierung, das beim Hinzufügen dieser Verbesserung verwendet wird."
             },
             "faceRecovery": {
-                "title": "Gesichtswiederherstellung",
                 "description": "Das Standardmodell für die Gesichtswiederherstellung, das beim Hinzufügen dieser Verbesserung verwendet wird."
             },
             "lightAdjustment": {
-                "title": "Lichtanpassung",
                 "description": "Das Standardmodell für die Lichtanpassung, das beim Hinzufügen dieser Verbesserung verwendet wird."
             },
             "colorBalance": {
-                "title": "Farbbalance",
                 "description": "Das Standardmodell für die Farbbalance, das beim Hinzufügen dieser Verbesserung verwendet wird."
             },
             "sharpen": {
-                "title": "Schärfen",
                 "description": "Das Standardmodell für das Schärfen, das beim Hinzufügen dieser Verbesserung verwendet wird."
             },
             "upscale": {
-                "title": "Hochskalieren",
                 "description": "Das Standardmodell für das Hochskalieren, das beim Hinzufügen dieser Verbesserung verwendet wird."
             }
         }
     },
     "navbar": {
-        "settings": "Einstellungen",
         "about": "Über",
         "updateAvailable": "Update verfügbar",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "Ausgabe"
         },
         "about_dialog": {
-            "title": "Über",
             "iconAlt": "App-Symbol",
-            "version": "Version {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "Version {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "Gesichter auswählen",
-        "toggleFace": "Gesicht {{number}} umschalten",
-        "originalAlt": "Original"
+        "toggleFace": "Gesicht {{number}} umschalten"
     },
     "crop": {
         "title": "Zuschneiden/Drehen",
         "aspectRatio": "Seitenverhältnis",
-        "dimensions": "Abmessungen",
         "zoomHint": "Sie können mit dem Mausrad oder der Trackpad-Geste das Bild links vergrößern und verkleinern.",
         "ratio": {
             "free": "Frei",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "Warteschlange ({{count}})",
             "image": "Bild",
-            "output": "Ausgabe",
             "size": "Größe",
             "type": "Typ",
             "processing": "Wird verarbeitet",

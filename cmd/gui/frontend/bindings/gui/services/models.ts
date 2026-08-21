@@ -5,6 +5,10 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as types$0 from "../../github.com/vegidio/open-photo-ai/types/models.js";
+
 /**
  * DownloadProgress is the payload of EventAppDownload. Emitted while a required runtime dependency
  * (ONNX Runtime, CUDA, cuDNN, TensorRT) is being fetched.
@@ -80,7 +84,12 @@ export class ExportUpdate {
  */
 export class InferenceProgress {
     "name": string;
-    "phase": string;
+
+    /**
+     * Declared as types.Phase rather than string so the generated TypeScript gets the enum too, and the frontend
+     * compares against a member instead of a bare "download" literal that would keep compiling if the value changed.
+     */
+    "phase": types$0.Phase;
     "progress": number;
     "fraction": number;
 
@@ -90,7 +99,7 @@ export class InferenceProgress {
             this["name"] = "";
         }
         if (!("phase" in $$source)) {
-            this["phase"] = "";
+            this["phase"] = types$0.Phase.$zero;
         }
         if (!("progress" in $$source)) {
             this["progress"] = 0;

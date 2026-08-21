@@ -1,25 +1,12 @@
 import { Typography } from '@mui/material';
 import { Trans, useTranslation } from 'react-i18next';
 import { MdFolderOpen } from 'react-icons/md';
-import { DialogService } from '@/bindings/gui/services';
 import { Button } from '@/components/atoms/Button';
-import { useFileStore } from '@/stores';
+import { useFileManager } from '@/hooks';
 
 export const PreviewEmpty = () => {
     const { t } = useTranslation();
-    const addFiles = useFileStore((state) => state.addFiles);
-
-    const onBrowseClick = async () => {
-        try {
-            const files = await DialogService.OpenFileDialog(
-                t('dialogs.native.selectImage'),
-                t('dialogs.native.imagesFilter'),
-            );
-            addFiles(files);
-        } catch (e) {
-            console.error(e);
-        }
-    };
+    const { openFiles } = useFileManager();
 
     return (
         <div className='flex flex-col items-center justify-center size-full'>
@@ -37,7 +24,7 @@ export const PreviewEmpty = () => {
                 </Typography>
             </div>
 
-            <Button onClick={onBrowseClick}>{t('preview.empty.browse')}</Button>
+            <Button onClick={() => openFiles('empty_preview')}>{t('preview.empty.browse')}</Button>
         </div>
     );
 };

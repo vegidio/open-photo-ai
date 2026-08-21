@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "Débruitage",
                 "description": "Le modèle de débruitage utilisé par défaut lors de l'ajout de cette amélioration."
             },
             "faceRecovery": {
-                "title": "Restauration des visages",
                 "description": "Le modèle de restauration des visages utilisé par défaut lors de l'ajout de cette amélioration."
             },
             "lightAdjustment": {
-                "title": "Ajustement de la lumière",
                 "description": "Le modèle d'ajustement de la lumière utilisé par défaut lors de l'ajout de cette amélioration."
             },
             "colorBalance": {
-                "title": "Balance des couleurs",
                 "description": "Le modèle de balance des couleurs utilisé par défaut lors de l'ajout de cette amélioration."
             },
             "sharpen": {
-                "title": "Netteté",
                 "description": "Le modèle de netteté utilisé par défaut lors de l'ajout de cette amélioration."
             },
             "upscale": {
-                "title": "Agrandissement",
                 "description": "Le modèle d'agrandissement utilisé par défaut lors de l'ajout de cette amélioration."
             }
         }
     },
     "navbar": {
-        "settings": "Paramètres",
         "about": "À propos",
         "updateAvailable": "Mise à jour disponible",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "Sortie"
         },
         "about_dialog": {
-            "title": "À propos",
             "iconAlt": "Icône de l'application",
-            "version": "Version {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "Version {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "Sélectionner les visages",
-        "toggleFace": "Activer/désactiver le visage {{number}}",
-        "originalAlt": "Original"
+        "toggleFace": "Activer/désactiver le visage {{number}}"
     },
     "crop": {
         "title": "Recadrer/pivoter",
         "aspectRatio": "Format",
-        "dimensions": "Dimensions",
         "zoomHint": "Vous pouvez utiliser la molette de la souris ou le pincement du trackpad pour zoomer et dézoomer sur l'image de gauche.",
         "ratio": {
             "free": "Libre",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "File d'attente ({{count}})",
             "image": "Image",
-            "output": "Sortie",
             "size": "Taille",
             "type": "Type",
             "processing": "En cours",

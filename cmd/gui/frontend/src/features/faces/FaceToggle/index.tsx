@@ -61,7 +61,11 @@ export const FaceToggle = ({ file, open, onClose }: FaceToggleProps) => {
             <ModalTitle title={t('faces.selectFaces')} onClose={handleClose} />
 
             <div className='flex-1 overflow-hidden relative'>
-                <img alt={t('faces.originalAlt')} src={originalImage.url} className='w-full h-full object-contain' />
+                <img
+                    alt={t('navbar.dimensions.original')}
+                    src={originalImage.url}
+                    className='w-full h-full object-contain'
+                />
 
                 <FaceBoxes
                     file={file}

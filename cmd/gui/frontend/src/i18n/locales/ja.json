@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "ノイズ除去",
                 "description": "この補正を追加したときに既定で使用するノイズ除去モデルです。"
             },
             "faceRecovery": {
-                "title": "顔の復元",
                 "description": "この補正を追加したときに既定で使用する顔復元モデルです。"
             },
             "lightAdjustment": {
-                "title": "明るさ調整",
                 "description": "この補正を追加したときに既定で使用する明るさ調整モデルです。"
             },
             "colorBalance": {
-                "title": "カラーバランス",
                 "description": "この補正を追加したときに既定で使用するカラーバランスモデルです。"
             },
             "sharpen": {
-                "title": "シャープ",
                 "description": "この補正を追加したときに既定で使用するシャープモデルです。"
             },
             "upscale": {
-                "title": "アップスケール",
                 "description": "この補正を追加したときに既定で使用するアップスケールモデルです。"
             }
         }
     },
     "navbar": {
-        "settings": "設定",
         "about": "このアプリについて",
         "updateAvailable": "アップデートあり",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "出力"
         },
         "about_dialog": {
-            "title": "このアプリについて",
             "iconAlt": "アプリアイコン",
-            "version": "バージョン {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "バージョン {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "顔を選択",
-        "toggleFace": "顔 {{number}} の切り替え",
-        "originalAlt": "元画像"
+        "toggleFace": "顔 {{number}} の切り替え"
     },
     "crop": {
         "title": "切り抜き/回転",
         "aspectRatio": "縦横比",
-        "dimensions": "サイズ",
         "zoomHint": "マウスホイールまたはトラックパッドのピンチ操作で、左側の画像を拡大・縮小できます。",
         "ratio": {
             "free": "自由",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "キュー ({{count}})",
             "image": "画像",
-            "output": "出力",
             "size": "サイズ",
             "type": "種類",
             "processing": "処理中",

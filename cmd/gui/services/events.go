@@ -3,6 +3,7 @@ package services
 import (
 	guitypes "gui/types"
 
+	"github.com/vegidio/open-photo-ai/types"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -37,10 +38,13 @@ type DownloadProgress struct {
 // local to whatever Phase is currently running - during "download" it is that download's own percentage, which is
 // what the label needs while the bar itself is still near the start of the operation's slice.
 type InferenceProgress struct {
-	Name     string  `json:"name"`
-	Phase    string  `json:"phase"`
-	Progress float64 `json:"progress"`
-	Fraction float64 `json:"fraction"`
+	Name string `json:"name"`
+
+	// Declared as types.Phase rather than string so the generated TypeScript gets the enum too, and the frontend
+	// compares against a member instead of a bare "download" literal that would keep compiling if the value changed.
+	Phase    types.Phase `json:"phase"`
+	Progress float64     `json:"progress"`
+	Fraction float64     `json:"fraction"`
 }
 
 // ExportUpdate is the payload of EventAppExport. One event stream serves every file in the export

@@ -48,7 +48,7 @@ export const RotateControls = ({
                 className='flex-1'
             />
 
-            <Button option='tertiary' className='w-28' onClick={onReset}>
+            <Button option='tertiary' className='min-w-28 shrink-0' onClick={onReset}>
                 {t('common.reset')}
             </Button>
         </div>

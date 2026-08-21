@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "Denoise",
                 "description": "The default Denoise model to use when adding this enhancement."
             },
             "faceRecovery": {
-                "title": "Face Recovery",
                 "description": "The default Face Recovery model to use when adding this enhancement."
             },
             "lightAdjustment": {
-                "title": "Light Adjustment",
                 "description": "The default Light Adjustment model to use when adding this enhancement."
             },
             "colorBalance": {
-                "title": "Color Balance",
                 "description": "The default Color Balance model to use when adding this enhancement."
             },
             "sharpen": {
-                "title": "Sharpen",
                 "description": "The default Sharpen model to use when adding this enhancement."
             },
             "upscale": {
-                "title": "Upscale",
                 "description": "The default Upscale model to use when adding this enhancement."
             }
         }
     },
     "navbar": {
-        "settings": "Settings",
         "about": "About",
         "updateAvailable": "Update Available",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "Output"
         },
         "about_dialog": {
-            "title": "About",
             "iconAlt": "App Icon",
-            "version": "Version {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "Version {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "Select faces",
-        "toggleFace": "Toggle face {{number}}",
-        "originalAlt": "Original"
+        "toggleFace": "Toggle face {{number}}"
     },
     "crop": {
         "title": "Crop/Rotate",
         "aspectRatio": "Aspect Ratio",
-        "dimensions": "Dimensions",
         "zoomHint": "You can use the mouse wheel or the trackpad pinch to zoom in and out the image on the left.",
         "ratio": {
             "free": "Free",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "Queue ({{count}})",
             "image": "Image",
-            "output": "Output",
             "size": "Size",
             "type": "Type",
             "processing": "Processing",

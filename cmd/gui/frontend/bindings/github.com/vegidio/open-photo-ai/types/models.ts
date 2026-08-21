@@ -153,6 +153,26 @@ export enum ModelType {
 };
 
 /**
+ * Phase distinguishes the two things that take time while an operation is being carried out.
+ */
+export enum Phase {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    /**
+     * PhaseDownload is the model's files being fetched, which happens only the first time it is used.
+     */
+    PhaseDownload = "download",
+
+    /**
+     * PhaseInference is the model actually running.
+     */
+    PhaseInference = "inference",
+};
+
+/**
  * PoolMemory describes one pool's occupancy at a moment in time.
  */
 export class PoolMemory {

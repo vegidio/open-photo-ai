@@ -123,12 +123,12 @@ These are the features I plan to implement in the future, in no particular order
 - [x] Add new models for denoise, sharpening.
 - [x] Crop and rotate images in the GUI.
 - [x] Attempt to include diffusion-based models (this will be hard!)
+- [x] Internationalization to other languages.
 - [ ] Rework the architecture of some models to improve performance.
 - [ ] Add new model to colorize black and white photos.
 - [ ] Add new model to fix imperfections and remove objects from photos.
 - [ ] CLI implementation.
 - [ ] Improve documentation for the library.
-- [ ] Internationalization to other languages.
 
 ## 💣 Troubleshooting
 

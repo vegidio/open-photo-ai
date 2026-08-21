@@ -38,7 +38,7 @@ const ImageList = ({ enhancements }: ImageListProps) => {
                 <TableHead className='[&_th]:text-[#b0b0b0] [&_th]:text-[13px] [&_th]:font-normal [&_th]:bg-[#212121]'>
                     <TableRow>
                         <TableCell className='w-[72px]'>{t('export.queue.image')}</TableCell>
-                        <TableCell>{t('export.queue.output')}</TableCell>
+                        <TableCell>{t('navbar.dimensions.output')}</TableCell>
                         <TableCell className='w-44'>{t('export.queue.size')}</TableCell>
                         <TableCell className='w-28'>{t('export.queue.type')}</TableCell>
                         <TableCell className='w-10' />

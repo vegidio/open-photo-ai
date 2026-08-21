@@ -54,33 +54,26 @@
         },
         "enhancements": {
             "denoise": {
-                "title": "नॉइज़ हटाना",
                 "description": "यह सुधार जोड़ते समय डिफ़ॉल्ट रूप से उपयोग होने वाला नॉइज़ हटाने का मॉडल।"
             },
             "faceRecovery": {
-                "title": "चेहरा पुनर्स्थापन",
                 "description": "यह सुधार जोड़ते समय डिफ़ॉल्ट रूप से उपयोग होने वाला चेहरा पुनर्स्थापन मॉडल।"
             },
             "lightAdjustment": {
-                "title": "प्रकाश समायोजन",
                 "description": "यह सुधार जोड़ते समय डिफ़ॉल्ट रूप से उपयोग होने वाला प्रकाश समायोजन मॉडल।"
             },
             "colorBalance": {
-                "title": "रंग संतुलन",
                 "description": "यह सुधार जोड़ते समय डिफ़ॉल्ट रूप से उपयोग होने वाला रंग संतुलन मॉडल।"
             },
             "sharpen": {
-                "title": "शार्पन",
                 "description": "यह सुधार जोड़ते समय डिफ़ॉल्ट रूप से उपयोग होने वाला शार्पन मॉडल।"
             },
             "upscale": {
-                "title": "अपस्केल",
                 "description": "यह सुधार जोड़ते समय डिफ़ॉल्ट रूप से उपयोग होने वाला अपस्केल मॉडल।"
             }
         }
     },
     "navbar": {
-        "settings": "सेटिंग्स",
         "about": "परिचय",
         "updateAvailable": "अपडेट उपलब्ध",
         "version": "v{{version}}",
@@ -91,12 +84,8 @@
             "output": "आउटपुट"
         },
         "about_dialog": {
-            "title": "परिचय",
             "iconAlt": "ऐप आइकन",
-            "version": "संस्करण {{version}}",
-            "copyright": "© 2025—2026, Vinicius Egidio",
-            "github": "Github",
-            "website": "vinicius.io"
+            "version": "संस्करण {{version}}"
         }
     },
     "sidebar": {
@@ -118,13 +107,11 @@
     },
     "faces": {
         "selectFaces": "चेहरे चुनें",
-        "toggleFace": "चेहरा {{number}} टॉगल करें",
-        "originalAlt": "मूल"
+        "toggleFace": "चेहरा {{number}} टॉगल करें"
     },
     "crop": {
         "title": "क्रॉप/घुमाएँ",
         "aspectRatio": "आस्पेक्ट अनुपात",
-        "dimensions": "आयाम",
         "zoomHint": "आप माउस व्हील या ट्रैकपैड पिंच का उपयोग करके बाईं ओर की छवि को ज़ूम इन और आउट कर सकते हैं।",
         "ratio": {
             "free": "मुक्त",
@@ -160,7 +147,6 @@
         "queue": {
             "title": "कतार ({{count}})",
             "image": "छवि",
-            "output": "आउटपुट",
             "size": "आकार",
             "type": "प्रकार",
             "processing": "प्रोसेस हो रहा है",

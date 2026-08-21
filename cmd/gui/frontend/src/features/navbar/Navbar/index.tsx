@@ -43,7 +43,7 @@ export const Navbar = () => {
                         {currentFile && <NavbarDimensions file={currentFile} />}
 
                         <Button option='text' size='small' onClick={() => setOpenSettings(true)}>
-                            {t('navbar.settings')}
+                            {t('settings.title')}
                         </Button>
 
                         <Button option='text' size='small' onClick={() => setOpenAbout(true)}>
@@ -65,7 +65,7 @@ export const Navbar = () => {
 
             {openAbout && <DialogAbout open={true} onClose={() => setOpenAbout(false)} />}
 
-            {openSettings && <Settings section='application' open={true} onClose={() => setOpenSettings(false)} />}
+            {openSettings && <Settings open={true} onClose={() => setOpenSettings(false)} />}
         </>
     );
 };

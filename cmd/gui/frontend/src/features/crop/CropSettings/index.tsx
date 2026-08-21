@@ -73,7 +73,7 @@ export const CropSettings = ({
 
             <Divider className='my-2' />
 
-            <Typography variant='body2'>{t('crop.dimensions')}</Typography>
+            <Typography variant='body2'>{t('navbar.dimensions.title')}</Typography>
 
             <CropDimensions
                 width={width}

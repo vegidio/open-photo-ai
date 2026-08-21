@@ -71,9 +71,18 @@ func Process(
 		// different slot depending on what preceded it.
 		applied := operations[:i+1]
 
-		// The slice of the overall bar this operation owns. Each operation reports 0-1 for itself, so without this
-		// rescaling the bar would refill from zero once per operation instead of once per call.
+		// The slice of the overall bar this operation owns. Whatever reports against this operation - a cache hit
+		// below, or runInference - reports 0-1 for itself, so without this rescaling the bar would refill from zero
+		// once per operation instead of once per call. Fraction is left alone: it is deliberately phase-local.
 		base, frac := float64(i)/float64(len(operations)), 1/float64(len(operations))
+
+		wrapped := onProgress
+		if onProgress != nil {
+			wrapped = func(progress types.Progress) {
+				progress.Total = base + progress.Total*frac
+				onProgress(progress)
+			}
+		}
 
 		if useCache {
 			if cachedImg, err := internal.ImageCache.GetImage(ctx, input.Hash, applied...); err == nil {
@@ -81,12 +90,13 @@ func Process(
 				output = cachedImg
 
 				// A skipped operation still has to hand its slice back, or the bar stalls for as long as the cached
-				// operations last.
-				if onProgress != nil {
-					onProgress(types.Progress{
+				// operations last. It goes through wrapped like every other report, so the slice arithmetic above is
+				// the only place that knows how an operation maps onto the overall bar.
+				if wrapped != nil {
+					wrapped(types.Progress{
 						Operation: op.Id(),
 						Phase:     types.PhaseInference,
-						Total:     base + frac,
+						Total:     1,
 						Fraction:  1,
 					})
 				}
@@ -95,16 +105,6 @@ func Process(
 			}
 
 			internal.Log().Debug("cache miss, running inference", "op", op.Id(), "index", i)
-		}
-
-		// runInference reports 0-1 for its one operation; this is what maps that onto the operation's slice of the
-		// overall bar. Fraction is left alone - it is deliberately phase-local.
-		wrapped := onProgress
-		if onProgress != nil {
-			wrapped = func(progress types.Progress) {
-				progress.Total = base + progress.Total*frac
-				onProgress(progress)
-			}
 		}
 
 		output, err = runInference(ctx, leases, output, ep, wrapped, op)
@@ -149,7 +149,7 @@ func Execute[T any](
 ) (T, error) {
 	var genericNil T
 
-	split := &progressSplitter{operation: operation, onProgress: onProgress}
+	split := &progressSplitter{id: operation.Id(), onProgress: onProgress}
 
 	lease, err := selectModel(ctx, operation, ep, split.download)
 	if err != nil {
@@ -241,7 +241,10 @@ const downloadShare = 0.2
 // The two phases can't just each report 0-1: the caller sees one bar, and a download handing over to a run would send
 // it back to the start. The download therefore takes the head of the range and the run takes the rest.
 type progressSplitter struct {
-	operation  types.Operation
+	// id is the operation's full ID, resolved once at construction. Operation.Id() formats a string on every call,
+	// and the run callback below fires once per tile - thousands of times on a large upscale - so calling it there
+	// would put an avoidable allocation on the hot path.
+	id         string
 	onProgress types.ProgressHandler
 
 	// downloaded records whether a download actually happened, and is atomic because the download callback runs on
@@ -258,7 +261,7 @@ func (s *progressSplitter) download(_, _ int64, percent float64) {
 	}
 
 	s.onProgress(types.Progress{
-		Operation: s.operation.Id(),
+		Operation: s.id,
 		Phase:     types.PhaseDownload,
 		Total:     percent * downloadShare,
 		Fraction:  percent,
@@ -284,7 +287,7 @@ func (s *progressSplitter) run() types.InferenceProgress {
 	// family prefix, and the operation itself is both more specific and consistent across phases.
 	return func(_ string, progress float64) {
 		s.onProgress(types.Progress{
-			Operation: s.operation.Id(),
+			Operation: s.id,
 			Phase:     types.PhaseInference,
 			Total:     base + progress*span,
 			Fraction:  progress,
@@ -308,7 +311,7 @@ func runInference(
 	onProgress types.ProgressHandler,
 	operation types.Operation,
 ) (image.Image, error) {
-	split := &progressSplitter{operation: operation, onProgress: onProgress}
+	split := &progressSplitter{id: operation.Id(), onProgress: onProgress}
 
 	lease, err := selectModel(ctx, operation, ep, split.download)
 	if err != nil {

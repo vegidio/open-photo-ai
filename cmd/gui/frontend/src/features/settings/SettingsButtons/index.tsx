@@ -12,10 +12,10 @@ export const SettingsButtons = ({ onCancel, onSave, className = '' }: SettingsBu
 
     return (
         <div className={`${className} flex gap-3`}>
-            <Button option='secondary' className='w-20' onClick={onCancel}>
+            <Button option='secondary' className='min-w-20' onClick={onCancel}>
                 {t('common.cancel')}
             </Button>
-            <Button option='primary' className='w-20' onClick={onSave}>
+            <Button option='primary' className='min-w-20' onClick={onSave}>
                 {t('common.save')}
             </Button>
         </div>

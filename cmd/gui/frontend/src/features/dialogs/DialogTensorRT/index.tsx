@@ -51,10 +51,10 @@ export const DialogTensorRT = ({ open, onClose }: DialogTensorRTProps) => {
                 </div>
 
                 <div className={`flex gap-3`}>
-                    <Button option='secondary' className='w-36' onClick={onNo}>
+                    <Button option='secondary' className='min-w-36' onClick={onNo}>
                         {t('common.no')}
                     </Button>
-                    <Button option='primary' className='w-36' onClick={onYes}>
+                    <Button option='primary' className='min-w-36' onClick={onYes}>
                         {t('common.yes')}
                     </Button>
                 </div>

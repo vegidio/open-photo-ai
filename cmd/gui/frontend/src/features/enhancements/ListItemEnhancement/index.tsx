@@ -1,4 +1,4 @@
-import { type MouseEvent, type ReactNode, useState } from 'react';
+import { type ComponentType, type MouseEvent, useState } from 'react';
 import { IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
@@ -12,11 +12,29 @@ import { OptionsLightAdjustment } from '@/features/enhancements/OptionsLightAdju
 import { OptionsSharpen } from '@/features/enhancements/OptionsSharpen';
 import { OptionsUpscale } from '@/features/enhancements/OptionsUpscale';
 import { useCurrentFile, useFileDisabledFaces, useFileFaces } from '@/hooks';
+import { qualityLabel } from '@/i18n/format';
 import { useEnhancementStore } from '@/stores';
-import { getEnhancementType } from '@/utils/enhancement.ts';
+import { ENHANCEMENTS, type EnhancementType, getEnhancementType } from '@/utils/enhancement.ts';
 
 type ListItemEnhancementProps = {
     op: Operation;
+};
+
+type OptionsProps = {
+    anchorEl: HTMLElement | undefined;
+    open: boolean;
+    onClose: () => void;
+};
+
+// The popover each enhancement opens. Kept here rather than in the ENHANCEMENTS registry so that `utils/enhancement`
+// stays a plain data module the stores and hooks can import without pulling in the feature components.
+const OPTIONS: Record<EnhancementType, ComponentType<OptionsProps>> = {
+    dn: OptionsDenoise,
+    fr: OptionsFaceRecovery,
+    la: OptionsLightAdjustment,
+    cb: OptionsColorBalance,
+    sh: OptionsSharpen,
+    up: OptionsUpscale,
 };
 
 export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
@@ -27,8 +45,12 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const disabledFaces = useFileDisabledFaces(file);
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
 
-    const { name, info, icon } = opToEnhancement(t, op, facesLabel(t, faces.length, disabledFaces.size));
-    const OptionsComponent = selectOptionsComponent(op.id);
+    const type = getEnhancementType(op.id);
+    const enhancement = ENHANCEMENTS[type];
+    const OptionsComponent = OPTIONS[type];
+
+    const name = enhancement ? t(enhancement.nameKey) : '';
+    const info = enhancement ? opInfo(t, op, type, facesLabel(t, faces.length, disabledFaces.size)) : '';
 
     const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
     const open = Boolean(anchorEl);
@@ -44,7 +66,7 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const onRemove = () => {
         if (file) {
             removeEnhancement(file, op.id);
-            track(AnalyticsEvent.EnhancementRemoved, { type: getEnhancementType(op.id) });
+            track(AnalyticsEvent.EnhancementRemoved, { type });
         }
     };
 
@@ -64,7 +86,9 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
                 }
             >
                 <ListItemButton className='min-h-12' onClick={onMenuOpen}>
-                    <ListItemIcon className='min-w-9 [&>svg]:size-5'>{icon}</ListItemIcon>
+                    <ListItemIcon className='min-w-9 [&>svg]:size-5'>
+                        {enhancement && <Icon option={enhancement.icon} />}
+                    </ListItemIcon>
                     <ListItemText
                         primary={name}
                         secondary={info}
@@ -86,79 +110,26 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     );
 };
 
-const selectOptionsComponent = (operationId: string) => {
-    switch (true) {
-        case operationId.startsWith('dn'):
-            return OptionsDenoise;
+// The secondary line under the enhancement's name. Face recovery and upscale each carry a figure of their own; every
+// other enhancement is described by its intensity, so they share one key rather than repeating the same call six times.
+const opInfo = (t: TFunction, op: Operation, type: EnhancementType, faceText: string): string => {
+    const name = titleCase(op.options.name);
+    const quality = qualityLabel(t, op.options.precision);
 
-        case operationId.startsWith('fr'):
-            return OptionsFaceRecovery;
+    switch (type) {
+        case 'fr':
+            return t('enhancements.infoFaces', { name, faces: faceText, quality });
 
-        case operationId.startsWith('la'):
-            return OptionsLightAdjustment;
-
-        case operationId.startsWith('cb'):
-            return OptionsColorBalance;
-
-        case operationId.startsWith('sh'):
-            return OptionsSharpen;
-
-        case operationId.startsWith('up'):
-            return OptionsUpscale;
-    }
-};
-
-const opToEnhancement = (
-    t: TFunction,
-    op: Operation,
-    faceText: string,
-): { name: string; info: string; icon: ReactNode } => {
-    const quality = t(op.options.precision === 'fp32' ? 'models.quality.hd' : 'models.quality.md');
-
-    switch (true) {
-        // Denoise
-        case op.id.startsWith('dn'): {
-            const intensity = parseFloat(op.options.intensity) * 100;
-            const info = t('enhancements.info', { name: titleCase(op.options.name), intensity, quality });
-            return { name: t('enhancements.denoise.name'), info, icon: <Icon option='denoise' /> };
-        }
-
-        // Face Recovery
-        case op.id.startsWith('fr'): {
-            const info = t('enhancements.infoFaces', { name: titleCase(op.options.name), faces: faceText, quality });
-            return { name: t('enhancements.faceRecovery.name'), info, icon: <Icon option='face_recovery' /> };
-        }
-
-        // Light Adjustment
-        case op.id.startsWith('la'): {
-            const intensity = parseFloat(op.options.intensity) * 100;
-            const info = t('enhancements.info', { name: titleCase(op.options.name), intensity, quality });
-            return { name: t('enhancements.lightAdjustment.name'), info, icon: <Icon option='light_adjustment' /> };
-        }
-
-        // Color Balance
-        case op.id.startsWith('cb'): {
-            const intensity = parseFloat(op.options.intensity) * 100;
-            const info = t('enhancements.info', { name: titleCase(op.options.name), intensity, quality });
-            return { name: t('enhancements.colorBalance.name'), info, icon: <Icon option='color_balance' /> };
-        }
-
-        // Upscale
-        case op.id.startsWith('up'): {
+        case 'up': {
             const scale = parseFloat(parseFloat(op.options.scale).toFixed(3));
-            const info = t('enhancements.infoScale', { name: titleCase(op.options.name), scale, quality });
-            return { name: t('enhancements.upscale.name'), info, icon: <Icon option='upscale' /> };
+            return t('enhancements.infoScale', { name, scale, quality });
         }
 
-        // Sharpen
-        case op.id.startsWith('sh'): {
+        default: {
             const intensity = parseFloat(op.options.intensity) * 100;
-            const info = t('enhancements.info', { name: titleCase(op.options.name), intensity, quality });
-            return { name: t('enhancements.sharpen.name'), info, icon: <Icon option='sharpen' /> };
+            return t('enhancements.info', { name, intensity, quality });
         }
     }
-
-    return { name: '', info: '', icon: undefined };
 };
 
 const titleCase = (input: string): string => {
