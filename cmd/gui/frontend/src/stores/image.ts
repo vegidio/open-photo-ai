@@ -7,6 +7,10 @@ export type ImageTransform = {
     scale: number;
     positionX: number;
     positionY: number;
+    // Point of the displayed image to keep fixed while the scale changes, as fractions [0..1].
+    // Set by the mouse wheel/pinch zoom (the point under the cursor) and omitted by the drawer
+    // slider and +/- buttons, which stay anchored to the center of the container.
+    anchor?: { x: number; y: number };
 };
 
 // Portion of the image currently visible in the Preview, as fractions [0..1] of the displayed image

@@ -31,6 +31,12 @@ tasks:
         go build -o "{{.ROOT_DIR}}/build/{{.FILE}}"
         {{if .isPackage}}7z a -tzip -mx=9 "{{.ROOT_DIR}}/build/perftest_{{OS}}_{{.arch}}.zip" "{{.ROOT_DIR}}/build/{{.FILE}}"{{end}}
 
+  run:
+    desc: Run the app
+    dir: cmd/gui
+    cmds:
+      - wails3 dev
+
   # GUI build tasks
   gui:
     desc: Build the GUI version of the app

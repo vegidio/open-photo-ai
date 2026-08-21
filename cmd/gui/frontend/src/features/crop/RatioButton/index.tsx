@@ -10,9 +10,9 @@ type RatioButtonProps = {
 
 export const RatioButton = ({ label, icon: RatioIcon, selected, onClick }: RatioButtonProps) => {
     return (
-        <button type='button' onClick={onClick} className='flex items-center gap-3 text-left'>
+        <button type='button' onClick={onClick} className='group flex items-center gap-3 text-left'>
             <span
-                className={`flex size-12 shrink-0 items-center justify-center rounded-full transition-colors ${
+                className={`flex size-12 shrink-0 items-center justify-center rounded-full ring-1 ring-transparent transition-colors group-hover:ring-white ${
                     selected ? 'bg-[#009aff] text-[#f2f2f2]' : 'bg-neutral-700 text-neutral-200'
                 }`}
             >
