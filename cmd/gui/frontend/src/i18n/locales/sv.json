@@ -1,0 +1,304 @@
+{
+    "common": {
+        "cancel": "Avbryt",
+        "save": "Spara",
+        "close": "Stäng",
+        "apply": "Tillämpa",
+        "reset": "Återställ",
+        "yes": "Ja",
+        "no": "Nej",
+        "or": "ELLER",
+        "previewAlt": "Förhandsvisning"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "Inställningar",
+        "sections": {
+            "app": "Applikation",
+            "performance": "Prestanda",
+            "enhancements": "Förbättringar"
+        },
+        "app": {
+            "language": {
+                "title": "Språk",
+                "description": "Språket som används i hela appen. Ändringen tillämpas när du klickar på Spara."
+            },
+            "logs": {
+                "title": "Loggar",
+                "description": "Öppna platsen för appens loggar, som kan användas för att undersöka problem i appen.",
+                "button": "Visa loggar"
+            },
+            "analytics": {
+                "title": "Analys",
+                "description": "Hjälp till att förbättra appen genom att skicka anonym användningsstatistik. Inga bilder eller personuppgifter samlas någonsin in."
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "AI-processor",
+                "auto": "Auto",
+                "description": "Välj den AI-processor som ska orkestrera modellerna.",
+                "description_auto": "Välj den AI-processor som ska orkestrera modellerna. \"Auto\" försöker hitta den bästa processorn för ditt system.",
+                "description_tensorrt": "Välj den AI-processor som ska orkestrera modellerna. TensorRT är mycket snabbt, men vid första körningen tar det en stund att bygga modellgrafen; efterföljande körningar går betydligt snabbare.",
+                "description_cuda": "Välj den AI-processor som ska orkestrera modellerna. CUDA har hög prestanda och flexibilitet, ett bra standardval om TensorRT inte är tillgängligt.",
+                "description_directml": "Välj den AI-processor som ska orkestrera modellerna. DirectML är ett bra alternativ när du inte har ett dedikerat grafikkort.",
+                "description_coreml": "Välj den AI-processor som ska orkestrera modellerna. CoreML är oftast mycket snabbare än CPU, men stöder inte alla modeller.",
+                "description_cpu": "Välj den AI-processor som ska orkestrera modellerna. CPU är det långsammaste alternativet, men det stöder alla modeller."
+            }
+        },
+        "enhancements": {
+            "denoise": {
+                "title": "Brusreducering",
+                "description": "Standardmodellen för Brusreducering som används när du lägger till den här förbättringen."
+            },
+            "faceRecovery": {
+                "title": "Ansiktsåterställning",
+                "description": "Standardmodellen för Ansiktsåterställning som används när du lägger till den här förbättringen."
+            },
+            "lightAdjustment": {
+                "title": "Ljusjustering",
+                "description": "Standardmodellen för Ljusjustering som används när du lägger till den här förbättringen."
+            },
+            "colorBalance": {
+                "title": "Färgbalans",
+                "description": "Standardmodellen för Färgbalans som används när du lägger till den här förbättringen."
+            },
+            "sharpen": {
+                "title": "Skärpa",
+                "description": "Standardmodellen för Skärpa som används när du lägger till den här förbättringen."
+            },
+            "upscale": {
+                "title": "Uppskalning",
+                "description": "Standardmodellen för Uppskalning som används när du lägger till den här förbättringen."
+            }
+        }
+    },
+    "navbar": {
+        "settings": "Inställningar",
+        "about": "Om",
+        "updateAvailable": "Uppdatering tillgänglig",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Mått",
+            "original": "Original",
+            "cropped": "Beskuren",
+            "output": "Utdata"
+        },
+        "about_dialog": {
+            "title": "Om",
+            "iconAlt": "Appikon",
+            "version": "Version {{version}}",
+            "copyright": "© 2025—2026, Vinicius Egidio",
+            "github": "Github",
+            "website": "vinicius.io"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Autopilot",
+        "analysing": "Analyserar bild...",
+        "exportImage": "Exportera bild",
+        "noPreview": "Ingen förhandsvisning tillgänglig",
+        "zoomCropAlt": "Zooma och beskär"
+    },
+    "drawer": {
+        "addImages": "Lägg till bilder",
+        "selectAll": "Markera alla",
+        "unselectAll": "Avmarkera alla",
+        "preview": {
+            "full": "Hel",
+            "sideBySide": "Sida vid sida",
+            "split": "Delad"
+        }
+    },
+    "faces": {
+        "selectFaces": "Välj ansikten",
+        "toggleFace": "Växla ansikte {{number}}",
+        "originalAlt": "Original"
+    },
+    "crop": {
+        "title": "Beskär/Rotera",
+        "aspectRatio": "Bildförhållande",
+        "dimensions": "Mått",
+        "zoomHint": "Du kan använda mushjulet eller nypgesten på styrplattan för att zooma in och ut på bilden till vänster.",
+        "ratio": {
+            "free": "Fri",
+            "square": "Kvadrat"
+        },
+        "width": "b",
+        "height": "h"
+    },
+    "export": {
+        "title": "Exportera",
+        "settings": {
+            "title": "Exportinställningar",
+            "filename": {
+                "title": "Filnamn",
+                "prefix": "Prefix",
+                "suffix": "Suffix",
+                "allowOverwrite": "Tillåt överskrivning?",
+                "sameLocationOverwrite": "När filplats och filändelse är desamma skrivs din originalfil över. Detta kan inte ångras.",
+                "sameLocationRename": "När filplats och filändelse är desamma får de nya filnamnen ett nummer i stället för att originalet skrivs över."
+            },
+            "format": {
+                "title": "Format",
+                "preserve": "Behåll"
+            },
+            "location": {
+                "title": "Spara till",
+                "original": "Originalmapp",
+                "browse": "Bläddra..."
+            },
+            "abort": "Avbryt",
+            "exportAgain": "Exportera igen"
+        },
+        "queue": {
+            "title": "Kö ({{count}})",
+            "image": "Bild",
+            "output": "Utdata",
+            "size": "Storlek",
+            "type": "Typ",
+            "processing": "Bearbetar",
+            "completed": "Klar",
+            "error": "Fel",
+            "errorTooltip": "Något gick fel...",
+            "errorDownloadTooltip": "Kunde inte ladda ner AI-modellen"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Välj bild",
+            "selectDirectory": "Välj mapp",
+            "imagesFilter": "Bilder"
+        },
+        "tensorRT": {
+            "title": "TensorRT upptäckt",
+            "logoAlt": "TensorRT",
+            "intro": "Vi upptäckte ett grafikkort som stöder TensorRT. TensorRT är en NVIDIA-teknik som kan köra AI-modeller betydligt snabbare än CUDA.",
+            "optimization": "När TensorRT är aktiverat måste modellgrafen först optimeras till ett format som TensorRT förstår. <b>Detta optimeringssteg kan ta några minuter första gången</b>; efterföljande körningar går betydligt snabbare.",
+            "question": "Vill du aktivera TensorRT?",
+            "footer": "Oavsett vad du väljer nu kan du ändra ditt val när som helst i dialogrutan <b>Inställningar</b>, under <u>AI-processor</u>."
+        },
+        "download": {
+            "downloading": "Laddar ner beroenden...",
+            "pleaseWait": "Vänta lite!",
+            "error": "Fel vid nedladdning av beroenden.",
+            "errorDetail": "Appen kan inte starta förrän alla beroenden har laddats ner!",
+            "tryAgain": "Försök igen",
+            "working": "Arbetar..."
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_one": "Filen \"{{names}}\" stöds inte.",
+        "unsupportedFiles_other": "{{count}} filer stöds inte: {{names}}",
+        "cpuFallbackProvider": "{{provider}} kunde inte användas på det här systemet, så CPU:n används i stället. Förbättringarna blir långsammare.",
+        "cpuFallbackAuto": "Ingen GPU-processor kunde användas på det här systemet, så CPU:n används i stället. Förbättringarna blir långsammare."
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Brusreducering",
+            "models": {
+                "stockholm": "Använd den här modellen när du behöver snabb brusreducering av hög kvalitet på verkligt sensorbrus och beräkningseffektivitet spelar roll. Den är ett bra val när genomströmning och begränsade resurser är verkliga hänsyn, eftersom den håller nere inferenstiderna utan att offra kvalitet.",
+                "gothenburg": "Använd den här modellen när dina foton innehåller verkligt sensorbrus, den sortens brus som uppstår i svagt ljus eller vid hög ISO med en mobil eller systemkamera. Den hanterar de komplexa brusmönster som kameror ger upphov till, vilket gör den till rätt val för fotografi.",
+                "malmo": "Använd den här modellen för att ta bort regnstrimmor i utomhusbilder, oavsett om de tagits i lätt duggregn eller kraftigt ösregn. Den hanterar regn av varierande skala, täthet och riktning och återskapar fina detaljer bakom strimmorna. Ett bra val när vädereffekter skymmer motivet."
+            }
+        },
+        "faceRecovery": {
+            "name": "Ansiktsåterställning",
+            "models": {
+                "athens": "Använd den här modellen när trogenhet mot identiteten är viktigast. Den låter dig bevara ansiktets struktur samtidigt som detaljer återställs, även på kraftigt försämrade ansikten. Bäst när du vill återställa utan att förändra personen.",
+                "santorini": "Använd den här modellen när du vill ha aggressiv, snabb förbättring och kan tolerera att identiteten glider. Den ger skarpa, tilltalande ansikten vid måttlig försämring, men kan hallucinera drag och förändra identiteten vid mycket låg kvalitet på indata."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Ljusjustering",
+            "models": {
+                "paris": "Använd den här modellen för bilder som påverkats av dålig eller ojämn belysning, som nattmotiv, motljusbilder, skuggor eller överexponerade partier. Den är användbar när du behöver förbättra synlighet och kontrast så att bilderna ser tydligare ut."
+            }
+        },
+        "colorBalance": {
+            "name": "Färgbalans",
+            "models": {
+                "rio": "Använd den här modellen när dina foton ser för orangea eller för blå ut, eller bara har en skev, onaturlig ton, som inomhusbilder under varma lampor, mulna utomhusmotiv eller bilder tagna i blandat ljus där färgerna helt enkelt inte ser naturliga ut."
+            }
+        },
+        "sharpen": {
+            "name": "Skärpa",
+            "models": {
+                "moscow": "Använd den här modellen när oskärpan beror på att kameran var ur fokus snarare än på rörelse — t.ex. porträtt med suddig bakgrund eller förgrund, makrofoton som blivit mjuka, eller motiv där objektivet inte fokuserade på rätt plan.",
+                "petersburg": "Använd den här modellen när du behöver snabb, lättviktig rörelseoskärpereducering och effektivitet betyder mer än att pressa ut varenda kvalitetsprocent. Den passar bra för actionmaterial och handhållna skakningar, och är ett stabilt val på begränsad hårdvara.",
+                "novgorod": "Använd den här modellen när oskärpan orsakas av kamerarörelse eller snabba motiv — t.ex. sport, handhållna bilder i svagt ljus, eller foton där något rörde sig under exponeringen. Den prioriterar maximal återställningskvalitet framför hastighet; bra när resultatet betyder mest."
+            }
+        },
+        "upscale": {
+            "name": "Uppskalning",
+            "models": {
+                "tokyo": "Använd den här modellen när du vill ha en naturlig uppskalning utan överdrifter. Den fokuserar på att bevara originalets utseende och fina strukturer i stället för att \"hitta på\" nya detaljer, vilket gör den idealisk när realism och trohet betyder mer än skärpa.",
+                "kyoto": "Använd den här modellen för verkliga foton (människor, landskap, produkter). Den är utmärkt på att återskapa detaljer samtidigt som den hanterar brus, oskärpa och komprimeringsartefakter. Idealisk för praktisk användning där bilderna är ofullkomliga och du snabbt vill ha tilltalande, robusta resultat.",
+                "saitama": "Använd den här modellen för tecknat, teckningar, streckkonst och digitala illustrationer. Den bevarar rena linjer, platta färger och stiliserad skuggning utan att introducera fotoliknande texturer. Bäst när skarpa kanter och stilistisk konsekvens betyder mer än realism.",
+                "osaka": "En diffusionsmodell som bygger upp detaljer i stället för att interpolera dem, vilket ger de mest dramatiska resultaten på mjuka, små eller hårt komprimerade foton. Kostnaden är i en helt annan klass: 7,3 GB nedladdning vid första användningen, ungefär 8 GB grafikminne, och långt långsammare än de andra modellerna — minuter i stället för sekunder på ett bra grafikkort, och opraktiskt långsam utan ett. Endast en halvprecisionsversion publiceras, så \"HD\" är inte tillgängligt."
+            }
+        },
+        "add": "Lägg till förbättring",
+        "modelSelector": "AI-modell",
+        "intensity": "Intensitet",
+        "scale": {
+            "title": "Skala",
+            "max": "Max",
+            "custom": "Anpassad"
+        },
+        "faces_one": "{{count}} ansikte",
+        "faces_other": "{{count}} ansikten",
+        "faces_partial_one": "{{enabled}}/{{count}} ansikte",
+        "faces_partial_other": "{{enabled}}/{{count}} ansikten",
+        "info": "{{name}}, {{intensity}} %, {{quality}}",
+        "faceSelector": {
+            "title": "Ansikten",
+            "help": "Du kan välja enskilda<br/>ansikten som du vill förbättra.",
+            "button": "Välj ansikten ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Dra och släpp bilder<br/>för att börja redigera dem",
+            "browse": "Bläddra bland bilder"
+        },
+        "progress": {
+            "downloading": "Laddar ner {{percent}} %",
+            "denoise": "Brusreducering",
+            "faceRecovery": "Ansikten",
+            "lightAdjustment": "Ljusjustering",
+            "colorBalance": "Färgbalans",
+            "upscale": "Uppskalning",
+            "sharpen": "Skärpa",
+            "enhancing": "Förbättrar"
+        }
+    },
+    "menu": {
+        "file": {
+            "close": "Stäng bild",
+            "closeAll": "Stäng alla bilder",
+            "showIn": "Visa i filhanteraren",
+            "showIn_darwin": "Visa i Finder",
+            "showIn_windows": "Visa i Utforskaren"
+        }
+    },
+    "errors": {
+        "boundary": {
+            "title": "Något gick fel",
+            "message": "Open Photo AI råkade ut för ett oväntat fel och kan inte fortsätta. Att ladda om brukar lösa det; dina inställningar behålls, men allt osparat arbete i den aktuella sessionen går förlorat.",
+            "reload": "Ladda om"
+        },
+        "modelDownload": "Kunde inte ladda ner AI-modellen. Kontrollera din internetanslutning och försök igen.",
+        "autopilotFailed": "Något gick fel. Kunde inte köra autopiloten.",
+        "enhanceFailed": "Något gick fel. Kunde inte förbättra bilden.",
+        "faceDetectFailed": "Något gick fel. Kunde inte hitta några ansikten."
+    }
+}

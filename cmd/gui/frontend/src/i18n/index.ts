@@ -2,7 +2,10 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from '@/i18n/languages';
 import en from '@/i18n/locales/en.json';
+import es from '@/i18n/locales/es.json';
 import pt from '@/i18n/locales/pt.json';
+import ru from '@/i18n/locales/ru.json';
+import sv from '@/i18n/locales/sv.json';
 // Imported by path rather than through the '@/stores' barrel, which would pull in every other store.
 import { useSettingsStore } from '@/stores/settings';
 
@@ -11,7 +14,10 @@ i18n.use(initReactI18next).init({
     // loading — which is also why <Suspense> is unnecessary and `useSuspense` is off below.
     resources: {
         en: { translation: en },
+        es: { translation: es },
         pt: { translation: pt },
+        ru: { translation: ru },
+        sv: { translation: sv },
     },
     // The store is the source of truth and rehydrates from localStorage synchronously at import time, so the correct
     // language is known before the first render — no flash of English on a Portuguese install.
