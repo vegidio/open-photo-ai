@@ -4,6 +4,7 @@ import (
 	"context"
 	"image"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -28,8 +29,10 @@ import (
 
 // Process runs the image through the given operations in sequence, each on the AI model that implements it.
 //
-// onProgress reports the current operation's progress in the 0-1 range; it is called with "dl" as the operation name
-// while a model is still being downloaded.
+// onProgress reports the progress of the whole chain in Progress.Total, so the bar fills once no matter how many
+// operations there are: each operation owns an equal 1/n slice of it, and Progress.Operation says which one is
+// currently running. Progress.Fraction separately carries how far the current phase has got on its own terms, which
+// is what a "Downloading 34%" style label needs while the bar itself is still near the start of a slice.
 //
 // # Example:
 //
@@ -38,7 +41,7 @@ func Process(
 	ctx context.Context,
 	input *types.ImageData,
 	ep types.ExecutionProvider,
-	onProgress types.InferenceProgress,
+	onProgress types.ProgressHandler,
 	operations ...types.Operation,
 ) (*types.ImageData, error) {
 	var err error
@@ -68,10 +71,25 @@ func Process(
 		// different slot depending on what preceded it.
 		applied := operations[:i+1]
 
+		// The slice of the overall bar this operation owns. Each operation reports 0-1 for itself, so without this
+		// rescaling the bar would refill from zero once per operation instead of once per call.
+		base, frac := float64(i)/float64(len(operations)), 1/float64(len(operations))
+
 		if useCache {
 			if cachedImg, err := internal.ImageCache.GetImage(ctx, input.Hash, applied...); err == nil {
 				internal.Log().Debug("cache hit", "op", op.Id(), "index", i)
 				output = cachedImg
+
+				// A skipped operation still has to hand its slice back, or the bar stalls for as long as the cached
+				// operations last.
+				if onProgress != nil {
+					onProgress(types.Progress{
+						Operation: op.Id(),
+						Phase:     types.PhaseInference,
+						Total:     base + frac,
+						Fraction:  1,
+					})
+				}
 
 				continue
 			}
@@ -79,7 +97,17 @@ func Process(
 			internal.Log().Debug("cache miss, running inference", "op", op.Id(), "index", i)
 		}
 
-		output, err = runInference(ctx, leases, output, ep, onProgress, op)
+		// runInference reports 0-1 for its one operation; this is what maps that onto the operation's slice of the
+		// overall bar. Fraction is left alone - it is deliberately phase-local.
+		wrapped := onProgress
+		if onProgress != nil {
+			wrapped = func(progress types.Progress) {
+				progress.Total = base + progress.Total*frac
+				onProgress(progress)
+			}
+		}
+
+		output, err = runInference(ctx, leases, output, ep, wrapped, op)
 		if err != nil {
 			return nil, errors.Wrap(err, "error running inference")
 		}
@@ -106,8 +134,8 @@ func Process(
 // Execute runs a single operation whose output is data rather than an image - face detection, for instance. T must
 // match what the operation's model produces, or it fails with "operation type not supported".
 //
-// onProgress reports the operation's progress in the 0-1 range; it is called with "dl" as the operation name while the
-// model is still being downloaded.
+// onProgress reports the operation's progress in the 0-1 range, the model download and the run itself sharing that one
+// range so the bar never goes backwards between them.
 //
 // # Example:
 //
@@ -116,17 +144,14 @@ func Execute[T any](
 	ctx context.Context,
 	input *types.ImageData,
 	ep types.ExecutionProvider,
-	onProgress types.InferenceProgress,
+	onProgress types.ProgressHandler,
 	operation types.Operation,
 ) (T, error) {
 	var genericNil T
 
-	lease, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
-		if onProgress != nil {
-			onProgress("dl", percent)
-		}
-	})
+	split := &progressSplitter{operation: operation, onProgress: onProgress}
 
+	lease, err := selectModel(ctx, operation, ep, split.download)
 	if err != nil {
 		return genericNil, errors.Wrap(err, "error selecting model")
 	}
@@ -142,7 +167,7 @@ func Execute[T any](
 	}
 
 	start := time.Now()
-	result, err := dataModel.Run(ctx, input.Pixels, paramsOf(operation), onProgress)
+	result, err := dataModel.Run(ctx, input.Pixels, paramsOf(operation), split.run())
 	logModelRun(operation, start)
 	return result, err
 }
@@ -204,7 +229,73 @@ func (s *leaseSet) releaseAll() {
 	s.leases = nil
 }
 
+// downloadShare is the slice of one operation's progress range given to fetching its model, when the model isn't on
+// disk yet. Downloading and running would otherwise both report 0-1 over the same range and the bar would visibly go
+// backwards once the download finished.
+const downloadShare = 0.2
+
+// progressSplitter folds the two phases of carrying out one operation - fetching the model, then running it - into the
+// single 0-1 range that operation is allotted, and turns what the model reports into what the caller of Process or
+// Execute is promised.
+//
+// The two phases can't just each report 0-1: the caller sees one bar, and a download handing over to a run would send
+// it back to the start. The download therefore takes the head of the range and the run takes the rest.
+type progressSplitter struct {
+	operation  types.Operation
+	onProgress types.ProgressHandler
+
+	// downloaded records whether a download actually happened, and is atomic because the download callback runs on
+	// whichever goroutine deps.Install reports from rather than this one.
+	downloaded atomic.Bool
+}
+
+// download is the types.DownloadProgress to hand to selectModel.
+func (s *progressSplitter) download(_, _ int64, percent float64) {
+	s.downloaded.Store(true)
+
+	if s.onProgress == nil {
+		return
+	}
+
+	s.onProgress(types.Progress{
+		Operation: s.operation.Id(),
+		Phase:     types.PhaseDownload,
+		Total:     percent * downloadShare,
+		Fraction:  percent,
+	})
+}
+
+// run is the types.InferenceProgress to hand to Model.Run. It must be called only once selectModel has returned, which
+// is what settles whether a download took the head of the range: a model already on disk never reports one, and
+// shouldn't have to give up part of its range for it.
+//
+// It returns nil when the caller asked for no progress, which is the same thing the models check for.
+func (s *progressSplitter) run() types.InferenceProgress {
+	if s.onProgress == nil {
+		return nil
+	}
+
+	base, span := 0.0, 1.0
+	if s.downloaded.Load() {
+		base, span = downloadShare, 1-downloadShare
+	}
+
+	// The name the model reports is dropped in favour of the operation's full ID: the models report a two-letter
+	// family prefix, and the operation itself is both more specific and consistent across phases.
+	return func(_ string, progress float64) {
+		s.onProgress(types.Progress{
+			Operation: s.operation.Id(),
+			Phase:     types.PhaseInference,
+			Total:     base + progress*span,
+			Fraction:  progress,
+		})
+	}
+}
+
 // runInference runs one operation of a Process chain.
+//
+// onProgress covers this one operation in the 0-1 range - Process is what maps that onto the operation's slice of the
+// overall bar. Within it, progressSplitter divides the range between fetching the model and running it.
 //
 // The lease it takes is handed to leases rather than released here: the models of earlier operations must stay
 // resident until the whole chain finishes, or a concurrent admission could evict operation 1's model while operation 2
@@ -214,15 +305,12 @@ func runInference(
 	leases *leaseSet,
 	img image.Image,
 	ep types.ExecutionProvider,
-	onProgress types.InferenceProgress,
+	onProgress types.ProgressHandler,
 	operation types.Operation,
 ) (image.Image, error) {
-	lease, err := selectModel(ctx, operation, ep, func(_, _ int64, percent float64) {
-		if onProgress != nil {
-			onProgress("dl", percent)
-		}
-	})
+	split := &progressSplitter{operation: operation, onProgress: onProgress}
 
+	lease, err := selectModel(ctx, operation, ep, split.download)
 	if err != nil {
 		return nil, errors.Wrap(err, "error selecting model")
 	}
@@ -236,7 +324,7 @@ func runInference(
 	}
 
 	start := time.Now()
-	result, err := imageModel.Run(ctx, img, paramsOf(operation), onProgress)
+	result, err := imageModel.Run(ctx, img, paramsOf(operation), split.run())
 	logModelRun(operation, start)
 	return result, err
 }

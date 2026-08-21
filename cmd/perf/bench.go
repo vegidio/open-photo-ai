@@ -28,7 +28,7 @@ type config struct {
 	// onProgress is handed to opai.Process on every run, including the timed ones, so it must be cheap enough to be
 	// invisible in the measurement: the live UI's implementation does a single atomic store per tile and nothing else.
 	// It is nil when there is no live view to feed.
-	onProgress types.InferenceProgress
+	onProgress types.ProgressHandler
 
 	// faces is the result of the one detection pass the run makes, filled in by countFaces before the sweep starts.
 	//

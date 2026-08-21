@@ -32,9 +32,15 @@ type DownloadProgress struct {
 
 // InferenceProgress is the payload of EventAppProgress. Emitted as each model step within a
 // processing pipeline advances; Name identifies the sub-operation.
+//
+// Progress covers the whole pipeline, so the bar fills once however many operations were asked for. Fraction is
+// local to whatever Phase is currently running - during "download" it is that download's own percentage, which is
+// what the label needs while the bar itself is still near the start of the operation's slice.
 type InferenceProgress struct {
 	Name     string  `json:"name"`
+	Phase    string  `json:"phase"`
 	Progress float64 `json:"progress"`
+	Fraction float64 `json:"fraction"`
 }
 
 // ExportUpdate is the payload of EventAppExport. One event stream serves every file in the export

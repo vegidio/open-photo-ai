@@ -8,10 +8,14 @@ export const EnhancementProgress = () => {
     const [progress, setProgress] = useState({ name: t('preview.progress.enhancing'), value: 0 });
 
     const getOperationName = useCallback(
-        (id: string) => {
+        (id: string, phase: string, fraction: number) => {
+            // The download is the one phase whose own percentage is worth spelling out: the bar tracks the whole
+            // pipeline, so a download barely moves it, and without the number it reads as if nothing is happening.
+            if (phase === 'download') {
+                return t('preview.progress.downloading', { percent: Math.round(fraction * 100) });
+            }
+
             switch (true) {
-                case id.startsWith('dl'):
-                    return t('preview.progress.downloading');
                 case id.startsWith('dn'):
                     return t('preview.progress.denoise');
                 case id.startsWith('fr'):
@@ -34,15 +38,15 @@ export const EnhancementProgress = () => {
     useEffect(() => {
         // Returns the per-listener unsubscribe; `Events.Off` is global across every listener for the name.
         return Events.On('app:progress', (event) => {
-            const { name, progress } = event.data;
-            setProgress({ name: getOperationName(name), value: progress * 100 });
+            const { name, phase, progress, fraction } = event.data;
+            setProgress({ name: getOperationName(name, phase, fraction), value: progress * 100 });
         });
     }, [getOperationName]);
 
     return (
         <Paper
             elevation={8}
-            className='bg-none absolute flex top-4 right-4 w-32 h-7 items-center justify-center rounded-lg z-10'
+            className='bg-none absolute flex top-4 right-4 w-36 h-7 items-center justify-center rounded-lg z-10'
         >
             <LinearProgress variant='determinate' value={progress.value} className='size-full rounded-[5px]' />
             {/* Stretched to the Paper's box (inset-0) instead of relying on the flex static position: an inset-less

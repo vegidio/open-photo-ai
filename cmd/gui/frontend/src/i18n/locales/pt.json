@@ -271,7 +271,7 @@
             "browse": "Procurar imagens"
         },
         "progress": {
-            "downloading": "Baixando",
+            "downloading": "Baixando {{percent}}%",
             "denoise": "Redução de ruído",
             "faceRecovery": "Recup. de rostos",
             "lightAdjustment": "Ajuste de luz",

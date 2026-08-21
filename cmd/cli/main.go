@@ -40,8 +40,8 @@ func main() {
 
 	now := time.Now()
 
-	outputData, err := opai.Process(ctx, inputData, types.ExecutionProviderAuto, func(name string, progress float64) {
-		fmt.Printf("%s - Progress: %.1f%%\n", name, progress*100)
+	outputData, err := opai.Process(ctx, inputData, types.ExecutionProviderAuto, func(p types.Progress) {
+		fmt.Printf("%s [%s %.0f%%] - Progress: %.1f%%\n", p.Operation, p.Phase, p.Fraction*100, p.Total*100)
 	}, ops...)
 
 	if err != nil {

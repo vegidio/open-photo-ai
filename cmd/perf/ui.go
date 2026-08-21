@@ -181,10 +181,11 @@ type tileProgress struct {
 func (t *tileProgress) set(v float64) { t.bits.Store(math.Float64bits(v)) }
 func (t *tileProgress) get() float64  { return math.Float64frombits(t.bits.Load()) }
 
-// callback returns the types.InferenceProgress to hand to opai.Process. The operation name is ignored: the view
-// already knows which model is running.
-func (t *tileProgress) callback() types.InferenceProgress {
-	return func(_ string, fraction float64) { t.set(fraction) }
+// callback returns the types.ProgressHandler to hand to opai.Process. Only Total is used: the view already knows which
+// model is running, and Total is the one number that covers fetching the model and running it without going backwards
+// between the two.
+func (t *tileProgress) callback() types.ProgressHandler {
+	return func(progress types.Progress) { t.set(progress.Total) }
 }
 
 type liveModel struct {

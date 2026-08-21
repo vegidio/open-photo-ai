@@ -241,8 +241,13 @@ func (s *ImageService) runInference(
 		return nil, errors.Wrap(err, "failed to parse operation IDs")
 	}
 
-	outputData, err := opai.Process(ctx, inputImage, ep, func(name string, progress float64) {
-		s.app.Event.Emit(EventAppProgress, InferenceProgress{Name: name, Progress: progress})
+	outputData, err := opai.Process(ctx, inputImage, ep, func(progress types.Progress) {
+		s.app.Event.Emit(EventAppProgress, InferenceProgress{
+			Name:     progress.Operation,
+			Phase:    string(progress.Phase),
+			Progress: progress.Total,
+			Fraction: progress.Fraction,
+		})
 	}, operations...)
 
 	if err != nil {

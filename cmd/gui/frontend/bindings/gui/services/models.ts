@@ -73,18 +73,30 @@ export class ExportUpdate {
 /**
  * InferenceProgress is the payload of EventAppProgress. Emitted as each model step within a
  * processing pipeline advances; Name identifies the sub-operation.
+ * 
+ * Progress covers the whole pipeline, so the bar fills once however many operations were asked for. Fraction is
+ * local to whatever Phase is currently running - during "download" it is that download's own percentage, which is
+ * what the label needs while the bar itself is still near the start of the operation's slice.
  */
 export class InferenceProgress {
     "name": string;
+    "phase": string;
     "progress": number;
+    "fraction": number;
 
     /** Creates a new InferenceProgress instance. */
     constructor($$source: Partial<InferenceProgress> = {}) {
         if (!("name" in $$source)) {
             this["name"] = "";
         }
+        if (!("phase" in $$source)) {
+            this["phase"] = "";
+        }
         if (!("progress" in $$source)) {
             this["progress"] = 0;
+        }
+        if (!("fraction" in $$source)) {
+            this["fraction"] = 0;
         }
 
         Object.assign(this, $$source);
