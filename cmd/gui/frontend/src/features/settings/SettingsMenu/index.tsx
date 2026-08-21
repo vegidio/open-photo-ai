@@ -12,7 +12,7 @@ export const SettingsMenu = ({ className = '', onItemClick }: SettingsMenuProps)
     return (
         <SimpleTreeView
             className={`${className}`}
-            expandedItems={['app', 'enhancements']}
+            expandedItems={['app', 'performance', 'enhancements']}
             onItemClick={(_, itemId) => onItemClick?.(itemId)}
             sx={{
                 '& .MuiTreeItem-label': {
@@ -33,9 +33,20 @@ export const SettingsMenu = ({ className = '', onItemClick }: SettingsMenuProps)
                 }}
             >
                 <TreeItem itemId='app_language' label={t('settings.app.language.title')} />
-                <TreeItem itemId='app_processor' label={t('settings.app.aiProcessor.title')} />
-                <TreeItem itemId='app_analytics' label={t('settings.app.analytics.title')} />
                 <TreeItem itemId='app_logs' label={t('settings.app.logs.title')} />
+                <TreeItem itemId='app_analytics' label={t('settings.app.analytics.title')} />
+            </TreeItem>
+
+            <TreeItem
+                itemId='performance'
+                label={t('settings.sections.performance')}
+                slotProps={{
+                    label: {
+                        className: 'font-bold text-[#f2f2f2]',
+                    },
+                }}
+            >
+                <TreeItem itemId='perf_processor' label={t('settings.performance.aiProcessor.title')} />
             </TreeItem>
 
             <TreeItem

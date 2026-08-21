@@ -14,13 +14,14 @@
         "label": "{{model}} {{quality}}",
         "quality": {
             "hd": "HD",
-            "md": "MD"
+            "md": "SD"
         }
     },
     "settings": {
         "title": "Configurações",
         "sections": {
             "app": "Aplicativo",
+            "performance": "Desempenho",
             "enhancements": "Melhorias"
         },
         "app": {
@@ -28,6 +29,17 @@
                 "title": "Idioma",
                 "description": "O idioma usado em todo o aplicativo. A mudança é aplicada quando você clica em Salvar."
             },
+            "logs": {
+                "title": "Logs",
+                "description": "Abre a pasta dos logs do aplicativo, que podem ser usados para investigar problemas.",
+                "button": "Mostrar logs"
+            },
+            "analytics": {
+                "title": "Análise de uso",
+                "description": "Ajude a melhorar o aplicativo enviando dados anônimos de uso. Nenhuma imagem ou dado pessoal é coletado."
+            }
+        },
+        "performance": {
             "aiProcessor": {
                 "title": "Processador de IA",
                 "auto": "Automático",
@@ -38,15 +50,6 @@
                 "description_directml": "Selecione o processador de IA que vai orquestrar os modelos. O DirectML é uma boa opção quando você não tem uma GPU dedicada.",
                 "description_coreml": "Selecione o processador de IA que vai orquestrar os modelos. O CoreML costuma ser muito mais rápido que a CPU, mas não é compatível com todos os modelos.",
                 "description_cpu": "Selecione o processador de IA que vai orquestrar os modelos. A CPU é a opção mais lenta, mas é compatível com todos os modelos."
-            },
-            "analytics": {
-                "title": "Análise de uso",
-                "description": "Ajude a melhorar o aplicativo enviando dados anônimos de uso. Nenhuma imagem ou dado pessoal é coletado."
-            },
-            "logs": {
-                "title": "Logs",
-                "description": "Abre a pasta dos logs do aplicativo, que podem ser usados para investigar problemas.",
-                "button": "Mostrar logs"
             }
         },
         "enhancements": {
@@ -125,7 +128,7 @@
         "zoomHint": "Você pode usar a roda do mouse ou o gesto de pinça no trackpad para aproximar e afastar a imagem à esquerda.",
         "ratio": {
             "free": "Livre",
-            "square": "Quadrada"
+            "square": "Quadr."
         },
         "width": "l",
         "height": "a"
@@ -270,9 +273,9 @@
         "progress": {
             "downloading": "Baixando",
             "denoise": "Redução de ruído",
-            "faceRecovery": "Recuperação de rostos",
+            "faceRecovery": "Recup. de rostos",
             "lightAdjustment": "Ajuste de luz",
-            "colorBalance": "Equilíbrio de cores",
+            "colorBalance": "Equi. de cores",
             "upscale": "Ampliação",
             "sharpen": "Nitidez",
             "enhancing": "Melhorando"

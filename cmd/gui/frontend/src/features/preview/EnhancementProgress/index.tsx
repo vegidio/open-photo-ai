@@ -45,7 +45,13 @@ export const EnhancementProgress = () => {
             className='bg-none absolute flex top-4 right-4 w-32 h-7 items-center justify-center rounded-lg z-10'
         >
             <LinearProgress variant='determinate' value={progress.value} className='size-full rounded-[5px]' />
-            <Typography variant='subtitle2' className='absolute text-gray-700'>
+            {/* Stretched to the Paper's box (inset-0) instead of relying on the flex static position: an inset-less
+                absolute child gets a shrink-to-fit width bounded by the space left of its centered static position,
+                which wraps two-word labels that would otherwise fit the full width. */}
+            <Typography
+                variant='subtitle2'
+                className='absolute inset-0 flex items-center justify-center whitespace-nowrap px-1 text-gray-700'
+            >
                 {progress.name}
             </Typography>
         </Paper>

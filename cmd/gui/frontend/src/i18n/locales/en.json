@@ -14,13 +14,14 @@
         "label": "{{model}} {{quality}}",
         "quality": {
             "hd": "HD",
-            "md": "MD"
+            "md": "SD"
         }
     },
     "settings": {
         "title": "Settings",
         "sections": {
             "app": "Application",
+            "performance": "Performance",
             "enhancements": "Enhancements"
         },
         "app": {
@@ -28,6 +29,17 @@
                 "title": "Language",
                 "description": "The language used throughout the app. The change is applied when you click Save."
             },
+            "logs": {
+                "title": "Logs",
+                "description": "Open the location of the app logs, that can be used to investigate problems in the app.",
+                "button": "Show logs"
+            },
+            "analytics": {
+                "title": "Analytics",
+                "description": "Help improve the app by sending anonymous usage analytics. No images or personal data are ever collected."
+            }
+        },
+        "performance": {
             "aiProcessor": {
                 "title": "AI Processor",
                 "auto": "Auto",
@@ -38,15 +50,6 @@
                 "description_directml": "Select the AI processor that will orchestrate the models. DirectML is a good option when you don't have a dedicated GPU.",
                 "description_coreml": "Select the AI processor that will orchestrate the models. CoreML is usually much faster than CPU, but it doesn't support all models.",
                 "description_cpu": "Select the AI processor that will orchestrate the models. CPU is the slowest option, but it supports all models."
-            },
-            "analytics": {
-                "title": "Analytics",
-                "description": "Help improve the app by sending anonymous usage analytics. No images or personal data are ever collected."
-            },
-            "logs": {
-                "title": "Logs",
-                "description": "Open the location of the app logs, that can be used to investigate problems in the app.",
-                "button": "Show logs"
             }
         },
         "enhancements": {

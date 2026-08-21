@@ -52,9 +52,14 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
             </ListSubheader>
 
             <ItemLanguage id='app_language' />
-            <ItemAiProcessor id='app_processor' />
-            <ItemAnalytics id='app_analytics' />
             <ItemLogs id='app_logs' />
+            <ItemAnalytics id='app_analytics' />
+
+            <ListSubheader id='performance' className='bg-[#2b2b2b] text-[#f2f2f2]'>
+                {t('settings.sections.performance')}
+            </ListSubheader>
+
+            <ItemAiProcessor id='perf_processor' />
 
             <ListSubheader id='enhancements' className='bg-[#2b2b2b] text-[#f2f2f2]'>
                 {t('settings.sections.enhancements')}
@@ -204,63 +209,25 @@ const ItemLanguage = ({ id }: ItemLanguageProps) => {
     );
 };
 
-type ItemAiProcessorProps = {
+type ItemLogsProps = {
     id?: string;
 };
 
-const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
+const ItemLogs = ({ id }: ItemLogsProps) => {
     const { t } = useTranslation();
-    const processorOptions = useSettingsStore((state) => state.processorOptions);
-    const executionProvider = useSettingsStore((state) => state.executionProvider);
-    const setExecutionProvider = useSettingsStore((state) => state.setExecutionProvider);
 
-    // Each branch is a whole sentence in the catalog rather than a shared prefix plus a clause: a translator has to be
-    // free to reorder, merge or re-punctuate the two halves, which string concatenation would prevent.
-    //
-    // No lock while work is running: loaded models are keyed by processor as well as operation, so switching is an
-    // ordinary cache miss. Work already in flight keeps the models it holds and finishes on the old processor; the
-    // next run picks up the new one.
-    const description = useMemo(() => {
-        switch (executionProvider) {
-            case ExecutionProvider.ExecutionProviderAuto:
-                return t('settings.app.aiProcessor.description_auto');
-            case ExecutionProvider.ExecutionProviderTensorRT:
-                return t('settings.app.aiProcessor.description_tensorrt');
-            case ExecutionProvider.ExecutionProviderCUDA:
-                return t('settings.app.aiProcessor.description_cuda');
-            case ExecutionProvider.ExecutionProviderDirectML:
-                return t('settings.app.aiProcessor.description_directml');
-            case ExecutionProvider.ExecutionProviderCoreML:
-                return t('settings.app.aiProcessor.description_coreml');
-            case ExecutionProvider.ExecutionProviderCPU:
-                return t('settings.app.aiProcessor.description_cpu');
-            default:
-                return t('settings.app.aiProcessor.description');
-        }
-    }, [executionProvider, t]);
-
-    // Built here rather than in the store: the store is persisted, so a label written into it would be frozen in
-    // whatever language was active at the time. "Auto" is the only real word — the rest are product names.
-    const items = useMemo(
-        () =>
-            processorOptions.map((ep) => ({
-                value: ep,
-                label: ep === ExecutionProvider.ExecutionProviderAuto ? t('settings.app.aiProcessor.auto') : ep,
-            })),
-        [processorOptions, t],
-    );
+    const onShowLogs = async () => {
+        const path = await GetLogsPath();
+        await RevealInFileManager(path);
+    };
 
     return (
-        <SettingsItemSelect
+        <SettingsItemButton
             id={id}
-            title={t('settings.app.aiProcessor.title')}
-            description={description}
-            items={items}
-            selected={executionProvider}
-            onSelect={(value) => {
-                setExecutionProvider(value as ExecutionProvider);
-                track(AnalyticsEvent.ExecutionProviderChanged, { provider: value });
-            }}
+            title={t('settings.app.logs.title')}
+            description={t('settings.app.logs.description')}
+            button={t('settings.app.logs.button')}
+            onClick={onShowLogs}
         />
     );
 };
@@ -286,25 +253,63 @@ const ItemAnalytics = ({ id }: ItemAnalyticsProps) => {
     );
 };
 
-type ItemLogsProps = {
+type ItemAiProcessorProps = {
     id?: string;
 };
 
-const ItemLogs = ({ id }: ItemLogsProps) => {
+const ItemAiProcessor = ({ id }: ItemAiProcessorProps) => {
     const { t } = useTranslation();
+    const processorOptions = useSettingsStore((state) => state.processorOptions);
+    const executionProvider = useSettingsStore((state) => state.executionProvider);
+    const setExecutionProvider = useSettingsStore((state) => state.setExecutionProvider);
 
-    const onShowLogs = async () => {
-        const path = await GetLogsPath();
-        await RevealInFileManager(path);
-    };
+    // Each branch is a whole sentence in the catalog rather than a shared prefix plus a clause: a translator has to be
+    // free to reorder, merge or re-punctuate the two halves, which string concatenation would prevent.
+    //
+    // No lock while work is running: loaded models are keyed by processor as well as operation, so switching is an
+    // ordinary cache miss. Work already in flight keeps the models it holds and finishes on the old processor; the
+    // next run picks up the new one.
+    const description = useMemo(() => {
+        switch (executionProvider) {
+            case ExecutionProvider.ExecutionProviderAuto:
+                return t('settings.performance.aiProcessor.description_auto');
+            case ExecutionProvider.ExecutionProviderTensorRT:
+                return t('settings.performance.aiProcessor.description_tensorrt');
+            case ExecutionProvider.ExecutionProviderCUDA:
+                return t('settings.performance.aiProcessor.description_cuda');
+            case ExecutionProvider.ExecutionProviderDirectML:
+                return t('settings.performance.aiProcessor.description_directml');
+            case ExecutionProvider.ExecutionProviderCoreML:
+                return t('settings.performance.aiProcessor.description_coreml');
+            case ExecutionProvider.ExecutionProviderCPU:
+                return t('settings.performance.aiProcessor.description_cpu');
+            default:
+                return t('settings.performance.aiProcessor.description');
+        }
+    }, [executionProvider, t]);
+
+    // Built here rather than in the store: the store is persisted, so a label written into it would be frozen in
+    // whatever language was active at the time. "Auto" is the only real word — the rest are product names.
+    const items = useMemo(
+        () =>
+            processorOptions.map((ep) => ({
+                value: ep,
+                label: ep === ExecutionProvider.ExecutionProviderAuto ? t('settings.performance.aiProcessor.auto') : ep,
+            })),
+        [processorOptions, t],
+    );
 
     return (
-        <SettingsItemButton
+        <SettingsItemSelect
             id={id}
-            title={t('settings.app.logs.title')}
-            description={t('settings.app.logs.description')}
-            button={t('settings.app.logs.button')}
-            onClick={onShowLogs}
+            title={t('settings.performance.aiProcessor.title')}
+            description={description}
+            items={items}
+            selected={executionProvider}
+            onSelect={(value) => {
+                setExecutionProvider(value as ExecutionProvider);
+                track(AnalyticsEvent.ExecutionProviderChanged, { provider: value });
+            }}
         />
     );
 };
