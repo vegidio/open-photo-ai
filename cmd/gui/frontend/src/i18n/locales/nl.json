@@ -1,0 +1,304 @@
+{
+    "common": {
+        "cancel": "Annuleren",
+        "save": "Opslaan",
+        "close": "Sluiten",
+        "apply": "Toepassen",
+        "reset": "Herstellen",
+        "yes": "Ja",
+        "no": "Nee",
+        "or": "OF",
+        "previewAlt": "Voorbeeld"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "Instellingen",
+        "sections": {
+            "app": "Applicatie",
+            "performance": "Prestaties",
+            "enhancements": "Verbeteringen"
+        },
+        "app": {
+            "language": {
+                "title": "Taal",
+                "description": "De taal die in de hele app wordt gebruikt. De wijziging wordt toegepast wanneer je op Opslaan klikt."
+            },
+            "logs": {
+                "title": "Logboeken",
+                "description": "Open de locatie van de app-logboeken, waarmee je problemen in de app kunt onderzoeken.",
+                "button": "Logboeken tonen"
+            },
+            "analytics": {
+                "title": "Analyse",
+                "description": "Help de app te verbeteren door anonieme gebruiksgegevens te versturen. Er worden nooit afbeeldingen of persoonsgegevens verzameld."
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "AI-processor",
+                "auto": "Automatisch",
+                "description": "Selecteer de AI-processor die de modellen aanstuurt.",
+                "description_auto": "Selecteer de AI-processor die de modellen aanstuurt. \"Automatisch\" probeert de beste processor voor jouw systeem te detecteren.",
+                "description_tensorrt": "Selecteer de AI-processor die de modellen aanstuurt. TensorRT is erg snel, maar moet bij de eerste run eerst de modelgraaf opbouwen, wat even duurt; daarna gaat het veel sneller.",
+                "description_cuda": "Selecteer de AI-processor die de modellen aanstuurt. CUDA biedt sterke prestaties en flexibiliteit en is een goede standaardkeuze als TensorRT niet beschikbaar is.",
+                "description_directml": "Selecteer de AI-processor die de modellen aanstuurt. DirectML is een goede optie als je geen aparte GPU hebt.",
+                "description_coreml": "Selecteer de AI-processor die de modellen aanstuurt. CoreML is meestal veel sneller dan de CPU, maar ondersteunt niet alle modellen.",
+                "description_cpu": "Selecteer de AI-processor die de modellen aanstuurt. De CPU is de traagste optie, maar ondersteunt alle modellen."
+            }
+        },
+        "enhancements": {
+            "denoise": {
+                "title": "Ruisonderdrukking",
+                "description": "Het standaardmodel voor ruisonderdrukking dat wordt gebruikt bij het toevoegen van deze verbetering."
+            },
+            "faceRecovery": {
+                "title": "Gezichtsherstel",
+                "description": "Het standaardmodel voor gezichtsherstel dat wordt gebruikt bij het toevoegen van deze verbetering."
+            },
+            "lightAdjustment": {
+                "title": "Lichtaanpassing",
+                "description": "Het standaardmodel voor lichtaanpassing dat wordt gebruikt bij het toevoegen van deze verbetering."
+            },
+            "colorBalance": {
+                "title": "Kleurbalans",
+                "description": "Het standaardmodel voor kleurbalans dat wordt gebruikt bij het toevoegen van deze verbetering."
+            },
+            "sharpen": {
+                "title": "Verscherpen",
+                "description": "Het standaardmodel voor verscherpen dat wordt gebruikt bij het toevoegen van deze verbetering."
+            },
+            "upscale": {
+                "title": "Opschalen",
+                "description": "Het standaardmodel voor opschalen dat wordt gebruikt bij het toevoegen van deze verbetering."
+            }
+        }
+    },
+    "navbar": {
+        "settings": "Instellingen",
+        "about": "Over",
+        "updateAvailable": "Update beschikbaar",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Afmetingen",
+            "original": "Origineel",
+            "cropped": "Bijgesneden",
+            "output": "Uitvoer"
+        },
+        "about_dialog": {
+            "title": "Over",
+            "iconAlt": "App-pictogram",
+            "version": "Versie {{version}}",
+            "copyright": "© 2025—2026, Vinicius Egidio",
+            "github": "Github",
+            "website": "vinicius.io"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Autopilot",
+        "analysing": "Afbeelding analyseren...",
+        "exportImage": "Afbeelding exporteren",
+        "noPreview": "Geen voorbeeld beschikbaar",
+        "zoomCropAlt": "Zoomen & bijsnijden"
+    },
+    "drawer": {
+        "addImages": "Afbeeldingen toevoegen",
+        "selectAll": "Alles selecteren",
+        "unselectAll": "Selectie opheffen",
+        "preview": {
+            "full": "Volledig",
+            "sideBySide": "Naast elkaar",
+            "split": "Gesplitst"
+        }
+    },
+    "faces": {
+        "selectFaces": "Gezichten selecteren",
+        "toggleFace": "Gezicht {{number}} aan/uit",
+        "originalAlt": "Origineel"
+    },
+    "crop": {
+        "title": "Bijsnijden/draaien",
+        "aspectRatio": "Beeldverhouding",
+        "dimensions": "Afmetingen",
+        "zoomHint": "Je kunt met het muiswiel of de knijpbeweging op het trackpad in- en uitzoomen op de afbeelding links.",
+        "ratio": {
+            "free": "Vrij",
+            "square": "Vierkant"
+        },
+        "width": "b",
+        "height": "h"
+    },
+    "export": {
+        "title": "Exporteren",
+        "settings": {
+            "title": "Exportinstellingen",
+            "filename": {
+                "title": "Bestandsnaam",
+                "prefix": "Voorvoegsel",
+                "suffix": "Achtervoegsel",
+                "allowOverwrite": "Overschrijven toestaan?",
+                "sameLocationOverwrite": "Als de bestandslocatie en de extensie hetzelfde zijn, wordt je originele bestand overschreven. Dit kan niet ongedaan worden gemaakt.",
+                "sameLocationRename": "Als de bestandslocatie en de extensie hetzelfde zijn, krijgen nieuwe bestandsnamen een nummer in plaats van dat je origineel wordt overschreven."
+            },
+            "format": {
+                "title": "Formaat",
+                "preserve": "Behouden"
+            },
+            "location": {
+                "title": "Opslaan in",
+                "original": "Oorspronkelijke map",
+                "browse": "Bladeren..."
+            },
+            "abort": "Afbreken",
+            "exportAgain": "Opnieuw exporteren"
+        },
+        "queue": {
+            "title": "Wachtrij ({{count}})",
+            "image": "Afbeelding",
+            "output": "Uitvoer",
+            "size": "Grootte",
+            "type": "Type",
+            "processing": "Bezig",
+            "completed": "Voltooid",
+            "error": "Fout",
+            "errorTooltip": "Er is iets misgegaan...",
+            "errorDownloadTooltip": "Downloaden van AI-model mislukt"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Afbeelding selecteren",
+            "selectDirectory": "Map selecteren",
+            "imagesFilter": "Afbeeldingen"
+        },
+        "tensorRT": {
+            "title": "TensorRT gedetecteerd",
+            "logoAlt": "TensorRT",
+            "intro": "We hebben een GPU gedetecteerd die TensorRT ondersteunt. TensorRT is een NVIDIA-technologie die AI-modellen aanzienlijk sneller kan uitvoeren dan CUDA.",
+            "optimization": "Wanneer TensorRT is ingeschakeld, moet het de modelgraaf eerst omzetten naar een eigen formaat. <b>Deze optimalisatiestap kan de eerste keer een paar minuten duren</b>; daaropvolgende runs zijn veel sneller.",
+            "question": "Wil je TensorRT inschakelen?",
+            "footer": "Wat je nu ook kiest, je kunt je keuze altijd aanpassen in het dialoogvenster <b>Instellingen</b>, onder <u>AI-processor</u>."
+        },
+        "download": {
+            "downloading": "Afhankelijkheden downloaden...",
+            "pleaseWait": "Even geduld!",
+            "error": "Fout bij het downloaden van de afhankelijkheden.",
+            "errorDetail": "De app kan pas starten als alle afhankelijkheden zijn gedownload!",
+            "tryAgain": "Opnieuw proberen",
+            "working": "Bezig..."
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_one": "Het bestand \"{{names}}\" wordt niet ondersteund.",
+        "unsupportedFiles_other": "{{count}} bestanden worden niet ondersteund: {{names}}",
+        "cpuFallbackProvider": "{{provider}} kon op dit systeem niet worden gebruikt, dus wordt in plaats daarvan de CPU gebruikt. Verbeteringen zullen trager zijn.",
+        "cpuFallbackAuto": "Er kon op dit systeem geen GPU-processor worden gebruikt, dus wordt in plaats daarvan de CPU gebruikt. Verbeteringen zullen trager zijn."
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Ruisonderdrukking",
+            "models": {
+                "stockholm": "Gebruik dit model wanneer je snelle, hoogwaardige onderdrukking van echte sensorruis nodig hebt en rekenefficiëntie telt. Een goede keuze wanneer doorvoer en beperkte middelen echt meespelen: het houdt de inferentietijden laag zonder in te leveren op kwaliteit.",
+                "gothenburg": "Gebruik dit model wanneer je foto's echte sensorruis bevatten, het soort dat ontstaat bij weinig licht of een hoge ISO-waarde met een smartphone of DSLR. Het gaat om met de complexe ruispatronen die camera's produceren en is daarmee de juiste keuze voor fotografie.",
+                "malmo": "Gebruik dit model om regenstrepen uit buitenfoto's te verwijderen, of het nu lichte motregen of een stevige stortbui was. Het gaat om met regen van uiteenlopende schaal, dichtheid en richting en herstelt fijne details achter de strepen. Een goede keuze wanneer weersartefacten het beeld verstoren."
+            }
+        },
+        "faceRecovery": {
+            "name": "Gezichtsherstel",
+            "models": {
+                "athens": "Gebruik dit model wanneer het behoud van de identiteit het belangrijkst is. Het bewaart de gezichtsstructuur terwijl details worden hersteld, zelfs bij zwaar aangetaste gezichten. Het beste wanneer je wilt restaureren zonder de persoon te veranderen.",
+                "santorini": "Gebruik dit model wanneer je een agressieve, snelle verbetering wilt en wat identiteitsverschuiving acceptabel is. Het levert scherpe, aantrekkelijke gezichten bij matige degradatie, maar kan bij invoer van zeer lage kwaliteit kenmerken verzinnen en de identiteit veranderen."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Lichtaanpassing",
+            "models": {
+                "paris": "Gebruik dit model bij afbeeldingen met slechte of ongelijkmatige belichting, zoals nachtopnamen, tegenlichtfoto's, schaduwen of overbelichte gebieden. Handig wanneer je de zichtbaarheid en het contrast wilt verbeteren zodat afbeeldingen helderder ogen."
+            }
+        },
+        "colorBalance": {
+            "name": "Kleurbalans",
+            "models": {
+                "rio": "Gebruik dit model wanneer je foto's te oranje of te blauw ogen, of gewoon een vreemde, onnatuurlijke zweem hebben, zoals binnenopnamen onder warme lampen, bewolkte buitenscènes of foto's bij gemengd licht waarbij de kleuren simpelweg niet natuurlijk lijken."
+            }
+        },
+        "sharpen": {
+            "name": "Verscherpen",
+            "models": {
+                "moscow": "Gebruik dit model wanneer de onscherpte komt doordat de camera niet scherpstelde en niet door beweging, bijvoorbeeld portretten met een wazige achter- of voorgrond, macrofoto's die zacht zijn geworden, of elke scène waarin de lens op het verkeerde vlak scherpstelde.",
+                "petersburg": "Gebruik dit model wanneer je snelle, lichte bewegingsontscherping nodig hebt en efficiëntie belangrijker is dan het laatste beetje kwaliteit. Het is geschikt voor actiebeelden en handmatige cameratrillingen en is een solide keuze op beperkte hardware.",
+                "novgorod": "Gebruik dit model wanneer de onscherpte komt door cameratrillingen of snel bewegende onderwerpen, bijvoorbeeld sport, handmatige opnamen bij weinig licht, of elke foto waarbij er iets bewoog tijdens de belichting. Het stelt maximale herstelkwaliteit boven snelheid; goed wanneer het resultaat telt."
+            }
+        },
+        "upscale": {
+            "name": "Opschalen",
+            "models": {
+                "tokyo": "Gebruik dit model wanneer je een natuurlijke opschaling zonder overdrijving wilt. Het richt zich op het behouden van de oorspronkelijke look en fijne structuren in plaats van nieuwe details te \"verzinnen\", ideaal wanneer realisme en trouw aan het origineel belangrijker zijn dan scherpte.",
+                "kyoto": "Gebruik dit model voor echte foto's (mensen, landschappen, producten). Het herstelt details uitstekend en gaat tegelijk om met ruis, onscherpte en compressieartefacten. Ideaal voor praktijksituaties waarin afbeeldingen niet perfect zijn en je snel aantrekkelijke, robuuste resultaten wilt.",
+                "saitama": "Gebruik dit model voor cartoons, tekeningen, lijntekeningen en digitale illustraties. Het behoudt schone lijnen, vlakke kleuren en gestileerde schaduwen zonder fotoachtige texturen toe te voegen. Het beste wanneer scherpe randen en stilistische consistentie belangrijker zijn dan realisme.",
+                "osaka": "Een diffusiemodel dat detail opnieuw opbouwt in plaats van het te interpoleren, wat de meest spectaculaire resultaten geeft bij zachte, kleine of sterk gecomprimeerde foto's. Qua kosten speelt het in een andere klasse: een download van 7,3 GB bij het eerste gebruik, ongeveer 8 GB GPU-geheugen, en veel trager dan de andere modellen, dus minuten in plaats van seconden op een goede GPU en onwerkbaar traag zonder. Er wordt alleen een halveprecisieversie gepubliceerd, dus \"HD\" is niet beschikbaar."
+            }
+        },
+        "add": "Toevoegen",
+        "modelSelector": "AI-model",
+        "intensity": "Intensiteit",
+        "scale": {
+            "title": "Schaal",
+            "max": "Max",
+            "custom": "Aangepast"
+        },
+        "faces_one": "{{count}} gezicht",
+        "faces_other": "{{count}} gezichten",
+        "faces_partial_one": "{{enabled}}/{{count}} gezicht",
+        "faces_partial_other": "{{enabled}}/{{count}} gezichten",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "faceSelector": {
+            "title": "Gezichten",
+            "help": "Je kunt afzonderlijke gezichten<br/>selecteren die je wilt verbeteren.",
+            "button": "Gezichten selecteren ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Sleep afbeeldingen hierheen<br/>om ze te bewerken",
+            "browse": "Afbeeldingen zoeken"
+        },
+        "progress": {
+            "downloading": "Downloaden {{percent}}%",
+            "denoise": "Ruis",
+            "faceRecovery": "Gezichten",
+            "lightAdjustment": "Licht",
+            "colorBalance": "Kleur",
+            "upscale": "Opschalen",
+            "sharpen": "Verscherpen",
+            "enhancing": "Verbeteren"
+        }
+    },
+    "menu": {
+        "file": {
+            "close": "Afbeelding sluiten",
+            "closeAll": "Alle afbeeldingen sluiten",
+            "showIn": "Tonen in bestandsbeheer",
+            "showIn_darwin": "Tonen in Finder",
+            "showIn_windows": "Tonen in Verkenner"
+        }
+    },
+    "errors": {
+        "boundary": {
+            "title": "Er is iets misgegaan",
+            "message": "Open Photo AI liep tegen een onverwachte fout aan en kan niet verder. Opnieuw laden lost het meestal op; je instellingen blijven behouden, maar niet-opgeslagen werk in de huidige sessie gaat verloren.",
+            "reload": "Opnieuw laden"
+        },
+        "modelDownload": "Downloaden van AI-model mislukt. Controleer je internetverbinding en probeer het opnieuw.",
+        "autopilotFailed": "Er is iets misgegaan. Autopilot kon niet worden uitgevoerd.",
+        "enhanceFailed": "Er is iets misgegaan. De afbeelding kon niet worden verbeterd.",
+        "faceDetectFailed": "Er is iets misgegaan. Gezichten konden niet worden gedetecteerd."
+    }
+}

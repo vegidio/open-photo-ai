@@ -1,0 +1,304 @@
+{
+    "common": {
+        "cancel": "Abbrechen",
+        "save": "Speichern",
+        "close": "Schließen",
+        "apply": "Anwenden",
+        "reset": "Zurücksetzen",
+        "yes": "Ja",
+        "no": "Nein",
+        "or": "ODER",
+        "previewAlt": "Vorschau"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "Einstellungen",
+        "sections": {
+            "app": "Anwendung",
+            "performance": "Leistung",
+            "enhancements": "Verbesserungen"
+        },
+        "app": {
+            "language": {
+                "title": "Sprache",
+                "description": "Die Sprache, die in der gesamten App verwendet wird. Die Änderung wird übernommen, wenn Sie auf Speichern klicken."
+            },
+            "logs": {
+                "title": "Protokolle",
+                "description": "Öffnet den Speicherort der App-Protokolle, mit denen sich Probleme in der App untersuchen lassen.",
+                "button": "Protokolle anzeigen"
+            },
+            "analytics": {
+                "title": "Analyse",
+                "description": "Helfen Sie mit, die App zu verbessern, indem Sie anonyme Nutzungsdaten senden. Es werden niemals Bilder oder personenbezogene Daten erfasst."
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "KI-Prozessor",
+                "auto": "Automatisch",
+                "description": "Wählen Sie den KI-Prozessor, der die Modelle steuert.",
+                "description_auto": "Wählen Sie den KI-Prozessor, der die Modelle steuert. „Automatisch“ versucht, den besten Prozessor für Ihr System zu ermitteln.",
+                "description_tensorrt": "Wählen Sie den KI-Prozessor, der die Modelle steuert. TensorRT ist sehr schnell, muss beim ersten Durchlauf jedoch den Modellgraphen erstellen, was etwas dauert; danach läuft es deutlich schneller.",
+                "description_cuda": "Wählen Sie den KI-Prozessor, der die Modelle steuert. CUDA bietet starke Leistung und Flexibilität und ist eine gute Standardwahl, wenn TensorRT nicht verfügbar ist.",
+                "description_directml": "Wählen Sie den KI-Prozessor, der die Modelle steuert. DirectML ist eine gute Option, wenn Sie keine dedizierte GPU haben.",
+                "description_coreml": "Wählen Sie den KI-Prozessor, der die Modelle steuert. CoreML ist meist deutlich schneller als die CPU, unterstützt aber nicht alle Modelle.",
+                "description_cpu": "Wählen Sie den KI-Prozessor, der die Modelle steuert. Die CPU ist die langsamste Option, unterstützt aber alle Modelle."
+            }
+        },
+        "enhancements": {
+            "denoise": {
+                "title": "Rauschreduzierung",
+                "description": "Das Standardmodell für die Rauschreduzierung, das beim Hinzufügen dieser Verbesserung verwendet wird."
+            },
+            "faceRecovery": {
+                "title": "Gesichtswiederherstellung",
+                "description": "Das Standardmodell für die Gesichtswiederherstellung, das beim Hinzufügen dieser Verbesserung verwendet wird."
+            },
+            "lightAdjustment": {
+                "title": "Lichtanpassung",
+                "description": "Das Standardmodell für die Lichtanpassung, das beim Hinzufügen dieser Verbesserung verwendet wird."
+            },
+            "colorBalance": {
+                "title": "Farbbalance",
+                "description": "Das Standardmodell für die Farbbalance, das beim Hinzufügen dieser Verbesserung verwendet wird."
+            },
+            "sharpen": {
+                "title": "Schärfen",
+                "description": "Das Standardmodell für das Schärfen, das beim Hinzufügen dieser Verbesserung verwendet wird."
+            },
+            "upscale": {
+                "title": "Hochskalieren",
+                "description": "Das Standardmodell für das Hochskalieren, das beim Hinzufügen dieser Verbesserung verwendet wird."
+            }
+        }
+    },
+    "navbar": {
+        "settings": "Einstellungen",
+        "about": "Über",
+        "updateAvailable": "Update verfügbar",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Abmessungen",
+            "original": "Original",
+            "cropped": "Zugeschnitten",
+            "output": "Ausgabe"
+        },
+        "about_dialog": {
+            "title": "Über",
+            "iconAlt": "App-Symbol",
+            "version": "Version {{version}}",
+            "copyright": "© 2025—2026, Vinicius Egidio",
+            "github": "Github",
+            "website": "vinicius.io"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Autopilot",
+        "analysing": "Bild wird analysiert...",
+        "exportImage": "Bild exportieren",
+        "noPreview": "Keine Vorschau verfügbar",
+        "zoomCropAlt": "Zoomen & Zuschneiden"
+    },
+    "drawer": {
+        "addImages": "Bilder hinzufügen",
+        "selectAll": "Alle auswählen",
+        "unselectAll": "Auswahl aufheben",
+        "preview": {
+            "full": "Voll",
+            "sideBySide": "Nebeneinander",
+            "split": "Geteilt"
+        }
+    },
+    "faces": {
+        "selectFaces": "Gesichter auswählen",
+        "toggleFace": "Gesicht {{number}} umschalten",
+        "originalAlt": "Original"
+    },
+    "crop": {
+        "title": "Zuschneiden/Drehen",
+        "aspectRatio": "Seitenverhältnis",
+        "dimensions": "Abmessungen",
+        "zoomHint": "Sie können mit dem Mausrad oder der Trackpad-Geste das Bild links vergrößern und verkleinern.",
+        "ratio": {
+            "free": "Frei",
+            "square": "Quadrat"
+        },
+        "width": "B",
+        "height": "H"
+    },
+    "export": {
+        "title": "Exportieren",
+        "settings": {
+            "title": "Exporteinstellungen",
+            "filename": {
+                "title": "Dateiname",
+                "prefix": "Präfix",
+                "suffix": "Suffix",
+                "allowOverwrite": "Überschreiben zulassen?",
+                "sameLocationOverwrite": "Wenn Speicherort und Dateiendung identisch sind, wird Ihre Originaldatei überschrieben. Das lässt sich nicht rückgängig machen.",
+                "sameLocationRename": "Wenn Speicherort und Dateiendung identisch sind, wird an neue Dateinamen eine Nummer angehängt, statt das Original zu überschreiben."
+            },
+            "format": {
+                "title": "Format",
+                "preserve": "Beibehalten"
+            },
+            "location": {
+                "title": "Speichern unter",
+                "original": "Originalordner",
+                "browse": "Durchsuchen..."
+            },
+            "abort": "Abbrechen",
+            "exportAgain": "Erneut exportieren"
+        },
+        "queue": {
+            "title": "Warteschlange ({{count}})",
+            "image": "Bild",
+            "output": "Ausgabe",
+            "size": "Größe",
+            "type": "Typ",
+            "processing": "Wird verarbeitet",
+            "completed": "Abgeschlossen",
+            "error": "Fehler",
+            "errorTooltip": "Etwas ist schiefgelaufen...",
+            "errorDownloadTooltip": "KI-Modell konnte nicht heruntergeladen werden"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Bild auswählen",
+            "selectDirectory": "Ordner auswählen",
+            "imagesFilter": "Bilder"
+        },
+        "tensorRT": {
+            "title": "TensorRT erkannt",
+            "logoAlt": "TensorRT",
+            "intro": "Wir haben eine GPU erkannt, die TensorRT unterstützt. TensorRT ist eine NVIDIA-Technologie, die KI-Modelle deutlich schneller ausführen kann als CUDA.",
+            "optimization": "Wenn TensorRT aktiviert ist, muss es den Modellgraphen zunächst in ein eigenes Format optimieren. <b>Dieser Optimierungsschritt kann beim ersten Mal einige Minuten dauern</b>; nachfolgende Durchläufe sind deutlich schneller.",
+            "question": "Möchten Sie TensorRT aktivieren?",
+            "footer": "Unabhängig von Ihrer Wahl können Sie diese jederzeit im Dialog <b>Einstellungen</b> unter <u>KI-Prozessor</u> ändern."
+        },
+        "download": {
+            "downloading": "Abhängigkeiten werden heruntergeladen...",
+            "pleaseWait": "Bitte warten!",
+            "error": "Fehler beim Herunterladen der Abhängigkeiten.",
+            "errorDetail": "Die App kann erst starten, wenn alle Abhängigkeiten heruntergeladen sind!",
+            "tryAgain": "Erneut versuchen",
+            "working": "Wird ausgeführt..."
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_one": "Die Datei „{{names}}“ wird nicht unterstützt.",
+        "unsupportedFiles_other": "{{count}} Dateien werden nicht unterstützt: {{names}}",
+        "cpuFallbackProvider": "{{provider}} konnte auf diesem System nicht verwendet werden, daher wird stattdessen die CPU genutzt. Verbesserungen werden langsamer sein.",
+        "cpuFallbackAuto": "Auf diesem System konnte kein GPU-Prozessor verwendet werden, daher wird stattdessen die CPU genutzt. Verbesserungen werden langsamer sein."
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Rauschreduzierung",
+            "models": {
+                "stockholm": "Verwenden Sie dieses Modell, wenn Sie echtes Sensorrauschen schnell und in hoher Qualität entfernen möchten und Recheneffizienz zählt. Eine gute Wahl, wenn Durchsatz und begrenzte Ressourcen ein echtes Thema sind: Es hält die Inferenzzeiten niedrig, ohne Qualität zu opfern.",
+                "gothenburg": "Verwenden Sie dieses Modell, wenn Ihre Fotos echtes Sensorrauschen enthalten, also das, was bei wenig Licht oder hohem ISO-Wert mit Smartphone oder DSLR entsteht. Es bewältigt die komplexen Rauschmuster echter Kameras und ist damit die richtige Wahl für Fotografie.",
+                "malmo": "Verwenden Sie dieses Modell, um Regenschlieren aus Außenaufnahmen zu entfernen, ob bei leichtem Nieselregen oder starkem Regenguss. Es kommt mit Regen unterschiedlicher Größe, Dichte und Richtung zurecht und stellt feine Details hinter den Schlieren wieder her. Eine gute Wahl, wenn Wettereinflüsse die Szene verdecken."
+            }
+        },
+        "faceRecovery": {
+            "name": "Gesichtswiederherstellung",
+            "models": {
+                "athens": "Verwenden Sie dieses Modell, wenn Identitätstreue am wichtigsten ist. Es bewahrt die Gesichtsstruktur, während Details wiederhergestellt werden, selbst bei stark beschädigten Gesichtern. Am besten geeignet, wenn Sie restaurieren möchten, ohne die Person zu verändern.",
+                "santorini": "Verwenden Sie dieses Modell, wenn Sie eine aggressive, schnelle Verbesserung wollen und eine Veränderung der Identität in Kauf nehmen. Es liefert scharfe, ansprechende Gesichter bei mäßiger Degradation, kann aber bei sehr schlechter Qualität Merkmale erfinden und die Identität verändern."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Lichtanpassung",
+            "models": {
+                "paris": "Verwenden Sie dieses Modell bei Bildern mit schlechter oder ungleichmäßiger Beleuchtung, etwa Nachtaufnahmen, Gegenlichtfotos, Schatten oder überbelichteten Bereichen. Es ist nützlich, wenn Sie Sichtbarkeit und Kontrast verbessern möchten, damit Bilder klarer wirken."
+            }
+        },
+        "colorBalance": {
+            "name": "Farbbalance",
+            "models": {
+                "rio": "Verwenden Sie dieses Modell, wenn Ihre Fotos zu orange oder zu blau wirken oder einfach einen unnatürlichen Farbstich haben, etwa Innenaufnahmen unter warmem Lampenlicht, bewölkte Außenszenen oder Bilder bei Mischlicht, bei denen die Farben schlicht nicht natürlich aussehen."
+            }
+        },
+        "sharpen": {
+            "name": "Schärfen",
+            "models": {
+                "moscow": "Verwenden Sie dieses Modell, wenn die Unschärfe von einer falsch fokussierten Kamera stammt und nicht von Bewegung, etwa Porträts mit unscharfem Hinter- oder Vordergrund, weich geratene Makroaufnahmen oder jede Szene, in der das Objektiv auf die falsche Ebene scharfgestellt hat.",
+                "petersburg": "Verwenden Sie dieses Modell, wenn Sie eine schnelle, ressourcenschonende Bewegungsentschärfung brauchen und Effizienz wichtiger ist als das letzte Quäntchen Qualität. Es eignet sich gut für Actionaufnahmen und Verwacklungen aus der Hand und ist eine solide Wahl auf begrenzter Hardware.",
+                "novgorod": "Verwenden Sie dieses Modell, wenn die Unschärfe durch Verwackeln oder schnelle Motive entsteht, etwa bei Sport, Handaufnahmen bei wenig Licht oder jedem Foto, bei dem sich während der Belichtung etwas bewegt hat. Es stellt maximale Wiederherstellungsqualität über Geschwindigkeit; gut, wenn das Ergebnis zählt."
+            }
+        },
+        "upscale": {
+            "name": "Hochskalieren",
+            "models": {
+                "tokyo": "Verwenden Sie dieses Modell, wenn Sie eine natürliche Hochskalierung ohne Übertreibung wollen. Es bewahrt den ursprünglichen Look und feine Strukturen, statt neue Details zu „erfinden“, und ist damit ideal, wenn Realismus und Originaltreue wichtiger sind als Schärfe.",
+                "kyoto": "Verwenden Sie dieses Modell für reale Fotos (Menschen, Landschaften, Produkte). Es stellt Details hervorragend wieder her und bewältigt dabei Rauschen, Unschärfe und Kompressionsartefakte. Ideal für den Praxiseinsatz mit unperfekten Bildern, wenn Sie schnell ansprechende, robuste Ergebnisse wollen.",
+                "saitama": "Verwenden Sie dieses Modell für Cartoons, Zeichnungen, Strichgrafiken und digitale Illustrationen. Es bewahrt saubere Linien, flache Farben und stilisierte Schattierungen, ohne fotoähnliche Texturen einzuführen. Am besten geeignet, wenn scharfe Kanten und stilistische Konsistenz wichtiger sind als Realismus.",
+                "osaka": "Ein Diffusionsmodell, das Details neu aufbaut, statt sie zu interpolieren, und dadurch bei weichen, kleinen oder stark komprimierten Fotos die eindrucksvollsten Ergebnisse liefert. Beim Aufwand spielt es in einer anderen Liga: 7,3 GB Download bei der ersten Nutzung, rund 8 GB GPU-Speicher und deutlich langsamer als die anderen Modelle, also Minuten statt Sekunden auf einer guten GPU und ohne GPU unpraktikabel langsam. Es wird nur eine Halbpräzisions-Variante veröffentlicht, daher ist „HD“ nicht verfügbar."
+            }
+        },
+        "add": "Hinzufügen",
+        "modelSelector": "KI-Modell",
+        "intensity": "Intensität",
+        "scale": {
+            "title": "Skalierung",
+            "max": "Max",
+            "custom": "Benutzerdefiniert"
+        },
+        "faces_one": "{{count}} Gesicht",
+        "faces_other": "{{count}} Gesichter",
+        "faces_partial_one": "{{enabled}}/{{count}} Gesicht",
+        "faces_partial_other": "{{enabled}}/{{count}} Gesichter",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "faceSelector": {
+            "title": "Gesichter",
+            "help": "Sie können einzelne Gesichter<br/>auswählen, die verbessert werden sollen.",
+            "button": "Gesichter auswählen ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Bilder hierher ziehen und ablegen,<br/>um sie zu bearbeiten",
+            "browse": "Bilder durchsuchen"
+        },
+        "progress": {
+            "downloading": "Herunterladen {{percent}}%",
+            "denoise": "Entrauschen",
+            "faceRecovery": "Gesichter",
+            "lightAdjustment": "Lichtanpassung",
+            "colorBalance": "Farbbalance",
+            "upscale": "Hochskalieren",
+            "sharpen": "Schärfen",
+            "enhancing": "Wird verbessert"
+        }
+    },
+    "menu": {
+        "file": {
+            "close": "Bild schließen",
+            "closeAll": "Alle Bilder schließen",
+            "showIn": "Im Dateimanager anzeigen",
+            "showIn_darwin": "Im Finder anzeigen",
+            "showIn_windows": "Im Explorer anzeigen"
+        }
+    },
+    "errors": {
+        "boundary": {
+            "title": "Etwas ist schiefgelaufen",
+            "message": "Open Photo AI ist auf einen unerwarteten Fehler gestoßen und kann nicht fortfahren. Ein Neuladen behebt das meist; Ihre Einstellungen bleiben erhalten, nicht gespeicherte Arbeit aus der aktuellen Sitzung geht jedoch verloren.",
+            "reload": "Neu laden"
+        },
+        "modelDownload": "KI-Modell konnte nicht heruntergeladen werden. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+        "autopilotFailed": "Etwas ist schiefgelaufen. Der Autopilot konnte nicht ausgeführt werden.",
+        "enhanceFailed": "Etwas ist schiefgelaufen. Das Bild konnte nicht verbessert werden.",
+        "faceDetectFailed": "Etwas ist schiefgelaufen. Gesichter konnten nicht erkannt werden."
+    }
+}

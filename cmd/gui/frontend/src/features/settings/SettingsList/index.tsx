@@ -188,14 +188,25 @@ type ItemLanguageProps = {
     id?: string;
 };
 
+// Fixed locale rather than the active one, so the picker keeps the same order in every language. See ItemLanguage.
+const LANGUAGE_COLLATOR = new Intl.Collator('en');
+
 const ItemLanguage = ({ id }: ItemLanguageProps) => {
     const { t } = useTranslation();
     const language = useSettingsStore((state) => state.language);
     const setLanguage = useSettingsStore((state) => state.setLanguage);
 
     // Endonyms rather than catalog entries, so the list reads the same whatever language the app is currently in —
-    // see i18n/languages.ts. Only writes the store; Save is what actually switches the app over.
-    const items = useMemo(() => SUPPORTED_LANGUAGES.map((lng) => ({ value: lng, label: LANGUAGE_NAMES[lng] })), []);
+    // see i18n/languages.ts. Sorted by endonym because that is the only label a user can see; SUPPORTED_LANGUAGES is
+    // ordered by catalog id, which would look arbitrary here. Only writes the store; Save is what actually switches
+    // the app over.
+    const items = useMemo(
+        () =>
+            SUPPORTED_LANGUAGES.map((lng) => ({ value: lng, label: LANGUAGE_NAMES[lng] })).sort((a, b) =>
+                LANGUAGE_COLLATOR.compare(a.label, b.label),
+            ),
+        [],
+    );
 
     return (
         <SettingsItemSelect

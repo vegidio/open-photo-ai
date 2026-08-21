@@ -1,0 +1,301 @@
+{
+    "common": {
+        "cancel": "Batal",
+        "save": "Simpan",
+        "close": "Tutup",
+        "apply": "Terapkan",
+        "reset": "Atur ulang",
+        "yes": "Ya",
+        "no": "Tidak",
+        "or": "ATAU",
+        "previewAlt": "Pratinjau"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "Pengaturan",
+        "sections": {
+            "app": "Aplikasi",
+            "performance": "Performa",
+            "enhancements": "Peningkatan"
+        },
+        "app": {
+            "language": {
+                "title": "Bahasa",
+                "description": "Bahasa yang digunakan di seluruh aplikasi. Perubahan diterapkan saat Anda mengeklik Simpan."
+            },
+            "logs": {
+                "title": "Log",
+                "description": "Buka lokasi log aplikasi, yang dapat digunakan untuk menyelidiki masalah pada aplikasi.",
+                "button": "Tampilkan log"
+            },
+            "analytics": {
+                "title": "Analitik",
+                "description": "Bantu tingkatkan aplikasi dengan mengirim data penggunaan anonim. Tidak ada gambar atau data pribadi yang pernah dikumpulkan."
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "Prosesor AI",
+                "auto": "Otomatis",
+                "description": "Pilih prosesor AI yang akan menjalankan model.",
+                "description_auto": "Pilih prosesor AI yang akan menjalankan model. \"Otomatis\" akan mencoba mendeteksi prosesor terbaik untuk sistem Anda.",
+                "description_tensorrt": "Pilih prosesor AI yang akan menjalankan model. TensorRT sangat cepat, tetapi pada proses pertama diperlukan waktu untuk membuat grafik model; proses berikutnya akan jauh lebih cepat.",
+                "description_cuda": "Pilih prosesor AI yang akan menjalankan model. CUDA memiliki performa dan fleksibilitas yang kuat, pilihan bawaan yang baik jika TensorRT tidak tersedia.",
+                "description_directml": "Pilih prosesor AI yang akan menjalankan model. DirectML adalah opsi yang baik jika Anda tidak memiliki GPU khusus.",
+                "description_coreml": "Pilih prosesor AI yang akan menjalankan model. CoreML biasanya jauh lebih cepat daripada CPU, tetapi tidak mendukung semua model.",
+                "description_cpu": "Pilih prosesor AI yang akan menjalankan model. CPU adalah opsi paling lambat, tetapi mendukung semua model."
+            }
+        },
+        "enhancements": {
+            "denoise": {
+                "title": "Reduksi Noise",
+                "description": "Model Reduksi Noise bawaan yang digunakan saat menambahkan peningkatan ini."
+            },
+            "faceRecovery": {
+                "title": "Pemulihan Wajah",
+                "description": "Model Pemulihan Wajah bawaan yang digunakan saat menambahkan peningkatan ini."
+            },
+            "lightAdjustment": {
+                "title": "Penyesuaian Cahaya",
+                "description": "Model Penyesuaian Cahaya bawaan yang digunakan saat menambahkan peningkatan ini."
+            },
+            "colorBalance": {
+                "title": "Keseimbangan Warna",
+                "description": "Model Keseimbangan Warna bawaan yang digunakan saat menambahkan peningkatan ini."
+            },
+            "sharpen": {
+                "title": "Penajaman",
+                "description": "Model Penajaman bawaan yang digunakan saat menambahkan peningkatan ini."
+            },
+            "upscale": {
+                "title": "Perbesaran",
+                "description": "Model Perbesaran bawaan yang digunakan saat menambahkan peningkatan ini."
+            }
+        }
+    },
+    "navbar": {
+        "settings": "Pengaturan",
+        "about": "Tentang",
+        "updateAvailable": "Pembaruan Tersedia",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Dimensi",
+            "original": "Asli",
+            "cropped": "Terpotong",
+            "output": "Keluaran"
+        },
+        "about_dialog": {
+            "title": "Tentang",
+            "iconAlt": "Ikon Aplikasi",
+            "version": "Versi {{version}}",
+            "copyright": "© 2025—2026, Vinicius Egidio",
+            "github": "Github",
+            "website": "vinicius.io"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Autopilot",
+        "analysing": "Menganalisis gambar...",
+        "exportImage": "Ekspor gambar",
+        "noPreview": "Pratinjau tidak tersedia",
+        "zoomCropAlt": "Zoom & Potong"
+    },
+    "drawer": {
+        "addImages": "Tambah gambar",
+        "selectAll": "Pilih semua",
+        "unselectAll": "Batalkan semua pilihan",
+        "preview": {
+            "full": "Penuh",
+            "sideBySide": "Berdampingan",
+            "split": "Terbagi"
+        }
+    },
+    "faces": {
+        "selectFaces": "Pilih wajah",
+        "toggleFace": "Alihkan wajah {{number}}",
+        "originalAlt": "Asli"
+    },
+    "crop": {
+        "title": "Potong/Putar",
+        "aspectRatio": "Rasio Aspek",
+        "dimensions": "Dimensi",
+        "zoomHint": "Anda dapat menggunakan roda mouse atau cubitan trackpad untuk memperbesar dan memperkecil gambar di sebelah kiri.",
+        "ratio": {
+            "free": "Bebas",
+            "square": "Persegi"
+        },
+        "width": "l",
+        "height": "t"
+    },
+    "export": {
+        "title": "Ekspor",
+        "settings": {
+            "title": "Pengaturan Ekspor",
+            "filename": {
+                "title": "Nama file",
+                "prefix": "Awalan",
+                "suffix": "Akhiran",
+                "allowOverwrite": "Izinkan menimpa?",
+                "sameLocationOverwrite": "Jika lokasi dan ekstensi file sama, file asli Anda akan ditimpa. Tindakan ini tidak dapat dibatalkan.",
+                "sameLocationRename": "Jika lokasi dan ekstensi file sama, nama file baru akan diberi nomor alih-alih menimpa file asli Anda."
+            },
+            "format": {
+                "title": "Format",
+                "preserve": "Pertahankan"
+            },
+            "location": {
+                "title": "Simpan ke",
+                "original": "Folder asli",
+                "browse": "Telusuri..."
+            },
+            "abort": "Hentikan",
+            "exportAgain": "Ekspor lagi"
+        },
+        "queue": {
+            "title": "Antrean ({{count}})",
+            "image": "Gambar",
+            "output": "Keluaran",
+            "size": "Ukuran",
+            "type": "Tipe",
+            "processing": "Memproses",
+            "completed": "Selesai",
+            "error": "Kesalahan",
+            "errorTooltip": "Terjadi kesalahan...",
+            "errorDownloadTooltip": "Gagal mengunduh model AI"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Pilih Gambar",
+            "selectDirectory": "Pilih Folder",
+            "imagesFilter": "Gambar"
+        },
+        "tensorRT": {
+            "title": "TensorRT Terdeteksi",
+            "logoAlt": "TensorRT",
+            "intro": "Kami mendeteksi GPU yang mendukung TensorRT. TensorRT adalah teknologi NVIDIA yang dapat menjalankan model AI jauh lebih cepat daripada CUDA.",
+            "optimization": "Saat TensorRT diaktifkan, ia harus terlebih dahulu mengoptimalkan grafik model ke format yang dipahaminya. <b>Langkah optimasi ini dapat memakan waktu beberapa menit saat pertama kali dijalankan</b>; proses berikutnya akan jauh lebih cepat.",
+            "question": "Apakah Anda ingin mengaktifkan TensorRT?",
+            "footer": "Apa pun pilihan Anda sekarang, Anda dapat mengubahnya kapan saja pada dialog <b>Pengaturan</b>, di bagian <u>Prosesor AI</u>."
+        },
+        "download": {
+            "downloading": "Mengunduh dependensi...",
+            "pleaseWait": "Mohon tunggu!",
+            "error": "Kesalahan saat mengunduh dependensi.",
+            "errorDetail": "Aplikasi tidak dapat dimulai sampai semua dependensi selesai diunduh!",
+            "tryAgain": "Coba lagi",
+            "working": "Sedang bekerja..."
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_other": "{{count}} file tidak didukung: {{names}}",
+        "cpuFallbackProvider": "{{provider}} tidak dapat digunakan pada sistem ini, sehingga CPU digunakan sebagai gantinya. Peningkatan akan berjalan lebih lambat.",
+        "cpuFallbackAuto": "Tidak ada prosesor GPU yang dapat digunakan pada sistem ini, sehingga CPU digunakan sebagai gantinya. Peningkatan akan berjalan lebih lambat."
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Reduksi Noise",
+            "models": {
+                "stockholm": "Gunakan model ini saat Anda membutuhkan reduksi noise sensor yang cepat dan berkualitas tinggi serta efisiensi komputasi menjadi pertimbangan. Pilihan yang baik ketika throughput dan keterbatasan sumber daya benar-benar menjadi kendala, karena waktu inferensinya tetap singkat tanpa mengorbankan kualitas.",
+                "gothenburg": "Gunakan model ini saat foto Anda mengandung noise sensor nyata, jenis yang muncul ketika memotret dalam cahaya redup atau pada ISO tinggi dengan ponsel atau DSLR. Model ini menangani pola noise kompleks yang dihasilkan kamera, sehingga menjadi pilihan tepat untuk fotografi.",
+                "malmo": "Gunakan model ini untuk menghilangkan garis-garis hujan pada gambar luar ruangan, baik yang diambil saat gerimis ringan maupun hujan deras. Model ini menangani hujan dengan berbagai ukuran, kerapatan, dan arah, serta memulihkan detail halus di balik garis hujan. Pilihan yang baik ketika artefak cuaca menutupi pemandangan."
+            }
+        },
+        "faceRecovery": {
+            "name": "Pemulihan Wajah",
+            "models": {
+                "athens": "Gunakan model ini saat kesetiaan pada identitas paling penting. Model ini mempertahankan struktur wajah sambil memulihkan detail, bahkan pada wajah yang rusak berat. Terbaik ketika Anda ingin memulihkan tanpa mengubah orangnya.",
+                "santorini": "Gunakan model ini saat Anda menginginkan peningkatan agresif dan cepat serta dapat menoleransi perubahan identitas. Model ini menghasilkan wajah yang tajam dan enak dipandang pada kerusakan sedang, tetapi dapat mengarang fitur dan mengubah identitas pada masukan berkualitas sangat rendah."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Penyesuaian Cahaya",
+            "models": {
+                "paris": "Gunakan model ini saat bekerja dengan gambar yang pencahayaannya buruk atau tidak merata, seperti pemandangan malam, foto backlit, bayangan, atau area yang terlalu terang. Berguna ketika Anda perlu meningkatkan keterlihatan dan kontras agar gambar tampak lebih jelas."
+            }
+        },
+        "colorBalance": {
+            "name": "Keseimbangan Warna",
+            "models": {
+                "rio": "Gunakan model ini saat foto Anda tampak terlalu oranye, terlalu biru, atau sekadar memiliki rona yang janggal dan tidak alami, seperti foto dalam ruangan di bawah lampu hangat, pemandangan luar ruangan saat berawan, atau foto dengan pencahayaan campuran yang warnanya terlihat tidak alami."
+            }
+        },
+        "sharpen": {
+            "name": "Penajaman",
+            "models": {
+                "moscow": "Gunakan model ini saat keburaman berasal dari kamera yang tidak fokus, bukan dari gerakan, misalnya potret dengan latar belakang atau latar depan yang buram, foto makro yang menjadi lembut, atau pemandangan apa pun ketika lensa gagal fokus pada bidang yang tepat.",
+                "petersburg": "Gunakan model ini saat Anda membutuhkan penghilangan blur gerakan yang cepat dan ringan, serta efisiensi lebih penting daripada mengejar kualitas terakhir. Cocok untuk rekaman aksi dan guncangan kamera saat dipegang, dan merupakan pilihan solid pada perangkat keras terbatas.",
+                "novgorod": "Gunakan model ini saat keburaman disebabkan oleh guncangan kamera atau subjek yang bergerak cepat, misalnya olahraga, foto genggam dalam cahaya redup, atau foto apa pun yang objeknya bergerak saat pencahayaan. Model ini mengutamakan kualitas pemulihan maksimal dibanding kecepatan; bagus ketika hasil adalah yang utama."
+            }
+        },
+        "upscale": {
+            "name": "Perbesaran",
+            "models": {
+                "tokyo": "Gunakan model ini saat Anda menginginkan perbesaran yang alami tanpa berlebihan. Model ini berfokus mempertahankan tampilan asli dan struktur halus alih-alih \"mengarang\" detail baru, sehingga ideal ketika realisme dan kesetiaan pada gambar asli lebih penting daripada ketajaman.",
+                "kyoto": "Gunakan model ini untuk foto dunia nyata (orang, lanskap, produk). Model ini unggul dalam memulihkan detail sekaligus menangani noise, blur, dan artefak kompresi. Ideal untuk penggunaan praktis dengan gambar yang tidak sempurna, ketika Anda menginginkan hasil yang enak dipandang dan andal secara cepat.",
+                "saitama": "Gunakan model ini untuk kartun, gambar tangan, line art, dan ilustrasi digital. Model ini mempertahankan garis yang bersih, warna datar, dan bayangan bergaya tanpa menambahkan tekstur seperti foto. Terbaik ketika tepi yang tajam dan konsistensi gaya lebih penting daripada realisme.",
+                "osaka": "Model difusi yang membangun ulang detail alih-alih menginterpolasinya, memberikan hasil paling dramatis pada foto yang lembut, kecil, atau sangat terkompresi. Dari sisi biaya, model ini berada di kelas berbeda: unduhan 7,3 GB saat pertama digunakan, sekitar 8 GB memori GPU, dan jauh lebih lambat daripada model lain — hitungan menit alih-alih detik pada GPU yang baik, dan sangat tidak praktis tanpa GPU. Hanya versi presisi separuh yang dirilis, sehingga \"HD\" tidak tersedia."
+            }
+        },
+        "add": "Tambah peningkatan",
+        "modelSelector": "Model AI",
+        "intensity": "Intensitas",
+        "scale": {
+            "title": "Skala",
+            "max": "Maks",
+            "custom": "Kustom"
+        },
+        "faces_other": "{{count}} Wajah",
+        "faces_partial_other": "{{enabled}}/{{count}} Wajah",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "faceSelector": {
+            "title": "Wajah",
+            "help": "Anda dapat memilih wajah tertentu<br/>yang ingin ditingkatkan.",
+            "button": "Pilih wajah ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Seret dan lepas gambar<br/>untuk mulai mengeditnya",
+            "browse": "Telusuri gambar"
+        },
+        "progress": {
+            "downloading": "Mengunduh {{percent}}%",
+            "denoise": "Reduksi Noise",
+            "faceRecovery": "Wajah",
+            "lightAdjustment": "Cahaya",
+            "colorBalance": "Warna",
+            "upscale": "Perbesaran",
+            "sharpen": "Penajaman",
+            "enhancing": "Meningkatkan"
+        }
+    },
+    "menu": {
+        "file": {
+            "close": "Tutup gambar",
+            "closeAll": "Tutup semua gambar",
+            "showIn": "Tampilkan di Pengelola File",
+            "showIn_darwin": "Tampilkan di Finder",
+            "showIn_windows": "Tampilkan di Explorer"
+        }
+    },
+    "errors": {
+        "boundary": {
+            "title": "Terjadi kesalahan",
+            "message": "Open Photo AI mengalami kesalahan tak terduga dan tidak dapat melanjutkan. Memuat ulang biasanya memperbaikinya; pengaturan Anda tetap tersimpan, tetapi pekerjaan yang belum disimpan pada sesi saat ini akan hilang.",
+            "reload": "Muat ulang"
+        },
+        "modelDownload": "Gagal mengunduh model AI. Periksa koneksi internet Anda dan coba lagi.",
+        "autopilotFailed": "Terjadi kesalahan. Gagal menjalankan autopilot.",
+        "enhanceFailed": "Terjadi kesalahan. Gagal meningkatkan gambar.",
+        "faceDetectFailed": "Terjadi kesalahan. Gagal mendeteksi wajah."
+    }
+}

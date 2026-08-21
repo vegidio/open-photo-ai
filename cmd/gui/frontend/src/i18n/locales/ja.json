@@ -1,0 +1,301 @@
+{
+    "common": {
+        "cancel": "キャンセル",
+        "save": "保存",
+        "close": "閉じる",
+        "apply": "適用",
+        "reset": "リセット",
+        "yes": "はい",
+        "no": "いいえ",
+        "or": "または",
+        "previewAlt": "プレビュー"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "設定",
+        "sections": {
+            "app": "アプリケーション",
+            "performance": "パフォーマンス",
+            "enhancements": "補正"
+        },
+        "app": {
+            "language": {
+                "title": "言語",
+                "description": "アプリ全体で使用する言語です。変更は「保存」をクリックすると適用されます。"
+            },
+            "logs": {
+                "title": "ログ",
+                "description": "アプリのログの保存場所を開きます。ログはアプリの問題を調査する際に利用できます。",
+                "button": "ログを表示"
+            },
+            "analytics": {
+                "title": "利用状況の分析",
+                "description": "匿名の利用状況データを送信して、アプリの改善にご協力ください。画像や個人情報が収集されることは一切ありません。"
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "AI プロセッサ",
+                "auto": "自動",
+                "description": "モデルの実行を担う AI プロセッサを選択します。",
+                "description_auto": "モデルの実行を担う AI プロセッサを選択します。「自動」を選ぶと、お使いの環境に最適なプロセッサを自動で判別します。",
+                "description_tensorrt": "モデルの実行を担う AI プロセッサを選択します。TensorRT は非常に高速ですが、初回実行時はモデルグラフの作成に時間がかかります。2 回目以降はかなり高速になります。",
+                "description_cuda": "モデルの実行を担う AI プロセッサを選択します。CUDA は性能と柔軟性に優れており、TensorRT が使えない場合の既定として適しています。",
+                "description_directml": "モデルの実行を担う AI プロセッサを選択します。DirectML は専用 GPU がない環境に適した選択肢です。",
+                "description_coreml": "モデルの実行を担う AI プロセッサを選択します。CoreML は通常 CPU よりはるかに高速ですが、すべてのモデルに対応しているわけではありません。",
+                "description_cpu": "モデルの実行を担う AI プロセッサを選択します。CPU は最も低速ですが、すべてのモデルに対応しています。"
+            }
+        },
+        "enhancements": {
+            "denoise": {
+                "title": "ノイズ除去",
+                "description": "この補正を追加したときに既定で使用するノイズ除去モデルです。"
+            },
+            "faceRecovery": {
+                "title": "顔の復元",
+                "description": "この補正を追加したときに既定で使用する顔復元モデルです。"
+            },
+            "lightAdjustment": {
+                "title": "明るさ調整",
+                "description": "この補正を追加したときに既定で使用する明るさ調整モデルです。"
+            },
+            "colorBalance": {
+                "title": "カラーバランス",
+                "description": "この補正を追加したときに既定で使用するカラーバランスモデルです。"
+            },
+            "sharpen": {
+                "title": "シャープ",
+                "description": "この補正を追加したときに既定で使用するシャープモデルです。"
+            },
+            "upscale": {
+                "title": "アップスケール",
+                "description": "この補正を追加したときに既定で使用するアップスケールモデルです。"
+            }
+        }
+    },
+    "navbar": {
+        "settings": "設定",
+        "about": "このアプリについて",
+        "updateAvailable": "アップデートあり",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "サイズ",
+            "original": "元画像",
+            "cropped": "切り抜き後",
+            "output": "出力"
+        },
+        "about_dialog": {
+            "title": "このアプリについて",
+            "iconAlt": "アプリアイコン",
+            "version": "バージョン {{version}}",
+            "copyright": "© 2025—2026, Vinicius Egidio",
+            "github": "Github",
+            "website": "vinicius.io"
+        }
+    },
+    "sidebar": {
+        "autopilot": "自動補正",
+        "analysing": "画像を解析中...",
+        "exportImage": "画像を書き出す",
+        "noPreview": "プレビューはありません",
+        "zoomCropAlt": "ズームと切り抜き"
+    },
+    "drawer": {
+        "addImages": "画像を追加",
+        "selectAll": "すべて選択",
+        "unselectAll": "選択をすべて解除",
+        "preview": {
+            "full": "全体",
+            "sideBySide": "左右比較",
+            "split": "分割"
+        }
+    },
+    "faces": {
+        "selectFaces": "顔を選択",
+        "toggleFace": "顔 {{number}} の切り替え",
+        "originalAlt": "元画像"
+    },
+    "crop": {
+        "title": "切り抜き/回転",
+        "aspectRatio": "縦横比",
+        "dimensions": "サイズ",
+        "zoomHint": "マウスホイールまたはトラックパッドのピンチ操作で、左側の画像を拡大・縮小できます。",
+        "ratio": {
+            "free": "自由",
+            "square": "正方形"
+        },
+        "width": "幅",
+        "height": "高"
+    },
+    "export": {
+        "title": "書き出し",
+        "settings": {
+            "title": "書き出し設定",
+            "filename": {
+                "title": "ファイル名",
+                "prefix": "接頭辞",
+                "suffix": "接尾辞",
+                "allowOverwrite": "上書きを許可しますか？",
+                "sameLocationOverwrite": "保存場所と拡張子が同じ場合、元のファイルが上書きされます。この操作は元に戻せません。",
+                "sameLocationRename": "保存場所と拡張子が同じ場合、元のファイルを上書きせず、新しいファイル名に番号が追加されます。"
+            },
+            "format": {
+                "title": "形式",
+                "preserve": "元のまま"
+            },
+            "location": {
+                "title": "保存先",
+                "original": "元のフォルダ",
+                "browse": "参照..."
+            },
+            "abort": "中止",
+            "exportAgain": "再度書き出す"
+        },
+        "queue": {
+            "title": "キュー ({{count}})",
+            "image": "画像",
+            "output": "出力",
+            "size": "サイズ",
+            "type": "種類",
+            "processing": "処理中",
+            "completed": "完了",
+            "error": "エラー",
+            "errorTooltip": "問題が発生しました...",
+            "errorDownloadTooltip": "AI モデルのダウンロードに失敗しました"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "画像を選択",
+            "selectDirectory": "フォルダを選択",
+            "imagesFilter": "画像"
+        },
+        "tensorRT": {
+            "title": "TensorRT を検出しました",
+            "logoAlt": "TensorRT",
+            "intro": "TensorRT に対応した GPU を検出しました。TensorRT は NVIDIA の技術で、CUDA よりも大幅に高速に AI モデルを実行できます。",
+            "optimization": "TensorRT を有効にすると、まずモデルグラフを TensorRT が扱える形式に最適化する必要があります。<b>この最適化には初回のみ数分かかることがあります</b>。2 回目以降はかなり高速になります。",
+            "question": "TensorRT を有効にしますか？",
+            "footer": "ここでどちらを選んでも、<b>設定</b>ダイアログの <u>AI プロセッサ</u> でいつでも変更できます。"
+        },
+        "download": {
+            "downloading": "依存関係をダウンロード中...",
+            "pleaseWait": "しばらくお待ちください。",
+            "error": "依存関係のダウンロード中にエラーが発生しました。",
+            "errorDetail": "すべての依存関係がダウンロードされるまで、アプリを起動できません。",
+            "tryAgain": "再試行",
+            "working": "処理中..."
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_other": "{{count}} 件のファイルは対応していません：{{names}}",
+        "cpuFallbackProvider": "この環境では {{provider}} を使用できなかったため、代わりに CPU を使用しています。補正の処理は遅くなります。",
+        "cpuFallbackAuto": "この環境では GPU プロセッサを使用できなかったため、代わりに CPU を使用しています。補正の処理は遅くなります。"
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "ノイズ除去",
+            "models": {
+                "stockholm": "実際のセンサーノイズを高品質かつ高速に除去したい場合や、計算効率が重要な場合に使用します。品質を犠牲にせず処理時間を短く抑えられるため、処理量やリソースの制約が問題になる場面に適しています。",
+                "gothenburg": "スマートフォンや一眼レフで暗所や高 ISO で撮影したときに生じる、実際のセンサーノイズを含む写真に使用します。カメラが生み出す複雑なノイズパターンに対応できるため、写真にはこのモデルが適しています。",
+                "malmo": "小雨から土砂降りまで、屋外で撮影した写真から雨の筋を取り除くために使用します。大きさ・密度・向きの異なる雨に対応し、筋の背後にある細部を復元します。天候による写り込みで被写体が見えにくいときに適しています。"
+            }
+        },
+        "faceRecovery": {
+            "name": "顔の復元",
+            "models": {
+                "athens": "本人らしさを何よりも重視する場合に使用します。劣化の激しい顔でも、顔の構造を保ったまま細部を復元できます。人物を変えずに復元したいときに最適です。",
+                "santorini": "多少人物の印象が変わっても構わないので、強めの補正を高速にかけたい場合に使用します。中程度の劣化であれば、くっきりと見栄えのする顔に仕上がりますが、画質が極端に低い場合は特徴が作り出され、別人のようになることがあります。"
+            }
+        },
+        "lightAdjustment": {
+            "name": "明るさ調整",
+            "models": {
+                "paris": "夜景、逆光、影、白飛びした部分など、光量が足りない、あるいは光の当たり方が偏った写真に使用します。視認性とコントラストを高めて、画像をはっきり見せたいときに役立ちます。"
+            }
+        },
+        "colorBalance": {
+            "name": "カラーバランス",
+            "models": {
+                "rio": "オレンジや青に偏っている、あるいは不自然な色かぶりがある写真に使用します。暖色系の照明の室内、曇りの屋外、複数の光源が混在する場所など、色が自然に見えない状況で撮影した写真に適しています。"
+            }
+        },
+        "sharpen": {
+            "name": "シャープ",
+            "models": {
+                "moscow": "動きではなくピントのずれが原因でぼけている場合に使用します。背景や手前がぼけたポートレート、甘くなったマクロ撮影など、レンズが狙った面にピントを合わせられなかった写真に適しています。",
+                "petersburg": "動きによるぶれを軽量かつ高速に補正したい場合や、品質を極限まで追求するより効率を優先したい場合に使用します。動きのある映像や手ぶれに向いており、性能の限られた環境でも扱いやすい選択肢です。",
+                "novgorod": "手ぶれや被写体の速い動きが原因でぼけている場合に使用します。スポーツ、暗所での手持ち撮影など、露光中に何かが動いた写真に適しています。速度よりも復元品質を優先するため、仕上がりを重視するときに向いています。"
+            }
+        },
+        "upscale": {
+            "name": "アップスケール",
+            "models": {
+                "tokyo": "誇張のない自然な拡大をしたい場合に使用します。新たな細部を「作り出す」のではなく、元の見た目と細かな構造を保つことを重視するため、鮮鋭さよりも忠実さやリアルさが大切な場面に最適です。",
+                "kyoto": "人物、風景、商品などの実写写真に使用します。ノイズ・ぼけ・圧縮ノイズに対処しながら細部を復元する能力に優れています。完璧ではない画像を扱う実用的な用途で、見栄えのする安定した結果を素早く得たいときに最適です。",
+                "saitama": "アニメ、イラスト、線画、デジタルイラストレーションに使用します。写真のような質感を加えることなく、きれいな線・ベタ塗り・アニメ調の陰影を保ちます。リアルさよりも、シャープな輪郭と作風の一貫性が重要なときに適しています。",
+                "osaka": "細部を補間するのではなく再構築する拡散モデルで、甘い・小さい・圧縮の強い写真に対して最も劇的な効果を発揮します。ただしコストは別格です。初回に 7.3 GB のダウンロードが必要で、GPU メモリを約 8 GB 使用し、他のモデルよりはるかに低速です。高性能な GPU でも秒ではなく分単位かかり、GPU がなければ実用に耐えません。半精度版のみ公開されているため、「HD」は利用できません。"
+            }
+        },
+        "add": "補正を追加",
+        "modelSelector": "AI モデル",
+        "intensity": "強度",
+        "scale": {
+            "title": "倍率",
+            "max": "最大",
+            "custom": "カスタム"
+        },
+        "faces_other": "顔 {{count}} 個",
+        "faces_partial_other": "顔 {{enabled}}/{{count}} 個",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "faceSelector": {
+            "title": "顔",
+            "help": "補正したい顔を<br/>個別に選択できます。",
+            "button": "顔を選択 ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "画像をドラッグ＆ドロップして<br/>編集を始めましょう",
+            "browse": "画像を選ぶ"
+        },
+        "progress": {
+            "downloading": "ダウンロード中 {{percent}}%",
+            "denoise": "ノイズ除去",
+            "faceRecovery": "顔の復元",
+            "lightAdjustment": "明るさ調整",
+            "colorBalance": "カラーバランス",
+            "upscale": "アップスケール",
+            "sharpen": "シャープ",
+            "enhancing": "補正中"
+        }
+    },
+    "menu": {
+        "file": {
+            "close": "画像を閉じる",
+            "closeAll": "すべての画像を閉じる",
+            "showIn": "ファイルマネージャーで表示",
+            "showIn_darwin": "Finder で表示",
+            "showIn_windows": "エクスプローラーで表示"
+        }
+    },
+    "errors": {
+        "boundary": {
+            "title": "問題が発生しました",
+            "message": "Open Photo AI で予期しないエラーが発生したため、処理を続行できません。再読み込みすればたいてい解決します。設定は保持されますが、現在のセッションで保存していない作業は失われます。",
+            "reload": "再読み込み"
+        },
+        "modelDownload": "AI モデルのダウンロードに失敗しました。インターネット接続を確認して、もう一度お試しください。",
+        "autopilotFailed": "問題が発生しました。自動補正を実行できませんでした。",
+        "enhanceFailed": "問題が発生しました。画像を補正できませんでした。",
+        "faceDetectFailed": "問題が発生しました。顔を検出できませんでした。"
+    }
+}
