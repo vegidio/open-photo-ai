@@ -36,6 +36,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         items: [
             { id: 'enh_denoise', labelKey: 'enhancements.denoise.name' },
             { id: 'enh_face', labelKey: 'enhancements.faceRecovery.name' },
+            { id: 'enh_colorization', labelKey: 'enhancements.colorization.name' },
             { id: 'enh_light', labelKey: 'enhancements.lightAdjustment.name' },
             { id: 'enh_color', labelKey: 'enhancements.colorBalance.name' },
             { id: 'enh_sharpen', labelKey: 'enhancements.sharpen.name' },

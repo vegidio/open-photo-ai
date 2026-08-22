@@ -59,6 +59,9 @@
             "faceRecovery": {
                 "description": "添加此增强时默认使用的人脸修复模型。"
             },
+            "colorization": {
+                "description": "添加此增强时默认使用的上色模型。"
+            },
             "lightAdjustment": {
                 "description": "添加此增强时默认使用的光线调整模型。"
             },
@@ -200,6 +203,14 @@
                 "santorini": "当你想要激进而快速的增强，并且可以接受身份特征发生变化时，使用此模型。对于中等程度的画质损失，它能生成锐利、观感讨喜的人脸，但在画质极差的输入上可能会臆造五官并改变身份特征。"
             }
         },
+        "colorization": {
+            "name": "上色",
+            "models": {
+                "delhi": "大多数黑白照片的最佳首选。它会分析整个画面来判断各种物体应有的颜色，生成浓郁、自信且边缘干净的色彩——不过偶尔会大胆地选用一种原本不存在的颜色。",
+                "mumbai": "当 Delhi 的色彩对照片来说过于浓烈或过于现代时使用。它以更具创意的方向训练，偏向柔和、略带风格化的色调，适合老照片人像和扫描的胶片，但不同照片之间的效果差异会更大。",
+                "jaipur": "当稳定性最重要时使用。它的色彩比其他模型更含蓄，但几乎从不产生奇怪的色块或离谱的猜测——对于老人像、风景和严重受损的扫描件来说是稳妥之选。"
+            }
+        },
         "lightAdjustment": {
             "name": "光线调整",
             "models": {
@@ -240,6 +251,7 @@
         "faces_other": "{{count}} 张人脸",
         "faces_partial_other": "{{enabled}}/{{count}} 张人脸",
         "info": "{{name}}，{{intensity}}%，{{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
         "faceSelector": {
             "title": "人脸",
             "help": "你可以选择想要<br/>增强的单个人脸。",
@@ -257,6 +269,7 @@
             "downloading": "下载中 {{percent}}%",
             "denoise": "降噪",
             "faceRecovery": "人脸修复",
+            "colorization": "上色",
             "lightAdjustment": "光线调整",
             "colorBalance": "色彩平衡",
             "upscale": "放大",

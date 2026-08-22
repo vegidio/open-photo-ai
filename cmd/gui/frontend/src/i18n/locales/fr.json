@@ -59,6 +59,9 @@
             "faceRecovery": {
                 "description": "Le modèle de restauration des visages utilisé par défaut lors de l'ajout de cette amélioration."
             },
+            "colorization": {
+                "description": "Le modèle de colorisation utilisé par défaut lors de l'ajout de cette amélioration."
+            },
             "lightAdjustment": {
                 "description": "Le modèle d'ajustement de la lumière utilisé par défaut lors de l'ajout de cette amélioration."
             },
@@ -202,6 +205,14 @@
                 "santorini": "Utilisez ce modèle lorsque vous voulez une amélioration agressive et rapide et que vous tolérez une dérive d'identité. Il produit des visages nets et flatteurs sur des dégradations modérées, mais il peut inventer des traits et modifier l'identité sur des images de très mauvaise qualité."
             }
         },
+        "colorization": {
+            "name": "Colorisation",
+            "models": {
+                "delhi": "Le meilleur premier choix pour la plupart des photos en noir et blanc. Il analyse toute la scène pour décider de l'apparence des choses et produit des couleurs riches et assurées, aux contours nets — même s'il lui arrive de trancher audacieusement pour une couleur qui n'existait pas.",
+                "mumbai": "À utiliser lorsque les couleurs de Delhi paraissent trop intenses ou trop modernes pour la photo. Entraîné avec une touche plus créative, il privilégie des tons plus doux et légèrement stylisés qui conviennent aux portraits anciens et aux pellicules numérisées, mais ses choix varient davantage d'une photo à l'autre.",
+                "jaipur": "À utiliser lorsque la régularité compte avant tout. Ses couleurs sont plus sobres que celles des autres, mais il ne produit presque jamais de taches de couleur étranges ni de choix aberrants — une valeur sûre pour les vieux portraits, les paysages et les numérisations très abîmées."
+            }
+        },
         "lightAdjustment": {
             "name": "Ajustement de la lumière",
             "models": {
@@ -246,6 +257,7 @@
         "faces_partial_many": "{{enabled}}/{{count}} visages",
         "faces_partial_other": "{{enabled}}/{{count}} visages",
         "info": "{{name}}, {{intensity}} %, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
         "faceSelector": {
             "title": "Visages",
             "help": "Vous pouvez sélectionner les visages<br/>que vous souhaitez améliorer.",
@@ -263,6 +275,7 @@
             "downloading": "Téléchargement {{percent}} %",
             "denoise": "Débruitage",
             "faceRecovery": "Visages",
+            "colorization": "Colorisation",
             "lightAdjustment": "Lumière",
             "colorBalance": "Couleurs",
             "upscale": "Agrandissement",

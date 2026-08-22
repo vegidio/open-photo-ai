@@ -59,6 +59,9 @@
             "faceRecovery": {
                 "description": "Standardmodellen för Ansiktsåterställning som används när du lägger till den här förbättringen."
             },
+            "colorization": {
+                "description": "Standardmodellen för Kolorering som används när du lägger till den här förbättringen."
+            },
             "lightAdjustment": {
                 "description": "Standardmodellen för Ljusjustering som används när du lägger till den här förbättringen."
             },
@@ -201,6 +204,14 @@
                 "santorini": "Använd den här modellen när du vill ha aggressiv, snabb förbättring och kan tolerera att identiteten glider. Den ger skarpa, tilltalande ansikten vid måttlig försämring, men kan hallucinera drag och förändra identiteten vid mycket låg kvalitet på indata."
             }
         },
+        "colorization": {
+            "name": "Kolorering",
+            "models": {
+                "delhi": "Det bästa förstahandsvalet för de flesta svartvita foton. Modellen ser till hela scenen för att avgöra hur saker bör se ut och ger rika, säkra färger med rena kanter — även om den ibland djärvt väljer en färg som inte fanns där.",
+                "mumbai": "Använd när Delhis färger känns för intensiva eller moderna för fotot. Modellen är tränad med en mer kreativ prägel och lutar åt mjukare, lätt stiliserade toner som passar äldre porträtt och inskannad film — men resultaten varierar mer från foto till foto.",
+                "jaipur": "Använd när jämnhet är viktigast. Färgerna är mer dämpade än hos de andra, men modellen lämnar nästan aldrig konstiga färgfläckar eller felgissningar — ett pålitligt val för gamla porträtt, landskap och svårt skadade inskanningar."
+            }
+        },
         "lightAdjustment": {
             "name": "Ljusjustering",
             "models": {
@@ -243,6 +254,7 @@
         "faces_partial_one": "{{enabled}}/{{count}} ansikte",
         "faces_partial_other": "{{enabled}}/{{count}} ansikten",
         "info": "{{name}}, {{intensity}} %, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
         "faceSelector": {
             "title": "Ansikten",
             "help": "Du kan välja enskilda<br/>ansikten som du vill förbättra.",
@@ -260,6 +272,7 @@
             "downloading": "Laddar ner {{percent}} %",
             "denoise": "Brusreducering",
             "faceRecovery": "Ansikten",
+            "colorization": "Kolorering",
             "lightAdjustment": "Ljusjustering",
             "colorBalance": "Färgbalans",
             "upscale": "Uppskalning",

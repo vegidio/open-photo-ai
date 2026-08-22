@@ -59,6 +59,9 @@
             "faceRecovery": {
                 "description": "Model Pemulihan Wajah bawaan yang digunakan saat menambahkan peningkatan ini."
             },
+            "colorization": {
+                "description": "Model Pewarnaan bawaan yang digunakan saat menambahkan peningkatan ini."
+            },
             "lightAdjustment": {
                 "description": "Model Penyesuaian Cahaya bawaan yang digunakan saat menambahkan peningkatan ini."
             },
@@ -200,6 +203,14 @@
                 "santorini": "Gunakan model ini saat Anda menginginkan peningkatan agresif dan cepat serta dapat menoleransi perubahan identitas. Model ini menghasilkan wajah yang tajam dan enak dipandang pada kerusakan sedang, tetapi dapat mengarang fitur dan mengubah identitas pada masukan berkualitas sangat rendah."
             }
         },
+        "colorization": {
+            "name": "Pewarnaan",
+            "models": {
+                "delhi": "Pilihan pertama terbaik untuk sebagian besar foto hitam-putih. Model ini mengamati seluruh adegan untuk menentukan seperti apa seharusnya warna setiap objek, menghasilkan warna yang kaya dan meyakinkan dengan tepian bersih — meski sesekali berani memilih warna yang sebenarnya tidak ada.",
+                "mumbai": "Gunakan saat warna Delhi terasa terlalu kuat atau terlalu modern untuk foto tersebut. Dilatih dengan sentuhan lebih kreatif, model ini condong ke warna yang lebih lembut dan sedikit bergaya, cocok untuk potret lawas dan film hasil pindaian, meski hasilnya lebih bervariasi dari satu foto ke foto lain.",
+                "jaipur": "Gunakan saat konsistensi paling penting. Warnanya lebih kalem daripada model lain, tetapi hampir tidak pernah menghasilkan bercak warna aneh atau tebakan yang keliru — pilihan yang andal untuk potret lama, pemandangan, dan pindaian yang sudah sangat rusak."
+            }
+        },
         "lightAdjustment": {
             "name": "Penyesuaian Cahaya",
             "models": {
@@ -240,6 +251,7 @@
         "faces_other": "{{count}} Wajah",
         "faces_partial_other": "{{enabled}}/{{count}} Wajah",
         "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
         "faceSelector": {
             "title": "Wajah",
             "help": "Anda dapat memilih wajah tertentu<br/>yang ingin ditingkatkan.",
@@ -257,6 +269,7 @@
             "downloading": "Mengunduh {{percent}}%",
             "denoise": "Reduksi Noise",
             "faceRecovery": "Wajah",
+            "colorization": "Pewarnaan",
             "lightAdjustment": "Cahaya",
             "colorBalance": "Warna",
             "upscale": "Perbesaran",

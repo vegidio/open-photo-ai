@@ -1,4 +1,5 @@
 export * from './ColorBalance.ts';
+export * from './Colorization.ts';
 export * from './Denoise.ts';
 export * from './FaceRecovery.ts';
 export * from './factory.ts';

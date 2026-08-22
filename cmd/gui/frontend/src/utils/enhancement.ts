@@ -6,10 +6,13 @@ import { ModelType } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { SuggestEnhancements } from '@/bindings/gui/services/imageservice.ts';
 import {
     Athens,
+    Delhi,
     Gothenburg,
+    Jaipur,
     Kyoto,
     Malmo,
     Moscow,
+    Mumbai,
     Novgorod,
     type Operation,
     Osaka,
@@ -25,6 +28,7 @@ import {
 export type ModelChoices = {
     dn: string;
     fr: string;
+    cl: string;
     la: string;
     cb: string;
     up: string;
@@ -34,7 +38,7 @@ export type ModelChoices = {
 // The first two letters of an operation ID are its enhancement type, e.g. `dn`, `fr`, `up`.
 export const getEnhancementType = (opId: string): EnhancementType => opId.slice(0, 2) as EnhancementType;
 
-export type EnhancementType = 'dn' | 'fr' | 'la' | 'cb' | 'sh' | 'up';
+export type EnhancementType = 'dn' | 'fr' | 'cl' | 'la' | 'cb' | 'sh' | 'up';
 
 type EnhancementInfo = {
     // The catalog key for the enhancement's full name, as shown in lists and menus.
@@ -60,6 +64,11 @@ export const ENHANCEMENTS: Record<EnhancementType, EnhancementInfo> = {
         nameKey: 'enhancements.faceRecovery.name',
         shortNameKey: 'preview.progress.faceRecovery',
         icon: 'face_recovery',
+    },
+    cl: {
+        nameKey: 'enhancements.colorization.name',
+        shortNameKey: 'preview.progress.colorization',
+        icon: 'colorization',
     },
     la: {
         nameKey: 'enhancements.lightAdjustment.name',
@@ -129,6 +138,17 @@ export const getFrOp = (model: string) => {
             return new Santorini('fp32');
         default:
             return new Athens('fp32');
+    }
+};
+
+export const getClOp = (model: string) => {
+    switch (model) {
+        case 'mumbai':
+            return new Mumbai('fp32');
+        case 'jaipur':
+            return new Jaipur('fp32');
+        default:
+            return new Delhi('fp32');
     }
 };
 

@@ -3,6 +3,9 @@ package models_test
 import (
 	"testing"
 
+	"github.com/vegidio/open-photo-ai/models/colorization/delhi"
+	"github.com/vegidio/open-photo-ai/models/colorization/jaipur"
+	"github.com/vegidio/open-photo-ai/models/colorization/mumbai"
 	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
@@ -93,6 +96,32 @@ func TestUpscaleOperationIds(t *testing.T) {
 	}
 }
 
+func TestColorizationOperationIds(t *testing.T) {
+	builders := map[string]func(types.Precision) types.Operation{
+		"delhi":  func(p types.Precision) types.Operation { return delhi.Op(p) },
+		"mumbai": func(p types.Precision) types.Operation { return mumbai.Op(p) },
+		"jaipur": func(p types.Precision) types.Operation { return jaipur.Op(p) },
+	}
+
+	tests := []struct{ variant, precision, want string }{
+		{"delhi", "fp32", "cl_delhi_fp32"},
+		{"delhi", "fp16", "cl_delhi_fp16"},
+		{"mumbai", "fp32", "cl_mumbai_fp32"},
+		{"mumbai", "fp16", "cl_mumbai_fp16"},
+		{"jaipur", "fp32", "cl_jaipur_fp32"},
+		{"jaipur", "fp16", "cl_jaipur_fp16"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := builders[tt.variant](types.Precision(tt.precision)).Id()
+			if got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestOperationInterfaces pins the optional interfaces the registry probes for. Losing Parameterized or CacheKeyer on
 // the intensity families would make every intensity collide in the image cache.
 func TestOperationInterfaces(t *testing.T) {
@@ -108,5 +137,14 @@ func TestOperationInterfaces(t *testing.T) {
 	var up types.Operation = kyoto.Op(2, types.PrecisionFp32)
 	if _, ok := up.(types.Parameterized); ok {
 		t.Error("upscale Op unexpectedly implements types.Parameterized")
+	}
+
+	// Colorization has no per-run inputs; its cache identity must remain the operation Id alone.
+	var cl types.Operation = delhi.Op(types.PrecisionFp32)
+	if _, ok := cl.(types.Parameterized); ok {
+		t.Error("colorization Op unexpectedly implements types.Parameterized")
+	}
+	if _, ok := cl.(types.CacheKeyer); ok {
+		t.Error("colorization Op unexpectedly implements types.CacheKeyer")
 	}
 }

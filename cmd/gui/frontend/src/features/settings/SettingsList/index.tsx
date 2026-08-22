@@ -176,8 +176,8 @@ const ItemAiProcessor = ({ id }: SettingsRowProps) => {
 type EnhancementRow = {
     type: EnhancementType;
     descriptionKey: ParseKeys;
-    field: 'dnModel' | 'frModel' | 'laModel' | 'cbModel' | 'shModel' | 'upModel';
-    setter: 'setDnModel' | 'setFrModel' | 'setLaModel' | 'setCbModel' | 'setShModel' | 'setUpModel';
+    field: 'dnModel' | 'frModel' | 'clModel' | 'laModel' | 'cbModel' | 'shModel' | 'upModel';
+    setter: 'setDnModel' | 'setFrModel' | 'setClModel' | 'setLaModel' | 'setCbModel' | 'setShModel' | 'setUpModel';
     models: SelectItem[];
 };
 
@@ -201,6 +201,17 @@ const ENHANCEMENT_ROWS: Record<string, EnhancementRow> = {
         models: [
             { value: 'athens', label: 'Athens' },
             { value: 'santorini', label: 'Santorini' },
+        ],
+    },
+    enh_colorization: {
+        type: 'cl',
+        descriptionKey: 'settings.enhancements.colorization.description',
+        field: 'clModel',
+        setter: 'setClModel',
+        models: [
+            { value: 'delhi', label: 'Delhi' },
+            { value: 'mumbai', label: 'Mumbai' },
+            { value: 'jaipur', label: 'Jaipur' },
         ],
     },
     enh_light: {
@@ -269,6 +280,7 @@ const ROWS: Record<string, ComponentType<SettingsRowProps>> = {
     perf_processor: ItemAiProcessor,
     enh_denoise: ItemEnhancement,
     enh_face: ItemEnhancement,
+    enh_colorization: ItemEnhancement,
     enh_light: ItemEnhancement,
     enh_color: ItemEnhancement,
     enh_sharpen: ItemEnhancement,

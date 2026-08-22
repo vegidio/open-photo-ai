@@ -65,6 +65,13 @@ func TestIdsToOperationsIdentity(t *testing.T) {
 		// face recovery
 		"fr_athens_fp32":    "fr_athens_fp32",
 		"fr_santorini_fp16": "fr_santorini_fp16",
+		// colorization has no per-run inputs, so the ID is the identity
+		"cl_delhi_fp32":  "cl_delhi_fp32",
+		"cl_delhi_fp16":  "cl_delhi_fp16",
+		"cl_mumbai_fp32": "cl_mumbai_fp32",
+		"cl_mumbai_fp16": "cl_mumbai_fp16",
+		"cl_jaipur_fp32": "cl_jaipur_fp32",
+		"cl_jaipur_fp16": "cl_jaipur_fp16",
 	}
 
 	for id, wantIdentity := range cases {

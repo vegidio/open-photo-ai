@@ -9,10 +9,12 @@ It currently supports the following enhancements:
 <br/><br/>
 <img src="https://img.shields.io/badge/Denoise-FDEBD3?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjMDAwMDAwIj48cGF0aCBkPSJNMTA2LTM4NnEtNi02LTYtMTR0Ni0xNHE2LTYgMTQtNnQxNCA2cTYgNiA2IDE0dC02IDE0cS02IDYtMTQgNnQtMTQtNlptMC0xNjBxLTYtNi02LTE0dDYtMTRxNi02IDE0LTZ0MTQgNnE2IDYgNiAxNHQtNiAxNHEtNiA2LTE0IDZ0LTE0LTZabTEwNS41IDMzNC41UTIwMC0yMjMgMjAwLTI0MHQxMS41LTI4LjVRMjIzLTI4MCAyNDAtMjgwdDI4LjUgMTEuNVEyODAtMjU3IDI4MC0yNDB0LTExLjUgMjguNVEyNTctMjAwIDI0MC0yMDB0LTI4LjUtMTEuNVptMC0xNjBRMjAwLTM4MyAyMDAtNDAwdDExLjUtMjguNVEyMjMtNDQwIDI0MC00NDB0MjguNSAxMS41UTI4MC00MTcgMjgwLTQwMHQtMTEuNSAyOC41UTI1Ny0zNjAgMjQwLTM2MHQtMjguNS0xMS41Wm0wLTE2MFEyMDAtNTQzIDIwMC01NjB0MTEuNS0yOC41UTIyMy02MDAgMjQwLTYwMHQyOC41IDExLjVRMjgwLTU3NyAyODAtNTYwdC0xMS41IDI4LjVRMjU3LTUyMCAyNDAtNTIwdC0yOC41LTExLjVabTAtMTYwUTIwMC03MDMgMjAwLTcyMHQxMS41LTI4LjVRMjIzLTc2MCAyNDAtNzYwdDI4LjUgMTEuNVEyODAtNzM3IDI4MC03MjB0LTExLjUgMjguNVEyNTctNjgwIDI0MC02ODB0LTI4LjUtMTEuNVptMTQ2IDMzNFEzNDAtMzc1IDM0MC00MDB0MTcuNS00Mi41UTM3NS00NjAgNDAwLTQ2MHQ0Mi41IDE3LjVRNDYwLTQyNSA0NjAtNDAwdC0xNy41IDQyLjVRNDI1LTM0MCA0MDAtMzQwdC00Mi41LTE3LjVabTAtMTYwUTM0MC01MzUgMzQwLTU2MHQxNy41LTQyLjVRMzc1LTYyMCA0MDAtNjIwdDQyLjUgMTcuNVE0NjAtNTg1IDQ2MC01NjB0LTE3LjUgNDIuNVE0MjUtNTAwIDQwMC01MDB0LTQyLjUtMTcuNVptMTQgMzA2UTM2MC0yMjMgMzYwLTI0MHQxMS41LTI4LjVRMzgzLTI4MCA0MDAtMjgwdDI4LjUgMTEuNVE0NDAtMjU3IDQ0MC0yNDB0LTExLjUgMjguNVE0MTctMjAwIDQwMC0yMDB0LTI4LjUtMTEuNVptMC00ODBRMzYwLTcwMyAzNjAtNzIwdDExLjUtMjguNVEzODMtNzYwIDQwMC03NjB0MjguNSAxMS41UTQ0MC03MzcgNDQwLTcyMHQtMTEuNSAyOC41UTQxNy02ODAgNDAwLTY4MHQtMjguNS0xMS41Wk0zODYtMTA2cS02LTYtNi0xNHQ2LTE0cTYtNiAxNC02dDE0IDZxNiA2IDYgMTR0LTYgMTRxLTYgNi0xNCA2dC0xNC02Wm0wLTcyMHEtNi02LTYtMTR0Ni0xNHE2LTYgMTQtNnQxNCA2cTYgNiA2IDE0dC02IDE0cS02IDYtMTQgNnQtMTQtNlptMTMxLjUgNDY4LjVRNTAwLTM3NSA1MDAtNDAwdDE3LjUtNDIuNVE1MzUtNDYwIDU2MC00NjB0NDIuNSAxNy41UTYyMC00MjUgNjIwLTQwMHQtMTcuNSA0Mi41UTU4NS0zNDAgNTYwLTM0MHQtNDIuNS0xNy41Wm0wLTE2MFE1MDAtNTM1IDUwMC01NjB0MTcuNS00Mi41UTUzNS02MjAgNTYwLTYyMHQ0Mi41IDE3LjVRNjIwLTU4NSA2MjAtNTYwdC0xNy41IDQyLjVRNTg1LTUwMCA1NjAtNTAwdC00Mi41LTE3LjVabTE0IDMwNlE1MjAtMjIzIDUyMC0yNDB0MTEuNS0yOC41UTU0My0yODAgNTYwLTI4MHQyOC41IDExLjVRNjAwLTI1NyA2MDAtMjQwdC0xMS41IDI4LjVRNTc3LTIwMCA1NjAtMjAwdC0yOC41LTExLjVabTAtNDgwUTUyMC03MDMgNTIwLTcyMHQxMS41LTI4LjVRNTQzLTc2MCA1NjAtNzYwdDI4LjUgMTEuNVE2MDAtNzM3IDYwMC03MjB0LTExLjUgMjguNVE1NzctNjgwIDU2MC02ODB0LTI4LjUtMTEuNVpNNTQ2LTEwNnEtNi02LTYtMTR0Ni0xNHE2LTYgMTQtNnQxNCA2cTYgNiA2IDE0dC02IDE0cS02IDYtMTQgNnQtMTQtNlptMC03MjBxLTYtNi02LTE0dDYtMTRxNi02IDE0LTZ0MTQgNnE2IDYgNiAxNHQtNiAxNHEtNiA2LTE0IDZ0LTE0LTZabTE0NS41IDYxNC41UTY4MC0yMjMgNjgwLTI0MHQxMS41LTI4LjVRNzAzLTI4MCA3MjAtMjgwdDI4LjUgMTEuNVE3NjAtMjU3IDc2MC0yNDB0LTExLjUgMjguNVE3MzctMjAwIDcyMC0yMDB0LTI4LjUtMTEuNVptMC0xNjBRNjgwLTM4MyA2ODAtNDAwdDExLjUtMjguNVE3MDMtNDQwIDcyMC00NDB0MjguNSAxMS41UTc2MC00MTcgNzYwLTQwMHQtMTEuNSAyOC41UTczNy0zNjAgNzIwLTM2MHQtMjguNS0xMS41Wm0wLTE2MFE2ODAtNTQzIDY4MC01NjB0MTEuNS0yOC41UTcwMy02MDAgNzIwLTYwMHQyOC41IDExLjVRNzYwLTU3NyA3NjAtNTYwdC0xMS41IDI4LjVRNzM3LTUyMCA3MjAtNTIwdC0yOC41LTExLjVabTAtMTYwUTY4MC03MDMgNjgwLTcyMHQxMS41LTI4LjVRNzAzLTc2MCA3MjAtNzYwdDI4LjUgMTEuNVE3NjAtNzM3IDc2MC03MjB0LTExLjUgMjguNVE3MzctNjgwIDcyMC02ODB0LTI4LjUtMTEuNVpNODI2LTM4NnEtNi02LTYtMTR0Ni0xNHE2LTYgMTQtNnQxNCA2cTYgNiA2IDE0dC02IDE0cS02IDYtMTQgNnQtMTQtNlptMC0xNjBxLTYtNi02LTE0dDYtMTRxNi02IDE0LTZ0MTQgNnE2IDYgNiAxNHQtNiAxNHEtNiA2LTE0IDZ0LTE0LTZaIi8+PC9zdmc+"/>
 <img src="https://img.shields.io/badge/Face Recovery-F9BE5A?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjMDAwMDAwIj4KICAgIDxwYXRoIGQ9Ik0zNjAtMzkwcS0yMSAwLTM1LjUtMTQuNVQzMTAtNDQwcTAtMjEgMTQuNS0zNS41VDM2MC00OTBxMjEgMCAzNS41IDE0LjVUNDEwLTQ0MHEwIDIxLTE0LjUgMzUuNVQzNjAtMzkwWm0yNDAgMHEtMjEgMC0zNS41LTE0LjVUNTUwLTQ0MHEwLTIxIDE0LjUtMzUuNVQ2MDAtNDkwcTIxIDAgMzUuNSAxNC41VDY1MC00NDBxMCAyMS0xNC41IDM1LjVUNjAwLTM5MFpNNDgwLTE2MHExMzQgMCAyMjctOTN0OTMtMjI3cTAtMjQtMy00Ni41VDc4Ni01NzBxLTIxIDUtNDIgNy41dC00NCAyLjVxLTkxIDAtMTcyLTM5VDM5MC03MDhxLTMyIDc4LTkxLjUgMTM1LjVUMTYwLTQ4NnY2cTAgMTM0IDkzIDIyN3QyMjcgOTNabTAgODBxLTgzIDAtMTU2LTMxLjVUMTk3LTE5N3EtNTQtNTQtODUuNS0xMjdUODAtNDgwcTAtODMgMzEuNS0xNTZUMTk3LTc2M3E1NC01NCAxMjctODUuNVQ0ODAtODgwcTgzIDAgMTU2IDMxLjVUNzYzLTc2M3E1NCA1NCA4NS41IDEyN1Q4ODAtNDgwcTAgODMtMzEuNSAxNTZUNzYzLTE5N3EtNTQgNTQtMTI3IDg1LjVUNDgwLTgwWm0tNTQtNzE1cTQyIDcwIDExNCAxMTIuNVQ3MDAtNjQwcTE0IDAgMjctMS41dDI3LTMuNXEtNDItNzAtMTE0LTExMi41VDQ4MC04MDBxLTE0IDAtMjcgMS41dC0yNyAzLjVaTTE3Ny01ODFxNTEtMjkgODktNzV0NTctMTAzcS01MSAyOS04OSA3NXQtNTcgMTAzWm0yNDktMjE0Wm0tMTAzIDM2WiIvPgo8L3N2Zz4="/>
-<img src="https://img.shields.io/badge/Light Adjustment-53C0E0?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjZTNlM2UzIj48cGF0aCBkPSJNNDgwLTM2MHE1MCAwIDg1LTM1dDM1LTg1cTAtNTAtMzUtODV0LTg1LTM1cS01MCAwLTg1IDM1dC0zNSA4NXEwIDUwIDM1IDg1dDg1IDM1Wm0wIDgwcS04MyAwLTE0MS41LTU4LjVUMjgwLTQ4MHEwLTgzIDU4LjUtMTQxLjVUNDgwLTY4MHE4MyAwIDE0MS41IDU4LjVUNjgwLTQ4MHEwIDgzLTU4LjUgMTQxLjVUNDgwLTI4MFpNMjAwLTQ0MEg0MHYtODBoMTYwdjgwWm03MjAgMEg3NjB2LTgwaDE2MHY4MFpNNDQwLTc2MHYtMTYwaDgwdjE2MGgtODBabTAgNzIwdi0xNjBoODB2MTYwaC04MFpNMjU2LTY1MGwtMTAxLTk3IDU3LTU5IDk2IDEwMC01MiA1NlptNDkyIDQ5Ni05Ny0xMDEgNTMtNTUgMTAxIDk3LTU3IDU5Wm0tOTgtNTUwIDk3LTEwMSA1OSA1Ny0xMDAgOTYtNTYtNTJaTTE1NC0yMTJsMTAxLTk3IDU1IDUzLTk3IDEwMS01OS01N1ptMzI2LTI2OFoiLz48L3N2Zz4="/>
+<img src="https://img.shields.io/badge/Colorization-D9698A?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjRkZGRkZGIj48cGF0aCBkPSJNNDQwLTgwcS0zMyAwLTU2LjUtMjMuNVQzNjAtMTYwdi0xNjBIMjQwcS0zMyAwLTU2LjUtMjMuNVQxNjAtNDAwdi0yODBxMC02NiA0Ny0xMTN0MTEzLTQ3aDQ4MHY0NDBxMCAzMy0yMy41IDU2LjVUNzIwLTMyMEg2MDB2MTYwcTAgMzMtMjMuNSA1Ni41VDUyMC04MGgtODBaTTI0MC01NjBoNDgwdi0yMDBoLTQwdjE2MGgtODB2LTE2MGgtNDB2ODBoLTgwdi04MEgzMjBxLTMzIDAtNTYuNSAyMy41VDI0MC02ODB2MTIwWm0wIDE2MGg0ODB2LTgwSDI0MHY4MFptMCAwdi04MCA4MFoiLz48L3N2Zz4="/>
 <br/>
+<img src="https://img.shields.io/badge/Light Adjustment-53C0E0?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjZTNlM2UzIj48cGF0aCBkPSJNNDgwLTM2MHE1MCAwIDg1LTM1dDM1LTg1cTAtNTAtMzUtODV0LTg1LTM1cS01MCAwLTg1IDM1dC0zNSA4NXEwIDUwIDM1IDg1dDg1IDM1Wm0wIDgwcS04MyAwLTE0MS41LTU4LjVUMjgwLTQ4MHEwLTgzIDU4LjUtMTQxLjVUNDgwLTY4MHE4MyAwIDE0MS41IDU4LjVUNjgwLTQ4MHEwIDgzLTU4LjUgMTQxLjVUNDgwLTI4MFpNMjAwLTQ0MEg0MHYtODBoMTYwdjgwWm03MjAgMEg3NjB2LTgwaDE2MHY4MFpNNDQwLTc2MHYtMTYwaDgwdjE2MGgtODBabTAgNzIwdi0xNjBoODB2MTYwaC04MFpNMjU2LTY1MGwtMTAxLTk3IDU3LTU5IDk2IDEwMC01MiA1NlptNDkyIDQ5Ni05Ny0xMDEgNTMtNTUgMTAxIDk3LTU3IDU5Wm0tOTgtNTUwIDk3LTEwMSA1OSA1Ny0xMDAgOTYtNTYtNTJaTTE1NC0yMTJsMTAxLTk3IDU1IDUzLTk3IDEwMS01OS01N1ptMzI2LTI2OFoiLz48L3N2Zz4="/>
 <img src="https://img.shields.io/badge/Color Balance-C3E88D?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjMDAwMDAwIj48cGF0aCBkPSJNNDgwLTgwcS04MiAwLTE1NS0zMS41dC0xMjcuNS04NlExNDMtMjUyIDExMS41LTMyNVQ4MC00ODBxMC04MyAzMi41LTE1NnQ4OC0xMjdRMjU2LTgxNyAzMzAtODQ4LjVUNDg4LTg4MHE4MCAwIDE1MSAyNy41dDEyNC41IDc2cTUzLjUgNDguNSA4NSAxMTVUODgwLTUxOHEwIDExNS03MCAxNzYuNVQ2NDAtMjgwaC03NHEtOSAwLTEyLjUgNXQtMy41IDExcTAgMTIgMTUgMzQuNXQxNSA1MS41cTAgNTAtMjcuNSA3NFQ0ODAtODBabTAtNDAwWm0tMTc3IDIzcTE3LTE3IDE3LTQzdC0xNy00M3EtMTctMTctNDMtMTd0LTQzIDE3cS0xNyAxNy0xNyA0M3QxNyA0M3ExNyAxNyA0MyAxN3Q0My0xN1ptMTIwLTE2MHExNy0xNyAxNy00M3QtMTctNDNxLTE3LTE3LTQzLTE3dC00MyAxN3EtMTcgMTctMTcgNDN0MTcgNDNxMTcgMTcgNDMgMTd0NDMtMTdabTIwMCAwcTE3LTE3IDE3LTQzdC0xNy00M3EtMTctMTctNDMtMTd0LTQzIDE3cS0xNyAxNy0xNyA0M3QxNyA0M3ExNyAxNyA0MyAxN3Q0My0xN1ptMTIwIDE2MHExNy0xNyAxNy00M3QtMTctNDNxLTE3LTE3LTQzLTE3dC00MyAxN3EtMTcgMTctMTcgNDN0MTcgNDNxMTcgMTcgNDMgMTd0NDMtMTdaTTQ4MC0xNjBxOSAwIDE0LjUtNXQ1LjUtMTNxMC0xNC0xNS0zM3QtMTUtNTdxMC00MiAyOS02N3Q3MS0yNWg3MHE2NiAwIDExMy0zOC41VDgwMC01MThxMC0xMjEtOTIuNS0yMDEuNVQ0ODgtODAwcS0xMzYgMC0yMzIgOTN0LTk2IDIyN3EwIDEzMyA5My41IDIyNi41VDQ4MC0xNjBaIi8+PC9zdmc+"/>
 <img src="https://img.shields.io/badge/Sharpen-F55951?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjRkZGRkZGIj48cGF0aCBkPSJtODAtMTYwIDQwMC02NDAgNDAwIDY0MEg4MFptMTQ0LTgwaDUxMkw0ODAtNjUwIDIyNC0yNDBabTI1Ni0yMDVaIi8+PC9zdmc+"/>
+<br/>
 <img src="https://img.shields.io/badge/Upscale-984E7D?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiIHdpZHRoPSIyNHB4IiBmaWxsPSIjZTNlM2UzIj48cGF0aCBkPSJNMTIwLTEyMHYtMzIwaDgwdjE4NGw1MDQtNTA0SDUyMHYtODBoMzIwdjMyMGgtODB2LTE4NEwyNTYtMjAwaDE4NHY4MEgxMjBaIi8+PC9zdmc+"/>
 </p>
 
@@ -76,6 +78,14 @@ All enhancements available here come from open-source AI models that were adapte
 
 *Verdict*: if identity matters, start with **Athens**; if aesthetics matter more, use **Santorini**.
 
+### Colorization
+
+- **Delhi**: use as your first choice for most black-and-white photos. It looks at the whole scene to decide what things should look like, producing rich, confident colors with clean edges — skin, skies, and clothing rarely bleed into each other. Occasionally it commits boldly to a color that wasn't there.
+- **Mumbai**: use when Delhi's colors feel too intense or modern for the photo. Built on the same engine but trained for a more creative touch, it leans toward softer, gently stylized tones that can suit vintage portraits and film scans — though its choices vary more from one photo to the next.
+- **Jaipur**: use when consistency matters most. Its colors are more muted and restrained than the others, but it almost never produces the odd color patches or strange guesses colorization is prone to, making it a steady choice for old family portraits, landscapes, and badly degraded scans.
+
+*Verdict*: start with **Delhi** for the most lifelike result; try **Mumbai** if you'd like a softer, more nostalgic feel; switch to **Jaipur** when the other two hallucinate colors or leave strange patches on a difficult photo.
+
 ### Light Adjustment
 
 - **Paris**: use when working with images affected by poor or uneven lighting, such as night scenes, backlit photos, shadows, or overexposed areas. It’s useful when you need to enhance visibility and contrast so that images look clearer.
@@ -113,20 +123,20 @@ All enhancements available here come from open-source AI models that were adapte
 
 These are the features I plan to implement in the future, in no particular order:
 
-- [x] Model selection and enhancements customization.
+- [x] Model selection and enhancement customization.
 - [x] Support different preview layouts.
-- [x] Add new model for light adjustment.
+- [x] Add a new model for light adjustment.
 - [x] Add app preferences so you don't have to configure them every time.
-- [x] Enable TensorRT acceleration when pre warm-up is implemented.
+- [x] Enable TensorRT acceleration when pre-warm-up is implemented.
 - [x] Simplify the app installation using packages and installers.
-- [x] Add new model for color balance.
+- [x] Add a new model for color balance.
 - [x] Add new models for denoise, sharpening.
 - [x] Crop and rotate images in the GUI.
 - [x] Attempt to include diffusion-based models (this will be hard!)
 - [x] Internationalization to other languages.
+- [x] Add new models to colorize black and white photos.
 - [ ] Rework the architecture of some models to improve performance.
-- [ ] Add new model to colorize black and white photos.
-- [ ] Add new model to fix imperfections and remove objects from photos.
+- [ ] Add a new model to fix imperfections and remove objects from photos.
 - [ ] CLI implementation.
 - [ ] Improve documentation for the library.
 
@@ -156,9 +166,9 @@ To run the GUI version of the app on Linux, you will need to install the followi
 
 This app has some important dependencies that can't be bundled with the app itself because they are rather big, like ONNX Runtime, CUDA and TensorRT (if supported by your system). They are hosted on Github and the app will download them the first time it opens.
 
-Unfortunately, Github has a rate limit that will throttle the download speed if these files are downloaded too frequently. Since this is an open-source and free project I can't afford to pay for a hosted solution where we wouldn't have this problem.
+Unfortunately, GitHub has a rate limit that will throttle the download speed if these files are downloaded too frequently. Since this is an open-source and free project I can't afford to pay for a hosted solution where we wouldn't have this problem.
 
-If someday this project receives enough funds/donations then I will pay for a better hosting solution. Meanwhile, bare with me on this one.
+If someday this project receives enough funds/donations, then I will pay for a better hosting solution. Meanwhile, bare with me on this one.
 
 ### The model is taking too long to load (TensorRT only)
 
@@ -170,9 +180,8 @@ If you don't want to use TensorRT acceleration, you can disable it in the app Se
 
 ## 🐞 Known Issues
 
-1. Using half-precision (FP16) models with CPU execution provider often doesn't give any performance boost; a bug fix for this is expected to be available in the next ONNX release.
+1. Using half-precision (FP16) models with a CPU execution provider often doesn't give any performance boost; a bug fix for this is expected to be available in the next ONNX release.
 2. The **Tokyo** and **Osaka** models don't work with Apple's CoreML, so on a Mac they run on the CPU and will be slow. For Osaka this is a limitation of CoreML itself rather than of the model: it cannot load the two VAE graphs at all, and on the main graph it either fails outright or returns a visibly wrong result, so the app doesn't offer it.
-3. The **Osaka** model processes the image in fixed 960x960 regions. This is a property of the published model file rather than a choice: the graph is traced at one size and cannot run at another.
 
 ## 🐛 Error Reporting
 

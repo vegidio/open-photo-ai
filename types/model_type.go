@@ -8,6 +8,7 @@ const (
 	ModelTypeFaceRecovery    ModelType = "fr"
 	ModelTypeLightAdjustment ModelType = "la"
 	ModelTypeColorBalance    ModelType = "cb"
+	ModelTypeColorization    ModelType = "cl"
 	ModelTypeUpscale         ModelType = "up"
 	ModelTypeSharpen         ModelType = "sh"
 )

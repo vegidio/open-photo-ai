@@ -9,6 +9,7 @@ import {
     ENHANCEMENTS,
     type EnhancementType,
     getCbOp,
+    getClOp,
     getDnOp,
     getFrOp,
     getLaOp,
@@ -18,7 +19,7 @@ import {
 
 // The order the menu lists enhancements in. Separate from ENHANCEMENTS because object key order is not something to
 // rely on for presentation.
-const ENHANCEMENT_ORDER: EnhancementType[] = ['dn', 'fr', 'la', 'cb', 'sh', 'up'];
+const ENHANCEMENT_ORDER: EnhancementType[] = ['dn', 'fr', 'cl', 'la', 'cb', 'sh', 'up'];
 
 type MenuAddEnhancementProps = {
     anchorEl: HTMLElement | undefined;
@@ -30,6 +31,7 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
     const { t } = useTranslation();
     const dnModel = useSettingsStore((state) => state.dnModel);
     const frModel = useSettingsStore((state) => state.frModel);
+    const clModel = useSettingsStore((state) => state.clModel);
     const laModel = useSettingsStore((state) => state.laModel);
     const cbModel = useSettingsStore((state) => state.cbModel);
     const upModel = useSettingsStore((state) => state.upModel);
@@ -54,6 +56,7 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
         const ops: Record<EnhancementType, Operation> = {
             dn: getDnOp(dnModel),
             fr: getFrOp(frModel),
+            cl: getClOp(clModel),
             la: getLaOp(laModel),
             cb: getCbOp(cbModel),
             sh: getShOp(shModel),
@@ -66,7 +69,7 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
             name: t(ENHANCEMENTS[type].nameKey),
             op: ops[type],
         }));
-    }, [dnModel, frModel, laModel, upModel, currentFile?.Dimensions, cbModel, shModel, t]);
+    }, [dnModel, frModel, clModel, laModel, upModel, currentFile?.Dimensions, cbModel, shModel, t]);
 
     return (
         <Menu

@@ -59,6 +59,9 @@
             "faceRecovery": {
                 "description": "The default Face Recovery model to use when adding this enhancement."
             },
+            "colorization": {
+                "description": "The default Colorization model to use when adding this enhancement."
+            },
             "lightAdjustment": {
                 "description": "The default Light Adjustment model to use when adding this enhancement."
             },
@@ -201,6 +204,14 @@
                 "santorini": "Use this model when you want aggressive, fast enhancement and can tolerate identity drift. It produces sharp, visually pleasing faces on moderate degradation, but may hallucinate features and alter identity on very low-quality inputs."
             }
         },
+        "colorization": {
+            "name": "Colorization",
+            "models": {
+                "delhi": "The best first choice for most black-and-white photos. It looks at the whole scene to decide what things should look like, producing rich, confident colors with clean edges — though it occasionally commits boldly to a color that wasn't there.",
+                "mumbai": "Use when Delhi's colors feel too intense or modern for the photo. Trained for a more creative touch, it leans toward softer, gently stylized tones that suit vintage portraits and film scans, though its choices vary more from photo to photo.",
+                "jaipur": "Use when consistency matters most. Its colors are more muted than the others, but it almost never produces odd color patches or strange guesses, making it a steady choice for old portraits, landscapes, and badly degraded scans."
+            }
+        },
         "lightAdjustment": {
             "name": "Light Adjustment",
             "models": {
@@ -243,6 +254,7 @@
         "faces_partial_one": "{{enabled}}/{{count}} Face",
         "faces_partial_other": "{{enabled}}/{{count}} Faces",
         "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
         "faceSelector": {
             "title": "Faces",
             "help": "You can select individual<br/>faces that you want to enhance.",
@@ -260,6 +272,7 @@
             "downloading": "Downloading {{percent}}%",
             "denoise": "Denoise",
             "faceRecovery": "Face Recovery",
+            "colorization": "Colorize",
             "lightAdjustment": "Light Adjust",
             "colorBalance": "Color Balance",
             "upscale": "Upscale",

@@ -59,6 +59,9 @@
             "faceRecovery": {
                 "description": "Das Standardmodell für die Gesichtswiederherstellung, das beim Hinzufügen dieser Verbesserung verwendet wird."
             },
+            "colorization": {
+                "description": "Das Standardmodell für die Kolorierung, das beim Hinzufügen dieser Verbesserung verwendet wird."
+            },
             "lightAdjustment": {
                 "description": "Das Standardmodell für die Lichtanpassung, das beim Hinzufügen dieser Verbesserung verwendet wird."
             },
@@ -201,6 +204,14 @@
                 "santorini": "Verwenden Sie dieses Modell, wenn Sie eine aggressive, schnelle Verbesserung wollen und eine Veränderung der Identität in Kauf nehmen. Es liefert scharfe, ansprechende Gesichter bei mäßiger Degradation, kann aber bei sehr schlechter Qualität Merkmale erfinden und die Identität verändern."
             }
         },
+        "colorization": {
+            "name": "Kolorierung",
+            "models": {
+                "delhi": "Die beste erste Wahl für die meisten Schwarz-Weiß-Fotos. Es betrachtet die gesamte Szene, um zu entscheiden, wie die Dinge aussehen sollten, und erzeugt satte, überzeugende Farben mit sauberen Kanten — gelegentlich entscheidet es sich jedoch mutig für eine Farbe, die nicht da war.",
+                "mumbai": "Verwenden Sie dieses Modell, wenn die Farben von Delhi zu intensiv oder zu modern wirken. Es ist auf eine kreativere Note trainiert und neigt zu weicheren, dezent stilisierten Tönen, die zu alten Porträts und Filmscans passen — die Ergebnisse fallen jedoch von Foto zu Foto unterschiedlicher aus.",
+                "jaipur": "Verwenden Sie dieses Modell, wenn Beständigkeit am wichtigsten ist. Die Farben sind gedämpfter als bei den anderen, aber es erzeugt fast nie seltsame Farbflecken oder Fehlgriffe — eine verlässliche Wahl für alte Porträts, Landschaften und stark beschädigte Scans."
+            }
+        },
         "lightAdjustment": {
             "name": "Lichtanpassung",
             "models": {
@@ -243,6 +254,7 @@
         "faces_partial_one": "{{enabled}}/{{count}} Gesicht",
         "faces_partial_other": "{{enabled}}/{{count}} Gesichter",
         "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
         "faceSelector": {
             "title": "Gesichter",
             "help": "Sie können einzelne Gesichter<br/>auswählen, die verbessert werden sollen.",
@@ -260,6 +272,7 @@
             "downloading": "Herunterladen {{percent}}%",
             "denoise": "Entrauschen",
             "faceRecovery": "Gesichter",
+            "colorization": "Kolorierung",
             "lightAdjustment": "Lichtanpassung",
             "colorBalance": "Farbbalance",
             "upscale": "Hochskalieren",

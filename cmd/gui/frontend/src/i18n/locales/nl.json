@@ -59,6 +59,9 @@
             "faceRecovery": {
                 "description": "Het standaardmodel voor gezichtsherstel dat wordt gebruikt bij het toevoegen van deze verbetering."
             },
+            "colorization": {
+                "description": "Het standaardmodel voor inkleuren dat wordt gebruikt bij het toevoegen van deze verbetering."
+            },
             "lightAdjustment": {
                 "description": "Het standaardmodel voor lichtaanpassing dat wordt gebruikt bij het toevoegen van deze verbetering."
             },
@@ -201,6 +204,14 @@
                 "santorini": "Gebruik dit model wanneer je een agressieve, snelle verbetering wilt en wat identiteitsverschuiving acceptabel is. Het levert scherpe, aantrekkelijke gezichten bij matige degradatie, maar kan bij invoer van zeer lage kwaliteit kenmerken verzinnen en de identiteit veranderen."
             }
         },
+        "colorization": {
+            "name": "Inkleuren",
+            "models": {
+                "delhi": "De beste eerste keuze voor de meeste zwart-witfoto's. Het bekijkt de hele scène om te bepalen hoe dingen eruit horen te zien en levert rijke, overtuigende kleuren met strakke randen — al kiest het soms gedurfd voor een kleur die er niet was.",
+                "mumbai": "Gebruik dit model wanneer de kleuren van Delhi te fel of te modern aanvoelen voor de foto. Het is getraind met een creatievere inslag en neigt naar zachtere, subtiel gestileerde tinten die passen bij oude portretten en gescande film — al verschillen de resultaten sterker per foto.",
+                "jaipur": "Gebruik dit model wanneer consistentie het belangrijkst is. De kleuren zijn ingetogener dan bij de andere modellen, maar het produceert vrijwel nooit vreemde kleurvlekken of rare keuzes — een betrouwbare optie voor oude portretten, landschappen en zwaar beschadigde scans."
+            }
+        },
         "lightAdjustment": {
             "name": "Lichtaanpassing",
             "models": {
@@ -243,6 +254,7 @@
         "faces_partial_one": "{{enabled}}/{{count}} gezicht",
         "faces_partial_other": "{{enabled}}/{{count}} gezichten",
         "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
         "faceSelector": {
             "title": "Gezichten",
             "help": "Je kunt afzonderlijke gezichten<br/>selecteren die je wilt verbeteren.",
@@ -260,6 +272,7 @@
             "downloading": "Downloaden {{percent}}%",
             "denoise": "Ruis",
             "faceRecovery": "Gezichten",
+            "colorization": "Inkleuren",
             "lightAdjustment": "Licht",
             "colorBalance": "Kleur",
             "upscale": "Opschalen",

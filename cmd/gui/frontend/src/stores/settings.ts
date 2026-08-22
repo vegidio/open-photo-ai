@@ -24,6 +24,7 @@ type SettingsStore = {
 
     dnModel: string;
     frModel: string;
+    clModel: string;
     laModel: string;
     cbModel: string;
     upModel: string;
@@ -36,6 +37,7 @@ type SettingsStore = {
     setLanguage: (language: SupportedLanguage) => void;
     setDnModel: (model: string) => void;
     setFrModel: (model: string) => void;
+    setClModel: (model: string) => void;
     setLaModel: (model: string) => void;
     setCbModel: (model: string) => void;
     setUpModel: (model: string) => void;
@@ -55,6 +57,7 @@ const SNAPSHOT_KEYS = [
     'language',
     'dnModel',
     'frModel',
+    'clModel',
     'laModel',
     'cbModel',
     'upModel',
@@ -78,6 +81,7 @@ export const useSettingsStore = create(
                 language: detectLanguage(),
                 dnModel: 'stockholm',
                 frModel: 'athens',
+                clModel: 'delhi',
                 laModel: 'paris',
                 cbModel: 'rio',
                 upModel: 'kyoto',
@@ -144,6 +148,12 @@ export const useSettingsStore = create(
                 setFrModel: (model: string) => {
                     set((state) => {
                         state.frModel = model;
+                    });
+                },
+
+                setClModel: (model: string) => {
+                    set((state) => {
+                        state.clModel = model;
                     });
                 },
 

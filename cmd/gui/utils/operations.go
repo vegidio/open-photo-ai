@@ -12,6 +12,9 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/colorization/delhi"
+	"github.com/vegidio/open-photo-ai/models/colorization/jaipur"
+	"github.com/vegidio/open-photo-ai/models/colorization/mumbai"
 	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
@@ -93,6 +96,11 @@ var operationBuilders = map[string]operationBuilder{
 	"paris": requiredIntensityBuilder(paris.Op),
 	"rio":   requiredIntensityBuilder(rio.Op),
 
+	// Colorization — "_<name>_<precision>" (no per-run inputs)
+	"delhi":  precisionBuilder(delhi.Op),
+	"mumbai": precisionBuilder(mumbai.Op),
+	"jaipur": precisionBuilder(jaipur.Op),
+
 	// Upscale — "_<name>_<scale>x_<precision>"
 	"tokyo":   scaleBuilder(tokyo.Op),
 	"kyoto":   scaleBuilder(kyoto.Op),
@@ -110,6 +118,13 @@ var operationBuilders = map[string]operationBuilder{
 func faceRecoveryBuilder[T types.Operation](op func(types.Precision, []detection.Face) T) operationBuilder {
 	return func(values []string, params guitypes.InferenceParams) (types.Operation, error) {
 		return op(types.Precision(values[2]), params.Faces), nil
+	}
+}
+
+// precisionBuilder reads "_<name>_<precision>" for operations with no per-run inputs.
+func precisionBuilder[T types.Operation](op func(types.Precision) T) operationBuilder {
+	return func(values []string, _ guitypes.InferenceParams) (types.Operation, error) {
+		return op(types.Precision(values[2])), nil
 	}
 }
 

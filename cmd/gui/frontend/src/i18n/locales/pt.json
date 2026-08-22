@@ -59,6 +59,9 @@
             "faceRecovery": {
                 "description": "O modelo de Recuperação de rostos usado por padrão ao adicionar esta melhoria."
             },
+            "colorization": {
+                "description": "O modelo de Colorização usado por padrão ao adicionar esta melhoria."
+            },
             "lightAdjustment": {
                 "description": "O modelo de Ajuste de luz usado por padrão ao adicionar esta melhoria."
             },
@@ -201,6 +204,14 @@
                 "santorini": "Use este modelo quando você quer uma melhoria agressiva e rápida e pode tolerar mudanças na identidade. Ele produz rostos nítidos e agradáveis em degradação moderada, mas pode inventar traços e alterar a identidade em imagens de qualidade muito baixa."
             }
         },
+        "colorization": {
+            "name": "Colorização",
+            "models": {
+                "delhi": "A melhor primeira opção para a maioria das fotos em preto e branco. Ele analisa a cena inteira para decidir como as coisas devem ficar, produzindo cores ricas e seguras com bordas limpas — embora às vezes aposte com ousadia em uma cor que não estava lá.",
+                "mumbai": "Use quando as cores do Delhi parecerem intensas ou modernas demais para a foto. Treinado com um toque mais criativo, ele tende a tons mais suaves e levemente estilizados, que combinam com retratos antigos e filmes digitalizados — embora suas escolhas variem mais de uma foto para outra.",
+                "jaipur": "Use quando a consistência for o mais importante. Suas cores são mais discretas que as dos outros, mas ele quase nunca produz manchas de cor estranhas ou palpites errados — uma escolha segura para retratos antigos, paisagens e digitalizações muito deterioradas."
+            }
+        },
         "lightAdjustment": {
             "name": "Ajuste de luz",
             "models": {
@@ -243,6 +254,7 @@
         "faces_partial_one": "{{enabled}}/{{count}} rosto",
         "faces_partial_other": "{{enabled}}/{{count}} rostos",
         "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
         "faceSelector": {
             "title": "Rostos",
             "help": "Você pode selecionar rostos<br/>individuais para melhorar.",
@@ -260,6 +272,7 @@
             "downloading": "Baixando {{percent}}%",
             "denoise": "Redução de ruído",
             "faceRecovery": "Recup. de rostos",
+            "colorization": "Colorização",
             "lightAdjustment": "Ajuste de luz",
             "colorBalance": "Equi. de cores",
             "upscale": "Ampliação",

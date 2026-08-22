@@ -9,6 +9,9 @@ import (
 
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/colorization/delhi"
+	"github.com/vegidio/open-photo-ai/models/colorization/jaipur"
+	"github.com/vegidio/open-photo-ai/models/colorization/mumbai"
 	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
@@ -76,6 +79,11 @@ var catalog = []entry{
 	intensityEntry("paris", types.ModelTypeLightAdjustment, paris.Op),
 	intensityEntry("rio", types.ModelTypeColorBalance, rio.Op),
 
+	// Colorization
+	precisionEntry("delhi", types.ModelTypeColorization, delhi.Op),
+	precisionEntry("mumbai", types.ModelTypeColorization, mumbai.Op),
+	precisionEntry("jaipur", types.ModelTypeColorization, jaipur.Op),
+
 	// Detection
 	detectEntry("newyork", types.ModelTypeDetection, newyork.Op),
 
@@ -84,7 +92,7 @@ var catalog = []entry{
 	faceEntry("santorini", types.ModelTypeFaceRecovery, santorini.Op),
 }
 
-// lookup finds a model by name. A linear scan over 14 entries needs no init() and no parallel map to keep in sync.
+// lookup finds a model by name. A linear scan over 17 entries needs no init() and no parallel map to keep in sync.
 func lookup(name string) (entry, bool) {
 	i := slices.IndexFunc(catalog, func(e entry) bool { return e.name == name })
 	if i < 0 {
@@ -152,6 +160,17 @@ func intensityEntry[T types.Operation](name string, kind types.ModelType, op fun
 		kind: kind,
 		build: func(_ context.Context, _ *types.ImageData, cfg config) (runner, error) {
 			return processRunner(cfg, op(cfg.intensity, cfg.precision), ""), nil
+		},
+	}
+}
+
+// precisionEntry adapts constructors whose only input is the precision, like colorization.
+func precisionEntry[T types.Operation](name string, kind types.ModelType, op func(types.Precision) T) entry {
+	return entry{
+		name: name,
+		kind: kind,
+		build: func(_ context.Context, _ *types.ImageData, cfg config) (runner, error) {
+			return processRunner(cfg, op(cfg.precision), ""), nil
 		},
 	}
 }

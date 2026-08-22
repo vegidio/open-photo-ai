@@ -62,11 +62,12 @@ export const useEnhancementStore = create(
                         const getPriority = (op: Operation) => {
                             if (op.id.startsWith('dn')) return 0;
                             if (op.id.startsWith('fr')) return 1;
-                            if (op.id.startsWith('la')) return 2;
-                            if (op.id.startsWith('cb')) return 3;
-                            if (op.id.startsWith('sh')) return 4;
-                            if (op.id.startsWith('up')) return 5;
-                            return 6; // Any other prefix goes last
+                            if (op.id.startsWith('cl')) return 2;
+                            if (op.id.startsWith('la')) return 3;
+                            if (op.id.startsWith('cb')) return 4;
+                            if (op.id.startsWith('sh')) return 5;
+                            if (op.id.startsWith('up')) return 6;
+                            return 7; // Any other prefix goes last
                         };
 
                         return getPriority(a) - getPriority(b);

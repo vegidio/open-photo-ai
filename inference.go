@@ -10,6 +10,9 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/colorization/delhi"
+	"github.com/vegidio/open-photo-ai/models/colorization/jaipur"
+	"github.com/vegidio/open-photo-ai/models/colorization/mumbai"
 	"github.com/vegidio/open-photo-ai/models/denoise/gothenburg"
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
@@ -389,6 +392,14 @@ func newModel(
 	// Color Balance
 	case strings.HasPrefix(operation.Id(), "cb_rio"):
 		model, err = rio.New(ctx, operation, ep, onProgress)
+
+	// Colorization
+	case strings.HasPrefix(operation.Id(), "cl_delhi"):
+		model, err = delhi.New(ctx, operation, ep, onProgress)
+	case strings.HasPrefix(operation.Id(), "cl_mumbai"):
+		model, err = mumbai.New(ctx, operation, ep, onProgress)
+	case strings.HasPrefix(operation.Id(), "cl_jaipur"):
+		model, err = jaipur.New(ctx, operation, ep, onProgress)
 
 	// Upscale
 	case strings.HasPrefix(operation.Id(), "up_tokyo"):

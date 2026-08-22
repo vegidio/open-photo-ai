@@ -41,3 +41,99 @@ func RgbToHsv(r, g, b float64) (h, s, v float64) {
 
 	return
 }
+
+// CIELab support (sRGB, D65). The constants and piecewise thresholds follow OpenCV's float32 Lab conversion, which is
+// the convention colorization models are trained against: L in [0, 100] and a/b zero-centered (not the 8-bit encoding
+// that scales L by 255/100 and offsets a/b by 128).
+const (
+	labXn = 0.950456 // D65 white point, X
+	labZn = 1.088754 // D65 white point, Z
+	labT0 = 0.008856 // (6/29)^3, linear/cubic threshold
+	labK  = 903.3    // 29^3/3^3, low-luminance L slope
+)
+
+// RgbToLab converts an sRGB color to CIELab (D65). Inputs r, g, b are in [0, 1]; the returned l is in [0, 100] and
+// a, b are zero-centered (roughly [-128, 127]).
+func RgbToLab(r, g, b float32) (l, la, lb float32) {
+	lr := srgbToLinear(float64(r))
+	lg := srgbToLinear(float64(g))
+	lb64 := srgbToLinear(float64(b))
+
+	x := (0.412453*lr + 0.357580*lg + 0.180423*lb64) / labXn
+	y := 0.212671*lr + 0.715160*lg + 0.072169*lb64
+	z := (0.019334*lr + 0.119193*lg + 0.950227*lb64) / labZn
+
+	fx := labF(x)
+	fy := labF(y)
+	fz := labF(z)
+
+	var lum float64
+	if y > labT0 {
+		lum = 116.0*fy - 16.0
+	} else {
+		lum = labK * y
+	}
+
+	return float32(lum), float32(500.0 * (fx - fy)), float32(200.0 * (fy - fz))
+}
+
+// LabToRgb converts a CIELab color (D65, the same convention as RgbToLab) back to sRGB. The returned channels are
+// clamped to [0, 1].
+func LabToRgb(l, la, lb float32) (r, g, b float32) {
+	l64 := float64(l)
+
+	var y, fy float64
+	if l64 > labK*labT0 {
+		fy = (l64 + 16.0) / 116.0
+		y = fy * fy * fy
+	} else {
+		y = l64 / labK
+		fy = 7.787*y + 16.0/116.0
+	}
+
+	x := labXn * labFInv(fy+float64(la)/500.0)
+	z := labZn * labFInv(fy-float64(lb)/200.0)
+
+	lr := 3.240479*x - 1.537150*y - 0.498535*z
+	lg := -0.969256*x + 1.875992*y + 0.041556*z
+	lb64 := 0.055648*x - 0.204043*y + 1.057311*z
+
+	return float32(linearToSrgb(lr)), float32(linearToSrgb(lg)), float32(linearToSrgb(lb64))
+}
+
+// labF is the CIE f(t) forward transfer with OpenCV's linear-segment approximation below the threshold.
+func labF(t float64) float64 {
+	if t > labT0 {
+		return math.Cbrt(t)
+	}
+	return 7.787*t + 16.0/116.0
+}
+
+// labFInv inverts labF.
+func labFInv(ft float64) float64 {
+	if t := ft * ft * ft; t > labT0 {
+		return t
+	}
+	return (ft - 16.0/116.0) / 7.787
+}
+
+// srgbToLinear removes the sRGB gamma from a [0, 1] channel.
+func srgbToLinear(c float64) float64 {
+	if c <= 0.04045 {
+		return c / 12.92
+	}
+	return math.Pow((c+0.055)/1.055, 2.4)
+}
+
+// linearToSrgb applies the sRGB gamma to a linear-light channel and clamps to [0, 1].
+func linearToSrgb(c float64) float64 {
+	if c <= 0 {
+		return 0
+	}
+	if c <= 0.0031308 {
+		c *= 12.92
+	} else {
+		c = 1.055*math.Pow(c, 1.0/2.4) - 0.055
+	}
+	return math.Min(c, 1)
+}

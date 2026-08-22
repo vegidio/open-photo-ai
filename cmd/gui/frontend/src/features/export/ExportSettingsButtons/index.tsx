@@ -26,6 +26,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const ep = useSettingsStore((state) => state.executionProvider);
     const dnModel = useSettingsStore((state) => state.dnModel);
     const frModel = useSettingsStore((state) => state.frModel);
+    const clModel = useSettingsStore((state) => state.clModel);
     const laModel = useSettingsStore((state) => state.laModel);
     const cbModel = useSettingsStore((state) => state.cbModel);
     const upModel = useSettingsStore((state) => state.upModel);
@@ -59,6 +60,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
                     suggestRef.current = suggestEnhancement(file, {
                         dn: dnModel,
                         fr: frModel,
+                        cl: clModel,
                         la: laModel,
                         cb: cbModel,
                         up: upModel,

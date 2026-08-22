@@ -9,6 +9,7 @@ import {
     MdInfoOutline,
     MdOpenInFull,
     MdOutlineFaceRetouchingNatural,
+    MdOutlineFormatPaint,
     MdOutlineLightMode,
     MdOutlinePalette,
     MdRotate90DegreesCcw,
@@ -22,6 +23,7 @@ export type IconName =
     | 'info'
     | 'denoise'
     | 'face_recovery'
+    | 'colorization'
     | 'light_adjustment'
     | 'color_balance'
     | 'upscale'
@@ -49,6 +51,8 @@ export const Icon = ({ option, className = '' }: IconProps) => {
             return <MdBlurOn className={className} />;
         case 'face_recovery':
             return <MdOutlineFaceRetouchingNatural className={className} />;
+        case 'colorization':
+            return <MdOutlineFormatPaint className={className} />;
         case 'light_adjustment':
             return <MdOutlineLightMode className={className} />;
         case 'color_balance':

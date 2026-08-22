@@ -6,6 +6,7 @@ import type { Operation } from '@/operations';
 import { AnalyticsEvent, track } from '@/analytics';
 import { Icon } from '@/components/atoms/Icon';
 import { OptionsColorBalance } from '@/features/enhancements/OptionsColorBalance';
+import { OptionsColorization } from '@/features/enhancements/OptionsColorization';
 import { OptionsDenoise } from '@/features/enhancements/OptionsDenoise';
 import { OptionsFaceRecovery } from '@/features/enhancements/OptionsFaceRecovery';
 import { OptionsLightAdjustment } from '@/features/enhancements/OptionsLightAdjustment';
@@ -31,6 +32,7 @@ type OptionsProps = {
 const OPTIONS: Record<EnhancementType, ComponentType<OptionsProps>> = {
     dn: OptionsDenoise,
     fr: OptionsFaceRecovery,
+    cl: OptionsColorization,
     la: OptionsLightAdjustment,
     cb: OptionsColorBalance,
     sh: OptionsSharpen,
@@ -119,6 +121,10 @@ const opInfo = (t: TFunction, op: Operation, type: EnhancementType, faceText: st
     switch (type) {
         case 'fr':
             return t('enhancements.infoFaces', { name, faces: faceText, quality });
+
+        // Colorization has no intensity, so the default branch's "{{intensity}}%" would render "NaN%".
+        case 'cl':
+            return t('enhancements.infoModel', { name, quality });
 
         case 'up': {
             const scale = parseFloat(parseFloat(op.options.scale).toFixed(3));
