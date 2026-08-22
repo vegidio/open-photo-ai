@@ -9,6 +9,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
+	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 )
@@ -24,8 +25,9 @@ const noiseSeed uint64 = 0x5EEDBEEF
 // reference implementation resizes to the target resolution before inference with the comment that the model was only
 // trained at high resolution, and the network is resolution-preserving throughout: the VAE compresses 8x and expands
 // 8x, and the transformer between them does not change the token grid.
-func (m *Osaka) runPipeline(
+func runPipeline(
 	ctx context.Context,
+	m *upscale.Model,
 	img image.Image,
 	scale float64,
 	onProgress types.InferenceProgress,
@@ -35,7 +37,7 @@ func (m *Osaka) runPipeline(
 	}
 
 	if onProgress != nil {
-		onProgress("up", 0)
+		onProgress(0)
 	}
 
 	bounds := img.Bounds()
@@ -59,13 +61,13 @@ func (m *Osaka) runPipeline(
 	// standardize=true is the [-1,1] range the reference pipeline normalizes to.
 	basePixels := utils.ImageToCHW(padded, false, true)
 
-	warnIfMemoryTight(m.ep)
+	warnIfMemoryTight(m.EP())
 
 	internal.Log().Debug("osaka pipeline",
 		"scale", scale, "target", []int{targetW, targetH}, "padded", []int{paddedW, paddedH},
 		"region", ditRegionEdge)
 
-	restored, err := m.restore(ctx, basePixels, paddedW, paddedH, onProgress)
+	restored, err := restore(ctx, m, basePixels, paddedW, paddedH, onProgress)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +79,7 @@ func (m *Osaka) runPipeline(
 	out := utils.CHWToImage(restored, paddedW, paddedH, true)
 
 	if onProgress != nil {
-		onProgress("up", 1)
+		onProgress(1)
 	}
 
 	if paddedW != targetW || paddedH != targetH {
@@ -97,8 +99,9 @@ func (m *Osaka) runPipeline(
 // size); and it pads blindly to the tile size (Osaka must pad to a multiple of 16, for the 8x VAE and the 2x patchify
 // on top of it). What can be shared is shared: the partitioning rule via utils.TileGrid and the padding via
 // utils.ReflectionPad. The blending is deliberately its own - see canvas in blend.go.
-func (m *Osaka) restore(
+func restore(
 	ctx context.Context,
+	m *upscale.Model,
 	pixels []float32,
 	width, height int,
 	onProgress types.InferenceProgress,
@@ -114,7 +117,7 @@ func (m *Osaka) restore(
 
 		region := cropCHW(pixels, width, height, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), 3)
 
-		out, err := m.restoreRegion(ctx, region, rect.Dx(), rect.Dy(), rect.Min.X, rect.Min.Y)
+		out, err := restoreRegion(ctx, m, region, rect.Dx(), rect.Dy(), rect.Min.X, rect.Min.Y)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to restore tile %d of %d", i+1, len(tiles))
 		}
@@ -122,7 +125,7 @@ func (m *Osaka) restore(
 		canvas.add(out, rect, tileOverlap)
 
 		if onProgress != nil {
-			onProgress("up", utils.ClampProgress(float64(i+1)/float64(len(tiles))))
+			onProgress(utils.ClampProgress(float64(i+1) / float64(len(tiles))))
 		}
 	}
 
@@ -133,7 +136,12 @@ func (m *Osaka) restore(
 //
 // The region's dimensions must already be multiples of 16, which the caller guarantees - the image is padded to that
 // multiple, and every tile geometry is itself a multiple of 16, so no tile can be misaligned.
-func (m *Osaka) restoreRegion(ctx context.Context, pixels []float32, width, height, originX, originY int) ([]float32, error) {
+func restoreRegion(
+	ctx context.Context,
+	m *upscale.Model,
+	pixels []float32,
+	width, height, originX, originY int,
+) ([]float32, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
 	}
@@ -148,7 +156,7 @@ func (m *Osaka) restoreRegion(ctx context.Context, pixels []float32, width, heig
 	latentW, latentH := width/vaeStride, height/vaeStride
 	latentPlane := latentW * latentH
 
-	cond, err := runUnary(m.enc,
+	cond, err := runUnary(m.Graph(roleEncoder),
 		pixels,
 		ort.NewShape(1, 3, int64(height), int64(width)),
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)))
@@ -159,7 +167,7 @@ func (m *Osaka) restoreRegion(ctx context.Context, pixels []float32, width, heig
 	noise := gaussianNoise(latentChannels*latentPlane, originX, originY, noiseSeed)
 	vidInput := packVidInput(cond, noise, latentPlane)
 
-	prediction, err := runStep(m.dit,
+	prediction, err := runStep(m.Graph(roleDiT),
 		vidInput, ditTimestep,
 		ort.NewShape(1, ditChannels, int64(latentH), int64(latentW)),
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)))
@@ -169,7 +177,7 @@ func (m *Osaka) restoreRegion(ctx context.Context, pixels []float32, width, heig
 
 	denoised := schedulerStep(prediction, noise)
 
-	out, err := runUnary(m.dec,
+	out, err := runUnary(m.Graph(roleDecoder),
 		denoised,
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)),
 		ort.NewShape(1, 3, int64(height), int64(width)))

@@ -77,3 +77,83 @@ func TestGrayHasZeroChroma(t *testing.T) {
 		}
 	}
 }
+
+// TestRgbToLabLMatchesRgbToLab pins the L-only fast path against the full conversion. Colorization uses it at full
+// photo resolution, so any divergence would be a silent, image-wide luminance shift.
+func TestRgbToLabLMatchesRgbToLab(t *testing.T) {
+	for r := 0; r < 256; r += 3 {
+		for g := 0; g < 256; g += 5 {
+			for b := 0; b < 256; b += 7 {
+				fr := float32(uint32(r)*257) / 65535.0
+				fg := float32(uint32(g)*257) / 65535.0
+				fb := float32(uint32(b)*257) / 65535.0
+
+				want, _, _ := RgbToLab(fr, fg, fb)
+
+				if got := RgbToLabL(fr, fg, fb); got != want {
+					t.Fatalf("RgbToLabL(%d,%d,%d) = %v, want %v", r, g, b, got, want)
+				}
+
+				if got := RgbToLabLBytes(uint8(r), uint8(g), uint8(b)); got != want {
+					t.Fatalf("RgbToLabLBytes(%d,%d,%d) = %v, want %v", r, g, b, got, want)
+				}
+			}
+		}
+	}
+}
+
+// TestSrgbByteMatchesPow checks the threshold table at every step boundary and on either side of it. The encode is
+// monotonic, so pinning all 255 boundaries pins the mapping for every input in between.
+func TestSrgbByteMatchesPow(t *testing.T) {
+	for k := 1; k <= 255; k++ {
+		at := srgbByteThreshold[k-1]
+		below := math.Nextafter(at, 0)
+
+		if got, want := SrgbByte(at), srgbByteSlow(at); got != want || got != uint8(k) {
+			t.Fatalf("at threshold %d: SrgbByte = %d, slow = %d, want %d", k, got, want, k)
+		}
+
+		if got, want := SrgbByte(below), srgbByteSlow(below); got != want || got != uint8(k-1) {
+			t.Fatalf("below threshold %d: SrgbByte = %d, slow = %d, want %d", k, got, want, k-1)
+		}
+	}
+
+	// Out-of-range inputs must saturate the same way Clamp255 did.
+	for _, c := range []float64{-1, -0.0001, 0, 1, 1.5, 42} {
+		if got, want := SrgbByte(c), srgbByteSlow(c); got != want {
+			t.Fatalf("SrgbByte(%v) = %d, want %d", c, got, want)
+		}
+	}
+
+	// A dense sweep across the whole range, as a second opinion on the boundary argument.
+	for i := range 200001 {
+		c := -0.05 + float64(i)*(1.1/200000.0)
+
+		if got, want := SrgbByte(c), srgbByteSlow(c); got != want {
+			t.Fatalf("SrgbByte(%v) = %d, want %d", c, got, want)
+		}
+	}
+}
+
+// TestLabToLinearRgbMatchesLabToRgb pins the split conversion: encoding LabToLinearRgb's output must reproduce
+// LabToRgb's channels exactly.
+func TestLabToLinearRgbMatchesLabToRgb(t *testing.T) {
+	for l := 0; l <= 100; l += 2 {
+		for a := -120; a <= 120; a += 15 {
+			for b := -120; b <= 120; b += 15 {
+				fl, fa, fb := float32(l), float32(a), float32(b)
+
+				wr, wg, wb := LabToRgb(fl, fa, fb)
+				lr, lg, lb := LabToLinearRgb(fl, fa, fb)
+
+				for i, pair := range [][2]float64{{lr, float64(wr)}, {lg, float64(wg)}, {lb, float64(wb)}} {
+					want := uint8(Clamp255(float32(pair[1])*255.0 + 0.5))
+
+					if got := SrgbByte(pair[0]); got != want {
+						t.Fatalf("Lab(%d,%d,%d) channel %d: SrgbByte = %d, want %d", l, a, b, i, got, want)
+					}
+				}
+			}
+		}
+	}
+}

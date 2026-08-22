@@ -154,7 +154,7 @@ func TestGrayLumaInputIsNeutral(t *testing.T) {
 		}
 	}
 
-	data := grayLumaInput(resized)
+	data := grayLumaInput(resized, deoldifySize)
 	plane := deoldifySize * deoldifySize
 
 	for i := 0; i < plane; i += 997 {
@@ -178,15 +178,16 @@ func TestGrayLumaInputIsNeutral(t *testing.T) {
 // TestAbFromRgbNeutralGray verifies a neutral gray RGB tensor produces (near-)zero chroma planes, which is what
 // composeLab relies on to keep unmodeled regions gray.
 func TestAbFromRgbNeutralGray(t *testing.T) {
-	const w, h = 8, 4
-	plane := w * h
+	// The chroma planes always come back square, at the graph's export size.
+	const size = 8
+	plane := size * size
 	data := make([]float32, 3*plane)
 	for i := 0; i < plane; i++ {
 		v := float32(i) / float32(plane)
 		data[i], data[plane+i], data[2*plane+i] = v, v, v
 	}
 
-	aPlane, bPlane := abFromRgb(data, w, h)
+	aPlane, bPlane := abFromRgb(data, size)
 	for i := 0; i < plane; i++ {
 		if math.Abs(float64(aPlane[i])) > 0.01 || math.Abs(float64(bPlane[i])) > 0.01 {
 			t.Fatalf("index %d: gray produced chroma (%v, %v)", i, aPlane[i], bPlane[i])
@@ -194,7 +195,7 @@ func TestAbFromRgbNeutralGray(t *testing.T) {
 	}
 
 	// Out-of-range values must be clamped, not propagated.
-	aPlane, bPlane = abFromRgb([]float32{1.5, -0.5, 0.5}, 1, 1)
+	aPlane, bPlane = abFromRgb([]float32{1.5, -0.5, 0.5}, 1)
 	if math.IsNaN(float64(aPlane[0])) || math.IsNaN(float64(bPlane[0])) {
 		t.Fatal("out-of-range input produced NaN chroma")
 	}
@@ -214,7 +215,7 @@ func TestGrayLabInputIsNeutral(t *testing.T) {
 		}
 	}
 
-	data := grayLabInput(resized)
+	data := grayLabInput(resized, inputSize)
 	plane := inputSize * inputSize
 
 	for i := 0; i < plane; i += 997 {
@@ -233,5 +234,98 @@ func TestGrayLabInputIsNeutral(t *testing.T) {
 	wr, _, _ := utils.LabToRgb(l, 0, 0)
 	if data[0] != wr {
 		t.Fatalf("pixel 0: got %v, want %v", data[0], wr)
+	}
+}
+
+// synthChroma builds deterministic, non-trivial ab planes at model resolution, spanning the negative and positive
+// chroma range so the composition is exercised well away from the neutral axis.
+func synthChroma(size int) (aPlane, bPlane []float32) {
+	plane := size * size
+	aPlane = make([]float32, plane)
+	bPlane = make([]float32, plane)
+
+	for i := range plane {
+		x, y := i%size, i/size
+		aPlane[i] = float32((x*13+y*7)%241) - 120
+		bPlane[i] = float32((x*29+y*17)%241) - 120
+	}
+
+	return aPlane, bPlane
+}
+
+// TestComposeMatchesReference is the guarantee behind fusing the four full-resolution passes into one, and behind the
+// lookup tables that replaced the per-pixel math.Pow calls: for every pixel of every shape tested, the fused compose
+// must produce the exact same byte as extracting, upsampling and combining separately. Not "within a count" — equal.
+func TestComposeMatchesReference(t *testing.T) {
+	sizes := []struct{ srcSize, width, height int }{
+		{16, 64, 48},  // the usual case: upsampling chroma to a larger image
+		{16, 16, 16},  // identity, where the reference short-circuits to a copy
+		{16, 7, 5},    // downsampling, and dimensions coprime with the source
+		{32, 129, 31}, // extreme aspect ratio, odd dimensions
+		{8, 1, 1},     // degenerate single pixel
+	}
+
+	for _, tc := range sizes {
+		img := synth(tc.width, tc.height)
+		aPlane, bPlane := synthChroma(tc.srcSize)
+
+		got := compose(img, aPlane, bPlane, tc.srcSize).(*image.RGBA)
+		want := composeReference(img, aPlane, bPlane, tc.srcSize).(*image.RGBA)
+
+		for y := range tc.height {
+			for x := range tc.width {
+				g := y*got.Stride + x*4
+				w := y*want.Stride + x*4
+
+				for c := range 4 {
+					if got.Pix[g+c] != want.Pix[w+c] {
+						t.Fatalf("%dx%d from %d, pixel (%d, %d) channel %d: got %d, want %d",
+							tc.width, tc.height, tc.srcSize, x, y, c, got.Pix[g+c], want.Pix[w+c])
+					}
+				}
+			}
+		}
+	}
+}
+
+// TestComposeMatchesReferenceForImageTypes covers the three source-buffer shapes compose() distinguishes: the
+// premultiplied fast path, the straight-alpha fast path including partially transparent pixels (where the byte lookup
+// must give way to the general conversion), and the generic At() fallback.
+func TestComposeMatchesReferenceForImageTypes(t *testing.T) {
+	const size, width, height = 16, 40, 24
+
+	aPlane, bPlane := synthChroma(size)
+	nrgba := synth(width, height)
+
+	// Vary alpha so the un-premultiplying branch is exercised alongside the opaque one.
+	translucent := image.NewNRGBA(image.Rect(0, 0, width, height))
+	copy(translucent.Pix, nrgba.Pix)
+	for y := range height {
+		for x := range width {
+			translucent.Pix[y*translucent.Stride+x*4+3] = uint8((x*11 + y*5) % 256)
+		}
+	}
+
+	rgba := image.NewRGBA(image.Rect(0, 0, width, height))
+	copy(rgba.Pix, nrgba.Pix)
+
+	cases := map[string]image.Image{
+		"nrgba":       nrgba,
+		"translucent": translucent,
+		"rgba":        rgba,
+		"generic":     genericImage{src: nrgba},
+	}
+
+	for name, img := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := compose(img, aPlane, bPlane, size).(*image.RGBA)
+			want := composeReference(img, aPlane, bPlane, size).(*image.RGBA)
+
+			for i := range want.Pix {
+				if got.Pix[i] != want.Pix[i] {
+					t.Fatalf("byte %d: got %d, want %d", i, got.Pix[i], want.Pix[i])
+				}
+			}
+		})
 	}
 }

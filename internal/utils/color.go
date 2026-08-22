@@ -137,3 +137,119 @@ func linearToSrgb(c float64) float64 {
 	}
 	return math.Min(c, 1)
 }
+
+// region - Fast paths
+
+// The colorization pipeline runs these conversions once per pixel at full photo resolution, where the transcendental
+// calls dominate. Two properties make them avoidable without changing a single output byte:
+//
+//  1. Only L is ever needed from the forward conversion at full resolution, and L depends solely on Y - so two of the
+//     three cube roots and both chroma terms are dead work.
+//  2. Every channel that reaches the forward path comes from an 8-bit pixel byte via Sample16, so srgbToLinear has
+//     only 256 distinct arguments; and the reverse path's only consumer is a rounded 8-bit channel, so it has only
+//     256 distinct results.
+//
+// Both tables are built to agree with the general path exactly, and TestSrgbByteMatchesPow pins that agreement at
+// every step boundary - which, for a monotonic transfer, pins it everywhere.
+
+// srgbLinearLUT[v] is srgbToLinear for the 8-bit channel value v exactly as it arrives through Sample16, which scales
+// a byte to 16-bit by *257; the caller then divides by 65535 in float32.
+var srgbLinearLUT [256]float64
+
+// srgbByteThreshold[k] is the smallest linear-light value that encodes to output byte k+1. Because the transfer is
+// monotonic, counting the thresholds at or below a value yields the same byte the math.Pow expression would.
+var srgbByteThreshold [255]float64
+
+func init() {
+	for v := range 256 {
+		srgbLinearLUT[v] = srgbToLinear(float64(float32(uint32(v)*257) / 65535.0))
+	}
+
+	// Locate each step boundary by bisecting the float64 bit pattern rather than the value: for positive floats the
+	// bit order is the value order, so this converges on the exact float64 where the output byte changes.
+	for k := 1; k <= 255; k++ {
+		lo, hi := math.Float64bits(0), math.Float64bits(1)
+
+		for lo < hi {
+			mid := lo + (hi-lo)/2
+			if srgbByteSlow(math.Float64frombits(mid)) >= uint8(k) {
+				hi = mid
+			} else {
+				lo = mid + 1
+			}
+		}
+
+		srgbByteThreshold[k-1] = math.Float64frombits(lo)
+	}
+}
+
+// RgbToLabL returns only the CIELab L of an sRGB color, bit-for-bit identical to the first result of RgbToLab. Inputs
+// are in [0, 1]; the result is in [0, 100].
+func RgbToLabL(r, g, b float32) float32 {
+	return labLFromLinear(srgbToLinear(float64(r)), srgbToLinear(float64(g)), srgbToLinear(float64(b)))
+}
+
+// RgbToLabLBytes is RgbToLabL for channels that came straight from 8-bit pixel bytes, taking the linearization from a
+// lookup table instead of math.Pow. Valid only where Sample16 returns v*257 unscaled - that is, for premultiplied
+// buffers and for straight-alpha buffers at full opacity; callers must use RgbToLabL otherwise.
+func RgbToLabLBytes(r, g, b uint8) float32 {
+	return labLFromLinear(srgbLinearLUT[r], srgbLinearLUT[g], srgbLinearLUT[b])
+}
+
+// labLFromLinear is the L half of the CIELab forward transfer, shared by both entry points above.
+func labLFromLinear(lr, lg, lb float64) float32 {
+	y := 0.212671*lr + 0.715160*lg + 0.072169*lb
+
+	if y > labT0 {
+		return float32(116.0*labF(y) - 16.0)
+	}
+
+	return float32(labK * y)
+}
+
+// LabToLinearRgb is LabToRgb stopping one step short: it returns linear-light channels, unclamped and still in
+// float64, for callers that finish with SrgbByte instead of the float32 gamma encode.
+func LabToLinearRgb(l, la, lb float32) (r, g, b float64) {
+	l64 := float64(l)
+
+	var y, fy float64
+	if l64 > labK*labT0 {
+		fy = (l64 + 16.0) / 116.0
+		y = fy * fy * fy
+	} else {
+		y = l64 / labK
+		fy = 7.787*y + 16.0/116.0
+	}
+
+	x := labXn * labFInv(fy+float64(la)/500.0)
+	z := labZn * labFInv(fy-float64(lb)/200.0)
+
+	return 3.240479*x - 1.537150*y - 0.498535*z,
+		-0.969256*x + 1.875992*y + 0.041556*z,
+		0.055648*x - 0.204043*y + 1.057311*z
+}
+
+// SrgbByte gamma-encodes a linear-light channel straight to the rounded 8-bit value it would end up as, replacing the
+// math.Pow in linearToSrgb with a search over 255 precomputed thresholds.
+func SrgbByte(c float64) uint8 {
+	lo, hi := 0, 255
+
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if srgbByteThreshold[mid] <= c {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+
+	return uint8(lo)
+}
+
+// srgbByteSlow is the reference the threshold table is built and tested against: the exact expression the compose loop
+// used before the table existed.
+func srgbByteSlow(c float64) uint8 {
+	return uint8(Clamp255(float32(linearToSrgb(c))*255.0 + 0.5))
+}
+
+// endregion

@@ -10,7 +10,7 @@ import (
 	guitypes "gui/types"
 	"testing"
 
-	"github.com/vegidio/open-photo-ai/models/upscale/osaka"
+	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -137,7 +137,7 @@ func TestIdsToOperationsCarriesOsakaScale(t *testing.T) {
 		if !ok {
 			t.Fatalf("%q: operation is not Parameterized", id)
 		}
-		if got, _ := p.Params()[osaka.ParamScale].(float64); got != want {
+		if got, _ := p.Params()[upscale.ParamScale].(float64); got != want {
 			t.Errorf("%q: scale = %v, want %v", id, got, want)
 		}
 
@@ -145,8 +145,8 @@ func TestIdsToOperationsCarriesOsakaScale(t *testing.T) {
 		if !ok {
 			t.Fatalf("%q: operation is not a CacheKeyer", id)
 		}
-		if got := ck.CacheKey(); got != osaka.ScaleCacheKey(want) {
-			t.Errorf("%q: CacheKey() = %q, want %q", id, got, osaka.ScaleCacheKey(want))
+		if got := ck.CacheKey(); got != upscale.ScaleCacheKey(want) {
+			t.Errorf("%q: CacheKey() = %q, want %q", id, got, upscale.ScaleCacheKey(want))
 		}
 
 		// Every distinct scale must produce a distinct key, or the shared identity would let one scale serve

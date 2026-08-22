@@ -19,8 +19,8 @@ func RunPipeline(
 	opts ...utils.TileOption,
 ) (image.Image, error) {
 	if onProgress != nil {
-		onProgress("dn", 0)
+		onProgress(0)
 	}
 
-	return utils.RunTiledInference(ctx, session, img, 1, "dn", onProgress, opts...)
+	return utils.RunTiledInference(ctx, session, img, 1, onProgress, opts...)
 }

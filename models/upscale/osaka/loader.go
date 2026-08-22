@@ -1,33 +1,20 @@
 package osaka
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/vegidio/open-photo-ai/internal/utils"
+	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// The three graphs behind one Osaka model. Unlike the convolutional upscalers, which hold one session per scale factor,
-// these are three stages of a single pass and are always loaded together.
-const (
-	ditSuffix = ""
-	encSuffix = "_vae_encoder"
-	decSuffix = "_vae_decoder"
-)
-
-// sessionSpec names one graph and the tensors it takes and returns. The names are not shared with the rest of the
-// codebase, which uses "input"/"output" everywhere: these graphs were exported with meaningful names.
-type sessionSpec struct {
-	suffix  string
-	inputs  []string
-	outputs []string
-}
-
-var sessionSpecs = []sessionSpec{
-	{suffix: ditSuffix, inputs: []string{"vid_input", "timestep"}, outputs: []string{"denoised_latent"}},
-	{suffix: encSuffix, inputs: []string{"pixel_image"}, outputs: []string{"latent"}},
-	{suffix: decSuffix, inputs: []string{"latent"}, outputs: []string{"pixel_image"}},
+// The three graphs behind one Osaka model. Unlike the convolutional upscalers, which hold one session per scale
+// factor, these are three stages of a single pass and are always loaded together.
+//
+// The tensor names are not shared with the rest of the codebase, which uses "input"/"output" everywhere: these graphs
+// were exported with meaningful names.
+var graphs = []upscale.GraphSpec{
+	{Role: roleDiT, Suffix: "", Inputs: []string{"vid_input", "timestep"}, Outputs: []string{"denoised_latent"}},
+	{Role: roleEncoder, Suffix: "_vae_encoder", Inputs: []string{"pixel_image"}, Outputs: []string{"latent"}},
+	{Role: roleDecoder, Suffix: "_vae_decoder", Inputs: []string{"latent"}, Outputs: []string{"pixel_image"}},
 }
 
 // profileFor is the provider tuning every Osaka graph needs.
@@ -67,62 +54,6 @@ func profileFor() utils.EPProfile {
 			types.ExecutionProviderTensorRT,
 		},
 	}
-}
-
-func modelId(suffix string, precision types.Precision) string {
-	return fmt.Sprintf("up_osaka%s_%s", suffix, precision)
-}
-
-// graphs is the three stages of one Osaka pass, held both as a set to destroy and measure as a unit and as named
-// fields for the pipeline to call.
-//
-// The names are what matter: binding them by position to the order of sessionSpecs would make reordering that literal
-// swap the encoder and the decoder, which compiles, runs, and returns a wrong image with nothing to catch it.
-type graphs struct {
-	utils.Sessions
-
-	dit *utils.Session
-	enc *utils.Session
-	dec *utils.Session
-}
-
-// loadSessions downloads and opens the three graphs and binds each to its role by name.
-func loadSessions(
-	ctx context.Context,
-	precision types.Precision,
-	ep types.ExecutionProvider,
-	onProgress types.DownloadProgress,
-) (graphs, error) {
-	specs := make([]utils.SessionSpec, 0, len(sessionSpecs))
-	for _, spec := range sessionSpecs {
-		specs = append(specs, utils.SessionSpec{
-			ModelId: modelId(spec.suffix, precision),
-			Inputs:  spec.inputs,
-			Outputs: spec.outputs,
-		})
-	}
-
-	// The shared loader destroys a partially-opened set for us, so a failure here leaks nothing - which matters most
-	// for this model, whose DiT alone is nearly 7 GB.
-	sessions, err := utils.LoadSessions(ctx, specs, ep, profileFor(), onProgress)
-	if err != nil {
-		return graphs{}, err
-	}
-
-	// LoadSessions returns the sessions in spec order, and specs was built from sessionSpecs just above, so the two
-	// are index-aligned by construction within this function - unlike the fields below, which are read from another
-	// file and so are bound by name.
-	bySuffix := make(map[string]*utils.Session, len(sessionSpecs))
-	for i, spec := range sessionSpecs {
-		bySuffix[spec.suffix] = sessions[i]
-	}
-
-	return graphs{
-		Sessions: sessions,
-		dit:      bySuffix[ditSuffix],
-		enc:      bySuffix[encSuffix],
-		dec:      bySuffix[decSuffix],
-	}, nil
 }
 
 // brokenOptimizers are the ONNX Runtime graph transformers that miscompile this DiT.

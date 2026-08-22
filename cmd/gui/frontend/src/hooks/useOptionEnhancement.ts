@@ -12,19 +12,20 @@ type OptionEnhancement = {
 };
 
 /**
- * Shared wiring for the `Options…` popovers (sharpen, denoise, upscale, light adjustment, color balance). It holds the
- * local `model`/`amount` input state and writes the enhancement back to the store only when the user actually changes a
- * value — never on mount, so opening a popover never cancels in-flight inference.
+ * Shared wiring for every `Options…` popover. It holds the local `model`/`amount` input state and writes the
+ * enhancement back to the store only when the user actually changes a value — never on mount, so opening a popover
+ * never cancels in-flight inference.
  *
  * @param prefix the operation id prefix used to find the current op (e.g. `sh`, `dn`, `up`).
- * @param initialAmount seeds the `amount` input from the current op (intensity or scale).
  * @param build turns the current `model`/`amount` into an `Operation`; return `undefined` to skip the write
  * (e.g. transient/empty input or an unknown model).
+ * @param initialAmount seeds the `amount` input from the current op (intensity or scale). Enhancements that have
+ * neither — colorization, face recovery — omit it and use only `model` and `onModelChange`.
  */
 export const useOptionEnhancement = (
     prefix: string,
-    initialAmount: (op: Operation | undefined) => string,
     build: (model: string, amount: string) => Operation | undefined,
+    initialAmount: (op: Operation | undefined) => string = () => '',
 ): OptionEnhancement => {
     const file = useCurrentFile();
     const operations = useFileOperations(file);

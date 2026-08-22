@@ -5,6 +5,7 @@ import { create } from 'zustand/react';
 import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/detection';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
+import { ENHANCEMENT_ORDER, getEnhancementType } from '@/utils/enhancement';
 
 type EnhancementStore = {
     autopilot: boolean;
@@ -57,21 +58,14 @@ export const useEnhancementStore = create(
 
                     const allOps = [...existingOps, ...operations];
 
-                    // Sort operations by prefix priority: dn -> fr -> la -> cb -> up -> sh
-                    const sortedOps = allOps.sort((a, b) => {
-                        const getPriority = (op: Operation) => {
-                            if (op.id.startsWith('dn')) return 0;
-                            if (op.id.startsWith('fr')) return 1;
-                            if (op.id.startsWith('cl')) return 2;
-                            if (op.id.startsWith('la')) return 3;
-                            if (op.id.startsWith('cb')) return 4;
-                            if (op.id.startsWith('sh')) return 5;
-                            if (op.id.startsWith('up')) return 6;
-                            return 7; // Any other prefix goes last
-                        };
+                    // Applied in ENHANCEMENT_ORDER, the same order the add menu offers them in — the two must agree,
+                    // so they read from one list rather than each keeping their own copy. An unknown prefix sorts last.
+                    const getPriority = (op: Operation) => {
+                        const index = ENHANCEMENT_ORDER.indexOf(getEnhancementType(op.id));
+                        return index < 0 ? ENHANCEMENT_ORDER.length : index;
+                    };
 
-                        return getPriority(a) - getPriority(b);
-                    });
+                    const sortedOps = allOps.sort((a, b) => getPriority(a) - getPriority(b));
 
                     state.enhancements.set(file.Path, sortedOps);
                 });

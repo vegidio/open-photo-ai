@@ -7,6 +7,7 @@ export * from './useFileFaces.ts';
 export * from './useFileManager.ts';
 export * from './useFileOperations.ts';
 export * from './useImageTransform.ts';
+export * from './useModelOptions.ts';
 export * from './useNotify.ts';
 export * from './useOptionEnhancement.ts';
 export * from './useSyncFaces.ts';

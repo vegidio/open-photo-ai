@@ -1,11 +1,8 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ModelSelector, type ModelSelectorOption } from '@/features/enhancements/ModelSelector';
+import { ModelSelector } from '@/features/enhancements/ModelSelector';
 import { OptionsPopover } from '@/features/enhancements/OptionsPopover';
-import { useCurrentFile, useFileOperations } from '@/hooks';
-import { modelLabel } from '@/i18n/format';
-import { Delhi, Jaipur, Mumbai } from '@/operations';
-import { useEnhancementStore } from '@/stores';
+import { useModelOptions, useOptionEnhancement } from '@/hooks';
+import { buildSelection } from '@/utils/enhancement';
 
 type OptionsColorizationProps = {
     anchorEl: HTMLElement | undefined;
@@ -16,59 +13,10 @@ type OptionsColorizationProps = {
 export const OptionsColorization = ({ anchorEl, open, onClose }: OptionsColorizationProps) => {
     const { t } = useTranslation();
 
-    // Built here rather than at module scope: t() called at module-evaluation time would freeze the labels
-    // and descriptions in whatever language was active on the first import and never follow a change.
-    const options = useMemo<ModelSelectorOption[]>(
-        () => [
-            {
-                value: 'delhi_fp32',
-                label: modelLabel(t, 'Delhi', 'fp32'),
-                description: t('enhancements.colorization.models.delhi'),
-            },
-            { value: 'delhi_fp16', label: modelLabel(t, 'Delhi', 'fp16') },
-            {
-                value: 'mumbai_fp32',
-                label: modelLabel(t, 'Mumbai', 'fp32'),
-                description: t('enhancements.colorization.models.mumbai'),
-            },
-            { value: 'mumbai_fp16', label: modelLabel(t, 'Mumbai', 'fp16') },
-            {
-                value: 'jaipur_fp32',
-                label: modelLabel(t, 'Jaipur', 'fp32'),
-                description: t('enhancements.colorization.models.jaipur'),
-            },
-            { value: 'jaipur_fp16', label: modelLabel(t, 'Jaipur', 'fp16') },
-        ],
-        [t],
-    );
+    const options = useModelOptions('cl');
 
-    const file = useCurrentFile();
-    const operations = useFileOperations(file);
-    const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
-
-    const currentOp = operations.find((op) => op.id.startsWith('cl'));
-    if (!file || !currentOp) return undefined;
-
-    const selectedModel = `${currentOp.options.name}_${currentOp.options.precision}`;
-
-    const onModelChange = (value: string) => {
-        if (!value) return;
-        const values = value.split('_');
-
-        switch (values[0]) {
-            case 'delhi':
-                replaceEnhancement(file, new Delhi(values[1]));
-                break;
-
-            case 'mumbai':
-                replaceEnhancement(file, new Mumbai(values[1]));
-                break;
-
-            case 'jaipur':
-                replaceEnhancement(file, new Jaipur(values[1]));
-                break;
-        }
-    };
+    // Colorization has no per-run amount, so only the model half of the hook is used.
+    const { model, onModelChange } = useOptionEnhancement('cl', (nextModel) => buildSelection('cl', nextModel));
 
     return (
         <OptionsPopover
@@ -79,7 +27,7 @@ export const OptionsColorization = ({ anchorEl, open, onClose }: OptionsColoriza
             hideBackdrop={false}
         >
             <div className='flex flex-col mt-1 p-3 gap-4'>
-                <ModelSelector options={options} value={selectedModel} onChange={onModelChange} />
+                <ModelSelector options={options} value={model} onChange={onModelChange} />
             </div>
         </OptionsPopover>
     );

@@ -24,13 +24,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const overwrite = useExportStore((state) => state.overwrite);
     const resetKey = useExportStore((state) => state.resetKey);
     const ep = useSettingsStore((state) => state.executionProvider);
-    const dnModel = useSettingsStore((state) => state.dnModel);
-    const frModel = useSettingsStore((state) => state.frModel);
-    const clModel = useSettingsStore((state) => state.clModel);
-    const laModel = useSettingsStore((state) => state.laModel);
-    const cbModel = useSettingsStore((state) => state.cbModel);
-    const upModel = useSettingsStore((state) => state.upModel);
-    const shModel = useSettingsStore((state) => state.shModel);
+    const models = useSettingsStore((state) => state.models);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | undefined>(undefined);
@@ -57,15 +51,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
                 // The list of operations for this file is empty; it means Autopilot added this file in the export
                 // list. We need to check if there are any suitable operations to apply to the file.
                 if (operations.length === 0) {
-                    suggestRef.current = suggestEnhancement(file, {
-                        dn: dnModel,
-                        fr: frModel,
-                        cl: clModel,
-                        la: laModel,
-                        cb: cbModel,
-                        up: upModel,
-                        sh: shModel,
-                    });
+                    suggestRef.current = suggestEnhancement(file, models);
 
                     const suggestions = await suggestRef.current;
 

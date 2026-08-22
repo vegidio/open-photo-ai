@@ -5,6 +5,7 @@ import type { SupportedEPs } from '@/bindings/gui/services';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { DEFAULT_LANGUAGE, detectLanguage, isSupportedLanguage, type SupportedLanguage } from '@/i18n/languages';
 import { os } from '@/utils/constants';
+import { DEFAULT_MODELS, type EnhancementType, type ModelChoices } from '@/utils/enhancement';
 
 const {
     ExecutionProviderCUDA,
@@ -22,26 +23,16 @@ type SettingsStore = {
     analyticsEnabled: boolean;
     language: SupportedLanguage;
 
-    dnModel: string;
-    frModel: string;
-    clModel: string;
-    laModel: string;
-    cbModel: string;
-    upModel: string;
-    shModel: string;
+    // The default model for each enhancement, keyed by its two-letter type. One record rather than seven parallel
+    // fields, so adding an enhancement is an entry in ENHANCEMENTS and nothing here.
+    models: ModelChoices;
 
     setIsFirstTensorRT: (isFirstRun: boolean) => void;
     setProcessorOptions: (supportedEps: SupportedEPs) => void;
     setExecutionProvider: (ep: ExecutionProvider) => void;
     setAnalyticsEnabled: (enabled: boolean) => void;
     setLanguage: (language: SupportedLanguage) => void;
-    setDnModel: (model: string) => void;
-    setFrModel: (model: string) => void;
-    setClModel: (model: string) => void;
-    setLaModel: (model: string) => void;
-    setCbModel: (model: string) => void;
-    setUpModel: (model: string) => void;
-    setShModel: (model: string) => void;
+    setModel: (type: EnhancementType, model: string) => void;
 
     saveSnapshot: () => void;
     restoreSnapshot: () => void;
@@ -55,13 +46,7 @@ const SNAPSHOT_KEYS = [
     'executionProvider',
     'analyticsEnabled',
     'language',
-    'dnModel',
-    'frModel',
-    'clModel',
-    'laModel',
-    'cbModel',
-    'upModel',
-    'shModel',
+    'models',
 ] as const satisfies readonly (keyof SettingsStore)[];
 
 type SnapshotKey = (typeof SNAPSHOT_KEYS)[number];
@@ -79,13 +64,7 @@ export const useSettingsStore = create(
                 analyticsEnabled: true,
                 // Only used on first launch; `persist` replaces it with the stored choice on every later boot.
                 language: detectLanguage(),
-                dnModel: 'stockholm',
-                frModel: 'athens',
-                clModel: 'delhi',
-                laModel: 'paris',
-                cbModel: 'rio',
-                upModel: 'kyoto',
-                shModel: 'moscow',
+                models: { ...DEFAULT_MODELS },
 
                 setIsFirstTensorRT: (isFirst: boolean) => {
                     set((state) => {
@@ -139,45 +118,9 @@ export const useSettingsStore = create(
                     });
                 },
 
-                setDnModel: (model: string) => {
+                setModel: (type: EnhancementType, model: string) => {
                     set((state) => {
-                        state.dnModel = model;
-                    });
-                },
-
-                setFrModel: (model: string) => {
-                    set((state) => {
-                        state.frModel = model;
-                    });
-                },
-
-                setClModel: (model: string) => {
-                    set((state) => {
-                        state.clModel = model;
-                    });
-                },
-
-                setLaModel: (model: string) => {
-                    set((state) => {
-                        state.laModel = model;
-                    });
-                },
-
-                setCbModel: (model: string) => {
-                    set((state) => {
-                        state.cbModel = model;
-                    });
-                },
-
-                setUpModel: (model: string) => {
-                    set((state) => {
-                        state.upModel = model;
-                    });
-                },
-
-                setShModel: (model: string) => {
-                    set((state) => {
-                        state.shModel = model;
+                        state.models[type] = model;
                     });
                 },
 
@@ -190,8 +133,14 @@ export const useSettingsStore = create(
 
                     for (const key of SNAPSHOT_KEYS) {
                         const value = state[key];
+                        // Arrays and the models record are copied rather than referenced, so editing settings after a
+                        // snapshot cannot mutate the snapshot itself and make Cancel a no-op.
                         // biome-ignore lint/suspicious/noExplicitAny: typed key, runtime-safe
-                        (saved as any)[key] = Array.isArray(value) ? [...value] : value;
+                        (saved as any)[key] = Array.isArray(value)
+                            ? [...value]
+                            : value !== null && typeof value === 'object'
+                              ? { ...value }
+                              : value;
                     }
 
                     snapshot = saved;

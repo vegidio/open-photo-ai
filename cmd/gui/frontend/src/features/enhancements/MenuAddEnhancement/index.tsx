@@ -5,21 +5,7 @@ import type { Operation } from '@/operations';
 import { Icon } from '@/components/atoms/Icon';
 import { useAddEnhancements, useCurrentFile, useFileOperations } from '@/hooks';
 import { useSettingsStore } from '@/stores';
-import {
-    ENHANCEMENTS,
-    type EnhancementType,
-    getCbOp,
-    getClOp,
-    getDnOp,
-    getFrOp,
-    getLaOp,
-    getShOp,
-    getUpOp,
-} from '@/utils/enhancement';
-
-// The order the menu lists enhancements in. Separate from ENHANCEMENTS because object key order is not something to
-// rely on for presentation.
-const ENHANCEMENT_ORDER: EnhancementType[] = ['dn', 'fr', 'cl', 'la', 'cb', 'sh', 'up'];
+import { defaultUpscaleScale, ENHANCEMENT_ORDER, ENHANCEMENTS, getOp } from '@/utils/enhancement';
 
 type MenuAddEnhancementProps = {
     anchorEl: HTMLElement | undefined;
@@ -29,13 +15,7 @@ type MenuAddEnhancementProps = {
 
 export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhancementProps) => {
     const { t } = useTranslation();
-    const dnModel = useSettingsStore((state) => state.dnModel);
-    const frModel = useSettingsStore((state) => state.frModel);
-    const clModel = useSettingsStore((state) => state.clModel);
-    const laModel = useSettingsStore((state) => state.laModel);
-    const cbModel = useSettingsStore((state) => state.cbModel);
-    const upModel = useSettingsStore((state) => state.upModel);
-    const shModel = useSettingsStore((state) => state.shModel);
+    const models = useSettingsStore((state) => state.models);
 
     const currentFile = useCurrentFile();
     const operations = useFileOperations(currentFile);
@@ -47,29 +27,17 @@ export const MenuAddEnhancement = ({ anchorEl, open, onMenuClose }: MenuAddEnhan
     };
 
     const defaultEnhancements = useMemo(() => {
-        const [width, height] = currentFile?.Dimensions ?? [0, 0];
-        const mp = width * height;
-        const scale = mp <= 1_048_576 ? 4 : mp <= 4_194_304 ? 2 : 1;
-
-        // Name and icon come from the ENHANCEMENTS registry; only the operation each row builds is specific to this
-        // menu, since that is what depends on the user's default model for the enhancement.
-        const ops: Record<EnhancementType, Operation> = {
-            dn: getDnOp(dnModel),
-            fr: getFrOp(frModel),
-            cl: getClOp(clModel),
-            la: getLaOp(laModel),
-            cb: getCbOp(cbModel),
-            sh: getShOp(shModel),
-            up: getUpOp(upModel, scale),
-        };
+        // Name, icon and the operation itself all come from the ENHANCEMENTS registry; the only thing specific to this
+        // menu is that the operation is built at the user's default model, and upscale at a scale fitting the image.
+        const scale = defaultUpscaleScale(currentFile);
 
         return ENHANCEMENT_ORDER.map((type) => ({
             type,
             icon: <Icon option={ENHANCEMENTS[type].icon} />,
             name: t(ENHANCEMENTS[type].nameKey),
-            op: ops[type],
+            op: getOp(type, models[type], type === 'up' ? scale : undefined),
         }));
-    }, [dnModel, frModel, clModel, laModel, upModel, currentFile?.Dimensions, cbModel, shModel, t]);
+    }, [models, currentFile, t]);
 
     return (
         <Menu

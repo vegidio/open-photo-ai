@@ -20,13 +20,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
     const hasEnhancement = useEnhancementStore((state) => (file ? state.enhancements.has(file.Path) : false));
     const operations = useFileOperations(file);
     const addEnhancements = useAddEnhancements();
-    const dnModel = useSettingsStore((state) => state.dnModel);
-    const frModel = useSettingsStore((state) => state.frModel);
-    const clModel = useSettingsStore((state) => state.clModel);
-    const laModel = useSettingsStore((state) => state.laModel);
-    const cbModel = useSettingsStore((state) => state.cbModel);
-    const upModel = useSettingsStore((state) => state.upModel);
-    const shModel = useSettingsStore((state) => state.shModel);
+    const models = useSettingsStore((state) => state.models);
 
     const [isAnalysing, setIsAnalysing] = useState(false);
 
@@ -44,15 +38,7 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
             setIsAnalysing(true);
 
             try {
-                const suggestions = await suggestEnhancement(currentFile, {
-                    dn: dnModel,
-                    fr: frModel,
-                    cl: clModel,
-                    la: laModel,
-                    cb: cbModel,
-                    sh: shModel,
-                    up: upModel,
-                });
+                const suggestions = await suggestEnhancement(currentFile, models);
 
                 await addEnhancements(currentFile, suggestions);
                 track(AnalyticsEvent.AutopilotRun, { count: suggestions.length });

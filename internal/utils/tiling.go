@@ -34,9 +34,9 @@ func WithDivergenceGuard(threshold float32) TileOption {
 
 // RunTiledInference runs a fixed-shape ONNX session over an image in overlapping 256x256 tiles and stitches the results
 // back together with soft blending. scale is the model's output scale factor (1 for denoise, N for an NxN upscale), so
-// the result has dimensions width*scale x height*scale. opId is the progress key (e.g. "dn"/"up").
+// the result has dimensions width*scale x height*scale.
 //
-// The caller is responsible for emitting the initial onProgress(opId, 0): upscale invokes this once per scale pass and
+// The caller is responsible for emitting the initial onProgress(0): upscale invokes this once per scale pass and
 // must not reset progress to 0 on each pass.
 //
 // This is the tiling path a model should take. A custom driver gives up the divergence guard, the blending, the
@@ -48,7 +48,6 @@ func RunTiledInference(
 	session *Session,
 	img image.Image,
 	scale int,
-	opId string,
 	onProgress types.InferenceProgress,
 	opts ...TileOption,
 ) (*image.RGBA, error) {
@@ -100,7 +99,7 @@ func RunTiledInference(
 
 		if onProgress != nil {
 			total += step
-			onProgress(opId, ClampProgress(total))
+			onProgress(ClampProgress(total))
 		}
 	}
 

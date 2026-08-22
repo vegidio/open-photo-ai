@@ -2,6 +2,7 @@ package upscale
 
 import (
 	"context"
+	"fmt"
 	"image"
 	"math"
 
@@ -22,7 +23,7 @@ func RunPipeline(
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	if onProgress != nil {
-		onProgress("up", 0)
+		onProgress(0)
 	}
 
 	// Weight each pass by its input pixel area (≈ tile count ≈ work) so progress advances monotonically
@@ -44,10 +45,10 @@ func RunPipeline(
 		wrapped := onProgress
 		if onProgress != nil && totalW > 0 {
 			base, frac := done/totalW, weights[i]/totalW
-			wrapped = func(op string, p float64) { onProgress(op, base+p*frac) }
+			wrapped = func(p float64) { onProgress(base + p*frac) }
 		}
 
-		processedImg, err := utils.RunTiledInference(ctx, session, resultImg, scales[i], "up", wrapped)
+		processedImg, err := utils.RunTiledInference(ctx, session, resultImg, scales[i], wrapped)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to process image")
 		}
@@ -106,4 +107,23 @@ func resizeToIntendedScale(img image.Image, originalBounds image.Rectangle, scal
 	}
 
 	return img
+}
+
+// ParamScale is the map key carrying the per-run scale factor to Model.Run. Only variants whose Id omits the scale
+// (see Op) use it; for the rest the scale is in the Id and the params map is empty.
+const ParamScale = "scale"
+
+// ScaleFromParams reads the per-run scale from a params map, defaulting to 1.0 when absent or of the wrong type.
+// A scale of 1.0 still runs a diffusion model: it restores detail at the input size.
+func ScaleFromParams(params map[string]any) float64 {
+	if v, ok := params[ParamScale].(float64); ok {
+		return ClampScale(v)
+	}
+
+	return 1.0
+}
+
+// ScaleCacheKey is the stable per-run signature folded into the image cache key.
+func ScaleCacheKey(scale float64) string {
+	return fmt.Sprintf("s=%.4g", scale)
 }

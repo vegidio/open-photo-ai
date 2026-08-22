@@ -51,7 +51,7 @@ func TestOsakaFullPipeline(t *testing.T) {
 	outDir := os.TempDir()
 
 	lastOp, lastPct := "", -1.0
-	progress := func(op string, p float64) {
+	progress := func(p float64) {
 		if p-lastPct >= 0.2 || op != lastOp {
 			t.Logf("   progress %s %.0f%%", op, p*100)
 			lastOp, lastPct = op, p

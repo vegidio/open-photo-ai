@@ -112,31 +112,18 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     );
 };
 
-// The secondary line under the enhancement's name. Face recovery and upscale each carry a figure of their own; every
-// other enhancement is described by its intensity, so they share one key rather than repeating the same call six times.
-const opInfo = (t: TFunction, op: Operation, type: EnhancementType, faceText: string): string => {
-    const name = titleCase(op.options.name);
-    const quality = qualityLabel(t, op.options.precision);
-
-    switch (type) {
-        case 'fr':
-            return t('enhancements.infoFaces', { name, faces: faceText, quality });
-
-        // Colorization has no intensity, so the default branch's "{{intensity}}%" would render "NaN%".
-        case 'cl':
-            return t('enhancements.infoModel', { name, quality });
-
-        case 'up': {
-            const scale = parseFloat(parseFloat(op.options.scale).toFixed(3));
-            return t('enhancements.infoScale', { name, scale, quality });
-        }
-
-        default: {
-            const intensity = parseFloat(op.options.intensity) * 100;
-            return t('enhancements.info', { name, intensity, quality });
-        }
-    }
-};
+// The secondary line under the enhancement's name. What it reports differs by enhancement -- a face count, a scale, an
+// intensity, or nothing but the model -- so the key comes from the ENHANCEMENTS registry rather than a switch here.
+// That way a new enhancement cannot be added without declaring which shape its line takes; previously, forgetting to
+// add a case rendered "NaN%".
+const opInfo = (t: TFunction, op: Operation, type: EnhancementType, faceText: string): string =>
+    t(ENHANCEMENTS[type].infoKey, {
+        name: titleCase(op.options.name),
+        quality: qualityLabel(t, op.options.precision),
+        faces: faceText,
+        scale: parseFloat(parseFloat(op.options.scale).toFixed(3)),
+        intensity: parseFloat(op.options.intensity) * 100,
+    });
 
 const titleCase = (input: string): string => {
     if (!input) return input;

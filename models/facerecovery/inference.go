@@ -34,7 +34,7 @@ func RestoreFaces(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 	if onProgress != nil {
-		onProgress("fr", 0.2)
+		onProgress(0.2)
 	}
 
 	total := 0.2
@@ -59,14 +59,14 @@ func RestoreFaces(
 		}
 		if onProgress != nil {
 			total += step
-			onProgress("fr", total)
+			onProgress(total)
 		}
 
 		result = blendFace(result, restored, mask, transform, face.BoundingBox, tileSize)
 
 		if onProgress != nil {
 			total += step
-			onProgress("fr", utils.ClampProgress(total))
+			onProgress(utils.ClampProgress(total))
 		}
 	}
 

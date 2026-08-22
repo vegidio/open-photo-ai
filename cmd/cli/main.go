@@ -39,23 +39,28 @@ func main() {
 		return
 	}
 
-	ops := map[string]func(types.Precision) types.Operation{
-		"delhi":  func(p types.Precision) types.Operation { return delhi.Op(p) },
-		"mumbai": func(p types.Precision) types.Operation { return mumbai.Op(p) },
-		"jaipur": func(p types.Precision) types.Operation { return jaipur.Op(p) },
+	// An ordered slice rather than a map plus a separate key list: the run order is part of the definition, and a
+	// model can't be added to one half and forgotten in the other.
+	ops := []struct {
+		name string
+		op   func(types.Precision) types.Operation
+	}{
+		{"delhi", func(p types.Precision) types.Operation { return delhi.Op(p) }},
+		{"mumbai", func(p types.Precision) types.Operation { return mumbai.Op(p) }},
+		{"jaipur", func(p types.Precision) types.Operation { return jaipur.Op(p) }},
 	}
 	precisions := []types.Precision{types.PrecisionFp32, types.PrecisionFp16}
 	providers := []types.ExecutionProvider{types.ExecutionProviderCPU, types.ExecutionProviderCoreML}
 
-	for _, name := range []string{"delhi", "mumbai", "jaipur"} {
+	for _, model := range ops {
 		for _, precision := range precisions {
 			for _, ep := range providers {
-				tag := fmt.Sprintf("%s_%s_%s", name, precision, strings.ToLower(string(ep)))
+				tag := fmt.Sprintf("%s_%s_%s", model.name, precision, strings.ToLower(string(ep)))
 				now := time.Now()
 
 				outputData, err := opai.Process(ctx, inputData, ep, func(p types.Progress) {
 					fmt.Printf("%s [%s %.0f%%] - Progress: %.1f%%\n", p.Operation, p.Phase, p.Fraction*100, p.Total*100)
-				}, ops[name](precision))
+				}, model.op(precision))
 				if err != nil {
 					fmt.Printf("%s: failed to colorize the image: %v\n", tag, err)
 					return

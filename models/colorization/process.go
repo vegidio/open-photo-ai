@@ -3,6 +3,8 @@ package colorization
 import (
 	"context"
 	"image"
+	"runtime"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
@@ -10,40 +12,53 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-// inputSize is the fixed spatial size the colorization graphs are exported at. The model only predicts the ab chroma
-// planes at this resolution; the output keeps the original image's full-resolution luminance, so this is not a cap on
-// output detail.
-const inputSize = 512
+// Spec is everything that differs between the colorization graphs. Both families reduce to the same shape - render
+// the image square and gray, run it, take chroma from the result and compose it onto the original luminance - so the
+// pipeline itself is written once in Process() and the differences are stated as data in specs.go rather than buried
+// in a second copy.
+type Spec struct {
+	// Size is the square resolution the graph is exported at.
+	Size int
 
-// Process colorizes img with a DDColor-style session: the graph takes a gray RGB rendering of the image's luminance
-// (CHW, [0,1], 512x512) and returns the predicted Lab ab planes at the same size. The result is composed from the
-// original-resolution L channel plus the upsampled ab planes, so luminance detail is preserved exactly.
-func Process(ctx context.Context, session *utils.Session, img image.Image) (image.Image, error) {
-	bounds := img.Bounds()
-	origW := bounds.Dx()
-	origH := bounds.Dy()
+	// Filter resamples the image up to that size. The two families were trained against different resamplers and are
+	// sensitive to the difference.
+	Filter imaging.ResampleFilter
+
+	// BuildInput renders the resized image into the graph's CHW input tensor.
+	BuildInput func(img *image.NRGBA, size int) []float32
+
+	// OutChannels is the channel count of the output tensor: DDColor emits ab, DeOldify emits RGB.
+	OutChannels int
+
+	// Chroma pulls the Lab a/b planes, at model resolution, out of the raw output tensor.
+	Chroma func(data []float32, size int) (a, b []float32)
+}
+
+// Process colorizes img with session, which must be a graph matching sp.
+//
+// Every colorization family shares this one pipeline: the image is rendered square and gray the way the graph was
+// trained, run, and the predicted chroma is composed onto the original image's full-resolution luminance. Only chroma
+// comes from the model, so the graph's fixed input size is not a cap on output detail.
+func Process(ctx context.Context, session *utils.Session, img image.Image, sp Spec) (image.Image, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Wrap(err, "context cancelled")
+	}
+
+	resized := imaging.Resize(img, sp.Size, sp.Size, sp.Filter)
+	inputData := sp.BuildInput(resized, sp.Size)
 
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	origL := lPlane(img)
-
-	resized := imaging.Resize(img, inputSize, inputSize, imaging.Lanczos)
-	inputData := grayLabInput(resized)
-
-	if err := ctx.Err(); err != nil {
-		return nil, errors.Wrap(err, "context cancelled")
-	}
-
-	inputShape := ort.NewShape(1, 3, inputSize, inputSize)
+	inputShape := ort.NewShape(1, 3, int64(sp.Size), int64(sp.Size))
 	inputTensor, err := ort.NewTensor(inputShape, inputData)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create input tensor")
 	}
 	defer inputTensor.Destroy()
 
-	outputShape := ort.NewShape(1, 2, inputSize, inputSize)
+	outputShape := ort.NewShape(1, int64(sp.OutChannels), int64(sp.Size), int64(sp.Size))
 	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create output tensor")
@@ -54,163 +69,152 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor})
-	if err != nil {
+	if err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor}); err != nil {
 		return nil, errors.Wrap(err, "failed to run inference")
 	}
 
-	if err := ctx.Err(); err != nil {
+	if err = ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	outputData := outputTensor.GetData()
-	plane := inputSize * inputSize
-	aPlane := resizePlane(outputData[:plane], inputSize, inputSize, origW, origH)
-	bPlane := resizePlane(outputData[plane:2*plane], inputSize, inputSize, origW, origH)
+	aPlane, bPlane := sp.Chroma(outputTensor.GetData(), sp.Size)
 
-	return composeLab(origL, aPlane, bPlane, origW, origH), nil
+	return compose(img, aPlane, bPlane, sp.Size), nil
 }
 
-// lPlane extracts the CIELab L channel of every pixel at full resolution.
-func lPlane(img image.Image) []float32 {
+// compose renders the final image directly from the source pixels and the model-resolution chroma planes.
+//
+// This deliberately fuses what would otherwise be four full-resolution passes - extract luminance, upsample a,
+// upsample b, combine - into one. The intermediate planes it avoids are float32 at full photo resolution, so on a
+// 12 MP image they would total ~144 MB of heap that is written once, read once and thrown away. Fusing also keeps
+// each source pixel in cache for the whole of its own computation.
+//
+// The bilinear weights, the clamping and the arithmetic order are exactly those of the separate resize-then-compose
+// path, which survives as the reference implementation the tests check this against.
+func compose(img image.Image, aPlane, bPlane []float32, srcSize int) image.Image {
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	out := make([]float32, width*height)
+	out := image.NewRGBA(image.Rect(0, 0, width, height))
 
-	// Fast path: this runs at full photo resolution, so skipping the At() dispatch and color.Color boxing per pixel
-	// matters. Sample16 reproduces At().RGBA() bit-for-bit, so both paths are output-identical.
+	// The horizontal mapping depends only on x, so it is computed once here instead of per pixel.
+	x0s, x1s, fxs := sampleAxis(srcSize, width)
+
 	pix, stride, fast := utils.RgbPixBuffer(img)
 	_, isNRGBA := img.(*image.NRGBA)
 
-	if fast {
-		for y := range height {
-			row := y * stride
-			dst := y * width
+	rows := func(yStart, yEnd int) {
+		for y := yStart; y < yEnd; y++ {
+			sy := (float64(y)+0.5)*(float64(srcSize)/float64(height)) - 0.5
+			if sy < 0 {
+				sy = 0
+			}
+			y0 := int(sy)
+			if y0 > srcSize-1 {
+				y0 = srcSize - 1
+			}
+			y1 := y0 + 1
+			if y1 > srcSize-1 {
+				y1 = srcSize - 1
+			}
+			fy := float32(sy - float64(y0))
+
+			rowTop := y0 * srcSize
+			rowBottom := y1 * srcSize
+			src := y * stride
+			dst := y * out.Stride
 
 			for x := range width {
-				pr, pg, pb, _ := utils.Sample16(pix, row+x*4, isNRGBA)
-				l, _, _ := utils.RgbToLab(float32(pr)/65535.0, float32(pg)/65535.0, float32(pb)/65535.0)
-				out[dst+x] = l
+				x0, x1, fx := x0s[x], x1s[x], fxs[x]
+
+				aTop := aPlane[rowTop+x0]*(1-fx) + aPlane[rowTop+x1]*fx
+				aBottom := aPlane[rowBottom+x0]*(1-fx) + aPlane[rowBottom+x1]*fx
+				bTop := bPlane[rowTop+x0]*(1-fx) + bPlane[rowTop+x1]*fx
+				bBottom := bPlane[rowBottom+x0]*(1-fx) + bPlane[rowBottom+x1]*fx
+
+				var l float32
+				if fast {
+					off := src + x*4
+					// Sample16 leaves the channel bytes untouched unless it has to un-premultiply, so the table-driven
+					// conversion is exact for everything but a partially transparent straight-alpha pixel.
+					if !isNRGBA || pix[off+3] == 0xff {
+						l = utils.RgbToLabLBytes(pix[off], pix[off+1], pix[off+2])
+					} else {
+						pr, pg, pb, _ := utils.Sample16(pix, off, true)
+						l = utils.RgbToLabL(float32(pr)/65535.0, float32(pg)/65535.0, float32(pb)/65535.0)
+					}
+				} else {
+					pr, pg, pb, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+					l = utils.RgbToLabL(float32(pr)/65535.0, float32(pg)/65535.0, float32(pb)/65535.0)
+				}
+
+				r, g, b := utils.LabToLinearRgb(l, aTop*(1-fy)+aBottom*fy, bTop*(1-fy)+bBottom*fy)
+
+				// Round rather than truncate, matching the reference pipeline's np.round(): truncation would also turn
+				// the conversion's ~1e-5 neutral-axis error into visible one-count channel splits on gray pixels.
+				out.Pix[dst] = utils.SrgbByte(r)
+				out.Pix[dst+1] = utils.SrgbByte(g)
+				out.Pix[dst+2] = utils.SrgbByte(b)
+				out.Pix[dst+3] = 255
+				dst += 4
 			}
 		}
+	}
 
+	// The loop is strictly row-independent, so it splits across cores with no coordination beyond the join.
+	bands := min(runtime.NumCPU(), height)
+	if bands <= 1 {
+		rows(0, height)
 		return out
 	}
 
-	for y := range height {
-		for x := range width {
-			pr, pg, pb, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
-			l, _, _ := utils.RgbToLab(float32(pr)/65535.0, float32(pg)/65535.0, float32(pb)/65535.0)
-			out[y*width+x] = l
-		}
+	var wg sync.WaitGroup
+	band := (height + bands - 1) / bands
+
+	for start := 0; start < height; start += band {
+		wg.Add(1)
+
+		go func(yStart int) {
+			defer wg.Done()
+			rows(yStart, min(yStart+band, height))
+		}(start)
 	}
+
+	wg.Wait()
 
 	return out
 }
 
-// grayLabInput builds the model's CHW input tensor from the resized image: each pixel is reduced to its luminance
-// (Lab L with zero chroma) and rendered back to RGB, which is the gray image DDColor was trained on.
-func grayLabInput(img *image.NRGBA) []float32 {
-	plane := inputSize * inputSize
-	data := make([]float32, 3*plane)
+// sampleAxis precomputes the bilinear source columns and weights for every destination column. Sampling aligns pixel
+// centers (the cv2.INTER_LINEAR convention) and clamps at the edges.
+func sampleAxis(srcLen, dstLen int) (lo, hi []int, frac []float32) {
+	lo = make([]int, dstLen)
+	hi = make([]int, dstLen)
+	frac = make([]float32, dstLen)
 
-	for y := range inputSize {
-		row := y * img.Stride
-		dst := y * inputSize
+	scale := float64(srcLen) / float64(dstLen)
 
-		for x := range inputSize {
-			off := row + x*4
-			pr, pg, pb, _ := utils.Sample16(img.Pix, off, true)
-
-			l, _, _ := utils.RgbToLab(float32(pr)/65535.0, float32(pg)/65535.0, float32(pb)/65535.0)
-			r, g, b := utils.LabToRgb(l, 0, 0)
-
-			i := dst + x
-			data[i] = r
-			data[plane+i] = g
-			data[2*plane+i] = b
+	for i := range dstLen {
+		s := (float64(i)+0.5)*scale - 0.5
+		if s < 0 {
+			s = 0
 		}
+
+		i0 := int(s)
+		if i0 > srcLen-1 {
+			i0 = srcLen - 1
+		}
+
+		i1 := i0 + 1
+		if i1 > srcLen-1 {
+			i1 = srcLen - 1
+		}
+
+		lo[i] = i0
+		hi[i] = i1
+		frac[i] = float32(s - float64(i0))
 	}
 
-	return data
-}
-
-// resizePlane bilinearly resizes a single float32 plane. The imaging package only resizes 8-bit images, and the ab
-// planes must stay in float Lab units until they are combined with the luminance, so this is done by hand. Sampling
-// aligns pixel centers (the cv2.INTER_LINEAR convention) and clamps at the edges.
-func resizePlane(src []float32, srcW, srcH, dstW, dstH int) []float32 {
-	if srcW == dstW && srcH == dstH {
-		out := make([]float32, len(src))
-		copy(out, src)
-		return out
-	}
-
-	out := make([]float32, dstW*dstH)
-	scaleX := float64(srcW) / float64(dstW)
-	scaleY := float64(srcH) / float64(dstH)
-
-	for y := range dstH {
-		sy := (float64(y)+0.5)*scaleY - 0.5
-		if sy < 0 {
-			sy = 0
-		}
-		y0 := int(sy)
-		if y0 > srcH-1 {
-			y0 = srcH - 1
-		}
-		y1 := y0 + 1
-		if y1 > srcH-1 {
-			y1 = srcH - 1
-		}
-		fy := float32(sy - float64(y0))
-
-		for x := range dstW {
-			sx := (float64(x)+0.5)*scaleX - 0.5
-			if sx < 0 {
-				sx = 0
-			}
-			x0 := int(sx)
-			if x0 > srcW-1 {
-				x0 = srcW - 1
-			}
-			x1 := x0 + 1
-			if x1 > srcW-1 {
-				x1 = srcW - 1
-			}
-			fx := float32(sx - float64(x0))
-
-			top := src[y0*srcW+x0]*(1-fx) + src[y0*srcW+x1]*fx
-			bottom := src[y1*srcW+x0]*(1-fx) + src[y1*srcW+x1]*fx
-			out[y*dstW+x] = top*(1-fy) + bottom*fy
-		}
-	}
-
-	return out
-}
-
-// composeLab renders the final image from the original luminance plane and the upsampled chroma planes.
-func composeLab(lPlane, aPlane, bPlane []float32, width, height int) image.Image {
-	out := image.NewRGBA(image.Rect(0, 0, width, height))
-
-	for y := range height {
-		dst := y * out.Stride
-		row := y * width
-
-		for x := range width {
-			i := row + x
-			r, g, b := utils.LabToRgb(lPlane[i], aPlane[i], bPlane[i])
-
-			// Round rather than truncate, matching the reference pipeline's np.round(): truncation would also turn
-			// the conversion's ~1e-5 neutral-axis error into visible one-count channel splits on gray pixels.
-			out.Pix[dst] = uint8(utils.Clamp255(r*255.0 + 0.5))
-			out.Pix[dst+1] = uint8(utils.Clamp255(g*255.0 + 0.5))
-			out.Pix[dst+2] = uint8(utils.Clamp255(b*255.0 + 0.5))
-			out.Pix[dst+3] = 255
-			dst += 4
-		}
-	}
-
-	return out
+	return lo, hi, frac
 }

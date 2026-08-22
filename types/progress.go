@@ -10,9 +10,9 @@ type DownloadProgress func(downloaded, total int64, percent float64)
 // against, so it describes one model's own run and nothing beyond it: a model has no way to know what else the call
 // that invoked it is going to do. ProgressHandler is what the caller of Process or Execute receives.
 //
-// The operation parameter describes the current processing step, and progress represents the completion percentage as a
-// value between 0.0 and 1.0.
-type InferenceProgress func(operation string, progress float64)
+// progress represents the completion percentage as a value between 0.0 and 1.0. A model reports no name for itself:
+// the operation it belongs to is both more specific and consistent across phases, and Process fills it in.
+type InferenceProgress func(progress float64)
 
 // Phase distinguishes the two things that take time while an operation is being carried out.
 type Phase string

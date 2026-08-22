@@ -286,9 +286,7 @@ func (s *progressSplitter) run() types.InferenceProgress {
 		base, span = downloadShare, 1-downloadShare
 	}
 
-	// The name the model reports is dropped in favour of the operation's full ID: the models report a two-letter
-	// family prefix, and the operation itself is both more specific and consistent across phases.
-	return func(_ string, progress float64) {
+	return func(progress float64) {
 		s.onProgress(types.Progress{
 			Operation: s.id,
 			Phase:     types.PhaseInference,

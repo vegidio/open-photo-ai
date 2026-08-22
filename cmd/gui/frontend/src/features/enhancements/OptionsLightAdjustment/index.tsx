@@ -1,12 +1,10 @@
-import { useMemo } from 'react';
 import { Divider } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { IntensitySelector } from '@/features/enhancements/IntensitySelector';
-import { ModelSelector, type ModelSelectorOption } from '@/features/enhancements/ModelSelector';
+import { ModelSelector } from '@/features/enhancements/ModelSelector';
 import { OptionsPopover } from '@/features/enhancements/OptionsPopover';
-import { useOptionEnhancement } from '@/hooks';
-import { modelLabel } from '@/i18n/format';
-import { Paris } from '@/operations';
+import { useModelOptions, useOptionEnhancement } from '@/hooks';
+import { buildSelection } from '@/utils/enhancement';
 
 type OptionsLightAdjustmentProps = {
     anchorEl: HTMLElement | undefined;
@@ -17,32 +15,17 @@ type OptionsLightAdjustmentProps = {
 export const OptionsLightAdjustment = ({ anchorEl, open, onClose }: OptionsLightAdjustmentProps) => {
     const { t } = useTranslation();
 
-    // Built here rather than at module scope: t() called at module-evaluation time would freeze the labels
-    // and descriptions in whatever language was active on the first import and never follow a change.
-    const options = useMemo<ModelSelectorOption[]>(
-        () => [
-            {
-                value: 'paris_fp32',
-                label: modelLabel(t, 'Paris', 'fp32'),
-                description: t('enhancements.lightAdjustment.models.paris'),
-            },
-            { value: 'paris_fp16', label: modelLabel(t, 'Paris', 'fp16') },
-        ],
-        [t],
-    );
+    const options = useModelOptions('la');
 
     const { model, amount, onModelChange, onAmountChange } = useOptionEnhancement(
         'la',
+        (nextModel, nextIntensity) =>
+            buildSelection(
+                'la',
+                nextModel,
+                nextIntensity !== '' && nextIntensity !== '-' ? parseInt(nextIntensity, 10) / 100 : 0,
+            ),
         (op) => (Number(op?.options.intensity) * 100).toString(),
-        (nextModel, nextIntensity) => {
-            const intensity = nextIntensity !== '' && nextIntensity !== '-' ? parseInt(nextIntensity, 10) / 100 : 0;
-            const [name, precision] = nextModel.split('_');
-
-            switch (name) {
-                case 'paris':
-                    return new Paris(intensity, precision);
-            }
-        },
     );
 
     return (

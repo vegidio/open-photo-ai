@@ -7,14 +7,13 @@ import { AnalyticsEvent, track } from '@/analytics';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { GetLogsPath } from '@/bindings/gui/services/appservice.ts';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
-import type { SelectItem } from '@/components/atoms/Select';
 import { SettingsItemButton } from '@/features/settings/SettingsItemButton';
 import { SettingsItemSelect } from '@/features/settings/SettingsItemSelect';
 import { SettingsItemSwitch } from '@/features/settings/SettingsItemSwitch';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
 import { LANGUAGE_NAMES, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n/languages';
 import { useSettingsStore } from '@/stores';
-import { ENHANCEMENTS, type EnhancementType } from '@/utils/enhancement';
+import { ENHANCEMENTS, type EnhancementType, modelItems } from '@/utils/enhancement';
 
 export type SettingsListHandle = {
     scrollToSection: (itemId: string) => void;
@@ -49,7 +48,9 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
                     </ListSubheader>
 
                     {section.items.map((item) => {
-                        const Row = ROWS[item.id];
+                        // Every enhancement row renders the same component, so they fall through to it rather than
+                        // being listed one by one in ROWS — a third copy of the same seven ids.
+                        const Row = ROWS[item.id] ?? (item.id in ENHANCEMENT_ROWS ? ItemEnhancement : undefined);
                         return Row ? <Row key={item.id} id={item.id} /> : null;
                     })}
                 </div>
@@ -170,103 +171,38 @@ const ItemAiProcessor = ({ id }: SettingsRowProps) => {
     );
 };
 
-// The default-model rows. They differ only in which enhancement they belong to, which store field they read and the
-// models on offer, so they are described rather than written out six times. Model names are proper nouns and stay
-// out of the catalogs; the row's title comes from ENHANCEMENTS so it matches the rest of the app.
+// The default-model rows. They differ only in which enhancement they belong to and the description they show; the
+// models on offer and the row title both come from the ENHANCEMENTS registry, so a new model appears here without an
+// edit. Model names are proper nouns and stay out of the catalogs.
 type EnhancementRow = {
     type: EnhancementType;
     descriptionKey: ParseKeys;
-    field: 'dnModel' | 'frModel' | 'clModel' | 'laModel' | 'cbModel' | 'shModel' | 'upModel';
-    setter: 'setDnModel' | 'setFrModel' | 'setClModel' | 'setLaModel' | 'setCbModel' | 'setShModel' | 'setUpModel';
-    models: SelectItem[];
 };
 
 const ENHANCEMENT_ROWS: Record<string, EnhancementRow> = {
-    enh_denoise: {
-        type: 'dn',
-        descriptionKey: 'settings.enhancements.denoise.description',
-        field: 'dnModel',
-        setter: 'setDnModel',
-        models: [
-            { value: 'stockholm', label: 'Stockholm' },
-            { value: 'malmo', label: 'Malmö' },
-            { value: 'gothenburg', label: 'Gothenburg' },
-        ],
-    },
-    enh_face: {
-        type: 'fr',
-        descriptionKey: 'settings.enhancements.faceRecovery.description',
-        field: 'frModel',
-        setter: 'setFrModel',
-        models: [
-            { value: 'athens', label: 'Athens' },
-            { value: 'santorini', label: 'Santorini' },
-        ],
-    },
-    enh_colorization: {
-        type: 'cl',
-        descriptionKey: 'settings.enhancements.colorization.description',
-        field: 'clModel',
-        setter: 'setClModel',
-        models: [
-            { value: 'delhi', label: 'Delhi' },
-            { value: 'mumbai', label: 'Mumbai' },
-            { value: 'jaipur', label: 'Jaipur' },
-        ],
-    },
-    enh_light: {
-        type: 'la',
-        descriptionKey: 'settings.enhancements.lightAdjustment.description',
-        field: 'laModel',
-        setter: 'setLaModel',
-        models: [{ value: 'paris', label: 'Paris' }],
-    },
-    enh_color: {
-        type: 'cb',
-        descriptionKey: 'settings.enhancements.colorBalance.description',
-        field: 'cbModel',
-        setter: 'setCbModel',
-        models: [{ value: 'rio', label: 'Rio' }],
-    },
-    enh_sharpen: {
-        type: 'sh',
-        descriptionKey: 'settings.enhancements.sharpen.description',
-        field: 'shModel',
-        setter: 'setShModel',
-        models: [
-            { value: 'moscow', label: 'Moscow' },
-            { value: 'petersburg', label: 'St. Petersburg' },
-            { value: 'novgorod', label: 'Novgorod' },
-        ],
-    },
-    enh_upscale: {
-        type: 'up',
-        descriptionKey: 'settings.enhancements.upscale.description',
-        field: 'upModel',
-        setter: 'setUpModel',
-        models: [
-            { value: 'tokyo', label: 'Tokyo' },
-            { value: 'kyoto', label: 'Kyoto' },
-            { value: 'saitama', label: 'Saitama' },
-            { value: 'osaka', label: 'Osaka' },
-        ],
-    },
+    enh_denoise: { type: 'dn', descriptionKey: 'settings.enhancements.denoise.description' },
+    enh_face: { type: 'fr', descriptionKey: 'settings.enhancements.faceRecovery.description' },
+    enh_colorization: { type: 'cl', descriptionKey: 'settings.enhancements.colorization.description' },
+    enh_light: { type: 'la', descriptionKey: 'settings.enhancements.lightAdjustment.description' },
+    enh_color: { type: 'cb', descriptionKey: 'settings.enhancements.colorBalance.description' },
+    enh_sharpen: { type: 'sh', descriptionKey: 'settings.enhancements.sharpen.description' },
+    enh_upscale: { type: 'up', descriptionKey: 'settings.enhancements.upscale.description' },
 };
 
 const ItemEnhancement = ({ id }: SettingsRowProps) => {
     const { t } = useTranslation();
     const row = ENHANCEMENT_ROWS[id ?? ''];
-    const selected = useSettingsStore((state) => state[row.field]);
-    const setModel = useSettingsStore((state) => state[row.setter]);
+    const selected = useSettingsStore((state) => state.models[row.type]);
+    const setModel = useSettingsStore((state) => state.setModel);
 
     return (
         <SettingsItemSelect
             id={id}
             title={t(ENHANCEMENTS[row.type].nameKey)}
             description={t(row.descriptionKey)}
-            items={row.models}
+            items={modelItems(row.type)}
             selected={selected}
-            onSelect={(value) => setModel(value)}
+            onSelect={(value) => setModel(row.type, value)}
         />
     );
 };
@@ -278,11 +214,4 @@ const ROWS: Record<string, ComponentType<SettingsRowProps>> = {
     app_logs: ItemLogs,
     app_analytics: ItemAnalytics,
     perf_processor: ItemAiProcessor,
-    enh_denoise: ItemEnhancement,
-    enh_face: ItemEnhancement,
-    enh_colorization: ItemEnhancement,
-    enh_light: ItemEnhancement,
-    enh_color: ItemEnhancement,
-    enh_sharpen: ItemEnhancement,
-    enh_upscale: ItemEnhancement,
 };

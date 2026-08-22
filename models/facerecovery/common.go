@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
-	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -35,20 +34,6 @@ func FacesCacheKey(faces []detection.Face) string {
 	return b.String()
 }
 
-func LoadModel(
-	ctx context.Context,
-	operation types.Operation,
-	onProgress types.DownloadProgress,
-) (string, error) {
-	modelFile := operation.Id() + ".onnx"
-
-	if err := deps.Install(ctx, deps.ModelDependency(operation.Id()), onProgress); err != nil {
-		return "", errors.Wrapf(err, "failed to prepare Face Recovery model %s", operation.Id())
-	}
-
-	return modelFile, nil
-}
-
 func ExtractFaces(
 	ctx context.Context,
 	dtModel types.Model[[]detection.Face],
@@ -56,7 +41,7 @@ func ExtractFaces(
 	onProgress types.InferenceProgress,
 ) ([]detection.Face, error) {
 	if onProgress != nil {
-		onProgress("fr", 0)
+		onProgress(0)
 	}
 
 	faces, err := dtModel.Run(ctx, img, nil, nil)
@@ -65,7 +50,7 @@ func ExtractFaces(
 	}
 
 	if onProgress != nil {
-		onProgress("fr", 0.1)
+		onProgress(0.1)
 	}
 
 	return faces, nil
