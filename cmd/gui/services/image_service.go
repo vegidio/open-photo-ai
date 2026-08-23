@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
@@ -162,6 +163,8 @@ func (s *ImageService) ExportImage(
 		quality = 100
 	}
 
+	started := time.Now()
+
 	ops := strings.Join(opIds, ", ")
 	slog.Info("exporting image", "input", file.Path, "output", outputPath,
 		"format", format, "quality", quality, "operations", ops)
@@ -185,7 +188,7 @@ func (s *ImageService) ExportImage(
 	}
 
 	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: file.Hash, State: "RUNNING", Value: progressInferEnd})
-	return s.saveAndEmit(ctx, outputData.Pixels, outputPath, overwrite, format, quality, file.Hash)
+	return s.saveAndEmit(ctx, outputData.Pixels, outputPath, overwrite, format, quality, file.Hash, started)
 }
 
 func (s *ImageService) saveAndEmit(
@@ -196,6 +199,7 @@ func (s *ImageService) saveAndEmit(
 	format types.ImageFormat,
 	quality int,
 	fileHash string,
+	started time.Time,
 ) error {
 	if err := ctx.Err(); err != nil {
 		slog.Info("export save cancelled", "hash", fileHash)
@@ -215,8 +219,15 @@ func (s *ImageService) saveAndEmit(
 		return errors.Wrap(err, "failed to save image")
 	}
 
-	slog.Info("image saved", "output_path", finalPath, "size", size)
-	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: fileHash, State: "COMPLETED", Value: float64(size)})
+	duration := time.Since(started)
+
+	slog.Info("image saved", "output_path", finalPath, "size", size, "duration", duration)
+	s.app.Event.Emit(EventAppExport, ExportUpdate{
+		Hash:       fileHash,
+		State:      "COMPLETED",
+		Value:      float64(size),
+		DurationMs: duration.Milliseconds(),
+	})
 	return nil
 }
 
@@ -299,6 +310,9 @@ func getOutputPath(filePath string, overwrite bool) (string, func()) {
 
 	// Exhausted the dedup suffix range; fall back to the last candidate and let the caller's
 	// write fail loudly rather than looping forever.
+	slog.Warn("exhausted the output name suffixes; the export will overwrite or fail",
+		"base", basePath, "tries", maxOutputDedupTries)
+
 	return fmt.Sprintf("%s_%d%s", basePath, maxOutputDedupTries, ext), func() {}
 }
 
@@ -308,6 +322,14 @@ func getOutputPath(filePath string, overwrite bool) (string, func()) {
 func claimPath(path string) (release func(), ok bool) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
+		// Handing the name back on anything other than "already exists" is deliberate - see above - but it means a
+		// read-only directory or a missing parent is reported later, by the real write, as a failure to save a file
+		// this function has already decided the caller owns. Saying so here is what connects the two.
+		if !errors.Is(err, os.ErrExist) {
+			slog.Warn("could not claim the output name; leaving it for the write to report",
+				"output_path", path, "err", err)
+		}
+
 		// Nothing was created, so there is nothing to clean up - but the caller invokes release on its own write
 		// failure path, so this has to be a no-op func rather than nil.
 		return func() {}, !errors.Is(err, os.ErrExist)

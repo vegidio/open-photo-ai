@@ -108,6 +108,14 @@ func restore(
 ) ([]float32, error) {
 	grid := utils.TileGrid{Size: ditRegionEdge, Overlap: tileOverlap, Width: width, Height: height}
 	tiles := grid.Tiles()
+
+	// Same hazard as the shared driver: zero tiles means the loop never runs and an untouched canvas is returned as
+	// though it held a restored image. There is no partitioning of a zero-area region, so this is a failure.
+	if len(tiles) == 0 {
+		internal.Log().Warn("cannot tile the region", "width", width, "height", height)
+		return nil, errors.Newf("cannot tile a %dx%d region", width, height)
+	}
+
 	canvas := newCanvas(width, height)
 
 	for i, rect := range tiles {

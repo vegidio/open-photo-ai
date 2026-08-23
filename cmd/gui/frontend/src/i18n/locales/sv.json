@@ -320,6 +320,7 @@
         "modelDownload": "Kunde inte ladda ner AI-modellen. Kontrollera din internetanslutning och försök igen.",
         "autopilotFailed": "Något gick fel. Kunde inte köra autopiloten.",
         "enhanceFailed": "Något gick fel. Kunde inte förbättra bilden.",
-        "faceDetectFailed": "Något gick fel. Kunde inte hitta några ansikten."
+        "faceDetectFailed": "Något gick fel. Kunde inte hitta några ansikten.",
+        "showLogsFailed": "Det gick inte att öppna loggfilen. Du hittar den i appens konfigurationsmapp."
     }
 }

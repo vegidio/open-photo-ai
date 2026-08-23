@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
+	"github.com/vegidio/open-photo-ai/internal"
 )
 
 // The retry budget. maxFruitlessAttempts counts attempts that moved *no* bytes rather than attempts
@@ -103,7 +104,13 @@ func retryable(err error) bool {
 // nowhere". The distinction matters: a server that ignores Range and truncates every response would
 // move bytes on every attempt while never advancing past the same offset, and counting bytes rather
 // than position would retry it forever.
-func withRetry(ctx context.Context, op func(attempt int) (int64, error)) error {
+//
+// artifact names what is being fetched, and exists only so the log lines below can say which of
+// several concurrent downloads they are about. This is the slowest thing the app ever does and the
+// likeliest to fail on a user's machine, so every way out of the loop says why: without it a stalled
+// install is a frozen progress bar with nothing in the log to explain it. The success path stays
+// silent - the caller already reports that.
+func withRetry(ctx context.Context, artifact string, op func(attempt int) (int64, error)) error {
 	var fruitless int
 	var furthest int64
 
@@ -116,10 +123,13 @@ func withRetry(ctx context.Context, op func(attempt int) (int64, error)) error {
 		// Checked before retryable, so a cancellation that surfaced as some other error - a read on
 		// a closed body, say - still ends the loop rather than being retried into a dead context.
 		if ctx.Err() != nil {
+			internal.Log().Info("transfer cancelled", "artifact", artifact, "attempt", attempt)
 			return ctx.Err()
 		}
 
 		if !retryable(err) {
+			internal.Log().Warn("transfer failed and will not be retried",
+				"artifact", artifact, "attempt", attempt, "reached", reached, "err", err)
 			return err
 		}
 
@@ -129,11 +139,22 @@ func withRetry(ctx context.Context, op func(attempt int) (int64, error)) error {
 		} else {
 			fruitless++
 			if fruitless >= maxFruitlessAttempts {
+				internal.Log().Warn("gave up on the transfer", "artifact", artifact,
+					"attempts", attempt, "fruitless", fruitless, "furthest", furthest, "err", err)
 				return errors.Wrapf(err, "gave up after %d attempts that got no further", fruitless)
 			}
 		}
 
-		if err = sleepFor(ctx, backoff(fruitless, err)); err != nil {
+		// Hoisted out of the sleepFor call below so the wait can be reported. `stalled` is the one
+		// attribute that cannot be recovered from the error text at a glance, and it is exactly what
+		// separates "the bar froze for a minute" from an ordinary dropped connection.
+		delay := backoff(fruitless, err)
+
+		internal.Log().Warn("transfer attempt failed; retrying",
+			"artifact", artifact, "attempt", attempt, "reached", reached, "fruitless", fruitless,
+			"backoff", delay, "stalled", errors.Is(err, errStalled), "err", err)
+
+		if err = sleepFor(ctx, delay); err != nil {
 			return err
 		}
 	}

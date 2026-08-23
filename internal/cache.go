@@ -71,6 +71,11 @@ func (c *Cache) GetImage(ctx context.Context, hash string, operations ...types.O
 
 	img, err := dataToImage(data)
 	if err != nil {
+		// A stored entry that no longer decodes - a truncated write, a half-flushed shutdown - is reported as a miss
+		// like any other, so the caller re-runs the inference and SetImage overwrites this key with a good value. It
+		// self-heals, but silently: the only visible symptom is one enhancement that was inexplicably slow. Saying so
+		// is what makes that one slow run explicable in a log a user attached to a bug report.
+		Log().Warn("a cached image is corrupt; re-running the operation to replace it", "key", key, "err", err)
 		return nil, errors.Wrap(err, "failed to decode image")
 	}
 

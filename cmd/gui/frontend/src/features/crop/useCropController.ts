@@ -256,6 +256,10 @@ export const useCropController = (open: boolean, onClose: () => void) => {
 
         if (isIdentity) {
             removeCrop(currentFile);
+
+            // The counterpart to crop_applied. Confirming a crop that turned out to be the whole image is how a user
+            // backs out of the crop tool, and without this the funnel only ever showed the half that went through.
+            track(AnalyticsEvent.CropCancelled);
         } else {
             setCrop(
                 currentFile,

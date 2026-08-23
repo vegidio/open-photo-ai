@@ -1,5 +1,6 @@
 import { Typography } from '@mui/material';
 import { Trans, useTranslation } from 'react-i18next';
+import { AnalyticsEvent, track } from '@/analytics';
 import logo_tensorrt from '@/assets/logo_tensorrt.avif';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { Button } from '@/components/atoms/Button';
@@ -21,11 +22,13 @@ export const DialogTensorRT = ({ open, onClose }: DialogTensorRTProps) => {
         setExecutionProvider(ExecutionProvider.ExecutionProviderCUDA);
 
         setIsFirstTensorRT(false);
+        track(AnalyticsEvent.TensorRtPromptAnswered, { accepted: false });
         onClose?.();
     };
 
     const onYes = () => {
         setIsFirstTensorRT(false);
+        track(AnalyticsEvent.TensorRtPromptAnswered, { accepted: true });
         onClose?.();
     };
 

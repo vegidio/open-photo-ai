@@ -9,7 +9,7 @@ import { ListItemAutopilot } from '@/features/sidebar/ListItemAutopilot';
 import { useAddEnhancements, useCurrentFile, useFileOperations, useNotify } from '@/hooks';
 import { useEnhancementStore, useSettingsStore } from '@/stores';
 import { getEnhancementType, suggestEnhancement } from '@/utils/enhancement.ts';
-import { userFriendlyErrorKey } from '@/utils/errors.ts';
+import { getErrorMessage, userFriendlyErrorKey } from '@/utils/errors.ts';
 
 export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
     const { t } = useTranslation();
@@ -40,9 +40,11 @@ export const SidebarEnhancements = ({ className = '' }: TailwindProps) => {
             try {
                 const suggestions = await suggestEnhancement(currentFile, models);
 
-                await addEnhancements(currentFile, suggestions);
+                await addEnhancements(currentFile, suggestions, 'autopilot');
                 track(AnalyticsEvent.AutopilotRun, { count: suggestions.length });
             } catch (e) {
+                console.error('Autopilot failed', e);
+                track(AnalyticsEvent.AutopilotFailed, { reason: getErrorMessage(e) });
                 enqueueSnackbar(t(userFriendlyErrorKey(e, 'errors.autopilotFailed')), { variant: 'error' });
             } finally {
                 setIsAnalysing(false);

@@ -49,8 +49,11 @@ export const DialogDownload = ({ open, hasError = false, onClose }: DialogDownlo
         try {
             await Initialize();
             onClose();
-        } catch {
-            console.error('Failed to initialize the app');
+        } catch (e) {
+            // The retry leaves the dialog in its error state, so the only record of *why* the retry failed - which is
+            // usually a different reason from the first attempt - is this line.
+            console.error('Retrying initialization failed', e);
+            setError(true);
         }
     };
 

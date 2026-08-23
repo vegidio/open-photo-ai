@@ -124,8 +124,12 @@ func Process(
 			continue
 		}
 
-		if err = internal.ImageCache.SetImage(ctx, output, input.Hash, applied...); err != nil {
-			return nil, errors.Wrap(err, "error caching image")
+		// A cache write that fails must not fail the operation: the pixels the user asked for are already computed and
+		// sitting in `output`. Failing here threw away finished work because the disk was full or read-only, which is
+		// the cache's problem, not the enhancement's. The cost of carrying on is a re-run next time, not a wrong image.
+		if err := internal.ImageCache.SetImage(ctx, output, input.Hash, applied...); err != nil {
+			internal.Log().Warn("failed to cache the processed image",
+				"op", op.Id(), "hash", input.Hash, "err", err)
 		}
 	}
 
@@ -176,7 +180,7 @@ func Execute[T any](
 
 	start := time.Now()
 	result, err := dataModel.Run(ctx, input.Pixels, paramsOf(operation), split.run())
-	logModelRun(operation, start)
+	logModelRun(operation, start, err)
 	return result, err
 }
 
@@ -334,7 +338,7 @@ func runInference(
 
 	start := time.Now()
 	result, err := imageModel.Run(ctx, img, paramsOf(operation), split.run())
-	logModelRun(operation, start)
+	logModelRun(operation, start, err)
 	return result, err
 }
 
@@ -348,8 +352,19 @@ func paramsOf(operation types.Operation) map[string]any {
 	return nil
 }
 
-func logModelRun(operation types.Operation, start time.Time) {
-	internal.Log().Debug("model run complete", "op", operation.Id(), "duration", time.Since(start))
+// logModelRun records how one model run ended. It takes the error rather than being called only on the happy path
+// because a failed run is the more interesting of the two: without this, a model that errors leaves nothing between
+// "processing image" and the boundary's report, and the duration - the one number that says whether it failed fast or
+// timed out - is lost.
+func logModelRun(operation types.Operation, start time.Time, err error) {
+	if err != nil {
+		internal.Log().Warn("model run failed", "op", operation.Id(), "duration", time.Since(start), "err", err)
+		return
+	}
+
+	// Info rather than Debug: this fires at most once per operation, so at most a handful of lines per image, and its
+	// duration is what answers "which step was slow?" in a log a user attached to a bug report.
+	internal.Log().Info("model run complete", "op", operation.Id(), "duration", time.Since(start))
 }
 
 // selectModel returns a lease on the model that implements the given operation, building it on first use. The registry

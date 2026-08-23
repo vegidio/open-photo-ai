@@ -7,6 +7,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
+	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 )
@@ -70,6 +71,15 @@ func RunTiledInference(
 	// from TileGrid, so this driver and the ones that cannot use it agree on where the tiles are by construction.
 	grid := TileGrid{Size: defaultTileSize, Overlap: defaultTileOverlap, Width: width, Height: height}
 	tiles := grid.Tiles()
+
+	// Without this the loop below runs zero times and `result` - allocated but never written - is returned with a nil
+	// error, handing the caller a blank image that looks like a successful enhancement. `step` would also be a
+	// division by zero. There is no partitioning of a zero-area image, so this is a real failure, not a fast path.
+	if len(tiles) == 0 {
+		internal.Log().Warn("cannot tile the image", "width", width, "height", height)
+		return nil, errors.Newf("cannot tile a %dx%d image", width, height)
+	}
+
 	columns := grid.Columns()
 
 	// Every tile is padded out to the same fixed shape, so the input buffer and both tensors are identical from one
@@ -134,8 +144,13 @@ func (g TileGrid) Columns() int {
 	return len(g.offsets(g.Width))
 }
 
-// Tiles returns the tile rectangles in row-major order. An invalid geometry yields a single tile covering the whole
-// image, so a caller can never be handed an empty partitioning.
+// Tiles returns the tile rectangles in row-major order.
+//
+// An invalid *geometry* - a non-positive tile, an overlap that leaves no forward progress, a tile bigger than what it
+// covers - yields a single tile covering the whole image, so those cases can never produce an empty partitioning. A
+// non-positive *dimension* is different: there is no rectangle that covers a zero-width image, so it returns nil.
+// Callers must treat an empty result as an error rather than iterating zero tiles, or they will hand back an
+// untouched output buffer as though the work had succeeded.
 func (g TileGrid) Tiles() []image.Rectangle {
 	xs := g.offsets(g.Width)
 	ys := g.offsets(g.Height)

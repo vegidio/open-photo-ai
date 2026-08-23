@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/fs"
@@ -195,14 +196,40 @@ func FormatModelName(label string, precision types.Precision) string {
 	return fmt.Sprintf("%s (%s)", label, cases.Upper(language.English).String(string(precision)))
 }
 
+// createSession reports how one session build ended and delegates the work to createSessionInner.
+//
+// The split exists so the six failure returns below need no logging of their own: each already wraps its cause, and
+// one line here carries the two attributes none of them have - which model and which provider. Before this, a session
+// that failed to build produced no line at any level, so "it just doesn't work on my machine" had nothing behind it.
+//
+// The success line matters as much as the failure one: it is what explains a first run that took four minutes while
+// TensorRT compiled an engine, versus a later run that hit the cache.
 func createSession(
 	modelFile string,
 	inputs, outputs []string,
 	ep types.ExecutionProvider,
 	p EPProfile,
 ) (*Session, error) {
-	internal.Log().Debug("creating session", "model_file", modelFile, "ep", ep)
+	start := time.Now()
 
+	session, err := createSessionInner(modelFile, inputs, outputs, ep, p)
+	if err != nil {
+		internal.Log().Warn("failed to create the session", "model_file", modelFile, "ep", ep, "err", err)
+		return nil, err
+	}
+
+	internal.Log().Info("session created",
+		"model_file", modelFile, "ep", ep, "bytes", session.bytes, "duration", time.Since(start))
+
+	return session, nil
+}
+
+func createSessionInner(
+	modelFile string,
+	inputs, outputs []string,
+	ep types.ExecutionProvider,
+	p EPProfile,
+) (*Session, error) {
 	modelsPath, err := fs.MkUserConfigDir(internal.AppName, internal.ModelsDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to resolve the models directory")

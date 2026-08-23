@@ -75,7 +75,7 @@ export const App = () => {
 
                 if (supportedEps.TensorRT && isFirstTensorRT) setOpenTensorRT(true);
             } catch (e) {
-                console.error('Failed to initialize the app');
+                console.error('Failed to initialize the app', e);
                 track(AnalyticsEvent.InitFailed, { reason: getErrorMessage(e) });
                 setOpenDownload(true);
                 setDownloadError(true);

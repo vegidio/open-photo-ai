@@ -320,6 +320,7 @@
         "modelDownload": "Downloaden van AI-model mislukt. Controleer je internetverbinding en probeer het opnieuw.",
         "autopilotFailed": "Er is iets misgegaan. Autopilot kon niet worden uitgevoerd.",
         "enhanceFailed": "Er is iets misgegaan. De afbeelding kon niet worden verbeterd.",
-        "faceDetectFailed": "Er is iets misgegaan. Gezichten konden niet worden gedetecteerd."
+        "faceDetectFailed": "Er is iets misgegaan. Gezichten konden niet worden gedetecteerd.",
+        "showLogsFailed": "Kan het logbestand niet openen. Je vindt het in de configuratiemap van de app."
     }
 }

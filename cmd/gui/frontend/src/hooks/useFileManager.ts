@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import { AnalyticsEvent, track } from '@/analytics';
+import { formatList } from '@/analytics/buckets.ts';
 import { DialogService } from '@/bindings/gui/services';
 import { useCropStore, useEnhancementStore, useFileStore, useImageStore } from '@/stores';
 import { clearFacesCache } from '@/utils/face.ts';
@@ -60,9 +61,18 @@ export const useFileManager = () => {
                 );
 
                 addFilesToList(files);
-                if (files.length > 0) track(AnalyticsEvent.FilesAdded, { count: files.length, source });
+
+                if (files.length > 0) {
+                    track(AnalyticsEvent.FilesAdded, {
+                        count: files.length,
+                        source,
+                        // Which formats people actually bring in - RAW versus JPEG above all - which is a roadmap
+                        // input the app has never had any data on.
+                        formats: formatList(files.map((file) => file.Extension)),
+                    });
+                }
             } catch (e) {
-                console.error(e);
+                console.error('Failed to open the file dialog', e);
             }
         },
         [addFilesToList, t],

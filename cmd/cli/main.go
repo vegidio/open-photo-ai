@@ -21,6 +21,10 @@ func main() {
 	// Set up file-based logging (rotated daily, kept 7 days); also activates the opai library logger.
 	if logCloser, err := shared.SetupLogging(shared.AppName); err == nil {
 		defer logCloser.Close()
+	} else {
+		// Without this the CLI runs on a discarding logger and every library log line vanishes, which looks exactly
+		// like a library that logs nothing.
+		fmt.Printf("Failed to set up file logging, continuing without it: %v\n", err)
 	}
 
 	// Every provider must actually run: the cache key is operation + input, so a cached CPU result would otherwise be

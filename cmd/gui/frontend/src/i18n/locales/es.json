@@ -320,6 +320,7 @@
         "modelDownload": "No se ha podido descargar el modelo de IA. Comprueba tu conexión a internet e inténtalo de nuevo.",
         "autopilotFailed": "Algo ha ido mal. No se ha podido ejecutar el piloto automático.",
         "enhanceFailed": "Algo ha ido mal. No se ha podido mejorar la imagen.",
-        "faceDetectFailed": "Algo ha ido mal. No se han podido detectar rostros."
+        "faceDetectFailed": "Algo ha ido mal. No se han podido detectar rostros.",
+        "showLogsFailed": "No se pudo abrir el archivo de registro. Lo encontrarás en la carpeta de configuración de la app."
     }
 }

@@ -320,6 +320,7 @@
         "modelDownload": "Falha ao baixar o modelo de IA. Verifique sua conexão com a internet e tente novamente.",
         "autopilotFailed": "Algo deu errado. Falha ao executar o piloto automático.",
         "enhanceFailed": "Algo deu errado. Falha ao melhorar a imagem.",
-        "faceDetectFailed": "Algo deu errado. Falha ao detectar rostos."
+        "faceDetectFailed": "Algo deu errado. Falha ao detectar rostos.",
+        "showLogsFailed": "Não foi possível abrir o ficheiro de registo. Encontra-o na pasta de configuração da aplicação."
     }
 }

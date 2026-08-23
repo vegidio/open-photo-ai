@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Dialog, Divider } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { AnalyticsEvent, track } from '@/analytics';
 import { SetExecutionProvider } from '@/bindings/gui/services/appservice.ts';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { SettingsButtons } from '@/features/settings/SettingsButtons';
@@ -36,7 +37,12 @@ export const Settings = ({ open, onClose }: SettingsProps) => {
         // Applying the language here rather than in the Select's onChange is what keeps Cancel a true no-op: until
         // Save runs, nothing outside the store has observed the new value, so restoreSnapshot() undoes it completely.
         // i18n.language is itself the authoritative "currently applied" value, so no extra ref is needed to compare.
-        if (language !== i18n.language) void i18n.changeLanguage(language);
+        if (language !== i18n.language) {
+            // Reported here rather than in the Select's onChange for the same reason the change itself is applied
+            // here: until Save runs, the pick is a draft that Cancel can undo, and a draft is not a language change.
+            track(AnalyticsEvent.LanguageChanged, { language });
+            void i18n.changeLanguage(language);
+        }
 
         // Only the processor needs telling: the other settings (the model of each enhancement) already produce a
         // different operation ID, so they miss the model cache on their own.

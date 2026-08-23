@@ -52,10 +52,16 @@ type InferenceProgress struct {
 //
 // Value is overloaded by State: while RUNNING it is a 0.0–1.0 progress ratio; on COMPLETED it is
 // the final file size in bytes. The frontend export row formats it accordingly.
+//
+// DurationMs is set only on COMPLETED, and is the wall time the whole export took in the backend - inference plus
+// encode plus write. It is measured here rather than in the frontend because the frontend can only time the round
+// trip through the IPC boundary, which is neither the number anyone wants nor a stable one.
 type ExportUpdate struct {
 	Hash  string  `json:"hash"`
 	State string  `json:"state"`
 	Value float64 `json:"value"`
+
+	DurationMs int64 `json:"durationMs"`
 }
 
 // ProviderFallback is the payload of EventAppFallback. Emitted when the selected AI processor couldn't be used - a

@@ -66,6 +66,9 @@ func AcquireModel(
 			// tell. That also makes a leader that fell back to the CPU need no special handling here.
 			<-b.done
 			if b.err != nil {
+				// Debug, not Warn: the leader already reported this failure with its full context. This line exists
+				// only so a run where N operations all failed on one bad model does not look like N unrelated faults.
+				Log().Debug("waited on a model build that failed", "op", id, "err", b.err)
 				return nil, b.err
 			}
 
@@ -74,6 +77,10 @@ func AcquireModel(
 
 		return buildAndInstall(id, key, ep, create)
 	}
+
+	// Reaching here means the entry was installed and evicted out from under this caller ten times running - a
+	// livelock signature, and one the error alone gives no way to recognise as such in a log.
+	Log().Warn("model registry churn; gave up acquiring", "op", id, "attempts", maxAcquireAttempts)
 
 	return nil, errors.Newf("model registry churn: gave up acquiring %s", id)
 }
@@ -190,6 +197,7 @@ func buildAndInstall(
 	// their own lookup would have, rather than waking up to retry a registry that will never accept anything again.
 	installErr := error(nil)
 	if lease == nil {
+		Log().Warn("the registry closed mid-build; the model was never filed", "op", id, "ep", ep)
 		installErr = ErrRegistryClosed
 	}
 

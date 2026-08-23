@@ -7,20 +7,51 @@ export const AnalyticsEvent = {
     AppOpen: 'app_open',
     AppInitialized: 'app_initialized',
     InitFailed: 'init_failed',
+
     FilesAdded: 'files_added',
     FileRemoved: 'file_removed',
     FilesCleared: 'files_cleared',
+
+    // `type` falls back to 'unknown' when an operation id no longer maps to an enhancement type. That means a stale id
+    // was rehydrated from a previous version's persisted state, not that anything crashed - so read a spike here as a
+    // migration problem rather than a bug in the enhancement pipeline.
     EnhancementAdded: 'enhancement_added',
     EnhancementRemoved: 'enhancement_removed',
+
     AutopilotRun: 'autopilot_run',
-    ImageProcessed: 'image_processed',
+    AutopilotFailed: 'autopilot_failed',
+
+    // Renamed from `image_processed`, which was never what its name claimed. It fires from the preview effect, whose
+    // dependencies include the crop, the disabled faces and the execution provider, and it fires on a frontend cache
+    // hit too - so it counted preview renders, several per edit, not images enhanced. The rename is deliberate: the
+    // old name's dashboards should break rather than quietly keep charting a different quantity.
+    //
+    // `export_completed` is the honest "the user enhanced an image and kept it" signal.
+    PreviewRendered: 'preview_rendered',
     ProcessFailed: 'process_failed',
+
     CropApplied: 'crop_applied',
-    ExportStarted: 'export_started',
+    CropCancelled: 'crop_cancelled',
+
+    // Batch and per-file events are named apart because they can never be compared one to one: a batch covers many
+    // files. Counting exports means counting `export_completed`.
+    ExportBatchStarted: 'export_batch_started',
+    ExportBatchFinished: 'export_batch_finished',
     ExportCompleted: 'export_completed',
     ExportFailed: 'export_failed',
+
     ExecutionProviderChanged: 'execution_provider_changed',
     ProviderFallback: 'provider_fallback',
+    ModelChanged: 'model_changed',
+    QualityChanged: 'quality_changed',
+    LanguageChanged: 'language_changed',
+    PreviewModeChanged: 'preview_mode_changed',
+
+    FacesDetected: 'faces_detected',
+    TensorRtPromptAnswered: 'tensorrt_prompt_answered',
+    SettingsOpened: 'settings_opened',
+    UpdateAvailable: 'update_available',
+
     RenderCrashed: 'render_crashed',
 } as const;
 

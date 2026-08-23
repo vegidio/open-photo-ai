@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AppBar, Toolbar, Typography } from '@mui/material';
 import { Browser } from '@wailsio/runtime';
 import { useTranslation } from 'react-i18next';
+import { AnalyticsEvent, track } from '@/analytics';
 import { IsOutdated } from '@/bindings/gui/services/appservice';
 import { Button } from '@/components/atoms/Button';
 import { DialogAbout } from '@/features/navbar/DialogAbout';
@@ -24,7 +25,17 @@ export const Navbar = () => {
     };
 
     useEffect(() => {
-        IsOutdated().then(setUpdateAvailable);
+        // Guarded rather than left floating: IsOutdated makes a network call, and until now a rejection here became an
+        // unhandled rejection with the update indicator simply never appearing.
+        IsOutdated()
+            .then((outdated) => {
+                setUpdateAvailable(outdated);
+
+                // How many users are running a build we have already superseded, which is the denominator for every
+                // "is this fixed in the latest version?" support answer.
+                if (outdated) track(AnalyticsEvent.UpdateAvailable, { version });
+            })
+            .catch((e) => console.error('Update check failed', e));
     }, []);
 
     return (
@@ -42,7 +53,14 @@ export const Navbar = () => {
                     <div className='mt-1 flex flex-row h-full items-center gap-3'>
                         {currentFile && <NavbarDimensions file={currentFile} />}
 
-                        <Button option='text' size='small' onClick={() => setOpenSettings(true)}>
+                        <Button
+                            option='text'
+                            size='small'
+                            onClick={() => {
+                                track(AnalyticsEvent.SettingsOpened);
+                                setOpenSettings(true);
+                            }}
+                        >
                             {t('settings.title')}
                         </Button>
 

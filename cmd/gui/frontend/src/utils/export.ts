@@ -7,7 +7,7 @@ import { type File, InferenceParams } from '@/bindings/gui/types';
 import { useCropStore } from '@/stores/crop.ts';
 import { EMPTY_CROP } from '@/utils/constants.ts';
 import { getEnabledFaces } from '@/utils/face.ts';
-import { LOSSLESS_QUALITY, type QualityChoices, type QualityFormat, QUALITY_FORMATS } from '@/utils/quality.ts';
+import { LOSSLESS_QUALITY, QUALITY_FORMATS, type QualityChoices, type QualityFormat } from '@/utils/quality.ts';
 
 export type ExportOptions = {
     file: File;

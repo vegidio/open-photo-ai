@@ -6,6 +6,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
+	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/types"
@@ -47,13 +48,16 @@ func RestoreFaces(
 	// face to keep it.
 	result := imaging.Clone(img)
 
-	for _, face := range faces {
+	for i, face := range faces {
 		if err := ctx.Err(); err != nil {
 			return nil, errors.Wrap(err, "context cancelled")
 		}
 
 		restored, transform, err := restoreSingleFace(session, img, face, tileSize, fidelity)
 		if err != nil {
+			// The whole operation aborts on the first face that fails, and the error says nothing about which of them
+			// it was - which is the only useful thing to know when one particular photo will not process.
+			internal.Log().Warn("failed to restore a face", "face", i+1, "of", len(faces), "err", err)
 			return nil, errors.Wrap(err, "failed to restore face")
 		}
 

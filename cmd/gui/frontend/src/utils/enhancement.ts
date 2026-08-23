@@ -35,6 +35,10 @@ export type ModelChoices = Record<EnhancementType, string>;
 // The prefix is narrowed rather than asserted: an id from the backend, a persisted setting or a stale cache entry can
 // carry any two characters, and casting made `ENHANCEMENTS[type]` look total when it is not. Returning undefined is
 // what the call sites already assume - they all guard on the lookup - so this makes their guards type-driven.
+//
+// The analytics call sites report the undefined case as type='unknown'. That means an operation id was rehydrated
+// from a previous version's persisted state and no longer maps to anything, so read a spike there as a migration
+// problem rather than as a fault in the enhancement pipeline.
 export const getEnhancementType = (opId: string): EnhancementType | undefined => {
     const prefix = opId.slice(0, 2);
     return ENHANCEMENT_ORDER.includes(prefix as EnhancementType) ? (prefix as EnhancementType) : undefined;

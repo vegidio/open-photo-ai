@@ -8,7 +8,7 @@ import { AnalyticsEvent, track } from '@/analytics';
 import { useExportStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { getErrorMessage } from '@/utils/errors.ts';
-import { exportImage } from '@/utils/export.ts';
+import { exportImage, resolveQualityFormat } from '@/utils/export.ts';
 import { QUALITY_FORMATS, type QualityChoices } from '@/utils/quality.ts';
 
 type ExportSettingsButtonsProps = {
@@ -46,9 +46,14 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose }: Export
         }
     };
 
-    // Exports every file in turn, reporting whether it got through all of them. Returns early on the first failure —
-    // the file's error state has already been emitted by then.
-    const exportAll = async (committed: QualityChoices): Promise<boolean> => {
+    // Exports every file in turn, reporting how many it got through and whether it finished. Returns early on the
+    // first failure — the file's error state has already been emitted by then.
+    //
+    // The count is carried out rather than derived from the per-file events: those are emitted by the queue rows, so
+    // the batch has no other way to say how far it got before it stopped.
+    const exportAll = async (committed: QualityChoices): Promise<{ exported: number; completed: boolean }> => {
+        let exported = 0;
+
         for (const [file, fileOperations] of enhancements.entries()) {
             let operations = fileOperations;
 
@@ -80,20 +85,21 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose }: Export
                     quality: committed,
                 });
                 await exportRef.current;
+                exported++;
             } catch (e) {
                 if (e instanceof CancelError) {
-                    Events.Emit('app:export', { hash: file.Hash, state: 'IDLE', value: 0 });
+                    Events.Emit('app:export', { hash: file.Hash, state: 'IDLE', value: 0, durationMs: 0 });
                 } else {
                     const msg = getErrorMessage(e);
                     const tag = msg.includes('[download]') ? 'ERROR_DOWNLOAD' : 'ERROR';
-                    Events.Emit('app:export', { hash: file.Hash, state: tag, value: 0 });
+                    Events.Emit('app:export', { hash: file.Hash, state: tag, value: 0, durationMs: 0 });
                 }
 
-                return false;
+                return { exported, completed: false };
             }
         }
 
-        return true;
+        return { exported, completed: true };
     };
 
     const handleExport = async () => {
@@ -112,9 +118,30 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose }: Export
         const committed = useSettingsStore.getState().quality;
 
         setState('processing');
-        track(AnalyticsEvent.ExportStarted, { count: enhancements.size, format });
 
-        const completed = await exportAll(committed);
+        // `file_count`, not `count`: this is the number of files the batch will attempt, which is what the per-file
+        // `export_completed` events should add up to. The old name sat next to a per-file `count` on other events and
+        // read as though the two were comparable.
+        const qualityFormat = resolveQualityFormat(enhancements.keys(), format);
+
+        track(AnalyticsEvent.ExportBatchStarted, {
+            file_count: enhancements.size,
+            format,
+            // Only meaningful when every file in the queue resolves to the same lossy encoder; under "preserve" with a
+            // mixed queue each file uses its own stored value and no single number is honest.
+            quality: qualityFormat ? committed[qualityFormat] : 0,
+            ep,
+        });
+
+        const startedAt = performance.now();
+        const { exported, completed } = await exportAll(committed);
+
+        track(AnalyticsEvent.ExportBatchFinished, {
+            file_count: enhancements.size,
+            exported,
+            completed,
+            duration_ms: Math.round(performance.now() - startedAt),
+        });
 
         setState(completed ? 'completed' : 'idle');
     };

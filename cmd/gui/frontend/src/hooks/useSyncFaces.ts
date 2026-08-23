@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { File } from '@/bindings/gui/types';
+import { AnalyticsEvent, track } from '@/analytics';
 import { useNotify } from '@/hooks/useNotify.ts';
 import i18n from '@/i18n';
 import { useCropStore, useEnhancementStore, useSettingsStore } from '@/stores';
@@ -26,7 +27,12 @@ export const useSyncFaces = () => {
             try {
                 const faces = await detectFaces(file, ep, crop);
                 setFaces(file, faces);
+
+                // How often face recovery finds anything, and how many faces a typical photo has - which is what
+                // decides whether the per-face cost of the recovery models is worth optimising.
+                track(AnalyticsEvent.FacesDetected, { count: faces.length });
             } catch (e) {
+                console.error('Face detection failed', e);
                 setFaces(file, []);
                 // The i18n singleton rather than useTranslation's t: this callback is memoised with a dependency
                 // list, and adding t would rebuild it on every language change for no benefit.

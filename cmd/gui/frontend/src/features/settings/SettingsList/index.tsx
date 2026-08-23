@@ -12,6 +12,7 @@ import { SettingsItemSelect } from '@/features/settings/SettingsItemSelect';
 import { SettingsItemSlider } from '@/features/settings/SettingsItemSlider';
 import { SettingsItemSwitch } from '@/features/settings/SettingsItemSwitch';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
+import { useNotify } from '@/hooks/useNotify.ts';
 import { LANGUAGE_NAMES, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n/languages';
 import { useSettingsStore } from '@/stores';
 import { ENHANCEMENTS, type EnhancementType, modelItems } from '@/utils/enhancement';
@@ -101,10 +102,19 @@ const ItemLanguage = ({ id }: SettingsRowProps) => {
 
 const ItemLogs = ({ id }: SettingsRowProps) => {
     const { t } = useTranslation();
+    const { enqueueSnackbar } = useNotify();
 
+    // Guarded rather than left as a floating promise. This is the button whose whole purpose is to let a user attach
+    // their log to a bug report, so when it fails silently - a config directory that can't be resolved, a file manager
+    // that won't open - the one path we have for diagnosing anything else is the path that gives no feedback at all.
     const onShowLogs = async () => {
-        const path = await GetLogsPath();
-        await RevealInFileManager(path);
+        try {
+            const path = await GetLogsPath();
+            await RevealInFileManager(path);
+        } catch (e) {
+            console.error('Failed to reveal the log file', e);
+            enqueueSnackbar(t('errors.showLogsFailed'), { variant: 'error' });
+        }
     };
 
     return (
@@ -210,7 +220,13 @@ const ItemEnhancement = ({ id }: SettingsRowProps) => {
             description={t(row.descriptionKey)}
             items={modelItems(row.type)}
             selected={selected}
-            onSelect={(value) => setModel(row.type, value)}
+            onSelect={(value) => {
+                setModel(row.type, value);
+
+                // The most interesting signal the app has no data on: each enhancement family ships three models, and
+                // nothing so far said which one anyone actually settles on.
+                track(AnalyticsEvent.ModelChanged, { type: row.type, model: value });
+            }}
         />
     );
 };
@@ -259,7 +275,12 @@ const ItemExportQuality = ({ id }: SettingsRowProps) => {
             max={MAX_QUALITY}
             step={1}
             marks={marks}
-            onChange={(next) => setQuality(format, next)}
+            onChange={(next) => {
+                setQuality(format, next);
+
+                // Once per adjustment, not once per drag tick: ValueSlider wires this to MUI's onChangeCommitted.
+                track(AnalyticsEvent.QualityChanged, { format, value: next });
+            }}
         />
     );
 };

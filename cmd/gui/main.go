@@ -137,18 +137,27 @@ func setLibPathAndRestart() {
 
 	libPaths := make([]string, 0)
 
-	if path, err := fs.MkUserConfigDir(shared.AppName, "runtime"); err == nil {
+	// log.Printf rather than slog: this runs before SetupLogging has wired the file sink, and the process re-execs
+	// immediately afterwards, so slog here would go to stderr under a handler nobody configured. It matches how run()
+	// reports a logging setup failure for the same reason.
+	//
+	// A directory that cannot be created is skipped, which is the long-standing behaviour - the remaining paths are
+	// still worth setting. But it was skipped silently, and the only later symptom is a provider that fails to attach
+	// for reasons that look unrelated to a directory nobody could create at startup.
+	addPath := func(parts ...string) {
+		path, err := fs.MkUserConfigDir(shared.AppName, parts...)
+		if err != nil {
+			log.Printf("could not create the library directory %v; leaving it off LD_LIBRARY_PATH: %v", parts, err)
+			return
+		}
+
 		libPaths = append(libPaths, path)
 	}
-	if path, err := fs.MkUserConfigDir(shared.AppName, "libs", "cuda"); err == nil {
-		libPaths = append(libPaths, path)
-	}
-	if path, err := fs.MkUserConfigDir(shared.AppName, "libs", "cudnn"); err == nil {
-		libPaths = append(libPaths, path)
-	}
-	if path, err := fs.MkUserConfigDir(shared.AppName, "libs", "tensorrt"); err == nil {
-		libPaths = append(libPaths, path)
-	}
+
+	addPath("runtime")
+	addPath("libs", "cuda")
+	addPath("libs", "cudnn")
+	addPath("libs", "tensorrt")
 
 	// Keep any inherited value, appended last so the bundled libraries — which are version-matched to the ONNX Runtime
 	// build — take precedence over a system-wide install. Merging matters: ReExec adds the variable to the inherited

@@ -164,11 +164,16 @@ func (s *AppService) destroy() {
 // onProviderFallback reports that the requested execution provider couldn't create a model and the CPU was used
 // instead. Only the first downgrade since the models were last loaded reaches the frontend; the rest are logged.
 func (s *AppService) onProviderFallback(ep types.ExecutionProvider, err error) {
-	slog.Warn("execution provider unavailable; falling back to CPU", "ep", ep, "err", err)
-
+	// The library already reported the downgrade itself, with the operation and provider that caused it, so repeating
+	// it here would put the same event in the log twice under two different wordings. What is only knowable at this
+	// layer is whether the user was actually told - which is the question being asked when someone reports that the
+	// app "went slow without saying anything".
 	if s.fallbackNotified.Swap(true) {
+		slog.Debug("execution provider fallback already reported to the user; not repeating it", "ep", ep)
 		return
 	}
+
+	slog.Warn("notified the user of the CPU fallback", "ep", ep, "err", err)
 
 	s.otel.LogError("Execution provider fallback", map[string]any{"provider": string(ep)}, err)
 	s.app.Event.Emit(EventAppFallback, ProviderFallback{Provider: string(ep)})

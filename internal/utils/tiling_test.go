@@ -159,3 +159,30 @@ func TestTileGridHasNoDuplicates(t *testing.T) {
 		}
 	}
 }
+
+// TestRunTiledInferenceRejectsAnUntileableImage is the driver's half of the contract TestTileGridEmptyImage pins on
+// the grid.
+//
+// Tiles returns nil for a zero-area image, and the loop below it then ran zero times - so the freshly allocated,
+// never-written result buffer was handed back with a nil error. The caller had no way to tell that from a successful
+// enhancement, and the blank image travelled all the way to the user. The guard runs before the scratch tensors are
+// allocated, so a nil session is never dereferenced here.
+func TestRunTiledInferenceRejectsAnUntileableImage(t *testing.T) {
+	for _, size := range []image.Rectangle{
+		image.Rect(0, 0, 0, 100),
+		image.Rect(0, 0, 100, 0),
+		image.Rect(0, 0, 0, 0),
+	} {
+		img := image.NewRGBA(size)
+
+		out, err := RunTiledInference(t.Context(), nil, img, 1, nil)
+		if err == nil {
+			t.Errorf("RunTiledInference(%v) returned a %v image and no error; want an error",
+				size, out.Bounds())
+		}
+
+		if out != nil {
+			t.Errorf("RunTiledInference(%v) returned an image alongside its error", size)
+		}
+	}
+}

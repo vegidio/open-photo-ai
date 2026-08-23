@@ -317,6 +317,7 @@
         "modelDownload": "AI 模型下载失败。请检查网络连接后重试。",
         "autopilotFailed": "出了点问题。自动优化运行失败。",
         "enhanceFailed": "出了点问题。图片增强失败。",
-        "faceDetectFailed": "出了点问题。人脸检测失败。"
+        "faceDetectFailed": "出了点问题。人脸检测失败。",
+        "showLogsFailed": "无法打开日志文件。你可以在应用的配置文件夹中找到它。"
     }
 }

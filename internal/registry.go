@@ -641,8 +641,11 @@ func (r *ModelRegistry) sweepIdle() []*entry {
 
 	r.mu.Unlock()
 
+	// Warn rather than Debug: a leaked lease pins its model - and its device memory - for the rest of the process,
+	// which is a bug in this package, not a routine event. It fires at most once per sweep per model, and at Debug it
+	// could only ever be seen by someone who already suspected it.
 	for _, n := range held {
-		Log().Debug("model has been held for a long time; a lease may have leaked",
+		Log().Warn("model has been held for a long time; a lease may have leaked",
 			"op", n.id, "refs", n.refs, "held_for", n.elapsed)
 	}
 

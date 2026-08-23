@@ -59,10 +59,11 @@ jobs:
           sudo apt install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
           pnpm install -g @go-task/cli
 
-      # `task test` rather than a `go test` line here, so the workspace has one definition of what its tests are - it
-      # covers all four modules and explains why -race is not optional for this codebase.
+      # `task test:backend` rather than a `go test` line here, so the workspace has one definition of what its tests
+      # are - it covers all four modules and explains why -race is not optional for this codebase. The :backend
+      # subtask, not the umbrella `task test`, because the frontend half of it is the separate test-frontend job below.
       - name: Run Go tests
-        run: task test
+        run: task test:backend
 
   test-frontend:
     runs-on: ubuntu-latest

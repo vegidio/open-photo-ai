@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { AnalyticsEvent, track } from '@/analytics';
+import { formatList, mpBucket } from '@/analytics/buckets.ts';
 import { EnhancementProgress } from '@/features/preview/EnhancementProgress';
 import { PreviewEmpty } from '@/features/preview/PreviewEmpty';
 import { PreviewImage } from '@/features/preview/PreviewImage';
@@ -55,6 +56,7 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                     setIsRunning(true);
 
                     const opIds = operations.map((op) => op.id);
+                    const startedAt = performance.now();
                     p = getEnhancedImage(currentFile, ep, ...opIds);
 
                     try {
@@ -62,11 +64,23 @@ export const Preview = ({ className = '' }: TailwindProps) => {
                         if (isCancelled) return;
 
                         setEnhancedImage(enhancedImage);
-                        track(AnalyticsEvent.ImageProcessed, { operation_count: opIds.length });
+
+                        // Reported as a preview render, which is what it is: this effect re-runs on a crop change, a
+                        // face toggle or a processor change, and `getEnhancedImage` resolves from its own cache
+                        // without touching the backend. The duration therefore covers cache hits too - which is
+                        // useful, since "how often is a preview instant?" is a real question - but it is not a
+                        // measure of inference time. See `export_completed` for that.
+                        track(AnalyticsEvent.PreviewRendered, {
+                            operation_count: opIds.length,
+                            duration_ms: Math.round(performance.now() - startedAt),
+                            mp_bucket: mpBucket(enhancedImage.width, enhancedImage.height),
+                            ep,
+                        });
                     } catch (e) {
                         // A run this effect has already abandoned reports nothing: it may fail precisely *because* it
                         // was cancelled, and a snackbar about a file the user has navigated away from is noise.
                         if (!isCancelled && !(e instanceof CancelError)) {
+                            console.error('Failed to process the image', e);
                             track(AnalyticsEvent.ProcessFailed, { reason: getErrorMessage(e) });
                             enqueueSnackbar(i18n.t(userFriendlyErrorKey(e, 'errors.enhanceFailed')), {
                                 variant: 'error',
@@ -104,7 +118,13 @@ export const Preview = ({ className = '' }: TailwindProps) => {
         // Returns the per-listener unsubscribe; `Events.Off` is global across every listener for the name.
         return Events.On('app:FilesDropped', (event) => {
             addFiles(event.data);
-            if (event.data?.length > 0) track(AnalyticsEvent.FilesAdded, { count: event.data.length, source: 'drop' });
+            if (event.data?.length > 0) {
+                track(AnalyticsEvent.FilesAdded, {
+                    count: event.data.length,
+                    source: 'drop',
+                    formats: formatList(event.data.map((file) => file.Extension)),
+                });
+            }
         });
     }, [addFiles]);
 

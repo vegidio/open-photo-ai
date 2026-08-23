@@ -89,6 +89,8 @@ func acquire(ctx context.Context, dir string, src Source, skipVerify bool, agg *
 		}
 
 		if !resumed || attempt == 1 {
+			internal.Log().Warn("hash mismatch; the artifact will not be installed",
+				"artifact", name, "expected", src.Sha256, "got", sum, "resumed", resumed)
 			return File{}, errors.Newf("hash mismatch for %s: expected %s, got %s", name, src.Sha256, sum)
 		}
 
@@ -96,6 +98,7 @@ func acquire(ctx context.Context, dir string, src Source, skipVerify bool, agg *
 			"artifact", name)
 	}
 
+	internal.Log().Warn("the download did not converge", "artifact", name)
 	return File{}, errors.Newf("failed to download %s", name)
 }
 
@@ -110,7 +113,9 @@ func fill(ctx context.Context, src Source, part, state string, prog *sourceProgr
 	var inline string
 	var resumed bool
 
-	err := withRetry(ctx, func(int) (int64, error) {
+	name := src.FileName()
+
+	err := withRetry(ctx, name, func(int) (int64, error) {
 		moved, startedAt, sum, err := transfer(ctx, src, part, state, prog)
 
 		inline = sum
@@ -130,7 +135,7 @@ func fill(ctx context.Context, src Source, part, state string, prog *sourceProgr
 
 	info, err := os.Stat(part)
 	if err != nil {
-		return "", 0, resumed, errors.Wrapf(err, "failed to measure %s", filepath.Base(part))
+		return "", 0, resumed, errors.Wrapf(err, "failed to measure %s", name)
 	}
 
 	// An empty hash means the transfer could not keep one as it went, because it started partway
@@ -207,6 +212,12 @@ func transfer(
 		}
 
 	default:
+		// The only place a bad URL becomes visible. A 403 is an expired signed link and a 404 a release tag that was
+		// never published - neither is retryable, so without this line the install fails with a status code that
+		// reached no log at any level.
+		internal.Log().Warn("unexpected response", "artifact", src.FileName(),
+			"status", resp.StatusCode, "retry_after", retryAfter(resp))
+
 		return 0, 0, "", &httpStatusError{
 			StatusCode: resp.StatusCode,
 			Status:     resp.Status,

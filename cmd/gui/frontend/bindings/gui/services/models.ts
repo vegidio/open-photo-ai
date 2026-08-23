@@ -44,11 +44,16 @@ export class DownloadProgress {
  * 
  * Value is overloaded by State: while RUNNING it is a 0.0–1.0 progress ratio; on COMPLETED it is
  * the final file size in bytes. The frontend export row formats it accordingly.
+ * 
+ * DurationMs is set only on COMPLETED, and is the wall time the whole export took in the backend - inference plus
+ * encode plus write. It is measured here rather than in the frontend because the frontend can only time the round
+ * trip through the IPC boundary, which is neither the number anyone wants nor a stable one.
  */
 export class ExportUpdate {
     "hash": string;
     "state": string;
     "value": number;
+    "durationMs": number;
 
     /** Creates a new ExportUpdate instance. */
     constructor($$source: Partial<ExportUpdate> = {}) {
@@ -60,6 +65,9 @@ export class ExportUpdate {
         }
         if (!("value" in $$source)) {
             this["value"] = 0;
+        }
+        if (!("durationMs" in $$source)) {
+            this["durationMs"] = 0;
         }
 
         Object.assign(this, $$source);

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import type { File } from '@/bindings/gui/types';
 import { getExportInfo, getQualityFormat, resolveQualityFormat } from './export.ts';
+import { ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 
 // getExportInfo is pure, but its module graph reaches utils/constants.ts, whose top-level await asks the Wails bridge
 // for the app version and platform before anything importing it can evaluate. There is no bridge in a unit test, so

@@ -22,6 +22,21 @@ import { useSettingsStore } from '@/stores';
 initAnalytics(useSettingsStore.getState().analyticsEnabled);
 track(AnalyticsEvent.AppOpen);
 
+// A rejection nobody caught is otherwise completely invisible: several backend calls are made as floating promises
+// (the update check, the reveal-in-file-manager handlers, the language and processor writes on Settings save), and a
+// failure in any of them today produces no toast, no console entry and no analytics event. These two listeners are
+// one place that covers all of them, so those call sites don't each need their own catch.
+//
+// Registered here rather than in App so they are live before React mounts - a failure during the first render is
+// exactly the kind that leaves no other trace.
+window.addEventListener('error', (event) => {
+    console.error('Unhandled error', event.error ?? event.message);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection', event.reason);
+});
+
 // Keep the analytics collection flag mirrored to the persisted opt-out — the store is the single source of truth, so any
 // change (including a Settings-cancel revert via restoreSnapshot) re-syncs analytics without call-site coordination.
 useSettingsStore.subscribe((state, prev) => {

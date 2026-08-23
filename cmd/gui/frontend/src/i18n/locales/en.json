@@ -320,6 +320,7 @@
         "modelDownload": "Failed to download AI model. Check your internet connection and try again.",
         "autopilotFailed": "Something went wrong. Failed to run autopilot.",
         "enhanceFailed": "Something went wrong. Failed to enhance image.",
-        "faceDetectFailed": "Something went wrong. Failed to detect faces."
+        "faceDetectFailed": "Something went wrong. Failed to detect faces.",
+        "showLogsFailed": "Couldn't open the log file. You can find it in the app's configuration folder."
     }
 }

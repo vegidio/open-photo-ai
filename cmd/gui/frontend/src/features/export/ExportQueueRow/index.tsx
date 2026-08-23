@@ -6,10 +6,11 @@ import { RiFolderImageLine } from 'react-icons/ri';
 import type { File } from '@/bindings/gui/types';
 import type { Operation } from '@/operations';
 import { AnalyticsEvent, track } from '@/analytics';
+import { mpBucket } from '@/analytics/buckets.ts';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { ExportQueueState } from '@/features/export/ExportQueueState';
 import { useFileCrop, useThumbnail } from '@/hooks';
-import { useExportStore } from '@/stores';
+import { useExportStore, useSettingsStore } from '@/stores';
 import { upscaleFactor } from '@/utils/enhancement.ts';
 import { getExportInfo } from '@/utils/export.ts';
 import { formatBytes } from '@/utils/format.ts';
@@ -49,26 +50,47 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
         return { oldDims, newDims, oldSize, newExt: ext, fileName, filePath };
     }, [file, format, location, operations, prefix, suffix, crop]);
 
+    // Derived before the effect so the listener closes over a stable string rather than over `file`, whose identity
+    // the effect deliberately does not track - it keys on the hash, and a hash fixes the dimensions.
+    const mpBand = mpBucket(file.Dimensions[0], file.Dimensions[1]);
+    const operationCount = operations.length;
+
     useEffect(() => {
         return Events.On('app:export', (event) => {
-            const { hash, state, value } = event.data;
+            const { hash, state, value, durationMs } = event.data;
             if (hash !== file.Hash) return;
 
             if (state === 'COMPLETED') {
                 setNewSize(formatBytes(value));
                 setProgress(100);
-                track(AnalyticsEvent.ExportCompleted);
+
+                // The one honest "an image was enhanced and kept" event, so it carries the properties worth having:
+                // the duration is measured in Go (inference + encode + write), not across the IPC boundary, and the
+                // size band is what makes durations comparable between a phone photo and a medium-format scan.
+                track(AnalyticsEvent.ExportCompleted, {
+                    format: useExportStore.getState().format,
+                    operation_count: operationCount,
+                    duration_ms: durationMs,
+                    // The source size, which is what determines how much work the models did. An upscale's output is
+                    // larger, but it is a fixed multiple of this.
+                    mp_bucket: mpBand,
+                    ep: useSettingsStore.getState().executionProvider,
+                });
             } else {
                 setProgress(value * 100);
             }
 
             if (state === 'ERROR' || state === 'ERROR_DOWNLOAD') {
-                track(AnalyticsEvent.ExportFailed, { reason: state });
+                track(AnalyticsEvent.ExportFailed, {
+                    reason: state,
+                    format: useExportStore.getState().format,
+                    ep: useSettingsStore.getState().executionProvider,
+                });
             }
 
             setState(state);
         });
-    }, [file.Hash]);
+    }, [file.Hash, mpBand, operationCount]);
 
     return (
         <>

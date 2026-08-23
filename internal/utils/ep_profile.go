@@ -201,9 +201,15 @@ func createOptions(goos, cachePath string, ep types.ExecutionProvider, p EPProfi
 
 	// A provider that declines to attach is not fatal: the ones after it, and ultimately the CPU, still run the
 	// graph. That is the long-standing behaviour and the reason these errors are only logged.
+	//
+	// Warn rather than Debug, though. This is the line that separates "the GPU is doing the work" from "it quietly
+	// fell back to CPU kernels", which is the single most common thing a user reports as "the app got slow" - and at
+	// Debug it was invisible in every log anyone would actually send us. It fires at most once per provider per
+	// session build, so it costs a handful of lines even on a machine where every provider declines.
 	for _, provider := range providers {
 		if err = providerAppenders[provider](cachePath, options, p); err != nil {
-			internal.Log().Debug("execution provider unavailable", "ep", provider, "err", err)
+			internal.Log().Warn("execution provider declined to attach; the graph will run on the next provider "+
+				"in the chain", "ep", provider, "requested_ep", ep, "err", err)
 		}
 	}
 
@@ -338,7 +344,11 @@ func appendCoreML(cachePath string, options *ort.SessionOptions, p EPProfile) er
 }
 
 func appendOpenVINO(_ string, _ *ort.SessionOptions, _ EPProfile) error {
-	return nil
+	// Reporting the no-op rather than returning nil. While this is stubbed out, returning nil told the caller the
+	// provider had attached, so a machine resolving to OpenVINO ran entirely on CPU kernels with nothing anywhere
+	// saying why. The error is not fatal - the caller logs it and moves down the chain, which is the correct
+	// behaviour - it just makes the downgrade visible.
+	return errors.New("the OpenVINO provider is disabled in this build")
 
 	// TODO: Temporarily disable OpenVINO EP
 	//return options.AppendExecutionProviderOpenVINO(map[string]string{

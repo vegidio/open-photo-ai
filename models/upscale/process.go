@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"image"
 	"math"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
+	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -48,10 +50,18 @@ func RunPipeline(
 			wrapped = func(p float64) { onProgress(base + p*frac) }
 		}
 
+		start := time.Now()
+
 		processedImg, err := utils.RunTiledInference(ctx, session, resultImg, scales[i], wrapped)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to process image")
 		}
+
+		// A multi-pass upscale is the longest single wait the app ever asks a user to sit through, and the operation's
+		// own duration says nothing about how it was divided. Debug, since it fires per pass rather than per operation.
+		internal.Log().Debug("upscale pass complete", "pass", i+1, "of", len(sessions),
+			"scale", scales[i], "width", resultImg.Bounds().Dx(), "height", resultImg.Bounds().Dy(),
+			"duration", time.Since(start))
 
 		resultImg = processedImg
 		done += weights[i]

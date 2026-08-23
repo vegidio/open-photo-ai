@@ -2,6 +2,7 @@ import type { MouseEvent } from 'react';
 import { ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
+import { AnalyticsEvent, track } from '@/analytics';
 import { Icon } from '@/components/atoms/Icon';
 import { useAppStore } from '@/stores';
 
@@ -15,7 +16,10 @@ export const PreviewSelector = ({ disabled = false, className = '' }: PreviewSel
     const setPreviewMode = useAppStore((state) => state.setPreviewMode);
 
     const onButtonClick = (_: MouseEvent<HTMLElement>, newValue: 'full' | 'side' | 'split') => {
-        if (newValue) setPreviewMode(newValue);
+        if (newValue) {
+            setPreviewMode(newValue);
+            track(AnalyticsEvent.PreviewModeChanged, { mode: newValue });
+        }
     };
 
     return (

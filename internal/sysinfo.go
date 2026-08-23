@@ -6,6 +6,12 @@ import (
 	"github.com/vegidio/go-sak/sysinfo"
 )
 
+// gpuInfoOnce is the memoized probe; GPUInfo wraps it so a failure can be reported once.
+var (
+	gpuInfoOnce = sync.OnceValues(sysinfo.GetGPUInfo)
+	gpuLogOnce  sync.Once
+)
+
 // GPUInfo returns the machine's GPUs, querying the OS at most once per process.
 //
 // sysinfo.GetGPUInfo shells out - `system_profiler SPDisplaysDataType` on macOS, a PowerShell CIM query on Windows,
@@ -15,13 +21,46 @@ import (
 //
 // It lives here rather than in the public utils package so that the budget code, which utils imports, can share the
 // one cache instead of starting a second.
-var GPUInfo = sync.OnceValues(sysinfo.GetGPUInfo)
+// It stays a var rather than becoming a func so tests can swap it - see stubGPUInfo in sysinfo_test.go.
+var GPUInfo = func() ([]sysinfo.GPUInfo, error) {
+	gpus, err := gpuInfoOnce()
+
+	// Reported here rather than at each call site. Four callers - the CUDA and TensorRT probes, the device budget,
+	// the telemetry header - all turn this error into a bare false or a zero, so the reason the machine looked like it
+	// had no GPU ("why is CUDA not being offered?") was discarded four separate times and never printed anywhere.
+	// Once, at the source, covers all of them; the sync.Once keeps a repeated call from repeating the line.
+	gpuLogOnce.Do(func() {
+		if err != nil {
+			Log().Warn("could not query the GPUs; CUDA and TensorRT will not be offered", "err", err)
+		}
+	})
+
+	return gpus, err
+}
+
+var (
+	memoryInfoOnce = sync.OnceValues(sysinfo.GetMemoryInfo)
+	memoryLogOnce  sync.Once
+)
 
 // MemoryInfo returns the machine's total physical RAM, querying the OS at most once per process. Same reasoning as
 // GPUInfo: on Windows it is a PowerShell CIM query.
 //
 // Prefer TotalRAMBytes over reading .Total from this directly - see the unit note there.
-var MemoryInfo = sync.OnceValues(sysinfo.GetMemoryInfo)
+// Stays a var for the same reason as GPUInfo: tests replace it.
+var MemoryInfo = func() (sysinfo.MemoryInfo, error) {
+	info, err := memoryInfoOnce()
+
+	// Same reasoning as GPUInfo: TotalRAMBytes collapses this to 0 and the budget code then warns about the default it
+	// picked, without ever saying what the OS actually said.
+	memoryLogOnce.Do(func() {
+		if err != nil {
+			Log().Warn("could not query the system memory; the default host budget will be used", "err", err)
+		}
+	})
+
+	return info, err
+}
 
 const (
 	// bytesPerReportedMB converts what sysinfo.MemoryInfo actually returns into bytes.

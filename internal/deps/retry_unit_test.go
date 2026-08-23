@@ -94,7 +94,7 @@ func TestWithRetryStopsWhenNothingAdvances(t *testing.T) {
 
 	var attempts int
 
-	err := withRetry(t.Context(), func(int) (int64, error) {
+	err := withRetry(t.Context(), "test-artifact", func(int) (int64, error) {
 		attempts++
 		return 0, errStalled
 	})
@@ -116,7 +116,7 @@ func TestWithRetryStopsWhenProgressStops(t *testing.T) {
 
 	var attempts int
 
-	err := withRetry(t.Context(), func(int) (int64, error) {
+	err := withRetry(t.Context(), "test-artifact", func(int) (int64, error) {
 		attempts++
 		return 100, errStalled
 	})
@@ -137,7 +137,7 @@ func TestWithRetryKeepsGoingWhileAdvancing(t *testing.T) {
 
 	var reached int64
 
-	err := withRetry(t.Context(), func(int) (int64, error) {
+	err := withRetry(t.Context(), "test-artifact", func(int) (int64, error) {
 		reached += 10
 		if reached >= 200 {
 			return reached, nil
@@ -171,7 +171,7 @@ func TestWithRetryStopsOnCancellation(t *testing.T) {
 	}()
 
 	done := make(chan error, 1)
-	go func() { done <- withRetry(ctx, func(int) (int64, error) { return 0, errStalled }) }()
+	go func() { done <- withRetry(ctx, "test-artifact", func(int) (int64, error) { return 0, errStalled }) }()
 
 	select {
 	case err := <-done:

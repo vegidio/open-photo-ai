@@ -7,13 +7,26 @@ tasks:
       - rm -rf {{.ROOT_DIR}}/build/*
 
   test:
-    desc: Run the tests of every module in the workspace
+    desc: Run the tests of every module in the workspace, plus the frontend suite
+    cmds:
+      - task: test:backend
+      - task: test:frontend
+
+  test:backend:
+    desc: Run the Go tests of every module in the workspace
     cmds:
       # -race is not optional here: the model registry hands out concurrent leases, and the bug class it exists to
       # prevent (freeing an ONNX session while another goroutine runs inference on it) is a native use-after-free that
       # kills the process instead of panicking. Without the race detector its tests prove very little.
       - go test -race ./...
       - for dir in cmd/cli cmd/gui cmd/perf; do (cd "$dir" && go test -race ./...) || exit 1; done
+
+  test:frontend:
+    desc: Run the frontend tests
+    dir: cmd/gui/frontend
+    cmds:
+      - pnpm install --frozen-lockfile
+      - pnpm test
 
   # Perftest build tasks
   perf:
