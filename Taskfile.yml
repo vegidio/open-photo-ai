@@ -19,6 +19,13 @@ tasks:
       # prevent (freeing an ONNX session while another goroutine runs inference on it) is a native use-after-free that
       # kills the process instead of panicking. Without the race detector its tests prove very little.
       - go test -race ./...
+
+      # cmd/gui embeds frontend/dist, which is a build artifact and so is absent on a fresh clone and in CI. Without
+      # it the package does not compile and `go test ./...` fails before running a single test. A placeholder is
+      # enough to satisfy the embed - no test reads the embedded assets, and a real build goes through `task gui`,
+      # where vite writes the actual bundle over this.
+      - mkdir -p cmd/gui/frontend/dist
+      - test -e cmd/gui/frontend/dist/index.html || touch cmd/gui/frontend/dist/.embed-placeholder
       - for dir in cmd/cli cmd/gui cmd/perf; do (cd "$dir" && go test -race ./...) || exit 1; done
 
   test:frontend:

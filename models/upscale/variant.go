@@ -21,6 +21,9 @@ type Variant struct {
 	// Codename identifies the model in both its operation Id and the session loader.
 	Codename string
 
+	// Label is the display name shown in the UI, before the scale and precision suffixes are appended.
+	Label string
+
 	// ScaleBuckets drives the convolutional contract: it maps a requested scale onto the sequence of native passes
 	// that cover it, which is what differs between a variant shipping native 2x and 4x weights and one shipping only
 	// 4x. Ignored when Diffusion is set.
@@ -51,11 +54,6 @@ type GraphSpec struct {
 // scaling by an integer factor. It is a struct rather than a handful of optional fields on Variant so that the two
 // contracts stay legible side by side.
 type DiffusionSpec struct {
-	// Label is the display name shown in the UI, before the precision suffix is appended. It deliberately names the
-	// category rather than the model or the scale: one set of sessions serves every scale, so a name naming one would
-	// be frozen at whichever scale happened to build the model first.
-	Label string
-
 	// Graphs is the fixed set of stages loaded together for one pass.
 	Graphs []GraphSpec
 
@@ -110,7 +108,7 @@ func (v *Variant) New(
 	}
 
 	return &Model{
-		name:      FormatUpscaleName(op.scale, op.precision),
+		name:      FormatUpscaleName(v.Label, op.scale, op.precision),
 		operation: op,
 		variant:   v,
 		Sessions:  sessions,
@@ -150,7 +148,9 @@ func (v *Variant) newDiffusion(
 	}
 
 	return &Model{
-		name:      utils.FormatModelName(v.Diffusion.Label, op.precision),
+		// No scale in the name, unlike the convolutional branch: one set of sessions serves every scale, so a name
+		// naming one would be frozen at whichever scale happened to build the model first.
+		name:      utils.FormatModelName(v.Label, op.precision),
 		operation: op,
 		variant:   v,
 		Sessions:  sessions,

@@ -31,3 +31,15 @@ func BenchmarkComposeReference(b *testing.B) {
 		composeReference(img, aPlane, bPlane, inputSize)
 	}
 }
+
+// BenchmarkGrayLabInput covers the DDColor input build, which runs once per colorization at the graph's fixed 512x512.
+func BenchmarkGrayLabInput(b *testing.B) {
+	img := synth(inputSize, inputSize)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for range b.N {
+		grayLabInput(img, inputSize)
+	}
+}

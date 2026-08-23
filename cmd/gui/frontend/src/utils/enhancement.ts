@@ -297,19 +297,15 @@ export const modelItems = (type: EnhancementType) =>
 /**
  * Builds the operation for an enhancement at the user's chosen model, at the precision that model defaults to.
  *
- * An unknown model falls back to the enhancement's first, which is what a stored setting from an older build or a
- * renamed model lands on.
+ * The fallback chain is one rule, not two: an unknown model falls back to the enhancement's default, and a default
+ * that is itself unknown falls back to its first. Both arms are what a stored setting from an older build, or a
+ * renamed model, lands on.
  */
-const modelOr = (type: EnhancementType, id: string) => {
-    const models = ENHANCEMENTS[type].models;
-    return models.find((m) => m.id === id) ?? models[0];
-};
-
 export const getOp = (type: EnhancementType, model: string, amount?: number): Operation => {
-    const info = ENHANCEMENTS[type];
-    const chosen = info.models.find((m) => m.id === model) ?? modelOr(type, info.defaultModel);
+    const { models, defaultModel, defaultAmount } = ENHANCEMENTS[type];
+    const chosen = models.find((m) => m.id === model) ?? models.find((m) => m.id === defaultModel) ?? models[0];
 
-    return chosen.build(chosen.fp16Only ? 'fp16' : 'fp32', amount ?? info.defaultAmount);
+    return chosen.build(chosen.fp16Only ? 'fp16' : 'fp32', amount ?? defaultAmount);
 };
 
 /**

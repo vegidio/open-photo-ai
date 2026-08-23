@@ -45,15 +45,20 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
         [image.id, setImageTransform],
     );
 
-    // Flush on unmount, so a drag that ends with the pane closing does not drop its last position.
+    // Flush on unmount, so a drag that ends with the pane closing does not drop its last position. Cancelling the
+    // frame without committing was the whole gap: the coalesced write is the only one that ever reaches the store, so
+    // dropping it loses up to a frame of panning.
+    //
+    // The deps are what make the flush land on the right image - a [] closure would capture the first id for the
+    // component's whole life and write the last pan of every image to it.
     useEffect(
         () => () => {
             if (panFrame.current === undefined) return;
 
             cancelAnimationFrame(panFrame.current);
-            panFrame.current = undefined;
+            if (pendingPan.current) setImageTransform(image.id, pendingPan.current);
         },
-        [],
+        [image.id, setImageTransform],
     );
 
     // Center image if smaller than container, otherwise constrain within bounds

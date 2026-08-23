@@ -1,7 +1,8 @@
-import { type ChangeEvent, type MouseEvent, useEffect, useState } from 'react';
-import { Slider, Typography } from '@mui/material';
+import { type ChangeEvent, useEffect, useState } from 'react';
+import { Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { TextField } from '@/components/atoms/TextField';
+import { ValueSlider } from '@/components/atoms/ValueSlider';
 
 type IntensitySelectorProps = {
     value: string;
@@ -48,12 +49,11 @@ export const IntensitySelector = ({
         }
     };
 
-    const onSliderChange = (_: Event, newValue: number) => {
+    // The slider half is ValueSlider's; only the string-typed TextField contract below is this component's own, so
+    // the conversion happens at that boundary rather than by keeping a second copy of the MUI Slider.
+    const onSliderChange = (newValue: number) => {
         setSliderValue(newValue);
-    };
-
-    const onMouseUp = (_: MouseEvent<HTMLSpanElement>) => {
-        onChange?.(sliderValue.toString());
+        onChange?.(newValue.toString());
     };
 
     return (
@@ -73,21 +73,7 @@ export const IntensitySelector = ({
                 />
             </div>
 
-            <div className='mx-1'>
-                <Slider
-                    size='small'
-                    min={min}
-                    max={max}
-                    step={step}
-                    marks={marks}
-                    track={false}
-                    valueLabelDisplay='auto'
-                    value={sliderValue}
-                    onChange={onSliderChange}
-                    onMouseUp={onMouseUp}
-                    className='block'
-                />
-            </div>
+            <ValueSlider value={sliderValue} min={min} max={max} step={step} marks={marks} onChange={onSliderChange} />
         </div>
     );
 };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircularProgress, IconButton, LinearProgress, TableCell, TableRow } from '@mui/material';
 import { Events } from '@wailsio/runtime';
 import { useTranslation } from 'react-i18next';
@@ -50,10 +50,12 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
         return { oldDims, newDims, oldSize, newExt: ext, fileName, filePath };
     }, [file, format, location, operations, prefix, suffix, crop]);
 
-    // Derived before the effect so the listener closes over a stable string rather than over `file`, whose identity
-    // the effect deliberately does not track - it keys on the hash, and a hash fixes the dimensions.
-    const mpBand = mpBucket(file.Dimensions[0], file.Dimensions[1]);
-    const operationCount = operations.length;
+    // Read through a ref rather than closed over, so the effect can key on the hash alone. Both are analytics
+    // properties read once when an export completes, and `operationCount` changes on every enhancement edit - as
+    // dependencies they tore down and re-registered the listener of every queued row each time.
+    const telemetry = { mpBand: mpBucket(file.Dimensions[0], file.Dimensions[1]), operationCount: operations.length };
+    const telemetryRef = useRef(telemetry);
+    telemetryRef.current = telemetry;
 
     useEffect(() => {
         return Events.On('app:export', (event) => {
@@ -69,11 +71,11 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                 // size band is what makes durations comparable between a phone photo and a medium-format scan.
                 track(AnalyticsEvent.ExportCompleted, {
                     format: useExportStore.getState().format,
-                    operation_count: operationCount,
+                    operation_count: telemetryRef.current.operationCount,
                     duration_ms: durationMs,
                     // The source size, which is what determines how much work the models did. An upscale's output is
                     // larger, but it is a fixed multiple of this.
-                    mp_bucket: mpBand,
+                    mp_bucket: telemetryRef.current.mpBand,
                     ep: useSettingsStore.getState().executionProvider,
                 });
             } else {
@@ -90,7 +92,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
 
             setState(state);
         });
-    }, [file.Hash, mpBand, operationCount]);
+    }, [file.Hash]);
 
     return (
         <>

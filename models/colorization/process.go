@@ -84,21 +84,16 @@ func compose(img image.Image, aPlane, bPlane []float32, srcSize int) image.Image
 
 	out := image.NewRGBA(image.Rect(0, 0, width, height))
 
-	// The horizontal mapping depends only on x, so it is computed once here instead of per pixel.
+	// Neither mapping depends on the pixel data, so both are computed once here instead of per pixel.
 	x0s, x1s, fxs := sampleAxis(srcSize, width)
+	y0s, y1s, fys := sampleAxis(srcSize, height)
 
 	pix, stride, fast := utils.RgbPixBuffer(img)
 	_, isNRGBA := img.(*image.NRGBA)
 
 	rows := func(yStart, yEnd int) {
 		for y := yStart; y < yEnd; y++ {
-			sy := (float64(y)+0.5)*(float64(srcSize)/float64(height)) - 0.5
-			if sy < 0 {
-				sy = 0
-			}
-			y0 := min(int(sy), srcSize-1)
-			y1 := min(y0+1, srcSize-1)
-			fy := float32(sy - float64(y0))
+			y0, y1, fy := y0s[y], y1s[y], fys[y]
 
 			rowTop := y0 * srcSize
 			rowBottom := y1 * srcSize

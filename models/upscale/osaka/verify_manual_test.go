@@ -15,19 +15,13 @@ import (
 func TestOsakaRestoresDegradedImage(t *testing.T) {
 	bootstrap(t)
 
-	sessions, err := loadSessions(context.Background(), types.PrecisionFp16, types.ExecutionProviderCPU, nil)
+	// CPU, deliberately: this test asserts on the numbers the model produces, and CoreML is excluded for this
+	// pipeline precisely because it returns plausible-looking wrong ones.
+	m, err := New(context.Background(), Op(1, types.PrecisionFp16), types.ExecutionProviderCPU, nil)
 	if err != nil {
-		t.Fatalf("load sessions: %v", err)
+		t.Fatalf("load model: %v", err)
 	}
-	defer sessions.Destroy()
-
-	m := &Osaka{
-		ep:       types.ExecutionProviderCPU,
-		Sessions: sessions,
-		dit:      sessions[0],
-		enc:      sessions[1],
-		dec:      sessions[2],
-	}
+	defer m.Destroy()
 
 	pristine, degraded := sweepImages(t)
 	basePixels := utils.ImageToCHW(degraded, false, true)
@@ -40,7 +34,7 @@ func TestOsakaRestoresDegradedImage(t *testing.T) {
 	t.Logf("input  : psnr(true)=%.2f dB  detail=%.4f", baseline, baseDetail)
 	t.Logf("pristine:                    detail=%.4f", trueDetail)
 
-	out, err := m.restoreRegion(context.Background(), basePixels, sweepEdge, sweepEdge, 0, 0)
+	out, err := restoreRegion(context.Background(), m, basePixels, sweepEdge, sweepEdge, 0, 0)
 	if err != nil {
 		t.Fatalf("restore: %v", err)
 	}

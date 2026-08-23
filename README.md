@@ -40,7 +40,7 @@ curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | sh
 
 ### Windows (PowerShell)
 
-```powershell
+```bash
 irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex
 ```
 
@@ -71,6 +71,14 @@ Coming soon...
 
 All enhancements available here come from open-source AI models that were adapted and converted to work on this project. The models and the credits to the original works can be found in the Hugging Face repository [vegidio/open-photo-ai](https://huggingface.co/vegidio/open-photo-ai):
 
+### Denoise
+
+- **Stockholm**: use when you need fast, high-quality denoising of real sensor noise and computational efficiency matters. It's a good choice when throughput and resource constraints are real concerns, keeping inference times low without sacrificing quality.
+- **Gothenburg**: use when your photos contain real-world sensor noise, the kind produced by shooting in low light or at high ISO with a smartphone or DSLR. It handles complex noise patterns that cameras produce, making it the right choice for photography.
+- **Malmö**: use to remove rain streaks from outdoor images, whether captured in light drizzle or heavy downpour. It handles rain of varying scale, density, and direction, restoring fine details behind streaks. A good choice when weather artifacts obscure the scene.
+
+*Verdict*: for regular sensor noise, start with **Gothenburg** for the best quality, then switch to **Stockholm** if speed matters more; reach for **Malmö** only when you need to remove rain streaks.
+
 ### Face Recovery
 
 - **Athens**: use when identity fidelity matters most. This model lets you preserve facial structure while restoring details, even on heavily degraded faces. Best when you want restoration without changing the person.
@@ -94,6 +102,14 @@ All enhancements available here come from open-source AI models that were adapte
 
 - **Rio**: use when your photos look too orange, too blue, or just have an off, unnatural tint, like indoor shots under warm lamps, cloudy outdoor scenes, or pictures taken in mixed lighting conditions where the colors simply don't look natural.
 
+### Sharpen
+
+- **Moscow**: use when blur comes from the camera being out of focus rather than from movement — e.g. portraits with a blurry background or foreground, macro photography gone soft, or any scene where a lens failed to focus on the right plane.
+- **St. Petersburg**: use when you need fast, lightweight motion deblurring and efficiency matters more than squeezing out every last bit of quality. It's well-suited for action footage and handheld camera shake, and it's a solid choice when running on limited hardware.
+- **Novgorod**: use when blur is caused by camera shake or fast-moving subjects — e.g. sports, handheld shots in low light, or any photo where something moved during exposure. It prioritizes maximum restoration quality over speed; good when results matter most.
+
+*Verdict*: use **Moscow** for out-of-focus blur; for motion blur, start with **Novgorod** for the best quality, or fall back to **St. Petersburg** if speed matters more.
+
 ### Upscale
 
 - **Tokyo**: use when you want a natural upscale without exaggeration. It focuses on preserving the original look and fine structures instead of "inventing" new details, making it ideal when realism and faithfulness matter more than sharpness.
@@ -102,22 +118,6 @@ All enhancements available here come from open-source AI models that were adapte
 - **Osaka**: use when you want the best possible quality upscale available. It rebuilds detail rather than just sharpening it, going furthest on photos that are soft or heavily compressed. It's slow, though, and needs a powerful GPU to run well.
 
 *Verdict*: start with **Tokyo** if you have a powerful GPU, then try **Kyoto** if it's taking too long. Reach for **Osaka** only when the others leave the image looking soft, and you can afford the wait.
-
-### Denoise
-
-- **Stockholm**: use when you need fast, high-quality denoising of real sensor noise and computational efficiency matters. It's a good choice when throughput and resource constraints are real concerns, keeping inference times low without sacrificing quality.
-- **Gothenburg**: use when your photos contain real-world sensor noise, the kind produced by shooting in low light or at high ISO with a smartphone or DSLR. It handles complex noise patterns that cameras produce, making it the right choice for photography.
-- **Malmö**: use to remove rain streaks from outdoor images, whether captured in light drizzle or heavy downpour. It handles rain of varying scale, density, and direction, restoring fine details behind streaks. A good choice when weather artifacts obscure the scene.
-
-*Verdict*: for regular sensor noise, start with **Gothenburg** for the best quality, then switch to **Stockholm** if speed matters more; reach for **Malmö** only when you need to remove rain streaks.
-
-### Sharpen
-
-- **Moscow**: use when blur comes from the camera being out of focus rather than from movement — e.g. portraits with a blurry background or foreground, macro photography gone soft, or any scene where a lens failed to focus on the right plane.
-- **St. Petersburg**: use when you need fast, lightweight motion deblurring and efficiency matters more than squeezing out every last bit of quality. It's well-suited for action footage and handheld camera shake, and it's a solid choice when running on limited hardware.
-- **Novgorod**: use when blur is caused by camera shake or fast-moving subjects — e.g. sports, handheld shots in low light, or any photo where something moved during exposure. It prioritizes maximum restoration quality over speed; good when results matter most.
-
-*Verdict*: use **Moscow** for out-of-focus blur; for motion blur, start with **Novgorod** for the best quality, or fall back to **St. Petersburg** if speed matters more.
 
 ## 🛣️ Roadmap
 

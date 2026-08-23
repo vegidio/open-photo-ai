@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { clampQuality, DEFAULT_QUALITY, normalizeQuality } from './quality.ts';
+import { ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 
 describe('clampQuality', () => {
     it('keeps a value in range', () => {

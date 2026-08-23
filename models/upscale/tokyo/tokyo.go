@@ -9,6 +9,7 @@ import (
 
 // variant holds everything specific to tokyo; the shared implementation lives in the upscale package.
 var variant = &upscale.Variant{
+	Label:        "Tokyo",
 	Codename:     "tokyo",
 	ScaleBuckets: upscale.DefaultScaleBuckets,
 }

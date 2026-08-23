@@ -10,6 +10,7 @@ import (
 // variant holds everything specific to malmo; the shared implementation lives in the denoise package.
 var variant = &denoise.Variant{
 	Codename: "malmo",
+	Label:    "Malmo",
 }
 
 // New loads the malmo session for the given operation.

@@ -26,8 +26,8 @@ func LoadSessions(
 	return utils.LoadSessions(ctx, specs, ep, utils.EPProfile{}, onProgress)
 }
 
-// FormatUpscaleName builds the display name used by every upscale variant. Upscale is the one family whose label
-// carries the scale, so it composes the label here and leaves the precision suffix to the shared formatter.
-func FormatUpscaleName(scale float64, precision types.Precision) string {
-	return utils.FormatModelName(fmt.Sprintf("Upscale %.4gx", scale), precision)
+// FormatUpscaleName builds the display name used by every convolutional upscale variant. Upscale is the one family
+// whose name carries the scale, so it composes that here and leaves the precision suffix to the shared formatter.
+func FormatUpscaleName(label string, scale float64, precision types.Precision) string {
+	return utils.FormatModelName(fmt.Sprintf("%s %.4gx", label, scale), precision)
 }

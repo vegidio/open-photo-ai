@@ -20,22 +20,17 @@ import (
 func TestOsakaFullPipeline(t *testing.T) {
 	bootstrap(t)
 
+	const scale = 2.0
+
 	// Auto, not CPU: the app resolves the provider this way, and pinning this to CPU is what let a CoreML abort
 	// reach a user despite the pipeline "passing" end to end.
-	sessions, err := loadSessions(context.Background(), types.PrecisionFp16, types.ExecutionProviderAuto, nil)
+	//
+	// Built through New rather than by hand, so the role-to-session binding under test is the one the app uses.
+	m, err := New(context.Background(), Op(scale, types.PrecisionFp16), types.ExecutionProviderAuto, nil)
 	if err != nil {
-		t.Fatalf("load sessions: %v", err)
+		t.Fatalf("load model: %v", err)
 	}
-	defer sessions.Destroy()
-
-	m := &Osaka{
-		operation: Op(2, types.PrecisionFp16),
-		ep:        types.ExecutionProviderAuto,
-		Sessions:  sessions,
-		dit:       sessions[0],
-		enc:       sessions[1],
-		dec:       sessions[2],
-	}
+	defer m.Destroy()
 
 	f, err := os.Open(samplePath)
 	if err != nil {
@@ -47,19 +42,18 @@ func TestOsakaFullPipeline(t *testing.T) {
 		t.Fatalf("decode sample: %v", err)
 	}
 
-	const scale = 2.0
 	outDir := os.TempDir()
 
-	lastOp, lastPct := "", -1.0
+	lastPct := -1.0
 	progress := func(p float64) {
-		if p-lastPct >= 0.2 || op != lastOp {
-			t.Logf("   progress %s %.0f%%", op, p*100)
-			lastOp, lastPct = op, p
+		if p-lastPct >= 0.2 {
+			t.Logf("   progress %.0f%%", p*100)
+			lastPct = p
 		}
 	}
 
 	start := time.Now()
-	out, err := m.runPipeline(context.Background(), src, scale, progress)
+	out, err := runPipeline(context.Background(), m, src, scale, progress)
 	elapsed := time.Since(start)
 
 	if err != nil {

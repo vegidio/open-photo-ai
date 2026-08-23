@@ -10,6 +10,7 @@ import (
 // variant holds everything specific to petersburg; the shared implementation lives in the sharpen package.
 var variant = &sharpen.Variant{
 	Codename: "petersburg",
+	Label:    "Petersburg",
 	// DivergenceThreshold is the max |raw output| above which a tile is treated as a NAFNet blow-up and
 	// replaced with the original input pixels. 3.0 sits safely above legitimate output magnitude (~O(1)) and far
 	// below the ~1000+ blow-up.

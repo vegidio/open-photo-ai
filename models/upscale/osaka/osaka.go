@@ -23,8 +23,8 @@ const (
 // diffusion contract rather than ScaleBuckets.
 var variant = &upscale.Variant{
 	Codename: "osaka",
+	Label:    "Osaka",
 	Diffusion: &upscale.DiffusionSpec{
-		Label:     "Upscale",
 		Graphs:    graphs,
 		Profile:   profileFor,
 		Precision: types.PrecisionFp16,

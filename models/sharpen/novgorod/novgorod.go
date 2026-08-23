@@ -10,6 +10,7 @@ import (
 // variant holds everything specific to novgorod; the shared implementation lives in the sharpen package.
 var variant = &sharpen.Variant{
 	Codename: "novgorod",
+	Label:    "Novgorod",
 }
 
 // New loads the novgorod session for the given operation.

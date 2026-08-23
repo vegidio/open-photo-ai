@@ -17,6 +17,9 @@ type Variant struct {
 	// Codename identifies the model in both its operation Id (`dn_<codename>_<precision>`) and the session loader.
 	Codename string
 
+	// Label is the display name shown in the UI, before the precision suffix is appended.
+	Label string
+
 	// DivergenceThreshold, when greater than zero, enables the per-tile blow-up guard at that magnitude. Only the
 	// NAFNet-based variants need it; leaving it zero runs the pipeline with no guard.
 	DivergenceThreshold float32
@@ -43,13 +46,13 @@ func (v *Variant) New(
 		return nil, errors.Errorf("expected a denoise operation, got %T", operation)
 	}
 
-	session, err := LoadSession(ctx, v.Codename, op.precision, ep, onProgress)
+	session, err := utils.LoadSingleSession(ctx, "dn", v.Codename, op.precision, ep, onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}
 
 	return &Model{
-		name:      FormatDenoiseName(op.precision),
+		name:      utils.FormatModelName(v.Label, op.precision),
 		operation: op,
 		variant:   v,
 		Session:   session,

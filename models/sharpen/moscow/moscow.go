@@ -10,6 +10,7 @@ import (
 // variant holds everything specific to moscow; the shared implementation lives in the sharpen package.
 var variant = &sharpen.Variant{
 	Codename: "moscow",
+	Label:    "Moscow",
 }
 
 // New loads the moscow session for the given operation.

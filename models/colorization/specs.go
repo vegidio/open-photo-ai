@@ -47,6 +47,10 @@ var DeOldify = Spec{
 
 // grayLabInput builds the model's CHW input tensor from the resized image: each pixel is reduced to its luminance
 // (Lab L with zero chroma) and rendered back to RGB, which is the gray image DDColor was trained on.
+//
+// GrayFromRgbBytes is that reduction with the Lab round-trip collapsed out - at zero chroma it is the identity on the
+// luminance, so going through L cost a cube root and three math.Pow per pixel to arrive back where it started. See the
+// helper's comment, and TestGrayFromRgbBytesMatchesLabRoundTrip for the bound on the difference.
 func grayLabInput(img *image.NRGBA, size int) []float32 {
 	plane := size * size
 	data := make([]float32, 3*plane)
@@ -57,13 +61,12 @@ func grayLabInput(img *image.NRGBA, size int) []float32 {
 
 		for x := range size {
 			off := row + x*4
-			l := utils.RgbToLabLBytes(img.Pix[off], img.Pix[off+1], img.Pix[off+2])
-			r, g, b := utils.LabToRgb(l, 0, 0)
+			gray := utils.GrayFromRgbBytes(img.Pix[off], img.Pix[off+1], img.Pix[off+2])
 
 			i := dst + x
-			data[i] = r
-			data[plane+i] = g
-			data[2*plane+i] = b
+			data[i] = gray
+			data[plane+i] = gray
+			data[2*plane+i] = gray
 		}
 	}
 

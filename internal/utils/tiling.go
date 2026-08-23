@@ -102,7 +102,7 @@ func RunTiledInference(
 		tileX, tileY := rect.Min.X, rect.Min.Y
 		tileW, tileH := rect.Dx(), rect.Dy()
 
-		paddedTile := prepareTileForInference(img, tileX, tileY, tileW, tileH, defaultTileSize)
+		paddedTile := prepareTileForInference(img, scratch, tileX, tileY, tileW, tileH, defaultTileSize)
 
 		processedTile, err := processTile(session, scratch, paddedTile, tileW, tileH, scale, cfg.divergenceThreshold)
 		if err != nil {
@@ -225,7 +225,22 @@ func (g TileGrid) offsets(length int) []int {
 
 // prepareTileForInference extracts a tile and reflection-pads it out to tileSize, which the fixed-shape sessions
 // require even for the partial tiles at the right and bottom edges.
-func prepareTileForInference(img image.Image, tileX, tileY, tileW, tileH, tileSize int) image.Image {
+//
+// scratch.tile absorbs the common case. The grid shifts an out-of-bounds tile back in rather than shrinking it, so
+// every tile of an image larger than one tile is already exactly tileSize square and needs no padding at all - and
+// cropping it allocated a fresh 1 MB buffer per tile to hold a copy the next tile immediately made garbage. The
+// padded branch below is reachable only when the whole image is smaller than one tile, where there is one tile and
+// the allocation does not repeat.
+func prepareTileForInference(img image.Image, scratch *tileScratch, tileX, tileY, tileW, tileH, tileSize int) image.Image {
+	if tileW == tileSize && tileH == tileSize {
+		// image.Pt(tileX, tileY), not offset by img.Bounds().Min, because that is how the imaging.Crop below reads
+		// the same numbers - it takes its rectangle in absolute source coordinates. The two disagree for an image
+		// whose bounds do not start at the origin, which nothing in this codebase produces; matching Crop keeps this
+		// a pure allocation change rather than a silent behaviour change on a path with no test.
+		draw.Draw(scratch.tile, scratch.tile.Bounds(), img, image.Pt(tileX, tileY), draw.Src)
+		return scratch.tile
+	}
+
 	tile := imaging.Crop(img, image.Rect(tileX, tileY, tileX+tileW, tileY+tileH))
 
 	padRight := 0
@@ -256,6 +271,14 @@ type tileScratch struct {
 	inputTensor  *ort.Tensor[float32]
 	outputTensor *ort.Tensor[float32]
 	outW, outH   int
+
+	// output is the decoded tile, reused for the same reason as the tensors: every tile decodes to the same fixed
+	// shape, and a fresh image per tile is 4 MB at a 512 tile upscaled 2x. It is only ever read again before the next
+	// tile overwrites it, which blendTileWithOverlap does synchronously.
+	output *image.RGBA
+
+	// tile is the extracted input tile, reused on the same terms - see prepareTileForInference.
+	tile *image.NRGBA
 }
 
 func newTileScratch(tileSize, scale int) (*tileScratch, error) {
@@ -280,6 +303,8 @@ func newTileScratch(tileSize, scale int) (*tileScratch, error) {
 		outputTensor: outputTensor,
 		outW:         outW,
 		outH:         outH,
+		output:       image.NewRGBA(image.Rect(0, 0, outW, outH)),
+		tile:         image.NewNRGBA(image.Rect(0, 0, tileSize, tileSize)),
 	}, nil
 }
 
@@ -304,9 +329,16 @@ func processTile(
 
 	cropW := tileW * scale
 	cropH := tileH * scale
-	croppedTile := imaging.Crop(processedTile, image.Rect(0, 0, cropW, cropH))
 
-	return croppedTile, nil
+	// Only the partial tiles at an edge carry padding to remove, and the grid shifts a tile back in rather than
+	// shrinking it - so on any image larger than one tile this crop was a full-size copy that changed nothing, plus an
+	// RGBA-to-NRGBA conversion of every pixel.
+	bounds := processedTile.Bounds()
+	if bounds.Dx() == cropW && bounds.Dy() == cropH {
+		return processedTile, nil
+	}
+
+	return imaging.Crop(processedTile, image.Rect(0, 0, cropW, cropH)), nil
 }
 
 // runTileInference runs inference on a single padded tile. The output shares the input's shape scaled by scale (scale 1
@@ -355,7 +387,7 @@ func runTileInference(
 		}
 	}
 
-	return CHWToImage(outputData, outW, outH, false), nil
+	return CHWToImageInto(scratch.output, outputData, outW, outH, false), nil
 }
 
 // ReflectionPad extends an image by mirroring its edge pixels outwards. It is exported for the drivers that pad to a

@@ -10,6 +10,7 @@ import (
 // variant holds everything specific to stockholm; the shared implementation lives in the denoise package.
 var variant = &denoise.Variant{
 	Codename: "stockholm",
+	Label:    "Stockholm",
 	// DivergenceThreshold is the max |raw output| above which a tile is treated as a NAFNet blow-up and
 	// replaced with the original input pixels. 3.0 sits safely above legitimate output magnitude (~O(1)) and far
 	// below the ~1000+ blow-up.

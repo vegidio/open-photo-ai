@@ -9,6 +9,7 @@ import (
 
 // variant holds everything specific to saitama; the shared implementation lives in the upscale package.
 var variant = &upscale.Variant{
+	Label:        "Saitama",
 	Codename:     "saitama",
 	ScaleBuckets: upscale.DefaultScaleBuckets,
 }

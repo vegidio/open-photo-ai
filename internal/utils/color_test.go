@@ -105,6 +105,9 @@ func TestRgbToLabLMatchesRgbToLab(t *testing.T) {
 // TestSrgbByteMatchesPow checks the threshold table at every step boundary and on either side of it. The encode is
 // monotonic, so pinning all 255 boundaries pins the mapping for every input in between.
 func TestSrgbByteMatchesPow(t *testing.T) {
+	// The table is built on first use rather than at init, and this test reads it directly.
+	buildSrgbByteThreshold()
+
 	for k := 1; k <= 255; k++ {
 		at := srgbByteThreshold[k-1]
 		below := math.Nextafter(at, 0)
@@ -156,4 +159,41 @@ func TestLabToLinearRgbMatchesLabToRgb(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestGrayFromRgbBytesMatchesLabRoundTrip pins the collapsed form against the Lab round-trip it replaced. The two are
+// not required to be bit-identical - the point is that the difference is far below the 8-bit quantization the value
+// feeds into, which is what makes skipping the round-trip safe.
+func TestGrayFromRgbBytesMatchesLabRoundTrip(t *testing.T) {
+	var worst float64
+
+	check := func(r, g, b uint8) {
+		t.Helper()
+
+		l := RgbToLabLBytes(r, g, b)
+		want, _, _ := LabToRgb(l, 0, 0)
+		got := GrayFromRgbBytes(r, g, b)
+
+		d := math.Abs(float64(got) - float64(want))
+		worst = math.Max(worst, d)
+
+		// One 8-bit step is 1/255 = 0.0039, so this leaves four orders of magnitude of headroom.
+		if d > 1e-4 {
+			t.Fatalf("rgb(%d,%d,%d): got %v, want %v (delta %g)", r, g, b, got, want, d)
+		}
+	}
+
+	// The gray diagonal exhaustively, then a coprime-strided sweep of the cube so no channel's stride aliases another.
+	for v := range 256 {
+		check(uint8(v), uint8(v), uint8(v))
+	}
+	for r := 0; r < 256; r += 3 {
+		for g := 0; g < 256; g += 5 {
+			for b := 0; b < 256; b += 7 {
+				check(uint8(r), uint8(g), uint8(b))
+			}
+		}
+	}
+
+	t.Logf("worst delta %g against a quantization step of %g", worst, 1.0/255.0)
 }

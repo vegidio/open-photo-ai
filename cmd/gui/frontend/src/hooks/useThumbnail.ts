@@ -1,4 +1,4 @@
-import { type RefCallback, useCallback, useEffect, useRef, useState } from 'react';
+import { type RefCallback, useCallback, useEffect, useState } from 'react';
 import type { File } from '@/bindings/gui/types';
 import { getImage } from '@/utils/image.ts';
 
@@ -26,11 +26,10 @@ export const useThumbnail = (file: File, size: number): Thumbnail => {
     const [url, setUrl] = useState<string>();
     const [visible, setVisible] = useState(false);
 
-    const observerRef = useRef<IntersectionObserver>(undefined);
-
+    // The returned cleanup is the only teardown needed: React 19 invokes a ref callback's returned function both when
+    // the node detaches and when the component unmounts, which is every case a separate ref plus an unmount effect
+    // used to cover.
     const ref = useCallback<RefCallback<Element>>((node) => {
-        observerRef.current?.disconnect();
-
         if (!node) return;
 
         // No IntersectionObserver (a test environment, an old webview) means load straight away rather than never.
@@ -52,12 +51,9 @@ export const useThumbnail = (file: File, size: number): Thumbnail => {
         );
 
         observer.observe(node);
-        observerRef.current = observer;
 
         return () => observer.disconnect();
     }, []);
-
-    useEffect(() => () => observerRef.current?.disconnect(), []);
 
     useEffect(() => {
         if (!visible) return;

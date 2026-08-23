@@ -79,7 +79,16 @@ func ImageToCHWInto(tensor []float32, img image.Image, useOffset, standardize bo
 // standardize: if true, denormalizes from [-1, 1]; if false, denormalizes from [0, 1]
 // Expects the format: [1, 3, H, W] in CHW format (RGB)
 func CHWToImage(data []float32, width, height int, standardize bool) image.Image {
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	return CHWToImageInto(image.NewRGBA(image.Rect(0, 0, width, height)), data, width, height, standardize)
+}
+
+// CHWToImageInto is CHWToImage writing into an image the caller owns, and is the mirror of ImageToCHWInto: it exists
+// for the tiled drivers, whose tiles all decode to the same fixed shape, so allocating a fresh output image per tile -
+// 4 MB at a 512 tile upscaled 2x, thousands of times over on a large photo - was gigabytes of identically-shaped
+// garbage. Callers with a single image should use CHWToImage.
+//
+// img must be at least width x height; the pixels outside that region are left alone.
+func CHWToImageInto(img *image.RGBA, data []float32, width, height int, standardize bool) image.Image {
 	pix := img.Pix
 
 	plane := height * width

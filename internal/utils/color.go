@@ -1,13 +1,16 @@
 package utils
 
-import "math"
+import (
+	"math"
+	"sync"
+)
 
 // RgbSaturation is the S of RgbToHsv on its own. All input channels (r, g, b) are expected to be in the range
 // [0, 255]; the result is scaled to the range [0, 255].
 //
 // It exists because RgbToHsv always computes the hue, including a math.Mod and a three-way branch, while a caller that
 // only tests saturation - autopilot's neutral-pixel scan - was paying that on every pixel of the image to use it on a
-// fraction of them. The arithmetic is copied from RgbToHsv verbatim so the two can never disagree.
+// fraction of them. RgbToHsv calls this for its own S, so the two cannot disagree.
 func RgbSaturation(r, g, b float64) float64 {
 	maxC := math.Max(r, math.Max(g, b))
 	if maxC == 0 {
@@ -32,12 +35,7 @@ func RgbToHsv(r, g, b float64) (h, s, v float64) {
 	delta := maxC - minC
 
 	v = maxC
-
-	if maxC == 0 {
-		s = 0
-	} else {
-		s = (delta / maxC) * 255.0
-	}
+	s = RgbSaturation(r, g, b)
 
 	if delta == 0 {
 		h = 0
@@ -97,24 +95,7 @@ func RgbToLab(r, g, b float32) (l, la, lb float32) {
 // LabToRgb converts a CIELab color (D65, the same convention as RgbToLab) back to sRGB. The returned channels are
 // clamped to [0, 1].
 func LabToRgb(l, la, lb float32) (r, g, b float32) {
-	l64 := float64(l)
-
-	var y, fy float64
-	if l64 > labK*labT0 {
-		fy = (l64 + 16.0) / 116.0
-		y = fy * fy * fy
-	} else {
-		y = l64 / labK
-		fy = 7.787*y + 16.0/116.0
-	}
-
-	x := labXn * labFInv(fy+float64(la)/500.0)
-	z := labZn * labFInv(fy-float64(lb)/200.0)
-
-	lr := 3.240479*x - 1.537150*y - 0.498535*z
-	lg := -0.969256*x + 1.875992*y + 0.041556*z
-	lb64 := 0.055648*x - 0.204043*y + 1.057311*z
-
+	lr, lg, lb64 := LabToLinearRgb(l, la, lb)
 	return float32(linearToSrgb(lr)), float32(linearToSrgb(lg)), float32(linearToSrgb(lb64))
 }
 
@@ -181,7 +162,17 @@ func init() {
 	for v := range 256 {
 		srgbLinearLUT[v] = srgbToLinear(float64(float32(uint32(v)*257) / 65535.0))
 	}
+}
 
+// buildSrgbByteThreshold fills the table above. It is deferred rather than run from init() because it is the expensive
+// half: 255 thresholds each bisected over the full float64 bit range is ~62 iterations apiece, so ~15,800 calls to
+// srgbByteSlow - several thousand of which reach math.Pow. Every binary linking this package paid that at load,
+// including the GUI, whether anything ever encoded a pixel or not.
+//
+// The bisection is kept as-is rather than seeded from the closed-form inverse: the table is pinned bit-for-bit against
+// srgbByteSlow by TestSrgbByteMatchesSlow, and a seeded search would put that exactness at risk to save a startup cost
+// that deferring removes outright.
+var buildSrgbByteThreshold = sync.OnceFunc(func() {
 	// Locate each step boundary by bisecting the float64 bit pattern rather than the value: for positive floats the
 	// bit order is the value order, so this converges on the exact float64 where the output byte changes.
 	for k := 1; k <= 255; k++ {
@@ -198,7 +189,7 @@ func init() {
 
 		srgbByteThreshold[k-1] = math.Float64frombits(lo)
 	}
-}
+})
 
 // RgbToLabL returns only the CIELab L of an sRGB color, bit-for-bit identical to the first result of RgbToLab. Inputs
 // are in [0, 1]; the result is in [0, 100].
@@ -211,6 +202,20 @@ func RgbToLabL(r, g, b float32) float32 {
 // buffers and for straight-alpha buffers at full opacity; callers must use RgbToLabL otherwise.
 func RgbToLabLBytes(r, g, b uint8) float32 {
 	return labLFromLinear(srgbLinearLUT[r], srgbLinearLUT[g], srgbLinearLUT[b])
+}
+
+// GrayFromRgbBytes returns the sRGB-encoded gray level that carries the same luminance as the given 8-bit sRGB pixel.
+// Writing it to all three channels is the "gray RGB rendering" the colorization graphs are trained on.
+//
+// This is the collapsed form of LabToRgb(RgbToLabL(r, g, b), 0, 0), which is what it replaced. At zero chroma the Lab
+// round-trip is the identity on the luminance: LabToRgb inverts the very cube root RgbToLabL applies, and the XYZ to
+// linear matrix rows sum to 1.000003, 1.000004 and 0.999993 against the D65 white point - so the L scaling cancels and
+// all three channels collapse to one gamma encode. Going through Lab cost a math.Cbrt, two cubes and three math.Pow
+// per pixel to compute a value the luminance already had.
+
+func GrayFromRgbBytes(r, g, b uint8) float32 {
+	y := 0.212671*srgbLinearLUT[r] + 0.715160*srgbLinearLUT[g] + 0.072169*srgbLinearLUT[b]
+	return float32(linearToSrgb(y))
 }
 
 // labLFromLinear is the L half of the CIELab forward transfer, shared by both entry points above.
@@ -249,6 +254,8 @@ func LabToLinearRgb(l, la, lb float32) (r, g, b float64) {
 // SrgbByte gamma-encodes a linear-light channel straight to the rounded 8-bit value it would end up as, replacing the
 // math.Pow in linearToSrgb with a search over 255 precomputed thresholds.
 func SrgbByte(c float64) uint8 {
+	buildSrgbByteThreshold()
+
 	lo, hi := 0, 255
 
 	for lo < hi {
