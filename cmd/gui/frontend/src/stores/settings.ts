@@ -6,6 +6,13 @@ import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/t
 import { DEFAULT_LANGUAGE, detectLanguage, isSupportedLanguage, type SupportedLanguage } from '@/i18n/languages';
 import { os } from '@/utils/constants';
 import { DEFAULT_MODELS, type EnhancementType, type ModelChoices } from '@/utils/enhancement';
+import {
+    clampQuality,
+    DEFAULT_QUALITY,
+    normalizeQuality,
+    type QualityChoices,
+    type QualityFormat,
+} from '@/utils/quality';
 
 const {
     ExecutionProviderCUDA,
@@ -27,12 +34,18 @@ type SettingsStore = {
     // fields, so adding an enhancement is an entry in ENHANCEMENTS and nothing here.
     models: ModelChoices;
 
+    // The encoder quality for each lossy export format. Shared by the Settings dialog and the Export dialog rather
+    // than duplicated: the Export dialog's slider is seeded from this, and pressing Export writes back to it, which
+    // is what makes the next export of the same format remember the last value used.
+    quality: QualityChoices;
+
     setIsFirstTensorRT: (isFirstRun: boolean) => void;
     setProcessorOptions: (supportedEps: SupportedEPs) => void;
     setExecutionProvider: (ep: ExecutionProvider) => void;
     setAnalyticsEnabled: (enabled: boolean) => void;
     setLanguage: (language: SupportedLanguage) => void;
     setModel: (type: EnhancementType, model: string) => void;
+    setQuality: (format: QualityFormat, value: number) => void;
 
     saveSnapshot: () => void;
     restoreSnapshot: () => void;
@@ -47,6 +60,7 @@ const SNAPSHOT_KEYS = [
     'analyticsEnabled',
     'language',
     'models',
+    'quality',
 ] as const satisfies readonly (keyof SettingsStore)[];
 
 type SnapshotKey = (typeof SNAPSHOT_KEYS)[number];
@@ -65,6 +79,7 @@ export const useSettingsStore = create(
                 // Only used on first launch; `persist` replaces it with the stored choice on every later boot.
                 language: detectLanguage(),
                 models: { ...DEFAULT_MODELS },
+                quality: { ...DEFAULT_QUALITY },
 
                 setIsFirstTensorRT: (isFirst: boolean) => {
                     set((state) => {
@@ -124,6 +139,12 @@ export const useSettingsStore = create(
                     });
                 },
 
+                setQuality: (format: QualityFormat, value: number) => {
+                    set((state) => {
+                        state.quality[format] = clampQuality(value);
+                    });
+                },
+
                 // Both directions iterate SNAPSHOT_KEYS, which is the whole point of that list: a new or renamed
                 // settings field updates one place and stays covered, instead of being silently left out of the
                 // snapshot until someone notices Cancel doesn't revert it.
@@ -165,7 +186,13 @@ export const useSettingsStore = create(
             // catalog no longer ships (or a hand-edited value) would leave the Settings select on an option that
             // isn't in its item list, and every t() call falling back key-by-key.
             onRehydrateStorage: () => (state) => {
-                if (state && !isSupportedLanguage(state.language)) state.language = DEFAULT_LANGUAGE;
+                if (!state) return;
+                if (!isSupportedLanguage(state.language)) state.language = DEFAULT_LANGUAGE;
+
+                // Same reasoning again, but the stakes are higher: a missing or out-of-range quality is not a setting
+                // that merely looks wrong in the UI - it is handed straight to the native encoders, which take a 0 as
+                // a real request and write out a garbage image. See normalizeQuality.
+                state.quality = normalizeQuality(state.quality);
             },
         },
     ),

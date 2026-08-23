@@ -22,6 +22,7 @@
         "sections": {
             "app": "Anwendung",
             "performance": "Leistung",
+            "export": "Export",
             "enhancements": "Verbesserungen"
         },
         "app": {
@@ -50,6 +51,24 @@
                 "description_directml": "Wählen Sie den KI-Prozessor, der die Modelle steuert. DirectML ist eine gute Option, wenn Sie keine dedizierte GPU haben.",
                 "description_coreml": "Wählen Sie den KI-Prozessor, der die Modelle steuert. CoreML ist meist deutlich schneller als die CPU, unterstützt aber nicht alle Modelle.",
                 "description_cpu": "Wählen Sie den KI-Prozessor, der die Modelle steuert. Die CPU ist die langsamste Option, unterstützt aber alle Modelle."
+            }
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF",
+                "description": "Die Qualität, die beim Exportieren von Bildern als AVIF verwendet wird. Niedrigere Werte ergeben kleinere Dateien."
+            },
+            "heic": {
+                "title": "HEIC",
+                "description": "Die Qualität, die beim Exportieren von Bildern als HEIC verwendet wird. Niedrigere Werte ergeben kleinere Dateien."
+            },
+            "jpeg": {
+                "title": "JPEG",
+                "description": "Die Qualität, die beim Exportieren von Bildern als JPEG verwendet wird. Niedrigere Werte ergeben kleinere Dateien."
+            },
+            "webp": {
+                "title": "WEBP",
+                "description": "Die Qualität, die beim Exportieren von Bildern als WEBP verwendet wird. Niedrigere Werte ergeben kleinere Dateien."
             }
         },
         "enhancements": {
@@ -138,6 +157,9 @@
             "format": {
                 "title": "Format",
                 "preserve": "Beibehalten"
+            },
+            "quality": {
+                "title": "Qualität"
             },
             "location": {
                 "title": "Speichern unter",

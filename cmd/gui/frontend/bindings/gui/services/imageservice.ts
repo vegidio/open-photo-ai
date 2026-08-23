@@ -13,13 +13,14 @@ import * as types$1 from "../../github.com/vegidio/open-photo-ai/types/models.js
 import * as types$0 from "../types/models.js";
 
 /**
- * ExportImage runs the operations named by opIds and writes the result to outputPath at full quality. Unless
- * overwrite is set, an existing file is left alone and a "_N" suffix is added instead (see getOutputPath).
+ * ExportImage runs the operations named by opIds and writes the result to outputPath. Unless overwrite is set, an
+ * existing file is left alone and a "_N" suffix is added instead (see getOutputPath).
  * 
- * Progress is reported through EventAppExport rather than the return value, keyed by file.Hash.
+ * quality is 1-100 and only affects the lossy formats; see utils.EncodeImage. Progress is reported through
+ * EventAppExport rather than the return value, keyed by file.Hash.
  */
-export function ExportImage(file: types$0.File, outputPath: string, ep: types$1.ExecutionProvider, overwrite: boolean, format: types$1.ImageFormat, params: types$0.InferenceParams, ...opIds: string[]): $CancellablePromise<void> {
-    return $Call.ByID(1308095068, file, outputPath, ep, overwrite, format, params, opIds);
+export function ExportImage(file: types$0.File, outputPath: string, ep: types$1.ExecutionProvider, overwrite: boolean, format: types$1.ImageFormat, quality: number, params: types$0.InferenceParams, ...opIds: string[]): $CancellablePromise<void> {
+    return $Call.ByID(1308095068, file, outputPath, ep, overwrite, format, quality, params, opIds);
 }
 
 /**

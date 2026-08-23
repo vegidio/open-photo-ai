@@ -22,6 +22,7 @@
         "sections": {
             "app": "Application",
             "performance": "Performance",
+            "export": "Export",
             "enhancements": "Enhancements"
         },
         "app": {
@@ -50,6 +51,24 @@
                 "description_directml": "Select the AI processor that will orchestrate the models. DirectML is a good option when you don't have a dedicated GPU.",
                 "description_coreml": "Select the AI processor that will orchestrate the models. CoreML is usually much faster than CPU, but it doesn't support all models.",
                 "description_cpu": "Select the AI processor that will orchestrate the models. CPU is the slowest option, but it supports all models."
+            }
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF",
+                "description": "The quality used when exporting images as AVIF. Lower values produce smaller files."
+            },
+            "heic": {
+                "title": "HEIC",
+                "description": "The quality used when exporting images as HEIC. Lower values produce smaller files."
+            },
+            "jpeg": {
+                "title": "JPEG",
+                "description": "The quality used when exporting images as JPEG. Lower values produce smaller files."
+            },
+            "webp": {
+                "title": "WEBP",
+                "description": "The quality used when exporting images as WEBP. Lower values produce smaller files."
             }
         },
         "enhancements": {
@@ -138,6 +157,9 @@
             "format": {
                 "title": "Format",
                 "preserve": "Preserve"
+            },
+            "quality": {
+                "title": "Quality"
             },
             "location": {
                 "title": "Save to",

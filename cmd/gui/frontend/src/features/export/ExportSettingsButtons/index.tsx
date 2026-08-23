@@ -9,13 +9,15 @@ import { useExportStore, useSettingsStore } from '@/stores';
 import { suggestEnhancement } from '@/utils/enhancement.ts';
 import { getErrorMessage } from '@/utils/errors.ts';
 import { exportImage } from '@/utils/export.ts';
+import { QUALITY_FORMATS, type QualityChoices } from '@/utils/quality.ts';
 
 type ExportSettingsButtonsProps = {
     enhancements: Map<File, Operation[]>;
+    quality: QualityChoices;
     onClose: () => void;
 };
 
-export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsButtonsProps) => {
+export const ExportSettingsButtons = ({ enhancements, quality, onClose }: ExportSettingsButtonsProps) => {
     const { t } = useTranslation();
     const format = useExportStore((state) => state.format);
     const prefix = useExportStore((state) => state.prefix);
@@ -25,6 +27,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     const resetKey = useExportStore((state) => state.resetKey);
     const ep = useSettingsStore((state) => state.executionProvider);
     const models = useSettingsStore((state) => state.models);
+    const setQuality = useSettingsStore((state) => state.setQuality);
 
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | undefined>(undefined);
@@ -45,7 +48,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
 
     // Exports every file in turn, reporting whether it got through all of them. Returns early on the first failure —
     // the file's error state has already been emitted by then.
-    const exportAll = async (): Promise<boolean> => {
+    const exportAll = async (committed: QualityChoices): Promise<boolean> => {
         for (const [file, fileOperations] of enhancements.entries()) {
             let operations = fileOperations;
 
@@ -74,6 +77,7 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
                     prefix,
                     suffix,
                     location,
+                    quality: committed,
                 });
                 await exportRef.current;
             } catch (e) {
@@ -98,10 +102,19 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
             return;
         }
 
+        // Where the Export dialog's draft becomes the remembered value - the point of "last quality used". Committed
+        // for every format, not just the visible one: the draft only ever differs from the store where the user
+        // changed something, so the rest are no-ops.
+        for (const qualityFormat of QUALITY_FORMATS) setQuality(qualityFormat, quality[qualityFormat]);
+
+        // Read back rather than reusing the draft, so the bytes written are encoded with exactly the values that were
+        // persisted, clamping included.
+        const committed = useSettingsStore.getState().quality;
+
         setState('processing');
         track(AnalyticsEvent.ExportStarted, { count: enhancements.size, format });
 
-        const completed = await exportAll();
+        const completed = await exportAll(committed);
 
         setState(completed ? 'completed' : 'idle');
     };

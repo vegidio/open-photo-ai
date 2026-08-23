@@ -43,4 +43,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             { id: 'enh_upscale', labelKey: 'enhancements.upscale.name' },
         ],
     },
+    {
+        id: 'export',
+        labelKey: 'settings.sections.export',
+        items: [
+            { id: 'export_avif', labelKey: 'settings.export.avif.title' },
+            { id: 'export_heic', labelKey: 'settings.export.heic.title' },
+            { id: 'export_jpeg', labelKey: 'settings.export.jpeg.title' },
+            { id: 'export_webp', labelKey: 'settings.export.webp.title' },
+        ],
+    },
 ];

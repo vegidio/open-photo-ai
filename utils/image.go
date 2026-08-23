@@ -35,6 +35,11 @@ import (
 // at …" and may return an all-black image), so every RAW decode/config call must hold this lock.
 var rawMu sync.Mutex
 
+// avifAlphaQuality is the quality of the AVIF alpha channel. Deliberately fixed rather than following the caller's
+// quality: alpha is a coverage mask, not picture detail, and degrading it shows up as haloing around transparent
+// edges long before the colour channels look wrong.
+const avifAlphaQuality = 60
+
 // LoadImage decodes an image file into memory, filling ImageData.Hash with the xxh3 of the file's bytes as it goes.
 // Camera RAW files are decoded through LibRaw; see IsRawExtension for the formats that covers.
 func LoadImage(path string) (*types.ImageData, error) {
@@ -126,21 +131,22 @@ func ImageDimensions(path string) ([]int, error) {
 
 // EncodeImage encodes an image into the given format.
 //
-// quality is 0-100 and applies to JPEG only; the other lossy formats (AVIF, HEIC, WebP) are encoded at fixed quality
-// settings and ignore it.
+// quality is 0-100 and applies to the lossy formats - AVIF, HEIC, JPEG and WebP. The lossless ones (BMP, GIF, PNG,
+// TIFF) ignore it. The scales are not comparable across encoders: 60 in libheif is not 60 in libjpeg, which is why
+// each format carries its own default in the GUI rather than sharing one.
 func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte, error) {
 	var buf bytes.Buffer
 	var err error
 
 	switch format {
 	case types.FormatAvif:
-		err = avif.Encode(&buf, img, &avif.Options{Speed: 6, AlphaQuality: 60, ColorQuality: 60})
+		err = avif.Encode(&buf, img, &avif.Options{Speed: 6, AlphaQuality: avifAlphaQuality, ColorQuality: quality})
 	case types.FormatBmp:
 		err = bmp.Encode(&buf, img)
 	case types.FormatGif:
 		err = gif.Encode(&buf, img, &gif.Options{NumColors: 256})
 	case types.FormatHeic:
-		err = heif.Encode(&buf, img, &heif.Options{Quality: 60})
+		err = heif.Encode(&buf, img, &heif.Options{Quality: quality})
 	case types.FormatJpeg:
 		err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality})
 	case types.FormatPng:
@@ -149,9 +155,9 @@ func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte
 	case types.FormatTiff:
 		err = tiff.Encode(&buf, img, &tiff.Options{Compression: tiff.Deflate})
 	case types.FormatWebp:
-		err = webp.Encode(&buf, img, &webp.Options{Quality: 75})
+		err = webp.Encode(&buf, img, &webp.Options{Quality: quality})
 	default:
-		err = errors.Errorf("unsupported image format: %d", format)
+		err = errors.Errorf("unsupported image format: %q", format)
 	}
 
 	if err != nil {
@@ -162,7 +168,7 @@ func EncodeImage(img image.Image, format types.ImageFormat, quality int) ([]byte
 }
 
 // SaveImage encodes data.Pixels in the given format and writes it to data.FilePath, returning the number of bytes
-// written. quality is 0-100 and, as in EncodeImage, only affects JPEG.
+// written. quality is 0-100 and, as in EncodeImage, only affects the lossy formats.
 func SaveImage(data *types.ImageData, format types.ImageFormat, quality int) (int, error) {
 	if quality < 0 || quality > 100 {
 		return 0, errors.Errorf("invalid quality: %d, must be between 0 and 100", quality)

@@ -4,16 +4,18 @@ import type { ParseKeys } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import type { TailwindProps } from '@/utils/TailwindProps';
 import { AnalyticsEvent, track } from '@/analytics';
-import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
+import { ExecutionProvider, ImageFormat } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { GetLogsPath } from '@/bindings/gui/services/appservice.ts';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { SettingsItemButton } from '@/features/settings/SettingsItemButton';
 import { SettingsItemSelect } from '@/features/settings/SettingsItemSelect';
+import { SettingsItemSlider } from '@/features/settings/SettingsItemSlider';
 import { SettingsItemSwitch } from '@/features/settings/SettingsItemSwitch';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
 import { LANGUAGE_NAMES, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n/languages';
 import { useSettingsStore } from '@/stores';
 import { ENHANCEMENTS, type EnhancementType, modelItems } from '@/utils/enhancement';
+import { DEFAULT_QUALITY, MAX_QUALITY, MIN_QUALITY, type QualityFormat } from '@/utils/quality';
 
 export type SettingsListHandle = {
     scrollToSection: (itemId: string) => void;
@@ -40,7 +42,7 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
     }));
 
     return (
-        <List ref={containerRef} className={`${className} py-0 w-full scroll-pt-12`}>
+        <List ref={containerRef} className={`${className} py-0 w-full scroll-pt-12 overflow-x-hidden`}>
             {SETTINGS_SECTIONS.map((section) => (
                 <div key={section.id}>
                     <ListSubheader id={section.id} className='bg-[#2b2b2b] text-[#f2f2f2]'>
@@ -50,7 +52,13 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
                     {section.items.map((item) => {
                         // Every enhancement row renders the same component, so they fall through to it rather than
                         // being listed one by one in ROWS — a third copy of the same seven ids.
-                        const Row = ROWS[item.id] ?? (item.id in ENHANCEMENT_ROWS ? ItemEnhancement : undefined);
+                        const Row =
+                            ROWS[item.id] ??
+                            (item.id in ENHANCEMENT_ROWS
+                                ? ItemEnhancement
+                                : item.id in EXPORT_ROWS
+                                  ? ItemExportQuality
+                                  : undefined);
                         return Row ? <Row key={item.id} id={item.id} /> : null;
                     })}
                 </div>
@@ -203,6 +211,55 @@ const ItemEnhancement = ({ id }: SettingsRowProps) => {
             items={modelItems(row.type)}
             selected={selected}
             onSelect={(value) => setModel(row.type, value)}
+        />
+    );
+};
+
+// The export-quality rows, following the same one-component-many-rows shape as the enhancement rows above: they
+// differ only in which format they set, and the format's own name is its title.
+const EXPORT_ROWS: Record<string, QualityFormat> = {
+    export_avif: ImageFormat.FormatAvif,
+    export_heic: ImageFormat.FormatHeic,
+    export_jpeg: ImageFormat.FormatJpeg,
+    export_webp: ImageFormat.FormatWebp,
+};
+
+const EXPORT_DESCRIPTION_KEYS: Record<QualityFormat, ParseKeys> = {
+    [ImageFormat.FormatAvif]: 'settings.export.avif.description',
+    [ImageFormat.FormatHeic]: 'settings.export.heic.description',
+    [ImageFormat.FormatJpeg]: 'settings.export.jpeg.description',
+    [ImageFormat.FormatWebp]: 'settings.export.webp.description',
+};
+
+const EXPORT_TITLE_KEYS: Record<QualityFormat, ParseKeys> = {
+    [ImageFormat.FormatAvif]: 'settings.export.avif.title',
+    [ImageFormat.FormatHeic]: 'settings.export.heic.title',
+    [ImageFormat.FormatJpeg]: 'settings.export.jpeg.title',
+    [ImageFormat.FormatWebp]: 'settings.export.webp.title',
+};
+
+// Writes the store as the user drags, unlike the Export dialog's slider, which holds a draft until Export is pressed.
+// The difference is deliberate: this dialog already has Save/Cancel around it, and 'quality' is in SNAPSHOT_KEYS, so
+// Cancel reverts these the same way it reverts every other setting.
+const ItemExportQuality = ({ id }: SettingsRowProps) => {
+    const { t } = useTranslation();
+    const format = EXPORT_ROWS[id ?? ''];
+    const value = useSettingsStore((state) => state.quality[format]);
+    const setQuality = useSettingsStore((state) => state.setQuality);
+
+    const marks = useMemo(() => [{ value: DEFAULT_QUALITY[format], label: String(DEFAULT_QUALITY[format]) }], [format]);
+
+    return (
+        <SettingsItemSlider
+            id={id}
+            title={t(EXPORT_TITLE_KEYS[format])}
+            description={t(EXPORT_DESCRIPTION_KEYS[format])}
+            value={value}
+            min={MIN_QUALITY}
+            max={MAX_QUALITY}
+            step={1}
+            marks={marks}
+            onChange={(next) => setQuality(format, next)}
         />
     );
 };

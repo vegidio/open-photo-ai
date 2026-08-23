@@ -22,6 +22,7 @@
         "sections": {
             "app": "アプリケーション",
             "performance": "パフォーマンス",
+            "export": "書き出し",
             "enhancements": "補正"
         },
         "app": {
@@ -50,6 +51,24 @@
                 "description_directml": "モデルの実行を担う AI プロセッサを選択します。DirectML は専用 GPU がない環境に適した選択肢です。",
                 "description_coreml": "モデルの実行を担う AI プロセッサを選択します。CoreML は通常 CPU よりはるかに高速ですが、すべてのモデルに対応しているわけではありません。",
                 "description_cpu": "モデルの実行を担う AI プロセッサを選択します。CPU は最も低速ですが、すべてのモデルに対応しています。"
+            }
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF",
+                "description": "画像をAVIFで書き出すときに使用する画質です。値を下げるとファイルサイズが小さくなります。"
+            },
+            "heic": {
+                "title": "HEIC",
+                "description": "画像をHEICで書き出すときに使用する画質です。値を下げるとファイルサイズが小さくなります。"
+            },
+            "jpeg": {
+                "title": "JPEG",
+                "description": "画像をJPEGで書き出すときに使用する画質です。値を下げるとファイルサイズが小さくなります。"
+            },
+            "webp": {
+                "title": "WEBP",
+                "description": "画像をWEBPで書き出すときに使用する画質です。値を下げるとファイルサイズが小さくなります。"
             }
         },
         "enhancements": {
@@ -138,6 +157,9 @@
             "format": {
                 "title": "形式",
                 "preserve": "元のまま"
+            },
+            "quality": {
+                "title": "画質"
             },
             "location": {
                 "title": "保存先",

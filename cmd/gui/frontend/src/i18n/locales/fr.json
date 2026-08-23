@@ -22,6 +22,7 @@
         "sections": {
             "app": "Application",
             "performance": "Performances",
+            "export": "Exportation",
             "enhancements": "Améliorations"
         },
         "app": {
@@ -50,6 +51,24 @@
                 "description_directml": "Sélectionnez le processeur IA qui orchestrera les modèles. DirectML est une bonne option lorsque vous n'avez pas de GPU dédié.",
                 "description_coreml": "Sélectionnez le processeur IA qui orchestrera les modèles. CoreML est généralement bien plus rapide que le CPU, mais il ne prend pas en charge tous les modèles.",
                 "description_cpu": "Sélectionnez le processeur IA qui orchestrera les modèles. Le CPU est l'option la plus lente, mais il prend en charge tous les modèles."
+            }
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF",
+                "description": "La qualité utilisée lors de l'exportation d'images en AVIF. Des valeurs plus faibles produisent des fichiers plus petits."
+            },
+            "heic": {
+                "title": "HEIC",
+                "description": "La qualité utilisée lors de l'exportation d'images en HEIC. Des valeurs plus faibles produisent des fichiers plus petits."
+            },
+            "jpeg": {
+                "title": "JPEG",
+                "description": "La qualité utilisée lors de l'exportation d'images en JPEG. Des valeurs plus faibles produisent des fichiers plus petits."
+            },
+            "webp": {
+                "title": "WEBP",
+                "description": "La qualité utilisée lors de l'exportation d'images en WEBP. Des valeurs plus faibles produisent des fichiers plus petits."
             }
         },
         "enhancements": {
@@ -138,6 +157,9 @@
             "format": {
                 "title": "Format",
                 "preserve": "Conserver"
+            },
+            "quality": {
+                "title": "Qualité"
             },
             "location": {
                 "title": "Enregistrer dans",

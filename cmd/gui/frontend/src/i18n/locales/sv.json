@@ -22,6 +22,7 @@
         "sections": {
             "app": "Applikation",
             "performance": "Prestanda",
+            "export": "Export",
             "enhancements": "Förbättringar"
         },
         "app": {
@@ -50,6 +51,24 @@
                 "description_directml": "Välj den AI-processor som ska orkestrera modellerna. DirectML är ett bra alternativ när du inte har ett dedikerat grafikkort.",
                 "description_coreml": "Välj den AI-processor som ska orkestrera modellerna. CoreML är oftast mycket snabbare än CPU, men stöder inte alla modeller.",
                 "description_cpu": "Välj den AI-processor som ska orkestrera modellerna. CPU är det långsammaste alternativet, men det stöder alla modeller."
+            }
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF",
+                "description": "Kvaliteten som används när bilder exporteras som AVIF. Lägre värden ger mindre filer."
+            },
+            "heic": {
+                "title": "HEIC",
+                "description": "Kvaliteten som används när bilder exporteras som HEIC. Lägre värden ger mindre filer."
+            },
+            "jpeg": {
+                "title": "JPEG",
+                "description": "Kvaliteten som används när bilder exporteras som JPEG. Lägre värden ger mindre filer."
+            },
+            "webp": {
+                "title": "WEBP",
+                "description": "Kvaliteten som används när bilder exporteras som WEBP. Lägre värden ger mindre filer."
             }
         },
         "enhancements": {
@@ -138,6 +157,9 @@
             "format": {
                 "title": "Format",
                 "preserve": "Behåll"
+            },
+            "quality": {
+                "title": "Kvalitet"
             },
             "location": {
                 "title": "Spara till",

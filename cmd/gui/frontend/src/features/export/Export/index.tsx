@@ -24,7 +24,7 @@ export const Export = ({ enhancements, open, onClose }: ExportProps) => {
             }}
             slotProps={{
                 paper: {
-                    className: 'bg-[#212121] w-[70rem] h-[40rem] max-w-full bg-none',
+                    className: 'bg-[#212121] w-[70rem] h-[42rem] max-w-full bg-none',
                 },
             }}
         >

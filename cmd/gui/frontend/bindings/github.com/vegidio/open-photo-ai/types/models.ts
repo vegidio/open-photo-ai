@@ -59,21 +59,56 @@ export enum ExecutionProvider {
 
 /**
  * ImageFormat describes the type of image used.
+ * 
+ * The values are strings rather than an iota so that the zero value is the empty string - an unusable format that
+ * EncodeImage rejects - instead of silently being the first format in the list, and so that inserting a format never
+ * renumbers the ones after it. The values double as the file extension each format is written with.
  */
 export enum ImageFormat {
     /**
      * The Go zero value for the underlying type of the enum.
      */
-    $zero = 0,
+    $zero = "",
 
-    FormatAvif = 0,
-    FormatBmp = 1,
-    FormatGif = 2,
-    FormatHeic = 3,
-    FormatJpeg = 4,
-    FormatPng = 5,
-    FormatTiff = 6,
-    FormatWebp = 7,
+    /**
+     * FormatAvif is the AV1 Image File Format, a lossy format with very high compression.
+     */
+    FormatAvif = "avif",
+
+    /**
+     * FormatBmp is the Windows bitmap format, uncompressed.
+     */
+    FormatBmp = "bmp",
+
+    /**
+     * FormatGif is the Graphics Interchange Format, limited to a 256-colour palette.
+     */
+    FormatGif = "gif",
+
+    /**
+     * FormatHeic is the High Efficiency Image Container, a lossy format used by Apple devices.
+     */
+    FormatHeic = "heic",
+
+    /**
+     * FormatJpeg is the JPEG format, the most widely supported lossy format.
+     */
+    FormatJpeg = "jpeg",
+
+    /**
+     * FormatPng is the Portable Network Graphics format, lossless with alpha support.
+     */
+    FormatPng = "png",
+
+    /**
+     * FormatTiff is the Tagged Image File Format, lossless and the fallback for inputs that cannot be re-encoded.
+     */
+    FormatTiff = "tiff",
+
+    /**
+     * FormatWebp is Google's WebP format, lossy with better compression than JPEG.
+     */
+    FormatWebp = "webp",
 };
 
 /**

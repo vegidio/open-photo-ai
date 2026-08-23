@@ -22,6 +22,7 @@
         "sections": {
             "app": "Applicatie",
             "performance": "Prestaties",
+            "export": "Exporteren",
             "enhancements": "Verbeteringen"
         },
         "app": {
@@ -50,6 +51,24 @@
                 "description_directml": "Selecteer de AI-processor die de modellen aanstuurt. DirectML is een goede optie als je geen aparte GPU hebt.",
                 "description_coreml": "Selecteer de AI-processor die de modellen aanstuurt. CoreML is meestal veel sneller dan de CPU, maar ondersteunt niet alle modellen.",
                 "description_cpu": "Selecteer de AI-processor die de modellen aanstuurt. De CPU is de traagste optie, maar ondersteunt alle modellen."
+            }
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF",
+                "description": "De kwaliteit die wordt gebruikt bij het exporteren van afbeeldingen als AVIF. Lagere waarden geven kleinere bestanden."
+            },
+            "heic": {
+                "title": "HEIC",
+                "description": "De kwaliteit die wordt gebruikt bij het exporteren van afbeeldingen als HEIC. Lagere waarden geven kleinere bestanden."
+            },
+            "jpeg": {
+                "title": "JPEG",
+                "description": "De kwaliteit die wordt gebruikt bij het exporteren van afbeeldingen als JPEG. Lagere waarden geven kleinere bestanden."
+            },
+            "webp": {
+                "title": "WEBP",
+                "description": "De kwaliteit die wordt gebruikt bij het exporteren van afbeeldingen als WEBP. Lagere waarden geven kleinere bestanden."
             }
         },
         "enhancements": {
@@ -138,6 +157,9 @@
             "format": {
                 "title": "Formaat",
                 "preserve": "Behouden"
+            },
+            "quality": {
+                "title": "Kwaliteit"
             },
             "location": {
                 "title": "Opslaan in",

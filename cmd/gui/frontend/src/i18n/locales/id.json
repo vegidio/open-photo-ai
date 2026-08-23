@@ -22,6 +22,7 @@
         "sections": {
             "app": "Aplikasi",
             "performance": "Performa",
+            "export": "Ekspor",
             "enhancements": "Peningkatan"
         },
         "app": {
@@ -50,6 +51,24 @@
                 "description_directml": "Pilih prosesor AI yang akan menjalankan model. DirectML adalah opsi yang baik jika Anda tidak memiliki GPU khusus.",
                 "description_coreml": "Pilih prosesor AI yang akan menjalankan model. CoreML biasanya jauh lebih cepat daripada CPU, tetapi tidak mendukung semua model.",
                 "description_cpu": "Pilih prosesor AI yang akan menjalankan model. CPU adalah opsi paling lambat, tetapi mendukung semua model."
+            }
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF",
+                "description": "Kualitas yang digunakan saat mengekspor gambar sebagai AVIF. Nilai lebih rendah menghasilkan berkas lebih kecil."
+            },
+            "heic": {
+                "title": "HEIC",
+                "description": "Kualitas yang digunakan saat mengekspor gambar sebagai HEIC. Nilai lebih rendah menghasilkan berkas lebih kecil."
+            },
+            "jpeg": {
+                "title": "JPEG",
+                "description": "Kualitas yang digunakan saat mengekspor gambar sebagai JPEG. Nilai lebih rendah menghasilkan berkas lebih kecil."
+            },
+            "webp": {
+                "title": "WEBP",
+                "description": "Kualitas yang digunakan saat mengekspor gambar sebagai WEBP. Nilai lebih rendah menghasilkan berkas lebih kecil."
             }
         },
         "enhancements": {
@@ -138,6 +157,9 @@
             "format": {
                 "title": "Format",
                 "preserve": "Pertahankan"
+            },
+            "quality": {
+                "title": "Kualitas"
             },
             "location": {
                 "title": "Simpan ke",

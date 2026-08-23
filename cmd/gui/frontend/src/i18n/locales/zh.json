@@ -22,6 +22,7 @@
         "sections": {
             "app": "应用程序",
             "performance": "性能",
+            "export": "导出",
             "enhancements": "增强"
         },
         "app": {
@@ -50,6 +51,24 @@
                 "description_directml": "选择用于调度模型的 AI 处理器。如果你没有独立显卡，DirectML 是一个不错的选择。",
                 "description_coreml": "选择用于调度模型的 AI 处理器。CoreML 通常比 CPU 快得多，但并不支持所有模型。",
                 "description_cpu": "选择用于调度模型的 AI 处理器。CPU 是最慢的选项，但支持所有模型。"
+            }
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF",
+                "description": "以 AVIF 导出图像时使用的质量。数值越低，文件越小。"
+            },
+            "heic": {
+                "title": "HEIC",
+                "description": "以 HEIC 导出图像时使用的质量。数值越低，文件越小。"
+            },
+            "jpeg": {
+                "title": "JPEG",
+                "description": "以 JPEG 导出图像时使用的质量。数值越低，文件越小。"
+            },
+            "webp": {
+                "title": "WEBP",
+                "description": "以 WEBP 导出图像时使用的质量。数值越低，文件越小。"
             }
         },
         "enhancements": {
@@ -138,6 +157,9 @@
             "format": {
                 "title": "格式",
                 "preserve": "保持原格式"
+            },
+            "quality": {
+                "title": "质量"
             },
             "location": {
                 "title": "保存到",

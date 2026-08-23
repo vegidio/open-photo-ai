@@ -22,7 +22,6 @@ import (
 
 const (
 	previewJpegQuality  = 90
-	exportMaxQuality    = 100
 	progressInferStart  = 0.1
 	progressInferEnd    = 0.9
 	maxOutputDedupTries = 999
@@ -137,10 +136,11 @@ func (s *ImageService) SuggestEnhancements(ctx context.Context, filePath string)
 	return suggestions, nil
 }
 
-// ExportImage runs the operations named by opIds and writes the result to outputPath at full quality. Unless
-// overwrite is set, an existing file is left alone and a "_N" suffix is added instead (see getOutputPath).
+// ExportImage runs the operations named by opIds and writes the result to outputPath. Unless overwrite is set, an
+// existing file is left alone and a "_N" suffix is added instead (see getOutputPath).
 //
-// Progress is reported through EventAppExport rather than the return value, keyed by file.Hash.
+// quality is 1-100 and only affects the lossy formats; see utils.EncodeImage. Progress is reported through
+// EventAppExport rather than the return value, keyed by file.Hash.
 func (s *ImageService) ExportImage(
 	ctx context.Context,
 	file guitypes.File,
@@ -148,6 +148,7 @@ func (s *ImageService) ExportImage(
 	ep types.ExecutionProvider,
 	overwrite bool,
 	format types.ImageFormat,
+	quality int,
 	params guitypes.InferenceParams,
 	opIds ...string,
 ) error {
@@ -155,9 +156,15 @@ func (s *ImageService) ExportImage(
 		return errors.Wrap(err, "context cancelled")
 	}
 
+	// The frontend clamps too, but this is the process boundary: a 0 here reaches libavif/libheif/libwebp as a real
+	// setting rather than "use the default" (the options struct is never nil), and produces a garbage image.
+	if quality < 1 || quality > 100 {
+		quality = 100
+	}
+
 	ops := strings.Join(opIds, ", ")
 	slog.Info("exporting image", "input", file.Path, "output", outputPath,
-		"format", format, "operations", ops)
+		"format", format, "quality", quality, "operations", ops)
 
 	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: file.Hash, State: "RUNNING", Value: progressInferStart})
 
@@ -178,7 +185,7 @@ func (s *ImageService) ExportImage(
 	}
 
 	s.app.Event.Emit(EventAppExport, ExportUpdate{Hash: file.Hash, State: "RUNNING", Value: progressInferEnd})
-	return s.saveAndEmit(ctx, outputData.Pixels, outputPath, overwrite, format, file.Hash)
+	return s.saveAndEmit(ctx, outputData.Pixels, outputPath, overwrite, format, quality, file.Hash)
 }
 
 func (s *ImageService) saveAndEmit(
@@ -187,6 +194,7 @@ func (s *ImageService) saveAndEmit(
 	outputPath string,
 	overwrite bool,
 	format types.ImageFormat,
+	quality int,
 	fileHash string,
 ) error {
 	if err := ctx.Err(); err != nil {
@@ -198,7 +206,7 @@ func (s *ImageService) saveAndEmit(
 	size, err := utils.SaveImage(&types.ImageData{
 		FilePath: finalPath,
 		Pixels:   pixels,
-	}, format, exportMaxQuality)
+	}, format, quality)
 	if err != nil {
 		// The name was claimed before encoding; drop the empty placeholder so a failed export leaves nothing behind.
 		release()
