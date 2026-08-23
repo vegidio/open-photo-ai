@@ -76,9 +76,7 @@ func TestGetOutputPathConcurrentExportsAreUnique(t *testing.T) {
 
 	start := make(chan struct{})
 	for range exports {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 
 			got, _ := getOutputPath(path, false)
@@ -86,7 +84,7 @@ func TestGetOutputPathConcurrentExportsAreUnique(t *testing.T) {
 			mu.Lock()
 			results[got]++
 			mu.Unlock()
-		}()
+		})
 	}
 
 	close(start)

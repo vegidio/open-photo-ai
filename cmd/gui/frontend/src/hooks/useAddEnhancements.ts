@@ -21,7 +21,9 @@ export const useAddEnhancements = () => {
         async (file: File, operations: Operation[]) => {
             addEnhancements(file, operations);
 
-            for (const op of operations) track(AnalyticsEvent.EnhancementAdded, { type: getEnhancementType(op.id) });
+            for (const op of operations) {
+                track(AnalyticsEvent.EnhancementAdded, { type: getEnhancementType(op.id) ?? 'unknown' });
+            }
 
             if (hasFaceRecovery(operations.map((op) => op.id))) {
                 await syncFaces(file);

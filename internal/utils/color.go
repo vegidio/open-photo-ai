@@ -2,6 +2,23 @@ package utils
 
 import "math"
 
+// RgbSaturation is the S of RgbToHsv on its own. All input channels (r, g, b) are expected to be in the range
+// [0, 255]; the result is scaled to the range [0, 255].
+//
+// It exists because RgbToHsv always computes the hue, including a math.Mod and a three-way branch, while a caller that
+// only tests saturation - autopilot's neutral-pixel scan - was paying that on every pixel of the image to use it on a
+// fraction of them. The arithmetic is copied from RgbToHsv verbatim so the two can never disagree.
+func RgbSaturation(r, g, b float64) float64 {
+	maxC := math.Max(r, math.Max(g, b))
+	if maxC == 0 {
+		return 0
+	}
+
+	minC := math.Min(r, math.Min(g, b))
+
+	return ((maxC - minC) / maxC) * 255.0
+}
+
 // RgbToHsv converts an RGB color to HSV (Hue, Saturation, Value). All input channels (r, g, b) are expected to be in
 // the range [0, 255].
 //

@@ -44,7 +44,9 @@ export const EnhancementProgress = () => {
             return t('preview.progress.downloading', { percent: Math.round(progress.fraction * 100) });
         }
 
-        const enhancement = ENHANCEMENTS[getEnhancementType(progress.operation)];
+        const type = getEnhancementType(progress.operation);
+        const enhancement = type && ENHANCEMENTS[type];
+
         return enhancement ? t(enhancement.shortNameKey) : t('preview.progress.enhancing');
     }, [progress.phase, progress.fraction, progress.operation, t]);
 

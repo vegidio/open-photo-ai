@@ -115,6 +115,28 @@ func buildAndInstall(
 	estimate := EstimateModelBytes(id)
 	DestroyEntries(Registry.makeRoom(pool, estimate))
 
+	// create calls into cgo, so a panic below is not hypothetical. Unwinding without resolving the pending build parks
+	// every waiter on b.done forever, and unwinding without giving the reservation back shrinks the pool's budget for
+	// the rest of the run - one bad model would deadlock the registry and permanently cost memory. Undo both here and
+	// then let the panic continue on its way.
+	//
+	// reserved tracks what is still owed; each path below zeroes it once it has handed the reservation over.
+	reserved := estimate
+	defer func() {
+		p := recover()
+		if p == nil {
+			return
+		}
+
+		if reserved > 0 {
+			Registry.releaseReservation(pool, reserved)
+		}
+
+		Registry.resolveBuild(buildKey, errors.Newf("panic while creating model %s: %v", id, p))
+
+		panic(p)
+	}()
+
 	Log().Info("creating model", "op", id, "ep", ep)
 	model, err := create(ep)
 
@@ -142,6 +164,7 @@ func buildAndInstall(
 	if err != nil {
 		Log().Warn("model creation failed", "op", id, "ep", ep, "err", err)
 		Registry.releaseReservation(pool, estimate)
+		reserved = 0
 		Registry.resolveBuild(buildKey, err)
 
 		return nil, err
@@ -152,21 +175,38 @@ func buildAndInstall(
 	landed := PoolOf(ep)
 	if landed != pool {
 		Registry.releaseReservation(pool, estimate)
+		reserved = 0
 		estimate = 0
 	}
 
 	// After a fallback this is not buildKey: the model is filed under the CPU. Waiters re-resolve the provider when
 	// they wake, see the latch, and look up that same CPU key - so the move needs no hand-off.
 	lease, dup, trim := Registry.install(registryKey(id, ep), id, ep, landed, model, residentBytes(model), estimate)
-	Registry.resolveBuild(buildKey, nil)
+
+	// install consumed whatever was still reserved, whether or not it filed the model.
+	reserved = 0
+
+	// A nil lease means the registry closed mid-build, so the model was never filed. Waiters have to fail the same way
+	// their own lookup would have, rather than waking up to retry a registry that will never accept anything again.
+	installErr := error(nil)
+	if lease == nil {
+		installErr = ErrRegistryClosed
+	}
+
+	Registry.resolveBuild(buildKey, installErr)
 
 	// Evicted because this model turned out bigger than its estimate.
 	DestroyEntries(trim)
 
-	// Lost an install race: the incumbent is the one everyone else is already using, so this copy is dead on arrival.
+	// Lost an install race, or the registry closed underneath us. Either way this copy was never filed and nothing else
+	// can reach it, so it is dead on arrival.
 	if dup != nil {
-		Log().Debug("discarding duplicate model built in a race", "op", id)
+		Log().Debug("discarding model that was never filed", "op", id)
 		destroyModel(dup)
+	}
+
+	if installErr != nil {
+		return nil, installErr
 	}
 
 	return lease, nil

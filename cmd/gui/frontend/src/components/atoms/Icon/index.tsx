@@ -9,13 +9,13 @@ import {
     MdInfoOutline,
     MdOpenInFull,
     MdOutlineFaceRetouchingNatural,
-    MdOutlineFormatPaint,
     MdOutlineLightMode,
     MdOutlinePalette,
     MdRotate90DegreesCcw,
     MdSplitscreen,
     MdSwapHoriz,
 } from 'react-icons/md';
+import { PiPaintBrushBroad } from 'react-icons/pi';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 
 export type IconName =
@@ -52,7 +52,7 @@ export const Icon = ({ option, className = '' }: IconProps) => {
         case 'face_recovery':
             return <MdOutlineFaceRetouchingNatural className={className} />;
         case 'colorization':
-            return <MdOutlineFormatPaint className={className} />;
+            return <PiPaintBrushBroad className={className} />;
         case 'light_adjustment':
             return <MdOutlineLightMode className={className} />;
         case 'color_balance':

@@ -132,8 +132,8 @@
                 "prefix": "Prefixo",
                 "suffix": "Sufixo",
                 "allowOverwrite": "Permitir sobrescrever?",
-                "sameLocationOverwrite": "Quando a pasta e a extensão do arquivo forem as mesmas, o arquivo original será sobrescrito. Isso não pode ser desfeito.",
-                "sameLocationRename": "Quando a pasta e a extensão do arquivo forem as mesmas, os novos arquivos receberão um número em vez de sobrescrever o original."
+                "sameLocationOverwrite": "Se a pasta e a extensão forem as mesmas, o arquivo original será sobrescrito. Isso não pode ser desfeito.",
+                "sameLocationRename": "Se a pasta e a extensão forem as mesmas, os novos arquivos recebem um número em vez de sobrescrever o original."
             },
             "format": {
                 "title": "Formato",

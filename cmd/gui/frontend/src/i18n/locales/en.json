@@ -132,8 +132,8 @@
                 "prefix": "Prefix",
                 "suffix": "Suffix",
                 "allowOverwrite": "Allow overwriting?",
-                "sameLocationOverwrite": "When file location and extension are the same, your original file will be overwritten. This cannot be reverted.",
-                "sameLocationRename": "When file location and extension are the same, new filenames will add a number instead of overwriting your original."
+                "sameLocationOverwrite": "If the location and extension are the same, your original file will be overwritten. This cannot be undone.",
+                "sameLocationRename": "If the location and extension are the same, new files get a number instead of overwriting the original."
             },
             "format": {
                 "title": "Format",

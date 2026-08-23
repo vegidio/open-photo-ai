@@ -20,7 +20,7 @@ export const SidebarAutopilot = ({ className = '' }: SidebarAutopilotProps) => {
                     {t('sidebar.autopilot')}
                 </Typography>
             }
-            initialValue={autopilot}
+            value={autopilot}
             color='#79e800'
             onChange={toggle}
             className={className}

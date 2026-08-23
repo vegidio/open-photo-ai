@@ -132,8 +132,8 @@
                 "prefix": "Préfixe",
                 "suffix": "Suffixe",
                 "allowOverwrite": "Autoriser l'écrasement ?",
-                "sameLocationOverwrite": "Lorsque l'emplacement et l'extension du fichier sont identiques, votre fichier d'origine sera écrasé. Cette action est irréversible.",
-                "sameLocationRename": "Lorsque l'emplacement et l'extension du fichier sont identiques, un numéro sera ajouté aux nouveaux noms de fichier au lieu d'écraser votre original."
+                "sameLocationOverwrite": "Si l'emplacement et l'extension sont identiques, votre fichier d'origine sera écrasé. Cette action est irréversible.",
+                "sameLocationRename": "Si l'emplacement et l'extension sont identiques, un numéro est ajouté aux nouveaux fichiers au lieu d'écraser l'original."
             },
             "format": {
                 "title": "Format",

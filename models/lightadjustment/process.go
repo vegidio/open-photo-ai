@@ -30,11 +30,14 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	// Resize so the longest side is at most maxSize (padded to a multiple of 16);
-	// if the image already fits, run it natively.
+	// Resize so neither side exceeds maxSize, padded to a multiple of 16. The alignment applies to an image that
+	// already fits too - it is a requirement of the graph, not a side effect of shrinking - so this runs on both
+	// branches rather than only on the one that downsamples. Anything already aligned and inside the ceiling is
+	// resized to its own dimensions, which imaging returns unchanged.
+	newW, newH := utils.FitWithinMaxSize(fullW, fullH, maxSize)
+
 	resized := img
-	if fullW > maxSize || fullH > maxSize {
-		newW, newH := utils.FitToMaxSize(fullW, fullH, maxSize)
+	if newW != fullW || newH != fullH {
 		resized = imaging.Resize(img, newW, newH, imaging.Lanczos)
 	}
 
@@ -48,34 +51,18 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	// Create input tensor with dynamic shape
-	inputShape := ort.NewShape(1, 3, int64(rH), int64(rW))
-	inputTensor, err := ort.NewTensor(inputShape, inputData)
+	shape := ort.NewShape(1, 3, int64(rH), int64(rW))
+
+	outputData, err := utils.RunUnary(session, inputData, shape, shape)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create input tensor")
-	}
-	defer inputTensor.Destroy()
-
-	outputShape := ort.NewShape(1, 3, int64(rH), int64(rW))
-	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create output tensor")
-	}
-	defer outputTensor.Destroy()
-
-	if err = ctx.Err(); err != nil {
-		return nil, errors.Wrap(err, "context cancelled")
-	}
-
-	if err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor}); err != nil {
-		return nil, errors.Wrap(err, "failed to run inference")
+		return nil, err
 	}
 
 	if err = ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	outLR := utils.CHWToImage(outputTensor.GetData(), rW, rH, false)
+	outLR := utils.CHWToImage(outputData, rW, rH, false)
 
 	// If we never downscaled, the output already matches the full resolution.
 	if resized == img {
@@ -85,9 +72,6 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 	return buildResult(img, resized, outLR), nil
 }
 
-// buildResult applies the low-res relighting as a per-pixel multiplicative gain map on the full-resolution original.
-// Both the smoothed input the model saw (inUp) and its relit output (outUp) are upsampled to full size; the ratio
-// outUp/inUp is the low-frequency gain, applied to the full-res detail in img.
 // buildResult applies the low-res relighting as a per-pixel multiplicative gain map on the full-resolution original.
 // Both the smoothed input the model saw (inUp) and its relit output (outUp) are upsampled to full size; the ratio
 // outUp/inUp is the low-frequency gain, applied to the full-res detail in img.

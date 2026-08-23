@@ -3,6 +3,7 @@ package opai
 import (
 	"context"
 	"image"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -64,7 +65,11 @@ func Process(
 
 	// Read once per call rather than per operation, so a concurrent SetImageCacheEnabled can't have this loop read
 	// from the cache and then decline to write back to it.
-	useCache := internal.ImageCacheEnabled()
+	//
+	// The nil check is not redundant with the setting: ImageCache is only assigned by a successful Initialize, so a
+	// caller that skipped it - or whose Initialize failed and whose error was ignored - would otherwise take a nil
+	// dereference here rather than simply running uncached.
+	useCache := internal.ImageCacheEnabled() && internal.ImageCache != nil
 	if !useCache {
 		internal.Log().Debug("image cache disabled for this call")
 	}
@@ -363,74 +368,125 @@ func selectModel(
 	})
 }
 
+// modelConstructor builds one model. Each package's New returns its own concrete type, so the table below wraps them
+// through the constructor helper rather than holding them directly - Go will not convert the function types implicitly.
+type modelConstructor func(
+	ctx context.Context,
+	operation types.Operation,
+	ep types.ExecutionProvider,
+	onProgress types.DownloadProgress,
+) (any, error)
+
+// modelConstructors maps `<type>_<codename>` - the first two segments of an operation id - to the model it names.
+//
+// A table rather than the prefix switch this used to be, for two reasons. The switch matched with HasPrefix, so its
+// correctness quietly depended on no codename being a prefix of another. And it keyed on the whole id, which meant a
+// malformed id whose halves disagree - `up_stockholm_fp32` - matched the denoise case and built a denoise model. An
+// exact lookup on both segments finds nothing for that id, which is the honest answer.
+var modelConstructors = map[string]modelConstructor{
+	// Face Detection
+	"dt_newyork": constructor(newyork.New),
+
+	// Face Recovery
+	"fr_athens":    constructor(athens.New),
+	"fr_santorini": constructor(santorini.New),
+
+	// Light Adjustment
+	"la_paris": constructor(paris.New),
+
+	// Color Balance
+	"cb_rio": constructor(rio.New),
+
+	// Colorization
+	"cl_delhi":  constructor(delhi.New),
+	"cl_mumbai": constructor(mumbai.New),
+	"cl_jaipur": constructor(jaipur.New),
+
+	// Upscale
+	"up_tokyo":   constructor(tokyo.New),
+	"up_kyoto":   constructor(kyoto.New),
+	"up_saitama": constructor(saitama.New),
+	"up_osaka":   constructor(osaka.New),
+
+	// Denoise
+	"dn_stockholm":  constructor(stockholm.New),
+	"dn_malmo":      constructor(malmo.New),
+	"dn_gothenburg": constructor(gothenburg.New),
+
+	// Sharpen
+	"sh_moscow":     constructor(moscow.New),
+	"sh_novgorod":   constructor(novgorod.New),
+	"sh_petersburg": constructor(petersburg.New),
+}
+
+// ModelKeys returns the `<type>_<codename>` key of every model this library can build, sorted.
+//
+// It is exported so the binaries that keep their own tables over the same models - the GUI's operation parser and the
+// benchmark runner, each of which needs a different function per model and so cannot share one table - can assert
+// theirs covers exactly this set instead of drifting from it silently.
+func ModelKeys() []string {
+	keys := make([]string, 0, len(modelConstructors))
+	for key := range modelConstructors {
+		keys = append(keys, key)
+	}
+
+	slices.Sort(keys)
+
+	return keys
+}
+
+// ModelKey reduces an operation id to the `<type>_<codename>` that identifies its model. Everything after those two
+// segments is per-run parameters and precision, which the model's own constructor reads off the operation.
+func ModelKey(operationId string) string {
+	first := strings.Index(operationId, "_")
+	if first < 0 {
+		return operationId
+	}
+
+	second := strings.Index(operationId[first+1:], "_")
+	if second < 0 {
+		return operationId
+	}
+
+	return operationId[:first+1+second]
+}
+
+// constructor adapts a model package's New to the table's signature.
+func constructor[T any](
+	create func(context.Context, types.Operation, types.ExecutionProvider, types.DownloadProgress) (T, error),
+) modelConstructor {
+	return func(
+		ctx context.Context,
+		operation types.Operation,
+		ep types.ExecutionProvider,
+		onProgress types.DownloadProgress,
+	) (any, error) {
+		model, err := create(ctx, operation, ep, onProgress)
+		if err != nil {
+			// Explicitly nil, not `model`: a nil *T stored in an interface is not a nil interface, so returning the
+			// failed value here would hand the caller something that passes a != nil check and panics on use.
+			return nil, err
+		}
+
+		return model, nil
+	}
+}
+
 func newModel(
 	ctx context.Context,
 	operation types.Operation,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
 ) (any, error) {
-	var model any
-	var err error
+	id := operation.Id()
 
-	switch {
-	// Face Detection
-	case strings.HasPrefix(operation.Id(), "dt_newyork"):
-		model, err = newyork.New(ctx, operation, ep, onProgress)
-
-	// Face Recovery
-	case strings.HasPrefix(operation.Id(), "fr_athens"):
-		model, err = athens.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "fr_santorini"):
-		model, err = santorini.New(ctx, operation, ep, onProgress)
-
-	// Light Adjustment
-	case strings.HasPrefix(operation.Id(), "la_paris"):
-		model, err = paris.New(ctx, operation, ep, onProgress)
-
-	// Color Balance
-	case strings.HasPrefix(operation.Id(), "cb_rio"):
-		model, err = rio.New(ctx, operation, ep, onProgress)
-
-	// Colorization
-	case strings.HasPrefix(operation.Id(), "cl_delhi"):
-		model, err = delhi.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "cl_mumbai"):
-		model, err = mumbai.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "cl_jaipur"):
-		model, err = jaipur.New(ctx, operation, ep, onProgress)
-
-	// Upscale
-	case strings.HasPrefix(operation.Id(), "up_tokyo"):
-		model, err = tokyo.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "up_kyoto"):
-		model, err = kyoto.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "up_saitama"):
-		model, err = saitama.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "up_osaka"):
-		model, err = osaka.New(ctx, operation, ep, onProgress)
-
-	// Denoise
-	case strings.HasPrefix(operation.Id(), "dn_stockholm"):
-		model, err = stockholm.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "dn_malmo"):
-		model, err = malmo.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "dn_gothenburg"):
-		model, err = gothenburg.New(ctx, operation, ep, onProgress)
-
-	// Sharpen
-	case strings.HasPrefix(operation.Id(), "sh_moscow"):
-		model, err = moscow.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "sh_novgorod"):
-		model, err = novgorod.New(ctx, operation, ep, onProgress)
-	case strings.HasPrefix(operation.Id(), "sh_petersburg"):
-		model, err = petersburg.New(ctx, operation, ep, onProgress)
-
-	default:
-		internal.Log().Warn("no model found for operation", "op", operation.Id())
-		return nil, errors.Errorf("no model found with ID: %s", operation.Id())
+	create, known := modelConstructors[ModelKey(id)]
+	if !known {
+		internal.Log().Warn("no model found for operation", "op", id)
+		return nil, errors.Errorf("no model found with ID: %s", id)
 	}
 
-	return model, err
+	return create(ctx, operation, ep, onProgress)
 }
 
 // endregion

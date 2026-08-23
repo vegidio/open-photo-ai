@@ -1,3 +1,4 @@
+import { LRUCache } from 'lru-cache';
 import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/detection';
 import type { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import type { CropInfo, File } from '@/bindings/gui/types';
@@ -9,7 +10,13 @@ import { cropToken } from '@/utils/crop.ts';
 // Caches the in-flight promise, not the resolved faces, so concurrent callers for the same key share one detection
 // run. Caching the result instead would let two callers that both miss (the preview and an export of the same file,
 // say) each pay a full detection inference.
-const facesCache = new Map<string, Promise<Face[]>>();
+//
+// Bounded, unlike the plain Map this used to be: there is one entry per (file hash, crop) pair, and every adjustment
+// of a crop box adds another, so a long editing session grew it without limit. Entries are small — a handful of boxes
+// and landmarks — so a plain count bound is enough here, and there is nothing to release on eviction (no object URLs,
+// unlike the image cache). Detection is deterministic for a given image and crop, so an evicted entry simply costs
+// one more inference if it is ever asked for again.
+const facesCache = new LRUCache<string, Promise<Face[]>>({ max: 500 });
 
 /**
  * Detects the faces in an image, caching the result by file hash (plus a crop token) to avoid redundant detection.
@@ -38,8 +45,8 @@ export const detectFaces = (file: File, ep: ExecutionProvider, crop?: CropInfo):
 };
 
 /**
- * Drops every cached detection. Unlike the image cache this Map is unbounded — one entry per file hash and crop, held
- * for the lifetime of the session — so clearing the workspace has to release it explicitly.
+ * Drops every cached detection. The cache is bounded, so this is about correctness rather than memory: closing a
+ * workspace should not leave detections from it available to the next one.
  */
 export const clearFacesCache = () => {
     facesCache.clear();

@@ -37,7 +37,10 @@ func (v *Variant) New(
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
 ) (*Model, error) {
-	op := operation.(Op)
+	op, ok := operation.(Op)
+	if !ok {
+		return nil, errors.Errorf("expected a light adjustment operation, got %T", operation)
+	}
 
 	session, err := utils.LoadSingleSession(ctx, "la", v.Codename, op.precision, ep, onProgress)
 	if err != nil {

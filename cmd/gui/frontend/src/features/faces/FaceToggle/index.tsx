@@ -30,10 +30,26 @@ export const FaceToggle = ({ file, open, onClose }: FaceToggleProps) => {
         onClose();
     };
 
+    // Coalesced to one update per animation frame. A drag-resize delivers a continuous stream of events, and each one
+    // re-rendered this dialog and the FaceBoxes overlay, which recomputes every box position inline.
     useEffect(() => {
-        const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+        let frame: number | undefined;
+
+        const onResize = () => {
+            if (frame !== undefined) return;
+
+            frame = requestAnimationFrame(() => {
+                frame = undefined;
+                setViewport({ w: window.innerWidth, h: window.innerHeight });
+            });
+        };
+
         window.addEventListener('resize', onResize);
-        return () => window.removeEventListener('resize', onResize);
+
+        return () => {
+            window.removeEventListener('resize', onResize);
+            if (frame !== undefined) cancelAnimationFrame(frame);
+        };
     }, []);
 
     if (!originalImage) return undefined;

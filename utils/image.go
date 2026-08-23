@@ -19,7 +19,7 @@ import (
 	"github.com/vegidio/go-sak/crypto"
 	"github.com/vegidio/heif-go"
 	_ "github.com/vegidio/heif-go"
-	raw "github.com/vegidio/raw-go"
+	"github.com/vegidio/raw-go"
 	"github.com/vegidio/webp-go"
 	_ "github.com/vegidio/webp-go"
 

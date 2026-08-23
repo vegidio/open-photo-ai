@@ -11,3 +11,4 @@ export * from './useModelOptions.ts';
 export * from './useNotify.ts';
 export * from './useOptionEnhancement.ts';
 export * from './useSyncFaces.ts';
+export * from './useThumbnail.ts';

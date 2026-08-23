@@ -37,16 +37,24 @@ func BlendWithIntensity(original, modelOutput image.Image, intensity float32) im
 
 	result := image.NewNRGBA(image.Rect(0, 0, width, height))
 
-	// Fast path: when both inputs are concrete RGBA-family buffers at the origin, blend via direct Pix
-	// indexing. Sample16 reproduces the exact 16-bit values At().RGBA() would return, so the output is
-	// bit-identical to the generic path while avoiding per-pixel interface dispatch on two sources.
+	// Fast path: when both inputs are concrete RGBA-family buffers, blend via direct Pix indexing. Sample16 reproduces
+	// the exact 16-bit values At().RGBA() would return, so the output is bit-identical to the generic path while
+	// avoiding per-pixel interface dispatch on two sources.
+	//
+	// No origin offset appears below: RgbPixBuffer hands back each image's own Pix, which already starts at that
+	// image's Bounds().Min, so 0-based indexing is correct whatever the bounds are.
 	oPix, oStride, oFast := RgbPixBuffer(original)
 	mPix, mStride, mFast := RgbPixBuffer(modelOutput)
 	_, oIsNRGBA := original.(*image.NRGBA)
 	_, mIsNRGBA := modelOutput.(*image.NRGBA)
-	atOrigin := original.Bounds().Min == image.Point{} && modelOutput.Bounds().Min == image.Point{}
 
-	if oFast && mFast && atOrigin {
+	// Both loops are sized from original but index both buffers, so a modelOutput smaller than the original would run
+	// off the end of mPix. The generic path reads such pixels as transparent black rather than panicking, so leave the
+	// mismatch to it.
+	modelBounds := modelOutput.Bounds()
+	modelCovers := modelBounds.Dx() >= width && modelBounds.Dy() >= height
+
+	if oFast && mFast && modelCovers {
 		for y := range height {
 			oRow := y * oStride
 			mRow := y * mStride
@@ -73,10 +81,13 @@ func BlendWithIntensity(original, modelOutput image.Image, intensity float32) im
 		return result
 	}
 
+	// At() is absolute, so unlike the Pix path above this one does need each image's origin added back.
+	origMin, modelMin := bounds.Min, modelBounds.Min
+
 	for y := range height {
 		for x := range width {
-			origR, origG, origB, origA := original.At(x, y).RGBA()
-			modelR, modelG, modelB, _ := modelOutput.At(x, y).RGBA()
+			origR, origG, origB, origA := original.At(origMin.X+x, origMin.Y+y).RGBA()
+			modelR, modelG, modelB, _ := modelOutput.At(modelMin.X+x, modelMin.Y+y).RGBA()
 
 			// Convert to float32 in range [0, 255]
 			oR := float32(origR) / 257.0
@@ -157,7 +168,9 @@ func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlap int, b
 
 			var sr, sg, sb uint32
 			if srcFast {
-				si := srcY*srcStride + (srcBounds.Min.X+dx)*4
+				// srcPix already starts at src.Bounds().Min, so this indexes from the tile's own origin. Adding
+				// srcBounds.Min back - as the At() fallback below correctly must - would apply it twice.
+				si := dy*srcStride + dx*4
 				sr, sg, sb = uint32(srcPix[si]), uint32(srcPix[si+1]), uint32(srcPix[si+2])
 				// RGBA buffers are already premultiplied 8-bit; only NRGBA with non-opaque alpha needs
 				// the premultiply that RGBA() would apply (matches the >>8 of the 16-bit result).

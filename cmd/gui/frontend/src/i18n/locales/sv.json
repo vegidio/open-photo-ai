@@ -132,8 +132,8 @@
                 "prefix": "Prefix",
                 "suffix": "Suffix",
                 "allowOverwrite": "Tillåt överskrivning?",
-                "sameLocationOverwrite": "När filplats och filändelse är desamma skrivs din originalfil över. Detta kan inte ångras.",
-                "sameLocationRename": "När filplats och filändelse är desamma får de nya filnamnen ett nummer i stället för att originalet skrivs över."
+                "sameLocationOverwrite": "Om plats och filändelse är desamma skrivs originalfilen över. Detta kan inte ångras.",
+                "sameLocationRename": "Om plats och filändelse är desamma får nya filer ett nummer i stället för att originalet skrivs över."
             },
             "format": {
                 "title": "Format",

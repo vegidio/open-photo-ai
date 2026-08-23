@@ -6,6 +6,7 @@ import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { Button } from '@/components/atoms/Button';
 import { DimensionsPopover } from '@/features/navbar/DimensionsPopover';
 import { useFileCrop, useFileOperations } from '@/hooks';
+import { upscaleFactor } from '@/utils/enhancement.ts';
 import { cropDimensions } from '@/utils/image.ts';
 
 type NavbarDimensionsProps = TailwindProps & {
@@ -15,8 +16,7 @@ type NavbarDimensionsProps = TailwindProps & {
 export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps) => {
     const { t } = useTranslation();
     const operations = useFileOperations(file);
-    const scaleStr = operations.find((op) => op.id.startsWith('up'))?.options?.scale ?? '1';
-    const scale = parseFloat(scaleStr);
+    const scale = upscaleFactor(operations);
 
     // A crop changes the source dimensions; the crop box (post-rotation) is the cropped image's size.
     const crop = useFileCrop(file);

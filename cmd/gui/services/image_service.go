@@ -300,7 +300,9 @@ func getOutputPath(filePath string, overwrite bool) (string, func()) {
 func claimPath(path string) (release func(), ok bool) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
-		return nil, !errors.Is(err, os.ErrExist)
+		// Nothing was created, so there is nothing to clean up - but the caller invokes release on its own write
+		// failure path, so this has to be a no-op func rather than nil.
+		return func() {}, !errors.Is(err, os.ErrExist)
 	}
 
 	_ = f.Close()

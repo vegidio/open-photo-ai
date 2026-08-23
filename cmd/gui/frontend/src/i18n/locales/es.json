@@ -132,8 +132,8 @@
                 "prefix": "Prefijo",
                 "suffix": "Sufijo",
                 "allowOverwrite": "¿Permitir sobrescribir?",
-                "sameLocationOverwrite": "Cuando la ubicación y la extensión del archivo son las mismas, tu archivo original será sobrescrito. Esto no se puede deshacer.",
-                "sameLocationRename": "Cuando la ubicación y la extensión del archivo son las mismas, los nuevos nombres añadirán un número en lugar de sobrescribir tu original."
+                "sameLocationOverwrite": "Si la ubicación y la extensión son las mismas, tu archivo original será sobrescrito. Esto no se puede deshacer.",
+                "sameLocationRename": "Si la ubicación y la extensión son las mismas, los archivos nuevos llevarán un número en vez de sobrescribir el original."
             },
             "format": {
                 "title": "Formato",

@@ -132,8 +132,8 @@
                 "prefix": "Voorvoegsel",
                 "suffix": "Achtervoegsel",
                 "allowOverwrite": "Overschrijven toestaan?",
-                "sameLocationOverwrite": "Als de bestandslocatie en de extensie hetzelfde zijn, wordt je originele bestand overschreven. Dit kan niet ongedaan worden gemaakt.",
-                "sameLocationRename": "Als de bestandslocatie en de extensie hetzelfde zijn, krijgen nieuwe bestandsnamen een nummer in plaats van dat je origineel wordt overschreven."
+                "sameLocationOverwrite": "Als locatie en extensie hetzelfde zijn, wordt je originele bestand overschreven. Dit kan niet ongedaan worden gemaakt.",
+                "sameLocationRename": "Als locatie en extensie hetzelfde zijn, krijgen nieuwe bestanden een nummer in plaats van het origineel te overschrijven."
             },
             "format": {
                 "title": "Formaat",

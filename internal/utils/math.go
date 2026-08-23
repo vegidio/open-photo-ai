@@ -41,6 +41,20 @@ func FitToMaxSize(w, h, maxSize int) (int, int) {
 	return RoundUpTo16(nw), RoundUpTo16(nh)
 }
 
+// FitWithinMaxSize returns (newW, newH) with neither side longer than maxSize and both rounded up to the next multiple
+// of 16.
+//
+// It differs from FitToMaxSize in that it never enlarges: an image already inside the ceiling keeps its own dimensions
+// and is only aligned. Running a small image at the ceiling costs inference time proportional to the area it was
+// stretched to while adding no detail the source did not have.
+func FitWithinMaxSize(w, h, maxSize int) (int, int) {
+	if w <= maxSize && h <= maxSize {
+		return RoundUpTo16(w), RoundUpTo16(h)
+	}
+
+	return FitToMaxSize(w, h, maxSize)
+}
+
 func RoundUpTo16(v int) int {
 	if v%16 == 0 {
 		return v

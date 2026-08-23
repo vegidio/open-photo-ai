@@ -132,8 +132,8 @@
                 "prefix": "前缀",
                 "suffix": "后缀",
                 "allowOverwrite": "允许覆盖？",
-                "sameLocationOverwrite": "当文件位置和扩展名相同时，你的原始文件将被覆盖。此操作无法撤销。",
-                "sameLocationRename": "当文件位置和扩展名相同时，新文件名会追加编号，而不会覆盖你的原始文件。"
+                "sameLocationOverwrite": "位置和扩展名相同时，原始文件将被覆盖，此操作无法撤销。",
+                "sameLocationRename": "位置和扩展名相同时，新文件会追加编号，不会覆盖原始文件。"
             },
             "format": {
                 "title": "格式",

@@ -1,10 +1,16 @@
+# GHSA-48c2-rrv3-qjmp: yaml <1.10.3 is reachable only through @emotion/* -> babel-plugin-macros -> cosmiconfig, so it
+# is build-time only and never ships. The selector is scoped to the vulnerable range and pinned inside the 1.x line:
+# a bare '>=1.10.3' would pull every yaml consumer up to 2.x, whose API cosmiconfig does not expect.
+overrides:
+  yaml@<1.10.3: '>=1.10.3 <2'
+
 allowBuilds:
   '@firebase/util': true
   protobufjs: true
 minimumReleaseAgeExclude:
   - '@vitejs/plugin-react@6.1.0'
   - vite@8.2.2
-  - '@wailsio/runtime@3.0.0-beta.10'
+  - '@wailsio/runtime@3.0.0-beta.12'
   - i18next@26.4.0
   - react-i18next@17.0.12
 onlyBuiltDependencies:

@@ -65,14 +65,8 @@ func resizePlane(src []float32, srcW, srcH, dstW, dstH int) []float32 {
 		if sy < 0 {
 			sy = 0
 		}
-		y0 := int(sy)
-		if y0 > srcH-1 {
-			y0 = srcH - 1
-		}
-		y1 := y0 + 1
-		if y1 > srcH-1 {
-			y1 = srcH - 1
-		}
+		y0 := min(int(sy), srcH-1)
+		y1 := min(y0+1, srcH-1)
 		fy := float32(sy - float64(y0))
 
 		for x := range dstW {
@@ -80,14 +74,8 @@ func resizePlane(src []float32, srcW, srcH, dstW, dstH int) []float32 {
 			if sx < 0 {
 				sx = 0
 			}
-			x0 := int(sx)
-			if x0 > srcW-1 {
-				x0 = srcW - 1
-			}
-			x1 := x0 + 1
-			if x1 > srcW-1 {
-				x1 = srcW - 1
-			}
+			x0 := min(int(sx), srcW-1)
+			x1 := min(x0+1, srcW-1)
 			fx := float32(sx - float64(x0))
 
 			top := src[y0*srcW+x0]*(1-fx) + src[y0*srcW+x1]*fx

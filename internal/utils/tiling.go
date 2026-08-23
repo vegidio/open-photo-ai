@@ -70,7 +70,16 @@ func RunTiledInference(
 	// from TileGrid, so this driver and the ones that cannot use it agree on where the tiles are by construction.
 	grid := TileGrid{Size: defaultTileSize, Overlap: defaultTileOverlap, Width: width, Height: height}
 	tiles := grid.Tiles()
-	columns := len(grid.offsets(width))
+	columns := grid.Columns()
+
+	// Every tile is padded out to the same fixed shape, so the input buffer and both tensors are identical from one
+	// tile to the next. Built once here and reused: allocating them per tile meant ~800 KB of float32 plus two ORT
+	// values for each of what can be thousands of tiles, all immediately garbage.
+	scratch, err := newTileScratch(defaultTileSize, scale)
+	if err != nil {
+		return nil, err
+	}
+	defer scratch.destroy()
 
 	step := 1 / float64(len(tiles))
 	total := 0.0
@@ -85,7 +94,7 @@ func RunTiledInference(
 
 		paddedTile := prepareTileForInference(img, tileX, tileY, tileW, tileH, defaultTileSize)
 
-		processedTile, err := processTile(session, paddedTile, tileW, tileH, scale, cfg.divergenceThreshold)
+		processedTile, err := processTile(session, scratch, paddedTile, tileW, tileH, scale, cfg.divergenceThreshold)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to process tile")
 		}
@@ -116,6 +125,13 @@ type TileGrid struct {
 	Overlap int
 	Width   int
 	Height  int
+}
+
+// Columns is how many tiles Tiles puts in each row. The driver needs it to know which tiles have a neighbour to the
+// left and which have one above; deriving it here rather than at the call site keeps it from drifting out of step
+// with the layout Tiles actually produces.
+func (g TileGrid) Columns() int {
+	return len(g.offsets(g.Width))
 }
 
 // Tiles returns the tile rectangles in row-major order. An invalid geometry yields a single tile covering the whole
@@ -214,10 +230,59 @@ func prepareTileForInference(img image.Image, tileX, tileY, tileW, tileH, tileSi
 	return tile
 }
 
+// tileScratch is the per-run working set for the tiled driver: one CHW input buffer and the two ORT tensors bound to
+// it and to the output.
+//
+// The tensors are safe to reuse because ort.NewTensor wraps the Go slice's memory rather than copying it, so writing
+// the next tile into input is what feeds the next Run. Every tile shares one fixed shape, which is what makes a single
+// pair sufficient for the whole image.
+type tileScratch struct {
+	input        []float32
+	inputTensor  *ort.Tensor[float32]
+	outputTensor *ort.Tensor[float32]
+	outW, outH   int
+}
+
+func newTileScratch(tileSize, scale int) (*tileScratch, error) {
+	input := make([]float32, 3*tileSize*tileSize)
+
+	inputTensor, err := ort.NewTensor(ort.NewShape(1, 3, int64(tileSize), int64(tileSize)), input)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create input tensor")
+	}
+
+	outW, outH := tileSize*scale, tileSize*scale
+
+	outputTensor, err := ort.NewEmptyTensor[float32](ort.NewShape(1, 3, int64(outH), int64(outW)))
+	if err != nil {
+		inputTensor.Destroy()
+		return nil, errors.Wrap(err, "failed to create output tensor")
+	}
+
+	return &tileScratch{
+		input:        input,
+		inputTensor:  inputTensor,
+		outputTensor: outputTensor,
+		outW:         outW,
+		outH:         outH,
+	}, nil
+}
+
+func (s *tileScratch) destroy() {
+	s.inputTensor.Destroy()
+	s.outputTensor.Destroy()
+}
+
 // processTile runs the model and crops the padding back off. The crop bounds are scaled by scale to match the
 // inference output dimensions (scale is 1 for denoise).
-func processTile(session *Session, tile image.Image, tileW, tileH, scale int, divergenceThreshold float32) (image.Image, error) {
-	processedTile, err := runTileInference(session, tile, scale, divergenceThreshold)
+func processTile(
+	session *Session,
+	scratch *tileScratch,
+	tile image.Image,
+	tileW, tileH, scale int,
+	divergenceThreshold float32,
+) (image.Image, error) {
+	processedTile, err := runTileInference(session, scratch, tile, scale, divergenceThreshold)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to run inference")
 	}
@@ -231,34 +296,33 @@ func processTile(session *Session, tile image.Image, tileW, tileH, scale int, di
 
 // runTileInference runs inference on a single padded tile. The output shares the input's shape scaled by scale (scale 1
 // keeps the dimensions, e.g. denoise; scale N upscales).
-func runTileInference(session *Session, tile image.Image, scale int, divergenceThreshold float32) (image.Image, error) {
+func runTileInference(
+	session *Session,
+	scratch *tileScratch,
+	tile image.Image,
+	scale int,
+	divergenceThreshold float32,
+) (image.Image, error) {
 	bounds := tile.Bounds()
 	h, w := bounds.Dy(), bounds.Dx()
 
-	inputData := ImageToCHW(tile, true, false)
-
-	inputShape := ort.NewShape(1, 3, int64(h), int64(w))
-	inputTensor, err := ort.NewTensor(inputShape, inputData)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create input tensor")
+	// The scratch tensors are shaped for a full padded tile. Anything else means the caller skipped the padding step,
+	// which would silently feed the model a stale buffer rather than this tile.
+	if want := 3 * h * w; want != len(scratch.input) {
+		return nil, errors.Errorf("tile is %dx%d, but the scratch buffer holds %d floats (want %d)",
+			w, h, len(scratch.input), want)
 	}
-	defer inputTensor.Destroy()
 
-	outputShape := ort.NewShape(1, 3, int64(h*scale), int64(w*scale))
-	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create output tensor")
-	}
-	defer outputTensor.Destroy()
+	// Overwrites the buffer the input tensor is bound to, which is how the next tile reaches the model.
+	ImageToCHWInto(scratch.input, tile, true, false)
 
-	err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor})
+	err := session.Run([]ort.Value{scratch.inputTensor}, []ort.Value{scratch.outputTensor})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to run inference")
 	}
 
-	outputData := outputTensor.GetData()
-	outW := int(outputShape[3])
-	outH := int(outputShape[2])
+	outputData := scratch.outputTensor.GetData()
+	outW, outH := scratch.outW, scratch.outH
 
 	// Per-tile divergence guard: some models numerically blow up on certain out-of-distribution tiles, exploding the
 	// RAW output to ~1000+ (which clamps to a solid saturated block). Detect that from the raw values and keep the
@@ -289,46 +353,65 @@ func ReflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 	paddedHeight := height + top + bottom
 	padded := image.NewRGBA(image.Rect(0, 0, paddedWidth, paddedHeight))
 
-	reflectIndex := func(idx, max int) int {
+	// Mirrors idx back into [0, length). A pad wider than the source has no true mirror to draw from - one reflection
+	// is not enough to get back inside - so the result is clamped to the nearest edge pixel.
+	//
+	// That case is reachable: a tile only a few pixels wide is padded out to the full tile size, so padRight exceeds
+	// the tile's own width. The previous per-pixel version read those indices out of bounds through At(), which
+	// returns transparent black, and so wrote a hard black border into the very edge the padding exists to make
+	// continuous. Repeating the edge pixel is both correct-in-spirit and what every other reflect-pad implementation
+	// falls back to.
+	reflectIndex := func(idx, length int) int {
 		if idx < 0 {
-			return -idx - 1
+			idx = -idx - 1
+		} else if idx >= length {
+			idx = 2*length - idx - 1
 		}
-		if idx >= max {
-			return 2*max - idx - 1
-		}
-		return idx
+
+		return min(length-1, max(0, idx))
 	}
 
 	// Copy original image to center
 	draw.Draw(padded, image.Rect(left, top, left+width, top+height), img, bounds.Min, draw.Src)
 
-	// Pad left and right edges
+	// Everything below mirrors within padded rather than sampling img again. The centre already holds exactly the
+	// pixels draw.Draw converted, so copying bytes out of it is identical to re-reading the source through At()/Set()
+	// - and it drops the per-pixel interface dispatch and color boxing that the rest of this file is careful to avoid.
+	// This matters beyond the edge tiles: the diffusion upscaler pads the whole image through here.
+	stride := padded.Stride
+	pix := padded.Pix
+
+	// Pad left and right edges, across the rows the source occupies.
 	for y := range height {
-		srcY := bounds.Min.Y + y
-		dstY := y + top
+		row := (y + top) * stride
 
 		for x := range left {
-			srcX := bounds.Min.X + reflectIndex(left-x-1, width)
-			padded.Set(x, dstY, img.At(srcX, srcY))
+			dst := row + x*4
+			src := row + (left+reflectIndex(left-x-1, width))*4
+			copy(pix[dst:dst+4], pix[src:src+4])
 		}
 
 		for x := range right {
-			srcX := bounds.Min.X + reflectIndex(width+x, width)
-			padded.Set(width+left+x, dstY, img.At(srcX, srcY))
+			dst := row + (left+width+x)*4
+			src := row + (left+reflectIndex(width+x, width))*4
+			copy(pix[dst:dst+4], pix[src:src+4])
 		}
 	}
 
-	// Pad top and bottom edges (including corners)
-	for x := range paddedWidth {
-		for y := range top {
-			srcY := reflectIndex(top-y-1, height) + top
-			padded.Set(x, y, padded.At(x, srcY))
-		}
+	// Pad top and bottom edges. The corners come along for free: with the left and right padding already written, each
+	// of these is a whole-row copy rather than a per-pixel walk.
+	rowBytes := paddedWidth * 4
 
-		for y := range bottom {
-			srcY := reflectIndex(height+y, height) + top
-			padded.Set(x, height+top+y, padded.At(x, srcY))
-		}
+	for y := range top {
+		dst := y * stride
+		src := (reflectIndex(top-y-1, height) + top) * stride
+		copy(pix[dst:dst+rowBytes], pix[src:src+rowBytes])
+	}
+
+	for y := range bottom {
+		dst := (height + top + y) * stride
+		src := (reflectIndex(height+y, height) + top) * stride
+		copy(pix[dst:dst+rowBytes], pix[src:src+rowBytes])
 	}
 
 	return padded

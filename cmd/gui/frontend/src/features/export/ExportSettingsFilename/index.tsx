@@ -37,7 +37,7 @@ export const ExportSettingsFilename = () => {
                         {t('export.settings.filename.allowOverwrite')}
                     </Typography>
                 }
-                initialValue={overwrite}
+                value={overwrite}
                 color='#009aff'
                 onChange={(value) => setOverwrite(value)}
                 className='mt-1'

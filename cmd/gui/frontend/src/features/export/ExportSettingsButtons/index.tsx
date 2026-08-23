@@ -46,7 +46,9 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
     // Exports every file in turn, reporting whether it got through all of them. Returns early on the first failure —
     // the file's error state has already been emitted by then.
     const exportAll = async (): Promise<boolean> => {
-        for (const [file, operations] of enhancements.entries()) {
+        for (const [file, fileOperations] of enhancements.entries()) {
+            let operations = fileOperations;
+
             try {
                 // The list of operations for this file is empty; it means Autopilot added this file in the export
                 // list. We need to check if there are any suitable operations to apply to the file.
@@ -56,7 +58,11 @@ export const ExportSettingsButtons = ({ enhancements, onClose }: ExportSettingsB
                     const suggestions = await suggestRef.current;
 
                     if (suggestions.length === 0) continue;
-                    operations.push(...suggestions);
+
+                    // A new array rather than a push: this one comes out of a memoised Map in SidebarExport, so
+                    // mutating it would make that memo stateful - after one run the "no operations, ask for
+                    // suggestions" branch above would never fire again.
+                    operations = [...operations, ...suggestions];
                 }
 
                 exportRef.current = exportImage({

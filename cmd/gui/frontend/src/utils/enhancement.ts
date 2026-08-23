@@ -31,7 +31,23 @@ export type EnhancementType = 'dn' | 'fr' | 'cl' | 'la' | 'cb' | 'sh' | 'up';
 export type ModelChoices = Record<EnhancementType, string>;
 
 // The first two letters of an operation ID are its enhancement type, e.g. `dn`, `fr`, `up`.
-export const getEnhancementType = (opId: string): EnhancementType => opId.slice(0, 2) as EnhancementType;
+//
+// The prefix is narrowed rather than asserted: an id from the backend, a persisted setting or a stale cache entry can
+// carry any two characters, and casting made `ENHANCEMENTS[type]` look total when it is not. Returning undefined is
+// what the call sites already assume - they all guard on the lookup - so this makes their guards type-driven.
+export const getEnhancementType = (opId: string): EnhancementType | undefined => {
+    const prefix = opId.slice(0, 2);
+    return ENHANCEMENT_ORDER.includes(prefix as EnhancementType) ? (prefix as EnhancementType) : undefined;
+};
+
+// The scale an operation list will produce, as a factor of the source dimensions. Fractional scales are supported, so
+// this parses as a float: reading it with parseInt silently truncated 1.5x to 1x.
+export const upscaleFactor = (operations: Operation[]): number => {
+    const scale = operations.find((op) => op.id.startsWith('up'))?.options?.scale;
+    const parsed = parseFloat(scale ?? '1');
+
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+};
 
 // The order enhancements are presented in and applied in. It is a single list because the two must agree: the add
 // menu offering them in one order while the pipeline ran them in another would be a silent inconsistency.

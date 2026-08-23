@@ -15,7 +15,19 @@ import (
 func ImageToCHW(img image.Image, useOffset, standardize bool) []float32 {
 	bounds := img.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
-	tensor := make([]float32, 3*height*width)
+
+	return ImageToCHWInto(make([]float32, 3*height*width), img, useOffset, standardize)
+}
+
+// ImageToCHWInto is ImageToCHW writing into a caller-supplied buffer, which must hold at least 3*W*H floats. It
+// returns the buffer it wrote to.
+//
+// This exists for the tiled drivers. Every tile of a run has the same fixed shape, so allocating a fresh ~800 KB
+// tensor per tile - thousands of them on a large image - produced gigabytes of identically-shaped garbage for no
+// reason. Callers with a single image should use ImageToCHW.
+func ImageToCHWInto(tensor []float32, img image.Image, useOffset, standardize bool) []float32 {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
 
 	// Per-channel plane base offsets, hoisted out of the inner loop.
 	plane := height * width

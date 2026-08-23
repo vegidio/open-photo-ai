@@ -1,12 +1,12 @@
 import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/detection';
 import type { Operation } from '@/operations';
 import { Version } from '@/bindings/gui/services/appservice.ts';
-import { GetArch, GetOS } from '@/bindings/gui/services/osservice.ts';
+import { GetOS } from '@/bindings/gui/services/osservice.ts';
 import { CropInfo } from '@/bindings/gui/types';
 
 // Top-level await: every module importing this one blocks until the backend answers. Issued together rather than
-// sequentially so that costs one round trip over the Wails bridge on startup instead of three.
-export const [version, os, arch] = await Promise.all([Version(), GetOS(), GetArch()]);
+// sequentially so that costs one round trip over the Wails bridge on startup instead of two.
+export const [version, os] = await Promise.all([Version(), GetOS()]);
 
 // Brand name, author line and links: intentionally not in the i18n catalogs, since they must read identically in
 // every language. A name, a domain and a service's brand are not translatable, and carrying them in 13 catalogs only

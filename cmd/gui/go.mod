@@ -7,16 +7,16 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/samber/lo v1.53.0
 	github.com/vegidio/go-sak v0.0.0-20260818145652-355405d075ca
-	github.com/vegidio/open-photo-ai v0.0.0-20260607083020-ddc25793bc45
-	github.com/wailsapp/wails/v3 v3.0.0-beta.10
+	github.com/vegidio/open-photo-ai v0.0.0-20260822210433-ed233b7064ce
+	github.com/wailsapp/wails/v3 v3.0.0-beta.12
 )
 
 require (
 	github.com/DeRuina/timberjack v1.4.6 // indirect
 	github.com/adrg/xdg v0.5.3 // indirect
-	github.com/andybalholm/brotli v1.2.1 // indirect
+	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/bodgit/plumbing v1.3.0 // indirect
-	github.com/bodgit/sevenzip v1.6.4 // indirect
+	github.com/bodgit/sevenzip v1.6.5 // indirect
 	github.com/bodgit/windows v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -40,7 +40,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.4 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
-	github.com/klauspost/compress v1.18.6 // indirect
+	github.com/klauspost/compress v1.19.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -48,14 +48,15 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/otiai10/copy v1.14.1 // indirect
 	github.com/otiai10/mint v1.6.3 // indirect
-	github.com/pierrec/lz4/v4 v4.1.26 // indirect
+	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
-	github.com/stangelandcl/ppmd v0.1.0 // indirect
+	github.com/stangelandcl/ppmd v0.1.1 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
 	github.com/vegidio/avif-go v0.0.0-20260715095249-dbb32e4e0094 // indirect
 	github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5 // indirect
+	github.com/vegidio/raw-go v0.0.0-20260619122347-1fd4b5c63e43 // indirect
 	github.com/vegidio/webp-go v0.0.0-20260614080129-a1efc50b59e1 // indirect
 	github.com/yalue/onnxruntime_go v1.31.0 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect

@@ -1,4 +1,3 @@
-import type { RefObject } from 'react';
 import { ClickAwayListener } from '@mui/material';
 import { DrawerBody } from '@/features/drawer/DrawerBody';
 import { DrawerHeader } from '@/features/drawer/DrawerHeader';
@@ -7,11 +6,7 @@ import { useDrawerStore } from '@/stores/drawer.ts';
 const drawerBleeding = 48;
 const drawerHeight = 128;
 
-type DrawerProps = {
-    containerRef: RefObject<HTMLDivElement | null>;
-};
-
-export const Drawer = (_props: DrawerProps) => {
+export const Drawer = () => {
     const open = useDrawerStore((state) => state.open);
     const setOpen = useDrawerStore((state) => state.setOpen);
 

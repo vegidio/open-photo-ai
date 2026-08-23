@@ -256,7 +256,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 
 // loadInput materializes the embedded sample image and decodes it.
 func loadInput() (*types.ImageData, func(), error) {
-	// First argument is the directory, not a name pattern: "" means the system temp dir. The pattern needs the .jpg
+	// The first argument is the directory, not a name pattern: "" means the system temp dir. The pattern needs the .jpg
 	// suffix because LoadImage picks the decoder from the file extension.
 	tempFile, cleanup, err := fs.MkTempFile("", "open-photo-ai-*.jpg")
 	if err != nil {

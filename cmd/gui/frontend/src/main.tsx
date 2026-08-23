@@ -28,12 +28,10 @@ useSettingsStore.subscribe((state, prev) => {
     if (state.analyticsEnabled !== prev.analyticsEnabled) setAnalyticsEnabled(state.analyticsEnabled);
 });
 
-const lightTheme = createTheme({
-    palette: {
-        mode: 'light',
-    },
-});
-
+// Dark only, deliberately. The UI's colours are hardcoded dark hex literals throughout (bg-[#212121], #009aff and so
+// on), so a light MUI palette would not produce a working light theme - it would produce dark panels with light
+// controls. The light theme and the prefers-color-scheme check that used to sit here were both unreachable; making
+// light mode real means moving those literals into theme tokens first.
 const darkTheme = createTheme({
     palette: {
         mode: 'dark',
@@ -54,10 +52,8 @@ const darkTheme = createTheme({
 });
 
 const Main = () => {
-    const isDarkMode = true; // useMediaQuery('(prefers-color-scheme: dark)');
-
     return (
-        <ThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
+        <ThemeProvider theme={darkTheme}>
             <StyledEngineProvider enableCssLayer>
                 <GlobalStyles styles='@layer theme, base, mui, components, utilities;' />
 
@@ -74,4 +70,7 @@ const Main = () => {
     );
 };
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(<Main />);
+const root = document.getElementById('root');
+if (!root) throw new Error('index.html is missing the #root element the app mounts into');
+
+ReactDOM.createRoot(root).render(<Main />);

@@ -132,8 +132,8 @@
                 "prefix": "Awalan",
                 "suffix": "Akhiran",
                 "allowOverwrite": "Izinkan menimpa?",
-                "sameLocationOverwrite": "Jika lokasi dan ekstensi file sama, file asli Anda akan ditimpa. Tindakan ini tidak dapat dibatalkan.",
-                "sameLocationRename": "Jika lokasi dan ekstensi file sama, nama file baru akan diberi nomor alih-alih menimpa file asli Anda."
+                "sameLocationOverwrite": "Jika lokasi dan ekstensi sama, file asli Anda akan ditimpa. Ini tidak dapat dibatalkan.",
+                "sameLocationRename": "Jika lokasi dan ekstensi sama, file baru akan diberi nomor alih-alih menimpa file asli."
             },
             "format": {
                 "title": "Format",

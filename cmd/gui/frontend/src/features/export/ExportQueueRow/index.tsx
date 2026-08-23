@@ -8,10 +8,12 @@ import type { Operation } from '@/operations';
 import { AnalyticsEvent, track } from '@/analytics';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { ExportQueueState } from '@/features/export/ExportQueueState';
-import { useFileCrop } from '@/hooks';
+import { useFileCrop, useThumbnail } from '@/hooks';
 import { useExportStore } from '@/stores';
+import { upscaleFactor } from '@/utils/enhancement.ts';
 import { getExportInfo } from '@/utils/export.ts';
-import { cropDimensions, getImage } from '@/utils/image.ts';
+import { formatBytes } from '@/utils/format.ts';
+import { cropDimensions } from '@/utils/image.ts';
 
 type ExportQueueRowProps = {
     file: File;
@@ -26,7 +28,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
     const location = useExportStore((state) => state.location);
     const crop = useFileCrop(file);
 
-    const [image, setImage] = useState<string>();
+    const { url: image, ref: thumbnailRef } = useThumbnail(file, 100);
     const [state, setState] = useState('IDLE');
     const [progress, setProgress] = useState(0);
     const [newSize, setNewSize] = useState<string>();
@@ -35,26 +37,17 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
         const { fileName, filePath, ext } = getExportInfo(file, format, prefix, suffix, location);
 
         // Dimensions — a crop changes the source size (crop box is post-rotation = the cropped image's size).
-        const scaleStr = operations.find((op) => op.id.startsWith('up'))?.options?.scale ?? '1';
-        const scale = parseInt(scaleStr, 10);
+        // The scale is read through the shared helper so this row and the navbar cannot disagree about it, which they
+        // did while one parsed it as an int and the other as a float.
+        const scale = upscaleFactor(operations);
         const [width, height] = cropDimensions(file, crop);
         const oldDims = `${width} x ${height}`;
-        const newDims = `${width * scale} x ${height * scale}`;
+        const newDims = `${(width * scale).toFixed(0)} x ${(height * scale).toFixed(0)}`;
 
-        const oldSize =
-            file.Size < 1_000_000 ? `${(file.Size / 1_000).toFixed(2)} KB` : `${(file.Size / 1_000_000).toFixed(2)} MB`;
+        const oldSize = formatBytes(file.Size);
 
         return { oldDims, newDims, oldSize, newExt: ext, fileName, filePath };
     }, [file, format, location, operations, prefix, suffix, crop]);
-
-    useEffect(() => {
-        async function loadImage() {
-            const imageData = await getImage(file, 100);
-            setImage(imageData.url);
-        }
-
-        loadImage();
-    }, [file]);
 
     useEffect(() => {
         return Events.On('app:export', (event) => {
@@ -62,9 +55,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
             if (hash !== file.Hash) return;
 
             if (state === 'COMPLETED') {
-                setNewSize(
-                    value < 1_000_000 ? `${(value / 1_000).toFixed(2)} KB` : `${(value / 1_000_000).toFixed(2)} MB`,
-                );
+                setNewSize(formatBytes(value));
                 setProgress(100);
                 track(AnalyticsEvent.ExportCompleted);
             } else {
@@ -84,7 +75,12 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
             <TableRow>
                 {/* Image */}
                 <TableCell rowSpan={2}>
-                    <img alt={t('common.previewAlt')} src={image} className='h-14 aspect-square object-cover' />
+                    <img
+                        ref={thumbnailRef}
+                        alt={t('common.previewAlt')}
+                        src={image}
+                        className='h-14 aspect-square object-cover'
+                    />
                 </TableCell>
 
                 {/* Filename & Dimensions */}

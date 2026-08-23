@@ -22,10 +22,39 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
     const setViewport = useImageStore((state) => state.setViewport);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
-    const onPanning = (ref: ReactZoomPanPinchRef) => {
-        const { positionX, positionY, scale } = ref.state;
-        setImageTransform(image.id, { positionX, positionY, scale });
-    };
+    // Panning fires on every pointer frame, and each store write re-renders both panes in side/split mode (they share
+    // one transform key), re-runs the transform effect and republishes the viewport rect - a sustained ~60Hz cascade
+    // through the tree for the length of a drag. Coalescing to one write per animation frame keeps the transform in
+    // sync without making the store the bottleneck. useCallback because a fresh identity per render would defeat any
+    // memoisation downstream.
+    const pendingPan = useRef<ImageTransform>(undefined);
+    const panFrame = useRef<number>(undefined);
+
+    const onPanning = useCallback(
+        (ref: ReactZoomPanPinchRef) => {
+            const { positionX, positionY, scale } = ref.state;
+            pendingPan.current = { positionX, positionY, scale };
+
+            if (panFrame.current !== undefined) return;
+
+            panFrame.current = requestAnimationFrame(() => {
+                panFrame.current = undefined;
+                if (pendingPan.current) setImageTransform(image.id, pendingPan.current);
+            });
+        },
+        [image.id, setImageTransform],
+    );
+
+    // Flush on unmount, so a drag that ends with the pane closing does not drop its last position.
+    useEffect(
+        () => () => {
+            if (panFrame.current === undefined) return;
+
+            cancelAnimationFrame(panFrame.current);
+            panFrame.current = undefined;
+        },
+        [],
+    );
 
     // Center image if smaller than container, otherwise constrain within bounds
     const constrainPosition = useCallback((position: number, scaledSize: number, containerSize: number) => {
@@ -33,19 +62,34 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
         return Math.max(containerSize - scaledSize, Math.min(0, position));
     }, []);
 
+    // Measured on every container resize, not only when the image changes. Everything downstream - the wheel anchor,
+    // constrainPosition, and the viewport rect published to the sidebar - is derived from these numbers, so measuring
+    // once left all three working off stale values after a window resize or a sidebar toggle.
     useEffect(() => {
         const container = tRef.current?.instance.wrapperComponent;
         if (!container) return;
 
-        const rect = container.getBoundingClientRect();
-        const scaleX = rect.width / image.width;
-        const scaleY = rect.height / image.height;
-        const scale = Math.min(scaleX, scaleY);
+        const measure = () => {
+            const rect = container.getBoundingClientRect();
+            const scale = Math.min(rect.width / image.width, rect.height / image.height);
 
-        setDimensions({
-            width: image.width * scale,
-            height: image.height * scale,
-        });
+            setDimensions((current) => {
+                const width = image.width * scale;
+                const height = image.height * scale;
+
+                // Same numbers means the same object, so a resize that changes nothing does not re-render.
+                return current.width === width && current.height === height ? current : { width, height };
+            });
+        };
+
+        measure();
+
+        if (typeof ResizeObserver === 'undefined') return;
+
+        const observer = new ResizeObserver(measure);
+        observer.observe(container);
+
+        return () => observer.disconnect();
     }, [image]);
 
     // Zoom in/out with the mouse wheel, or a trackpad pinch which the webview delivers as a wheel

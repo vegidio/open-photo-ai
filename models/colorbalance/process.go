@@ -23,8 +23,10 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	// Resize so the longest side equals maxSize, padded to a multiple of 16
-	newW, newH := utils.FitToMaxSize(origW, origH, maxSize)
+	// Resize so neither side exceeds maxSize, padded to a multiple of 16. An image already inside the ceiling is only
+	// aligned, never stretched up to it: the model has no detail to add, so the enlargement bought nothing and cost
+	// inference time proportional to the area.
+	newW, newH := utils.FitWithinMaxSize(origW, origH, maxSize)
 	resized := imaging.Resize(img, newW, newH, imaging.Lanczos)
 
 	// Convert resized image to CHW [0,1] float32
@@ -34,40 +36,25 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	inputShape := ort.NewShape(1, 3, int64(newH), int64(newW))
-	inputTensor, err := ort.NewTensor(inputShape, inputData)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create input tensor")
-	}
-	defer inputTensor.Destroy()
+	shape := ort.NewShape(1, 3, int64(newH), int64(newW))
 
-	outputShape := ort.NewShape(1, 3, int64(newH), int64(newW))
-	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
+	outputData, err := utils.RunUnary(session, inputData, shape, shape)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create output tensor")
+		return nil, err
 	}
-	defer outputTensor.Destroy()
 
 	if err = ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to run inference")
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, errors.Wrap(err, "context cancelled")
-	}
-
-	outputData := outputTensor.GetData()
-
 	// Fit a polynomial color mapping from low-res input -> low-res output, then
 	// apply that mapping to the full-resolution original.
 	srcLR := chwToHWC(inputData, newW, newH)
 	dstLR := chwToHWC(outputData, newW, newH)
-	w := fitPolynomialMapping(srcLR, dstLR)
+	w, err := fitPolynomialMapping(srcLR, dstLR)
+	if err != nil {
+		return nil, err
+	}
 
 	return applyMapping(img, w), nil
 }
@@ -76,7 +63,7 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 func chwToHWC(data []float32, width, height int) [][3]float32 {
 	plane := width * height
 	out := make([][3]float32, plane)
-	for i := 0; i < plane; i++ {
+	for i := range plane {
 		out[i] = [3]float32{data[i], data[plane+i], data[2*plane+i]}
 	}
 	return out
@@ -91,19 +78,19 @@ func kernelP(r, g, b float32) [11]float32 {
 // fitPolynomialMapping solves the 11x3 normal equations W = (X^T X)^-1 X^T Y
 // where each row of X is kernelP(src[i]) and each row of Y is dst[i].
 // A small ridge term is added to the diagonal to keep degenerate inputs stable.
-func fitPolynomialMapping(src, dst [][3]float32) [11][3]float32 {
+func fitPolynomialMapping(src, dst [][3]float32) ([11][3]float32, error) {
 	var xtx [11][11]float64
 	var xty [11][3]float64
 
 	for i := range src {
 		k := kernelP(src[i][0], src[i][1], src[i][2])
 		var k64 [11]float64
-		for a := 0; a < 11; a++ {
+		for a := range 11 {
 			k64[a] = float64(k[a])
 		}
-		for a := 0; a < 11; a++ {
+		for a := range 11 {
 			ka := k64[a]
-			for b := 0; b < 11; b++ {
+			for b := range 11 {
 				xtx[a][b] += ka * k64[b]
 			}
 			xty[a][0] += ka * float64(dst[i][0])
@@ -112,14 +99,14 @@ func fitPolynomialMapping(src, dst [][3]float32) [11][3]float32 {
 		}
 	}
 
-	for a := 0; a < 11; a++ {
+	for a := range 11 {
 		xtx[a][a] += 1e-8
 	}
 
 	// Augmented matrix [XtX | XtY] -> Gauss-Jordan elimination with partial pivoting.
 	var aug [11][14]float64
-	for i := 0; i < 11; i++ {
-		for j := 0; j < 11; j++ {
+	for i := range 11 {
+		for j := range 11 {
 			aug[i][j] = xtx[i][j]
 		}
 		aug[i][11] = xty[i][0]
@@ -127,7 +114,7 @@ func fitPolynomialMapping(src, dst [][3]float32) [11][3]float32 {
 		aug[i][13] = xty[i][2]
 	}
 
-	for col := 0; col < 11; col++ {
+	for col := range 11 {
 		pivot := col
 		maxVal := math.Abs(aug[col][col])
 		for r := col + 1; r < 11; r++ {
@@ -140,11 +127,19 @@ func fitPolynomialMapping(src, dst [][3]float32) [11][3]float32 {
 			aug[col], aug[pivot] = aug[pivot], aug[col]
 		}
 
+		// The ridge above makes XtX positive-definite, so after partial pivoting this should never be zero. Should is
+		// not a guarantee in float64, and dividing by it would fill w with NaN - which applyMapping renders as a
+		// destroyed image with nothing anywhere to say why. Fail loudly instead.
 		piv := aug[col][col]
+		if piv == 0 {
+			return [11][3]float32{}, errors.Errorf("singular normal equations at column %d; cannot fit the colour "+
+				"balance mapping", col)
+		}
+
 		for j := col; j < 14; j++ {
 			aug[col][j] /= piv
 		}
-		for r := 0; r < 11; r++ {
+		for r := range 11 {
 			if r == col {
 				continue
 			}
@@ -159,12 +154,12 @@ func fitPolynomialMapping(src, dst [][3]float32) [11][3]float32 {
 	}
 
 	var w [11][3]float32
-	for i := 0; i < 11; i++ {
+	for i := range 11 {
 		w[i][0] = float32(aug[i][11])
 		w[i][1] = float32(aug[i][12])
 		w[i][2] = float32(aug[i][13])
 	}
-	return w
+	return w, nil
 }
 
 // applyMapping renders a new full-resolution image by mapping each pixel of img

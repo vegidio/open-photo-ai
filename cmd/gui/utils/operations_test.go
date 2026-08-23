@@ -7,9 +7,12 @@ package utils
 
 import (
 	"fmt"
-	guitypes "gui/types"
+	"slices"
 	"testing"
 
+	guitypes "gui/types"
+
+	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/upscale"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -188,6 +191,56 @@ func TestIdsToOperationsRejectsBadInput(t *testing.T) {
 	for _, id := range bad {
 		if _, err := IdsToOperations([]string{id}, guitypes.InferenceParams{}); err == nil {
 			t.Errorf("%q: expected an error, got nil", id)
+		}
+	}
+}
+
+// The GUI parses operation ids into operations; opai turns those same ids into models. Each needs a different function
+// per model, so the two tables cannot be merged - but they must name the same set of models, and nothing in the
+// compiler links them. This is that link.
+func TestOperationBuildersMatchLibrary(t *testing.T) {
+	want := opai.ModelKeys()
+
+	got := make([]string, 0, len(operationBuilders))
+	for key := range operationBuilders {
+		got = append(got, key)
+	}
+	slices.Sort(got)
+
+	if !slices.Equal(got, want) {
+		t.Errorf("operationBuilders covers %v, but opai builds %v", got, want)
+	}
+}
+
+// Selection used to key on the codename alone, which let the two halves of an id disagree without anyone noticing:
+// an upscale prefix on a denoise codename quietly built a denoise operation.
+func TestIdsToOperationsRejectsMismatchedPrefix(t *testing.T) {
+	if _, err := IdsToOperations([]string{"up_stockholm_fp32"}, guitypes.InferenceParams{}); err == nil {
+		t.Error("an upscale prefix on a denoise codename should be rejected, not built as a denoise operation")
+	}
+
+	if _, err := IdsToOperations([]string{"dn_tokyo_4x_fp32"}, guitypes.InferenceParams{}); err == nil {
+		t.Error("a denoise prefix on an upscale codename should be rejected")
+	}
+}
+
+// Whatever the id's trailing segments carry, the operation it builds must be for the model the first two segments
+// name.
+func TestIdsToOperationsBuildsTheModelTheIdNames(t *testing.T) {
+	ids := []string{"dn_stockholm_0.5_fp32", "sh_moscow_1_fp16", "cl_delhi_fp32", "up_tokyo_4x_fp32", "cb_rio_0.5_fp32"}
+
+	ops, err := IdsToOperations(ids, guitypes.InferenceParams{})
+	if err != nil {
+		t.Fatalf("IdsToOperations: %v", err)
+	}
+
+	if len(ops) != len(ids) {
+		t.Fatalf("got %d operations for %d ids", len(ops), len(ids))
+	}
+
+	for i, op := range ops {
+		if got, want := opai.ModelKey(op.Id()), opai.ModelKey(ids[i]); got != want {
+			t.Errorf("id %q built a %q operation, want %q", ids[i], got, want)
 		}
 	}
 }

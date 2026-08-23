@@ -1,4 +1,4 @@
-import { type ChangeEvent, type MouseEvent, memo, useEffect, useState } from 'react';
+import { type ChangeEvent, type MouseEvent, memo, useState } from 'react';
 import { Checkbox, IconButton, Typography } from '@mui/material';
 import { basename } from 'pathe';
 import { useTranslation } from 'react-i18next';
@@ -6,8 +6,8 @@ import { IoIosMore } from 'react-icons/io';
 import type { File } from '@/bindings/gui/types';
 import type { TailwindProps } from '@/utils/TailwindProps.ts';
 import { MenuFileOptions } from '@/features/shared/MenuFileOptions';
+import { useThumbnail } from '@/hooks';
 import { useFileStore } from '@/stores';
-import { getImage } from '@/utils/image.ts';
 
 type FileListItemProps = {
     file: File;
@@ -21,13 +21,11 @@ type FileListItemProps = {
 // single stable handler rather than allocating a closure per item on every render.
 const DrawerItemComponent = ({ file, index, current = false, onClick }: FileListItemProps) => {
     const { t } = useTranslation();
-    const isSelected = useFileStore((state) =>
-        state.selectedFiles.some((selectedFile) => selectedFile.Path === file.Path),
-    );
+    const isSelected = useFileStore((state) => state.selectedPaths.has(file.Path));
     const addSelectedFile = useFileStore((state) => state.addSelectedFile);
     const removeSelectedFile = useFileStore((state) => state.removeSelectedFile);
 
-    const [image, setImage] = useState<string>();
+    const { url: image, ref: thumbnailRef } = useThumbnail(file, 100);
 
     const handleCheckboxChange = (event: ChangeEvent<HTMLInputElement>) => {
         const checked = event.target.checked;
@@ -39,15 +37,6 @@ const DrawerItemComponent = ({ file, index, current = false, onClick }: FileList
         }
     };
 
-    useEffect(() => {
-        async function loadImage() {
-            const imageData = await getImage(file, 100);
-            setImage(imageData.url);
-        }
-
-        loadImage();
-    }, [file]);
-
     return (
         // Using a div instead of a button here to avoid nested buttons error
         // biome-ignore lint/a11y/noStaticElementInteractions: N/A
@@ -56,7 +45,7 @@ const DrawerItemComponent = ({ file, index, current = false, onClick }: FileList
             onClick={() => onClick?.(index)}
             className={`h-full aspect-square rounded ${current ? 'outline-3 outline-blue-500' : ''}`}
         >
-            <div className='relative size-full'>
+            <div ref={thumbnailRef} className='relative size-full'>
                 <img alt={t('common.previewAlt')} src={image} className='size-full object-cover rounded' />
 
                 <Checkbox

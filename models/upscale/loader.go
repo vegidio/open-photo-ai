@@ -6,8 +6,6 @@ import (
 
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/types"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 // LoadSessions downloads and opens one ONNX session per scale factor for the given upscale variant
@@ -28,7 +26,8 @@ func LoadSessions(
 	return utils.LoadSessions(ctx, specs, ep, utils.EPProfile{}, onProgress)
 }
 
-// FormatUpscaleName builds the display name used by every upscale variant.
+// FormatUpscaleName builds the display name used by every upscale variant. Upscale is the one family whose label
+// carries the scale, so it composes the label here and leaves the precision suffix to the shared formatter.
 func FormatUpscaleName(scale float64, precision types.Precision) string {
-	return fmt.Sprintf("Upscale %.4gx (%s)", scale, cases.Upper(language.English).String(string(precision)))
+	return utils.FormatModelName(fmt.Sprintf("Upscale %.4gx", scale), precision)
 }

@@ -150,12 +150,7 @@ func resolveProviders(goos string, ep types.ExecutionProvider, p EPProfile) ([]t
 		return filterExcluded(chain, p), nil
 	}
 
-	var supported bool
-	if slices.Contains(chain, ep) {
-		supported = true
-	}
-
-	if !supported {
+	if !slices.Contains(chain, ep) {
 		return nil, errors.Errorf("unsupported execution provider: %s", ep)
 	}
 

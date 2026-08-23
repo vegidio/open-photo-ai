@@ -103,7 +103,7 @@ func (a *aggregate) extract(done, total int64) {
 	a.extracted = done
 	a.mu.Unlock()
 
-	a.report(0, first)
+	a.report(first)
 }
 
 // finish lands the report on 100%, rather than wherever the last throttled tick happened to fall or
@@ -131,11 +131,11 @@ func (a *aggregate) finish() {
 // how a source that had to start over gives back the bytes the bar was already told about.
 func (a *aggregate) add(n int64, done bool) {
 	a.downloaded.Add(n)
-	a.report(n, done)
+	a.report(done)
 }
 
 // report emits the current position, unless the last one was too recent. done forces it through.
-func (a *aggregate) report(_ int64, done bool) {
+func (a *aggregate) report(done bool) {
 	if a.onProgress == nil {
 		return
 	}

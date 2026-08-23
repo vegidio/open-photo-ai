@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal/utils"
@@ -31,6 +32,21 @@ type Variant struct {
 	// Fidelity is the weight bound to the graph's second input. It is only read when Inputs names one; -1 marks a
 	// graph that takes no weight at all.
 	Fidelity float32
+
+	// The feathered blend mask is a pure function of TileSize, which is fixed per variant - but building it means
+	// filling a TileSize-square image and then Gaussian-blurring it, which was being redone on every single Run.
+	// Variants are package-level values that outlive any one run, so it is built once and shared from then on.
+	maskOnce sync.Once
+	mask     image.Image
+}
+
+// blendMask returns this variant's feathered circular blend mask, building it on first use.
+func (v *Variant) blendMask() image.Image {
+	v.maskOnce.Do(func() {
+		v.mask = createCircularMask(v.TileSize, v.TileSize, maskBlurSigma)
+	})
+
+	return v.mask
 }
 
 // Op builds this variant's operation for the given pre-detected faces.
@@ -49,7 +65,10 @@ func (v *Variant) New(
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
 ) (*Model, error) {
-	op := operation.(Op)
+	op, ok := operation.(Op)
+	if !ok {
+		return nil, errors.Errorf("expected a face recovery operation, got %T", operation)
+	}
 
 	// utils.ModelSpec is not usable here: athens takes a second "weight" input, so the tensor names come from the
 	// variant rather than from the one-in-one-out convention.
@@ -142,7 +161,7 @@ func (m *Model) Run(
 		return img, nil
 	}
 
-	result, err := RestoreFaces(ctx, m.Session, img, faces, m.variant.TileSize, m.variant.Fidelity, onProgress)
+	result, err := RestoreFaces(ctx, m.Session, img, faces, m.variant, onProgress)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to restore faces")
 	}

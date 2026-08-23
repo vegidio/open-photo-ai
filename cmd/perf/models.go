@@ -92,7 +92,7 @@ var catalog = []entry{
 	faceEntry("santorini", types.ModelTypeFaceRecovery, santorini.Op),
 }
 
-// lookup finds a model by name. A linear scan over 17 entries needs no init() and no parallel map to keep in sync.
+// lookup finds a model by name. A linear scan over the catalog needs no init() and no parallel map to keep in sync.
 func lookup(name string) (entry, bool) {
 	i := slices.IndexFunc(catalog, func(e entry) bool { return e.name == name })
 	if i < 0 {
@@ -138,6 +138,9 @@ func resolveSelection(names []string) ([]entry, error) {
 // not convert `func(float64, types.Precision) tokyo.OpUpTokyo` into `func(float64, types.Precision) types.Operation`
 // implicitly. cmd/gui/utils/operations.go solves the same problem the same way, but it lives in module `gui` and so
 // can't be shared with this one.
+//
+// What is shared is the membership: TestCatalogMatchesLibrary asserts this catalog covers exactly the models
+// opai.ModelKeys reports, so the three tables can keep their own adapters without drifting over which models exist.
 
 // scaleEntry adapts the upscale constructors. Op itself clamps the scale to 1..8; --scale's validator mirrors that so
 // the report can't claim a factor the model didn't use.

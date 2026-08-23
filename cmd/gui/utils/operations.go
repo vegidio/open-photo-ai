@@ -11,6 +11,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
+	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
 	"github.com/vegidio/open-photo-ai/models/colorization/delhi"
 	"github.com/vegidio/open-photo-ai/models/colorization/jaipur"
@@ -19,6 +20,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/denoise/malmo"
 	"github.com/vegidio/open-photo-ai/models/denoise/stockholm"
 	"github.com/vegidio/open-photo-ai/models/detection"
+	"github.com/vegidio/open-photo-ai/models/detection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
@@ -38,7 +40,10 @@ import (
 //
 //	— e.g. "fr_athens_fp32", "la_paris_0.5_fp32", "up_tokyo_4x_fp32".
 //
-// The "<type>" prefix is not consumed here (selection happens by <name>);
+// Selection is on "<type>_<name>", both segments: keying on the name alone meant an id whose halves disagree, such as
+// "up_stockholm_fp32", built a denoise operation without complaint - while opai's own dispatch consumed the prefix and
+// would have resolved it differently.
+//
 // "<paramA>" is the scale for upscale (with a "x" suffix) or the intensity for light adjustment; the final segment is
 // always the precision.
 //
@@ -53,11 +58,11 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 			return nil, errors.Errorf("invalid operation ID: %q", opId)
 		}
 
-		name := values[1]
+		key := opai.ModelKey(opId)
 
-		build, known := operationBuilders[name]
+		build, known := operationBuilders[key]
 		if !known {
-			return nil, errors.Errorf("unknown operation variant %q in ID %q", name, opId)
+			return nil, errors.Errorf("unknown operation %q in ID %q", key, opId)
 		}
 
 		operation, err := build(values, params)
@@ -75,40 +80,48 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 // the pre-detected faces that only the face-recovery models consume.
 type operationBuilder func(values []string, params guitypes.InferenceParams) (types.Operation, error)
 
-// operationBuilders maps a model name to its constructor. A table rather than a switch so that adding a model is one
-// entry here, and so the shared "<name>_<amount>_<precision>" parsing is written once instead of per model.
+// operationBuilders maps a model's "<type>_<codename>" to its constructor. A table rather than a switch so that adding
+// a model is one entry here, and so the shared "<name>_<amount>_<precision>" parsing is written once instead of per
+// model.
+//
+// The keys are opai.ModelKey values, and TestOperationBuildersMatchLibrary asserts this table covers exactly the
+// models opai can build - which is what keeps two tables in two modules from drifting apart unnoticed.
 var operationBuilders = map[string]operationBuilder{
 	// Face Recovery — "_<name>_<precision>" (faces are detected independently and supplied by the caller)
-	"athens":    faceRecoveryBuilder(athens.Op),
-	"santorini": faceRecoveryBuilder(santorini.Op),
+	"fr_athens":    faceRecoveryBuilder(athens.Op),
+	"fr_santorini": faceRecoveryBuilder(santorini.Op),
 
 	// Denoise — "_<name>_<intensity>_<precision>" (older IDs without an intensity segment default to 1.0)
-	"stockholm":  intensityBuilder(stockholm.Op),
-	"gothenburg": intensityBuilder(gothenburg.Op),
-	"malmo":      intensityBuilder(malmo.Op),
+	"dn_stockholm":  intensityBuilder(stockholm.Op),
+	"dn_gothenburg": intensityBuilder(gothenburg.Op),
+	"dn_malmo":      intensityBuilder(malmo.Op),
 
 	// Sharpen — "_<name>_<intensity>_<precision>" (older IDs without an intensity segment default to 1.0)
-	"moscow":     intensityBuilder(moscow.Op),
-	"petersburg": intensityBuilder(petersburg.Op),
-	"novgorod":   intensityBuilder(novgorod.Op),
+	"sh_moscow":     intensityBuilder(moscow.Op),
+	"sh_petersburg": intensityBuilder(petersburg.Op),
+	"sh_novgorod":   intensityBuilder(novgorod.Op),
 
 	// Light Adjustment / Color Balance — "_<name>_<intensity>_<precision>", intensity always present
-	"paris": requiredIntensityBuilder(paris.Op),
-	"rio":   requiredIntensityBuilder(rio.Op),
+	"la_paris": requiredIntensityBuilder(paris.Op),
+	"cb_rio":   requiredIntensityBuilder(rio.Op),
 
 	// Colorization — "_<name>_<precision>" (no per-run inputs)
-	"delhi":  precisionBuilder(delhi.Op),
-	"mumbai": precisionBuilder(mumbai.Op),
-	"jaipur": precisionBuilder(jaipur.Op),
+	"cl_delhi":  precisionBuilder(delhi.Op),
+	"cl_mumbai": precisionBuilder(mumbai.Op),
+	"cl_jaipur": precisionBuilder(jaipur.Op),
 
 	// Upscale — "_<name>_<scale>x_<precision>"
-	"tokyo":   scaleBuilder(tokyo.Op),
-	"kyoto":   scaleBuilder(kyoto.Op),
-	"saitama": scaleBuilder(saitama.Op),
+	"up_tokyo":   scaleBuilder(tokyo.Op),
+	"up_kyoto":   scaleBuilder(kyoto.Op),
+	"up_saitama": scaleBuilder(saitama.Op),
 
 	// Osaka parses like the others, but its Op drops the scale from the identity: SeedVR2 restores at whatever size
 	// it is handed, so one set of sessions serves every scale and the scale travels in Params instead.
-	"osaka": scaleBuilder(osaka.Op),
+	"up_osaka": scaleBuilder(osaka.Op),
+
+	// Face Detection is built by opai directly (the GUI never names it in an operation chain), but it is listed so
+	// this table stays a complete mirror of opai.ModelKeys rather than a nearly-complete one.
+	"dt_newyork": precisionBuilder(newyork.Op),
 }
 
 // Each model's Op returns its own concrete operation type, so the builders below are generic over that type rather

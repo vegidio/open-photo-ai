@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Events } from '@wailsio/runtime';
 import { AnalyticsEvent, track } from '@/analytics';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
@@ -19,15 +19,9 @@ export const App = () => {
     const isFirstTensorRT = useSettingsStore((state) => state.isFirstTensorRT);
     const setProcessorOptions = useSettingsStore((state) => state.setProcessorOptions);
 
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [isContainerReady, setIsContainerReady] = useState(false);
     const [openDownload, setOpenDownload] = useState(false);
     const [downloadError, setDownloadError] = useState(false);
     const [openTensorRT, setOpenTensorRT] = useState(false);
-
-    useEffect(() => {
-        if (containerRef.current) setIsContainerReady(true);
-    }, []);
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: N/A
     useEffect(() => {
@@ -102,10 +96,10 @@ export const App = () => {
             <Navbar />
 
             <main className='flex flex-1 min-h-0 flex-row'>
-                <div id='preview_filelist' ref={containerRef} className='flex-1 relative overflow-hidden'>
+                <div id='preview_filelist' className='flex-1 relative overflow-hidden'>
                     <Preview className='h-[calc(100%-48px)]' />
 
-                    {isContainerReady && <Drawer containerRef={containerRef} />}
+                    <Drawer />
                 </div>
 
                 <Sidebar className='w-64 h-full' />

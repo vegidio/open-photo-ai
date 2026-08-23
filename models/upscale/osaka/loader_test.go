@@ -1,6 +1,7 @@
 package osaka
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/vegidio/open-photo-ai/types"
@@ -45,11 +46,5 @@ func TestProfileDeclaresTheGraphDynamic(t *testing.T) {
 }
 
 func contains(eps []types.ExecutionProvider, want types.ExecutionProvider) bool {
-	for _, ep := range eps {
-		if ep == want {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(eps, want)
 }

@@ -132,8 +132,8 @@
                 "prefix": "Präfix",
                 "suffix": "Suffix",
                 "allowOverwrite": "Überschreiben zulassen?",
-                "sameLocationOverwrite": "Wenn Speicherort und Dateiendung identisch sind, wird Ihre Originaldatei überschrieben. Das lässt sich nicht rückgängig machen.",
-                "sameLocationRename": "Wenn Speicherort und Dateiendung identisch sind, wird an neue Dateinamen eine Nummer angehängt, statt das Original zu überschreiben."
+                "sameLocationOverwrite": "Bei gleichem Ordner und gleicher Dateiendung wird Ihre Originaldatei überschrieben. Das lässt sich nicht rückgängig machen.",
+                "sameLocationRename": "Bei gleichem Ordner und gleicher Dateiendung bekommen neue Dateien eine Nummer, statt das Original zu überschreiben."
             },
             "format": {
                 "title": "Format",

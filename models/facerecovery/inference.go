@@ -5,6 +5,7 @@ import (
 	"image"
 
 	"github.com/cockroachdb/errors"
+	"github.com/disintegration/imaging"
 	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/detection"
 	"github.com/vegidio/open-photo-ai/types"
@@ -19,8 +20,7 @@ func RestoreFaces(
 	session *utils.Session,
 	img image.Image,
 	faces []detection.Face,
-	tileSize int,
-	fidelity float32,
+	variant *Variant,
 	onProgress types.InferenceProgress,
 ) (image.Image, error) {
 	// Nothing to restore; return the image untouched (also avoids a divide-by-zero in the progress step below).
@@ -28,7 +28,9 @@ func RestoreFaces(
 		return img, nil
 	}
 
-	mask := createCircularMask(tileSize, tileSize, maskBlurSigma)
+	tileSize := variant.TileSize
+	fidelity := variant.Fidelity
+	mask := variant.blendMask()
 
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
@@ -40,9 +42,10 @@ func RestoreFaces(
 	total := 0.2
 	step := 0.8 / float64(len(faces)*2)
 
-	// This result image will later be cloned in the blendFace function,
-	// so there's no risk any changes downstream will affect the original image
-	result := img
+	// One clone for the whole run: every face is then composited into this buffer in place. The caller's image is
+	// never written to, which is the guarantee the clone is here for - it just no longer costs a full-frame copy per
+	// face to keep it.
+	result := imaging.Clone(img)
 
 	for _, face := range faces {
 		if err := ctx.Err(); err != nil {
@@ -62,7 +65,7 @@ func RestoreFaces(
 			onProgress(total)
 		}
 
-		result = blendFace(result, restored, mask, transform, face.BoundingBox, tileSize)
+		blendFaceInto(result, restored, mask, transform, face.BoundingBox, tileSize)
 
 		if onProgress != nil {
 			total += step
@@ -97,36 +100,30 @@ func restoreSingleFace(
 func runInference(session *utils.Session, aligned image.Image, tileSize int, fidelity float32) (image.Image, error) {
 	inputData := utils.ImageToCHW(aligned, false, true)
 
-	inputTensor, err := ort.NewTensor(ort.NewShape(1, 3, int64(tileSize), int64(tileSize)), inputData)
+	shape := ort.NewShape(1, 3, int64(tileSize), int64(tileSize))
+
+	inputTensor, err := ort.NewTensor(shape, inputData)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create input tensor")
 	}
 	defer inputTensor.Destroy()
 
-	outputTensor, err := ort.NewEmptyTensor[float32](ort.NewShape(1, 3, int64(tileSize), int64(tileSize)))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create output tensor")
-	}
-	defer outputTensor.Destroy()
+	inputs := []ort.Value{inputTensor}
 
 	if fidelity >= 0 {
-		weightTensor, err := ort.NewTensor(ort.NewShape(1), []float32{fidelity})
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to create weight tensor")
+		weightTensor, wErr := ort.NewTensor(ort.NewShape(1), []float32{fidelity})
+		if wErr != nil {
+			return nil, errors.Wrap(wErr, "failed to create weight tensor")
 		}
 		defer weightTensor.Destroy()
 
-		err = session.Run([]ort.Value{inputTensor, weightTensor}, []ort.Value{outputTensor})
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to run inference")
-		}
-	} else {
-		err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor})
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to run inference")
-		}
+		inputs = append(inputs, weightTensor)
 	}
 
-	outputData := outputTensor.GetData()
+	outputData, err := utils.RunSession(session, inputs, shape)
+	if err != nil {
+		return nil, err
+	}
+
 	return utils.CHWToImage(outputData, tileSize, tileSize, true), nil
 }

@@ -26,9 +26,86 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
+  # Every build job below waits on these two. A tag is the point of no return - it is what publishes a release - so a
+  # suite that only ran after the binaries were built would be telling us about a broken release rather than
+  # preventing one.
+
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v5
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      # The GTK and WebKit headers are for cmd/gui: its packages import the Wails runtime, so compiling its tests needs
+      # the same system libraries the GUI build does. build-essential is for cgo, which -race requires.
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+          pnpm install -g @go-task/cli
+
+      # `task test` rather than a `go test` line here, so the workspace has one definition of what its tests are - it
+      # covers all four modules and explains why -race is not optional for this codebase.
+      - name: Run Go tests
+        run: task test
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cmd/gui/frontend
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v5
+
+      # Before setup-node, which needs pnpm already on PATH to resolve its store for the cache.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: cmd/gui/frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Type errors would surface later anyway - `pnpm build` is `tsc && vite build` - but failing here names the
+      # problem instead of burying it in a build log five jobs deep.
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      # Scoped to src: the generated bindings/ are excluded by biome.json, and two config files at the package root
+      # (vite.config.ts, tsconfig.node.json) have pre-existing formatting deviations that are not this pipeline's to
+      # fix. Widen this to `biome ci .` once those are formatted.
+      - name: Lint
+        run: pnpm exec biome ci src
+
+      - name: Run frontend tests
+        run: pnpm test
+
   build-linux-amd64:
     runs-on: ubuntu-latest
-    needs: [version]
+    needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
       OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}
@@ -79,7 +156,7 @@ jobs:
 
   build-linux-arm64:
     runs-on: ubuntu-24.04-arm
-    needs: [version]
+    needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
       OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}
@@ -130,7 +207,7 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
-    needs: [version]
+    needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
       OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}
@@ -176,7 +253,7 @@ jobs:
 
   build-windows-amd64:
     runs-on: windows-latest
-    needs: [version]
+    needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
       OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}
@@ -226,7 +303,7 @@ jobs:
 
   build-windows-arm64:
     runs-on: windows-11-arm
-    needs: [version]
+    needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
       OTEL_HEADER_AUTH: ${{ secrets.OTEL_HEADER_AUTH }}

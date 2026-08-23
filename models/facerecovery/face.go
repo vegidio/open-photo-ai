@@ -73,11 +73,11 @@ func createCircularMask(width, height int, blurSigma float64) image.Image {
 	innerRadiusSq := innerRadius * innerRadius
 	outerRadiusSq := outerRadius * outerRadius
 
-	for y := 0; y < height; y++ {
+	for y := range height {
 		dy := (float64(y) - centerY) * invCenterY
 		dySq := dy * dy
 
-		for x := 0; x < width; x++ {
+		for x := range width {
 			dx := (float64(x) - centerX) * invCenterX
 			distanceSq := dx*dx + dySq
 
@@ -108,10 +108,14 @@ func createCircularMask(width, height int, blurSigma float64) image.Image {
 	return mask
 }
 
-// blendFace blends a restored face back into the original image using forward affine transform
-func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbox detection.RectF, tileSize int) image.Image {
-	result := imaging.Clone(original)
-	origBounds := original.Bounds()
+// blendFaceInto blends a restored face into dst, in place, using the forward affine transform.
+//
+// In place rather than onto a copy: this used to clone the whole image per face, so a group photo paid a full-frame
+// allocation for every face in it just to write a few 512x512 regions. Each destination pixel is read (as the
+// unrestored background) and written in the same iteration, so reading and writing one buffer is safe - and it
+// preserves the existing behaviour of each face blending over the faces already composited before it.
+func blendFaceInto(dst *image.NRGBA, restored, mask image.Image, transform AffineMatrix, bbox detection.RectF, tileSize int) {
+	origBounds := dst.Bounds()
 
 	bboxWidth := bbox.Max.X - bbox.Min.X
 	bboxHeight := bbox.Max.Y - bbox.Min.Y
@@ -133,11 +137,11 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 	// the bulk of the interface dispatch from the blend.
 	maskSrc := newSampler(mask)
 	restoredSrc := newSampler(restored)
-	originalSrc := newSampler(original)
+	originalSrc := newSampler(dst)
 
 	// Get direct access to pixel buffer for faster writes
-	stride := result.Stride
-	pixels := result.Pix
+	stride := dst.Stride
+	pixels := dst.Pix
 
 	// Blend the restored face back using forward transform for both the face and its mask. The mask lives in aligned
 	// (tileSize x tileSize) space, which is exactly where the forward transform maps each destination pixel — so we
@@ -178,8 +182,6 @@ func blendFace(original, restored, mask image.Image, transform AffineMatrix, bbo
 			}
 		}
 	}
-
-	return result
 }
 
 // region - Private functions
@@ -193,7 +195,7 @@ func calculateSimilarityTransform(src, dst []detection.PointF) AffineMatrix {
 	numPoints := len(src)
 
 	var srcMeanX, srcMeanY, dstMeanX, dstMeanY float32
-	for i := 0; i < numPoints; i++ {
+	for i := range numPoints {
 		srcMeanX += src[i].X
 		srcMeanY += src[i].Y
 		dstMeanX += dst[i].X
@@ -209,7 +211,7 @@ func calculateSimilarityTransform(src, dst []detection.PointF) AffineMatrix {
 	var sXX, sXY, sYY float32
 	var dXsX, dXsY, dYsX, dYsY float32
 
-	for i := 0; i < numPoints; i++ {
+	for i := range numPoints {
 		sX := src[i].X - srcMeanX
 		sY := src[i].Y - srcMeanY
 

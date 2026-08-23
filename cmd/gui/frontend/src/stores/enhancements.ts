@@ -61,7 +61,9 @@ export const useEnhancementStore = create(
                     // Applied in ENHANCEMENT_ORDER, the same order the add menu offers them in — the two must agree,
                     // so they read from one list rather than each keeping their own copy. An unknown prefix sorts last.
                     const getPriority = (op: Operation) => {
-                        const index = ENHANCEMENT_ORDER.indexOf(getEnhancementType(op.id));
+                        const type = getEnhancementType(op.id);
+                        const index = type ? ENHANCEMENT_ORDER.indexOf(type) : -1;
+
                         return index < 0 ? ENHANCEMENT_ORDER.length : index;
                     };
 

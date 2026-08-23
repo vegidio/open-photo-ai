@@ -47,12 +47,14 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const disabledFaces = useFileDisabledFaces(file);
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
 
+    // An id whose prefix is not a known enhancement renders as an unnamed row rather than throwing: it can only come
+    // from a stale persisted operation or a backend the UI is older than, neither of which is worth a crash.
     const type = getEnhancementType(op.id);
-    const enhancement = ENHANCEMENTS[type];
-    const OptionsComponent = OPTIONS[type];
+    const enhancement = type && ENHANCEMENTS[type];
+    const OptionsComponent = type && OPTIONS[type];
 
     const name = enhancement ? t(enhancement.nameKey) : '';
-    const info = enhancement ? opInfo(t, op, type, facesLabel(t, faces.length, disabledFaces.size)) : '';
+    const info = type && enhancement ? opInfo(t, op, type, facesLabel(t, faces.length, disabledFaces.size)) : '';
 
     const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
     const open = Boolean(anchorEl);
@@ -68,7 +70,7 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
     const onRemove = () => {
         if (file) {
             removeEnhancement(file, op.id);
-            track(AnalyticsEvent.EnhancementRemoved, { type });
+            track(AnalyticsEvent.EnhancementRemoved, { type: type ?? 'unknown' });
         }
     };
 

@@ -93,7 +93,10 @@ func (v *Variant) New(
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
 ) (*Model, error) {
-	op := operation.(Op)
+	op, ok := operation.(Op)
+	if !ok {
+		return nil, errors.Errorf("expected an upscale operation, got %T", operation)
+	}
 
 	if v.Diffusion != nil {
 		return v.newDiffusion(ctx, op, ep, onProgress)

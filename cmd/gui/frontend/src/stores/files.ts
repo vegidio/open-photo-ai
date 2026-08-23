@@ -1,10 +1,21 @@
+import { enableMapSet } from 'immer';
 import { immer } from 'zustand/middleware/immer';
 import { create } from 'zustand/react';
 import type { File } from '@/bindings/gui/types';
 
+enableMapSet();
+
 type FileStore = {
     files: File[];
     selectedFiles: File[];
+
+    // The paths in selectedFiles, kept alongside it purely so a membership test is O(1).
+    //
+    // Zustand re-runs every subscriber's selector on every store write, and each drawer item subscribes with its own
+    // "am I selected?" check. Scanning selectedFiles made one "select all" cost O(n^2) comparisons on the click's
+    // synchronous path - a quarter of a million of them at 500 files. Every writer below updates both.
+    selectedPaths: Set<string>;
+
     currentIndex: number;
 
     setCurrentIndex: (index: number) => void;
@@ -21,6 +32,7 @@ export const useFileStore = create(
     immer<FileStore>((set, get) => ({
         files: [],
         selectedFiles: [],
+        selectedPaths: new Set<string>(),
         currentIndex: 0,
 
         setCurrentIndex: (index: number) => {
@@ -30,8 +42,8 @@ export const useFileStore = create(
         },
 
         addFiles: (files: File[]) => {
-            const wasEmpty = get().files.length === 0;
             const oldLength = get().files.length;
+            const wasEmpty = oldLength === 0;
 
             set((state) => {
                 // A Set of the existing paths, rather than a scan per incoming file: dropping a folder onto a long
@@ -64,6 +76,10 @@ export const useFileStore = create(
 
                 state.files = state.files.filter((f) => f.Path !== file.Path);
 
+                if (state.selectedPaths.delete(file.Path)) {
+                    state.selectedFiles = state.selectedFiles.filter((f) => f.Path !== file.Path);
+                }
+
                 if (state.files.length === 0) {
                     state.currentIndex = 0;
                 } else if (removedIndex < state.currentIndex) {
@@ -76,15 +92,16 @@ export const useFileStore = create(
 
         addSelectedFile: (file: File) => {
             set((state) => {
-                const exists = state.selectedFiles.some((existingFile) => existingFile.Path === file.Path);
-                if (!exists) state.selectedFiles.push(file);
+                if (state.selectedPaths.has(file.Path)) return;
+
+                state.selectedFiles.push(file);
+                state.selectedPaths.add(file.Path);
             });
         },
 
         removeSelectedFile: (path: string) => {
             set((state) => {
-                const removedIndex = state.selectedFiles.findIndex((file) => file.Path === path);
-                if (removedIndex === -1) return;
+                if (!state.selectedPaths.delete(path)) return;
 
                 state.selectedFiles = state.selectedFiles.filter((file) => file.Path !== path);
             });
@@ -92,13 +109,17 @@ export const useFileStore = create(
 
         selectAll: () => {
             set((state) => {
-                state.selectedFiles = state.files;
+                // A copy, not an alias. Assigning state.files directly left both fields pointing at one array, so
+                // "these are two independent lists" quietly stopped being true.
+                state.selectedFiles = [...state.files];
+                state.selectedPaths = new Set(state.files.map((file) => file.Path));
             });
         },
 
         unselectAll: () => {
             set((state) => {
                 state.selectedFiles = [];
+                state.selectedPaths = new Set();
             });
         },
 
@@ -106,6 +127,7 @@ export const useFileStore = create(
             set((state) => {
                 state.files = [];
                 state.selectedFiles = [];
+                state.selectedPaths = new Set();
                 state.currentIndex = 0;
             });
         },

@@ -182,13 +182,13 @@ func TestAbFromRgbNeutralGray(t *testing.T) {
 	const size = 8
 	plane := size * size
 	data := make([]float32, 3*plane)
-	for i := 0; i < plane; i++ {
+	for i := range plane {
 		v := float32(i) / float32(plane)
 		data[i], data[plane+i], data[2*plane+i] = v, v, v
 	}
 
 	aPlane, bPlane := abFromRgb(data, size)
-	for i := 0; i < plane; i++ {
+	for i := range plane {
 		if math.Abs(float64(aPlane[i])) > 0.01 || math.Abs(float64(bPlane[i])) > 0.01 {
 			t.Fatalf("index %d: gray produced chroma (%v, %v)", i, aPlane[i], bPlane[i])
 		}

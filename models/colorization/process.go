@@ -52,32 +52,18 @@ func Process(ctx context.Context, session *utils.Session, img image.Image, sp Sp
 	}
 
 	inputShape := ort.NewShape(1, 3, int64(sp.Size), int64(sp.Size))
-	inputTensor, err := ort.NewTensor(inputShape, inputData)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create input tensor")
-	}
-	defer inputTensor.Destroy()
-
 	outputShape := ort.NewShape(1, int64(sp.OutChannels), int64(sp.Size), int64(sp.Size))
-	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
+
+	outputData, err := utils.RunUnary(session, inputData, inputShape, outputShape)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create output tensor")
-	}
-	defer outputTensor.Destroy()
-
-	if err = ctx.Err(); err != nil {
-		return nil, errors.Wrap(err, "context cancelled")
-	}
-
-	if err = session.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor}); err != nil {
-		return nil, errors.Wrap(err, "failed to run inference")
+		return nil, err
 	}
 
 	if err = ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	aPlane, bPlane := sp.Chroma(outputTensor.GetData(), sp.Size)
+	aPlane, bPlane := sp.Chroma(outputData, sp.Size)
 
 	return compose(img, aPlane, bPlane, sp.Size), nil
 }
@@ -110,14 +96,8 @@ func compose(img image.Image, aPlane, bPlane []float32, srcSize int) image.Image
 			if sy < 0 {
 				sy = 0
 			}
-			y0 := int(sy)
-			if y0 > srcSize-1 {
-				y0 = srcSize - 1
-			}
-			y1 := y0 + 1
-			if y1 > srcSize-1 {
-				y1 = srcSize - 1
-			}
+			y0 := min(int(sy), srcSize-1)
+			y1 := min(y0+1, srcSize-1)
 			fy := float32(sy - float64(y0))
 
 			rowTop := y0 * srcSize
@@ -201,15 +181,8 @@ func sampleAxis(srcLen, dstLen int) (lo, hi []int, frac []float32) {
 			s = 0
 		}
 
-		i0 := int(s)
-		if i0 > srcLen-1 {
-			i0 = srcLen - 1
-		}
-
-		i1 := i0 + 1
-		if i1 > srcLen-1 {
-			i1 = srcLen - 1
-		}
+		i0 := min(int(s), srcLen-1)
+		i1 := min(i0+1, srcLen-1)
 
 		lo[i] = i0
 		hi[i] = i1

@@ -156,7 +156,7 @@ func restoreRegion(
 	latentW, latentH := width/vaeStride, height/vaeStride
 	latentPlane := latentW * latentH
 
-	cond, err := runUnary(m.Graph(roleEncoder),
+	cond, err := utils.RunUnary(m.Graph(roleEncoder),
 		pixels,
 		ort.NewShape(1, 3, int64(height), int64(width)),
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)))
@@ -177,7 +177,7 @@ func restoreRegion(
 
 	denoised := schedulerStep(prediction, noise)
 
-	out, err := runUnary(m.Graph(roleDecoder),
+	out, err := utils.RunUnary(m.Graph(roleDecoder),
 		denoised,
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)),
 		ort.NewShape(1, 3, int64(height), int64(width)))
@@ -207,17 +207,6 @@ func schedulerStep(prediction, noise []float32) []float32 {
 	return out
 }
 
-// runUnary runs a session that takes one tensor and returns one.
-func runUnary(session *utils.Session, in []float32, inShape, outShape ort.Shape) ([]float32, error) {
-	inTensor, err := ort.NewTensor(inShape, in)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create the input tensor")
-	}
-	defer inTensor.Destroy()
-
-	return runSession(session, []ort.Value{inTensor}, outShape)
-}
-
 // runStep runs the diffusion transformer, which takes the packed latent and the timestep.
 func runStep(session *utils.Session, vidInput []float32, timestep float32, inShape, outShape ort.Shape) ([]float32, error) {
 	vidTensor, err := ort.NewTensor(inShape, vidInput)
@@ -232,23 +221,5 @@ func runStep(session *utils.Session, vidInput []float32, timestep float32, inSha
 	}
 	defer stepTensor.Destroy()
 
-	return runSession(session, []ort.Value{vidTensor, stepTensor}, outShape)
-}
-
-func runSession(session *utils.Session, inputs []ort.Value, outShape ort.Shape) ([]float32, error) {
-	outTensor, err := ort.NewEmptyTensor[float32](outShape)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create the output tensor")
-	}
-	defer outTensor.Destroy()
-
-	if err = session.Run(inputs, []ort.Value{outTensor}); err != nil {
-		return nil, errors.Wrap(err, "failed to run the session")
-	}
-
-	// The tensor's buffer is freed by the deferred Destroy, so the data has to be copied out before returning.
-	out := make([]float32, len(outTensor.GetData()))
-	copy(out, outTensor.GetData())
-
-	return out, nil
+	return utils.RunSession(session, []ort.Value{vidTensor, stepTensor}, outShape)
 }

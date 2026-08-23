@@ -108,8 +108,9 @@ type ModelRegistry struct {
 	budget   [numPools]int64
 	idleTTL  time.Duration
 
+	// janitorStop is both the stop channel and the "is the sweep running?" flag: stopJanitor clears it, which is what
+	// lets a registry that was closed and reopened start a fresh janitor instead of being stuck with the dead one.
 	janitorStop chan struct{}
-	janitorOnce sync.Once
 
 	// evicting counts entries that have been removed from the map but are still leased, and so cannot be destroyed
 	// until their last user finishes. drained is non-nil exactly while evicting > 0, and is closed when the count
@@ -206,12 +207,20 @@ func (r *ModelRegistry) makeRoom(p types.MemoryPool, want int64) []*entry {
 
 	r.mu.Unlock()
 
-	if stillOver {
-		Log().Warn("model does not fit the memory budget; admitting it anyway",
-			"pool", p, "want", want, "resident", resident, "budget", budget)
-	}
+	warnOverBudget(p, want, resident, budget, stillOver)
 
 	return victims
+}
+
+// warnOverBudget reports a model admitted despite not fitting, which both the pre-build reservation and the post-build
+// install have to do. One function so the two cannot drift into describing the same event differently.
+func warnOverBudget(p types.MemoryPool, want, resident, budget int64, stillOver bool) {
+	if !stillOver {
+		return
+	}
+
+	Log().Warn("model does not fit the memory budget; admitting it anyway",
+		"pool", p, "want", want, "resident", resident, "budget", budget)
 }
 
 // lockedEvictUntilFits evicts idle models from pool p, least-recently-used first, until want more bytes fit under that
@@ -306,6 +315,15 @@ func (r *ModelRegistry) install(
 
 	r.reserved[pool] -= reserved
 
+	// The registry closed while this model was building. Filing it now would put a live session behind a DrainAll that
+	// has already walked past it, leaving it to outlive DestroyEnvironment - the exact native use-after-free the
+	// refcount exists to prevent. Hand it back as dup so the caller destroys it, same as losing an install race.
+	if r.closed {
+		r.mu.Unlock()
+
+		return nil, model, nil
+	}
+
 	if incumbent, ok := r.entries[key]; ok {
 		lease = r.lockedLease(incumbent)
 		r.mu.Unlock()
@@ -334,10 +352,7 @@ func (r *ModelRegistry) install(
 
 	r.mu.Unlock()
 
-	if stillOver {
-		Log().Warn("model does not fit the memory budget; admitting it anyway",
-			"pool", pool, "want", bytes, "resident", resident, "budget", budget)
-	}
+	warnOverBudget(pool, bytes, resident, budget, stillOver)
 
 	return lease, nil, trim
 }
@@ -514,29 +529,45 @@ func (r *ModelRegistry) Available(p types.MemoryPool) int64 {
 // StartJanitor begins the background sweep that reclaims idle models. It is safe to call more than once; only the
 // first call starts a goroutine.
 func (r *ModelRegistry) StartJanitor() {
-	r.janitorOnce.Do(func() {
-		stop := make(chan struct{})
+	r.mu.Lock()
 
-		r.mu.Lock()
-		r.janitorStop = stop
+	if r.janitorStop != nil {
 		r.mu.Unlock()
+		return
+	}
 
-		// The goroutine closes over the local rather than reading r.janitorStop, so stopJanitor can clear the field
-		// without racing the select below.
-		go func() {
-			ticker := time.NewTicker(janitorInterval)
-			defer ticker.Stop()
+	stop := make(chan struct{})
+	r.janitorStop = stop
+	r.mu.Unlock()
 
-			for {
-				select {
-				case <-stop:
-					return
-				case <-ticker.C:
-					DestroyEntries(r.sweepIdle())
-				}
+	// The goroutine closes over the local rather than reading r.janitorStop, so stopJanitor can clear the field
+	// without racing the select below.
+	go func() {
+		ticker := time.NewTicker(janitorInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				DestroyEntries(r.sweepIdle())
 			}
-		}()
-	})
+		}
+	}()
+}
+
+// Reopen lifts the shutdown latch set by Close so the registry accepts models again.
+//
+// Close is deliberately one-way for the run it ends - a model must never be filed into a registry that has already
+// been drained. Reopen exists because Initialize/Destroy is a lifecycle, not a process: an embedder reconfiguring the
+// runtime, or a test doing this repeatedly, would otherwise be left with a registry where every acquisition fails
+// with ErrRegistryClosed forever.
+func (r *ModelRegistry) Reopen() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.closed = false
 }
 
 // stopJanitor ends the background sweep. It is safe to call when the janitor was never started.

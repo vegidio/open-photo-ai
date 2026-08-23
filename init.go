@@ -16,7 +16,12 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-var destroyOnce sync.Once
+// Initialize and Destroy are a lifecycle that may run more than once in a process, so "Destroy only does something
+// once" has to mean once per Initialize rather than once ever. A plain sync.Once cannot be rearmed, hence the flag.
+var (
+	lifecycleMu sync.Mutex
+	destroyed   bool
+)
 
 // shutdownDrainTimeout bounds how long Destroy waits for in-flight inference to finish before giving up on a clean
 // ONNX teardown. A single large upscale can legitimately run for a while, so it is generous.
@@ -40,6 +45,13 @@ const shutdownDrainTimeout = 30 * time.Second
 //	defer opai.Destroy() // Clean up resources
 func Initialize(ctx context.Context, name string, onProgress types.DownloadProgress) error {
 	internal.AppName = name
+
+	// Rearm the lifecycle. A previous Destroy latched the registry closed and marked itself done; without clearing
+	// both, this call would return successfully and then fail every single acquisition with ErrRegistryClosed.
+	lifecycleMu.Lock()
+	destroyed = false
+	lifecycleMu.Unlock()
+	internal.Registry.Reopen()
 
 	onnxTag, _ := internal.ReleaseTag("onnx")
 
@@ -134,25 +146,35 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 //	}
 //	defer opai.Destroy() // Ensure cleanup on exit
 func Destroy() {
-	destroyOnce.Do(func() {
-		internal.Log().Info("destroying opai runtime")
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
 
-		if internal.ImageCache != nil {
-			internal.ImageCache.Close()
+	if destroyed {
+		return
+	}
+	destroyed = true
+
+	internal.Log().Info("destroying opai runtime")
+
+	if internal.ImageCache != nil {
+		// A failed flush loses cached results but changes nothing about the teardown, so it is logged rather than
+		// returned - Destroy has no error to give and the process is on its way out.
+		if err := internal.ImageCache.Close(); err != nil {
+			internal.Log().Warn("failed to close the image cache", "err", err)
 		}
+	}
 
-		// Tearing the ONNX environment down while a session is still running is the same use-after-free that freeing a
-		// model would be, and at shutdown there is no one left to report it. So the environment comes down only once
-		// every model is provably gone; if some work refuses to finish, leaking it is the right trade - the process is
-		// exiting anyway, and the OS reclaims everything a moment later.
-		if internal.Registry.Close(shutdownDrainTimeout) {
-			ort.DestroyEnvironment()
-			return
-		}
+	// Tearing the ONNX environment down while a session is still running is the same use-after-free that freeing a
+	// model would be, and at shutdown there is no one left to report it. So the environment comes down only once
+	// every model is provably gone; if some work refuses to finish, leaking it is the right trade - the process is
+	// exiting anyway, and the OS reclaims everything a moment later.
+	if internal.Registry.Close(shutdownDrainTimeout) {
+		ort.DestroyEnvironment()
+		return
+	}
 
-		internal.Log().Error("timed out waiting for models to be released; skipping ONNX teardown to avoid a crash",
-			"timeout", shutdownDrainTimeout)
-	})
+	internal.Log().Error("timed out waiting for models to be released; skipping ONNX teardown to avoid a crash",
+		"timeout", shutdownDrainTimeout)
 }
 
 // region - Private functions

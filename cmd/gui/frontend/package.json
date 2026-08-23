@@ -9,6 +9,7 @@
         "build": "tsc && vite build --mode production",
         "preview": "vite preview",
         "lint": "biome lint",
+        "test": "vitest run",
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
@@ -17,9 +18,9 @@
         "@emotion/styled": "11.14.1",
         "@fontsource/roboto": "5.3.0",
         "@mui/material": "9.3.1",
-        "@mui/x-tree-view": "9.11.0",
+        "@mui/x-tree-view": "9.12.0",
         "@tailwindcss/vite": "4.3.3",
-        "@wailsio/runtime": "3.0.0-beta.10",
+        "@wailsio/runtime": "3.0.0-beta.12",
         "i18next": "26.4.0",
         "immer": "11.1.18",
         "lru-cache": "11.5.2",
@@ -37,7 +38,7 @@
         "zustand": "5.0.15"
     },
     "devDependencies": {
-        "@biomejs/biome": "2.5.9",
+        "@biomejs/biome": "2.5.10",
         "@types/node": "26.2.0",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.4",
@@ -46,6 +47,7 @@
         "jiti": "2.7.0",
         "tailwind-scrollbar": "4.0.2",
         "typescript": "7.0.2",
-        "vite": "8.2.2"
+        "vite": "8.2.2",
+        "vitest": "^4.1.11"
     }
 }
