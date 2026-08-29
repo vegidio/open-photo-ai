@@ -229,8 +229,13 @@ func startRuntime() error {
 		return errors.Wrap(err, "failed to initialize ONNX Runtime")
 	}
 
-	// Disable ONNX runtime logging
-	//ort.SetEnvironmentLogLevel(ort.LoggingLevelFatal)
+	// ONNX Runtime logs from C++ to the process's stderr, which shared.SetupLogging redirects into opai.log - so this
+	// level decides how much of it is worth keeping, not how much noise reaches a terminal. Warning is the useful
+	// floor: it is where the node-assignment and provider-fallback diagnostics live, without the per-node flood that
+	// Info and Verbose produce. It has to come after InitializeEnvironment, which is what the binding checks for.
+	if err = ort.SetEnvironmentLogLevel(ort.LoggingLevelWarning); err != nil {
+		internal.Log().Warn("failed to set the ONNX Runtime log level", "err", err)
+	}
 
 	internal.Log().Info("ONNX runtime started", "runtime_path", runtimePath)
 	return nil

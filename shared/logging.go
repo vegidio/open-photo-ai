@@ -1,11 +1,11 @@
 package shared
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/DeRuina/timberjack"
@@ -20,8 +20,11 @@ import (
 //   - the OPAI library logger (via opai.SetLogger), and
 //   - the process-wide slog default (via slog.SetDefault), used by the application's own code.
 //
-// The default level is INFO; set OPAI_LOG_LEVEL=debug|info|warn|error to override. The returned io.Closer must be
-// closed on shutdown (defer c.Close()) to flush and stop the rotation worker.
+// It also captures the process's native stderr, so the log lines that ONNX Runtime writes from C++ end up in the same
+// file instead of the terminal.
+//
+// Logging is at INFO. The returned io.Closer must be closed on shutdown (defer c.Close()) to flush, stop the rotation
+// worker and put stderr back.
 func SetupLogging(appName string) (io.Closer, error) {
 	logsDir, err := fs.MkUserConfigDir(appName, "logs")
 	if err != nil {
@@ -57,29 +60,38 @@ func SetupLogging(appName string) (io.Closer, error) {
 	_, _ = writer.Write([]byte("---\n"))
 
 	logger := slog.New(slog.NewTextHandler(writer, &slog.HandlerOptions{
-		Level: ResolveLogLevel(slog.LevelInfo),
+		Level: slog.LevelInfo,
 	}))
 
 	opai.SetLogger(logger)  // activate the library logger
 	slog.SetDefault(logger) // route the app's package-level slog to the same file
 
-	return writer, nil
+	closers := []io.Closer{writer}
+
+	// ONNX Runtime logs from C++ straight to the process's stderr and its Go binding exposes no custom-logger hook, so
+	// the descriptor is the only place its output can be intercepted. Failing to do so costs nothing but ORT's lines,
+	// which is not worth failing a launch over.
+	if capture, err := startStderrCapture(logger); err == nil {
+		// Ahead of the writer: the capture's reader logs through it, so it has to stop first.
+		closers = append([]io.Closer{capture}, closers...)
+	} else {
+		logger.Warn("native stderr will not be captured into the log file", "err", err)
+	}
+
+	return multiCloser(closers), nil
 }
 
-// ResolveLogLevel maps the OPAI_LOG_LEVEL environment variable (debug|info|warn|error) to a slog level. When the
-// variable is unset or unrecognized, it returns def, letting each sink pick its own default (e.g. INFO for the log
-// file, ERROR for the Wails console).
-func ResolveLogLevel(def slog.Level) slog.Level {
-	switch strings.ToLower(os.Getenv("OPAI_LOG_LEVEL")) {
-	case "debug":
-		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
-	case "warn", "warning":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return def
+// multiCloser lets SetupLogging keep its single-io.Closer signature while owning two things that have to be torn
+// down in order. Every closer runs even if an earlier one fails, so a broken stderr restore cannot leave the log
+// file unflushed.
+type multiCloser []io.Closer
+
+func (m multiCloser) Close() error {
+	errs := make([]error, 0, len(m))
+
+	for _, c := range m {
+		errs = append(errs, c.Close())
 	}
+
+	return errors.Join(errs...)
 }

@@ -40,6 +40,10 @@ func main() {
 // exporter was never flushed.
 func run() int {
 	// TODO: Workaround for Linux to set LD_LIBRARY_PATH; I must revisit this approach in the future
+	//
+	// This has to stay ahead of SetupLogging, which redirects stderr into a pipe: descriptors survive an exec, so a
+	// re-exec from the other side would leave the new image writing into a pipe whose reader died with the old one,
+	// and the process would hang once it filled.
 	if runtime.GOOS == "linux" {
 		setLibPathAndRestart()
 	}
@@ -76,7 +80,7 @@ func run() int {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
-		LogLevel: shared.ResolveLogLevel(slog.LevelError),
+		LogLevel: slog.LevelError,
 	})
 
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{

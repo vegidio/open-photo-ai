@@ -16,6 +16,7 @@ require (
 	github.com/yalue/onnxruntime_go v1.31.0
 	golang.org/x/image v0.45.0
 	golang.org/x/sync v0.22.0
+	golang.org/x/sys v0.47.0
 	golang.org/x/text v0.41.0
 )
 
@@ -65,7 +66,6 @@ require (
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go4.org v0.0.0-20260112195520-a5071408f32f // indirect
 	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251222181119-0a764e51fe1b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251222181119-0a764e51fe1b // indirect
 	google.golang.org/grpc v1.79.3 // indirect
