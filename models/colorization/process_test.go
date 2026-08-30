@@ -63,7 +63,11 @@ func TestResizePlaneIdentity(t *testing.T) {
 	}
 }
 
-// TestResizePlaneConstant verifies interpolation of a constant plane stays constant at any output size.
+// TestResizePlaneConstant verifies interpolation of a constant plane stays constant at any output size. The weights
+// are applied as a*(1-f) + b*f rather than a lerp, so a blend of two equal samples is only constant to within float32
+// rounding — the two products round independently and their sum can land an ULP off. That form is deliberate: compose
+// uses it verbatim and TestComposeMatchesReference requires the two to agree byte-for-byte, so the tolerance belongs
+// here rather than in the arithmetic.
 func TestResizePlaneConstant(t *testing.T) {
 	src := make([]float32, 4*4)
 	for i := range src {
@@ -72,7 +76,7 @@ func TestResizePlaneConstant(t *testing.T) {
 
 	out := resizePlane(src, 4, 4, 11, 5)
 	for i, v := range out {
-		if v != 7.5 {
+		if math.Abs(float64(v-7.5)) > 1e-5 {
 			t.Fatalf("index %d: got %v, want 7.5", i, v)
 		}
 	}

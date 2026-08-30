@@ -58,7 +58,11 @@ func run() int {
 
 	slog.Info("starting Open Photo AI", "version", shared.Version, "os", runtime.GOOS, "arch", runtime.GOARCH)
 
-	otel := o11y.NewTelemetry(
+	// The Telemetry is never nil and stays safe to use and to Close even when construction fails, so an exporter that
+	// could not be installed costs this session its telemetry and nothing more - it must not stop the app from
+	// starting. The error used not to be returned at all, which made a collector that was never reachable look exactly
+	// like one that was.
+	otel, err := o11y.NewTelemetry(
 		shared.OtelEndpoint,
 		"opai",
 		shared.Version,
@@ -66,6 +70,9 @@ func run() int {
 		shared.OtelEnvironment,
 		true,
 	)
+	if err != nil {
+		slog.Warn("telemetry could not be initialised; records will be discarded this session", "err", err)
+	}
 
 	defer otel.Close()
 
@@ -106,7 +113,7 @@ func run() int {
 	defer destroyServices()
 
 	// Blocks until the application exits.
-	err := app.Run()
+	err = app.Run()
 
 	slog.Info("Open Photo AI exited")
 
@@ -171,7 +178,16 @@ func setLibPathAndRestart() {
 	libPaths = lo.Uniq(lo.Compact(libPaths))
 
 	slog.Info("re-executing with LD_LIBRARY_PATH", "paths", strings.Join(libPaths, ":"))
-	os.ReExec(fmt.Sprintf("LD_LIBRARY_PATH=%s", strings.Join(libPaths, ":")))
+
+	// On success ReExec never returns, because the process image has been replaced. An error therefore means the
+	// re-exec did not happen and startup carries on with whatever LD_LIBRARY_PATH was inherited, so the bundled NVIDIA
+	// libraries stay unfindable and the CUDA and TensorRT providers fail to attach much later, for reasons that look
+	// nothing like a failed exec at startup. It used to be discarded, which is exactly why that was hard to diagnose.
+	//
+	// log.Printf rather than slog for the same reason as addPath above: SetupLogging has not wired the file sink yet.
+	if err := os.ReExec(fmt.Sprintf("LD_LIBRARY_PATH=%s", strings.Join(libPaths, ":"))); err != nil {
+		log.Printf("could not re-execute with LD_LIBRARY_PATH; the bundled NVIDIA libraries will not be found: %v", err)
+	}
 }
 
 // maximizeOnStart maximises the window once the frontend runtime has connected, since StartState and early Maximise()
