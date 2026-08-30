@@ -12,23 +12,44 @@ import (
 // numPools is the number of types.MemoryPool values, so the per-pool counters can be plain arrays indexed by the pool.
 const numPools = 2
 
-// DefaultIdleTTL is how long an unused model stays resident before the janitor reclaims it. Long enough that a user
-// comparing models, or a batch export between images, never pays a rebuild; short enough that walking away from the
-// app gives the memory back.
+// DefaultIdleTTL is the floor on how long an unused model stays resident before the janitor reclaims it. Long enough
+// that a user comparing models, or a batch export between images, never pays a rebuild; short enough that walking away
+// from the app gives the memory back.
+//
+// It is a floor rather than the whole story because models are not equally expensive to rebuild: an upscaler is back
+// in a fifth of a second, while a colorizer whose provider has to recompile a multi-gigabyte graph costs minutes. A
+// flat TTL charges the user those minutes for stepping away from an image for five, so what a model earns above this
+// floor is derived from what it cost to build - see entry.idleTTLFor.
 const DefaultIdleTTL = 5 * time.Minute
+
+// MaxIdleTTL caps what an expensive build can buy itself. The build cost includes a first-run download, so without a
+// ceiling one slow network would pin a model for hours; the memory budget would still reclaim it under pressure, but
+// only after it had already crowded out everything else.
+const MaxIdleTTL = 30 * time.Minute
+
+// idleTTLCostFactor is how many multiples of its own build cost a model is kept idle for. Chosen so that a model
+// costing about 90 seconds to build earns roughly the full ceiling, while everything that rebuilds in under about 15
+// seconds falls back to the DefaultIdleTTL floor - which is every model shipped today except the colorizer and the
+// diffusion upscaler.
+const idleTTLCostFactor = 20
 
 // janitorInterval is how often idle models are swept for. It is much shorter than DefaultIdleTTL so that the actual
 // eviction time isn't quantised to the TTL.
 const janitorInterval = 30 * time.Second
 
-// leaseLeakAfter is how long a model may be continuously held before the janitor starts reporting it. Nothing in the
-// app legitimately holds one this long, so it is the observable signature of a lease that was never released - the one
-// new bug class the refcounting introduces.
+// leaseLeakAfter is how long a model may be held with no sign of life before the janitor starts reporting it. A
+// leaked lease pins its model for the rest of the process, which is otherwise invisible - it is the one new bug class
+// the refcounting introduces.
+//
+// "No sign of life" rather than "held", because a legitimate run can last far longer than this: an hour-plus diffusion
+// upscale is normal. Lease.Touch is what separates the two, stamping lastUsed as the run reports progress, so the
+// elapsed time this is compared against means "since we last heard from it" and not "since it was built".
 const leaseLeakAfter = 15 * time.Minute
 
 // entry is one resident model.
 //
-// key/id/ep/model/bytes are immutable after construction; refs, lastUsed and evicted are guarded by ModelRegistry.mu.
+// key/id/ep/model/bytes/buildCost are immutable after construction; refs, lastUsed and evicted are guarded by
+// ModelRegistry.mu.
 type entry struct {
 	key   string
 	id    string                  // operation id, for logging
@@ -37,9 +58,24 @@ type entry struct {
 	model any
 	bytes int64 // measured resident model-file bytes
 
+	// buildCost is how long create took, which is what rebuilding this model would cost the user. It is what buys an
+	// expensive model a longer idle TTL, and what breaks the tie when two equally idle models compete for the same
+	// bytes.
+	buildCost time.Duration
+
 	refs     int       // outstanding leases; > 0 means "in use, never destroy"
-	lastUsed time.Time // stamped on release, not acquire, so a long batch never looks idle mid-run
+	lastUsed time.Time // stamped on release and by Touch, not on acquire, so a long batch never looks idle mid-run
 	evicted  bool      // removed from the map; the last Release destroys it
+}
+
+// idleTTLFor reports how long this entry may sit unused before the janitor reclaims it: base at a minimum, more when
+// it was expensive to build, never more than MaxIdleTTL.
+//
+// The asymmetry is deliberate. Keeping a cheap model too long wastes memory that the budget will reclaim anyway;
+// dropping an expensive one too early costs the user minutes of rebuild in front of a progress bar, for a gap they
+// experienced as a short pause.
+func (e *entry) idleTTLFor(base time.Duration) time.Duration {
+	return min(max(base, e.buildCost*idleTTLCostFactor), MaxIdleTTL)
 }
 
 // Lease is a live borrow of a model, keeping it alive until released.
@@ -55,6 +91,23 @@ type Lease struct {
 // Model returns the leased model. It must not be used after Release.
 func (l *Lease) Model() any {
 	return l.e.model
+}
+
+// Touch records that the leased model is still doing something, for the benefit of the janitor's leaked-lease check.
+//
+// It is purely diagnostic: a leased entry is skipped by every eviction path regardless of its timestamp, and Release
+// re-stamps it anyway. What it changes is what elapsed time means for a held entry in sweepIdle - "since we last heard
+// from it" rather than "since it was built" - which is the difference between reporting a leak and libelling an
+// hour-long upscale that is working perfectly.
+//
+// Callers on a hot path must throttle: this takes the registry lock, and the progress callbacks that drive it fire
+// once per tile.
+func (l *Lease) Touch() {
+	if l == nil || l.released.Load() {
+		return
+	}
+
+	l.reg.touch(l.e)
 }
 
 // Release returns the lease. It is idempotent, so a stray double-defer is harmless, and it destroys the model when it
@@ -267,7 +320,12 @@ func (r *ModelRegistry) lockedOverBudget(p types.MemoryPool, want int64) bool {
 	return r.resident[p]+r.reserved[p]+want > r.budget[p]
 }
 
-// lockedOldestIdle returns the least recently used unleased entry in pool p, or nil if there is none.
+// lockedOldestIdle returns the least recently used unleased entry in pool p, or nil if there is none. Entries that
+// were last used at the same instant are separated by what they cost to build, cheapest first.
+//
+// The tie-break is not a nicety: a chain releases every lease it holds in one go, so all the models of one enhancement
+// sequence share a lastUsed down to the nanosecond. Without it the victim among them is chosen by Go's map iteration
+// order, which can throw away the colorizer that costs minutes to rebuild and keep the denoiser that costs a second.
 //
 // A linear scan is deliberate: the registry holds well under twenty models, so the bookkeeping a heap or an intrusive
 // list would need costs more than it saves. Callers must hold mu.
@@ -279,12 +337,22 @@ func (r *ModelRegistry) lockedOldestIdle(p types.MemoryPool) *entry {
 			continue
 		}
 
-		if oldest == nil || e.lastUsed.Before(oldest.lastUsed) {
+		if oldest == nil || cheaperVictim(e, oldest) {
 			oldest = e
 		}
 	}
 
 	return oldest
+}
+
+// cheaperVictim reports whether evicting candidate would cost the user less than evicting incumbent: older first, and
+// among equally old entries the one that is quicker to rebuild.
+func cheaperVictim(candidate, incumbent *entry) bool {
+	if candidate.lastUsed.Equal(incumbent.lastUsed) {
+		return candidate.buildCost < incumbent.buildCost
+	}
+
+	return candidate.lastUsed.Before(incumbent.lastUsed)
 }
 
 // releaseReservation gives back bytes promised to a build that never installed.
@@ -304,12 +372,17 @@ func (r *ModelRegistry) releaseReservation(p types.MemoryPool, want int64) {
 //
 // trim carries any models evicted because the finished model turned out larger than the pre-build estimate, which is
 // the normal case for an operation the manifest can't size ahead of time.
+//
+// buildCost is how long the caller's create took. It is recorded rather than measured here because only the caller
+// knows which of its attempts produced the model that landed - a build that failed on the GPU and succeeded on the CPU
+// would otherwise be charged both.
 func (r *ModelRegistry) install(
 	key, id string,
 	ep types.ExecutionProvider,
 	pool types.MemoryPool,
 	model any,
 	bytes, reserved int64,
+	buildCost time.Duration,
 ) (lease *Lease, dup any, trim []*entry) {
 	r.mu.Lock()
 
@@ -332,13 +405,14 @@ func (r *ModelRegistry) install(
 	}
 
 	e := &entry{
-		key:      key,
-		id:       id,
-		ep:       ep,
-		pool:     pool,
-		model:    model,
-		bytes:    bytes,
-		lastUsed: time.Now(),
+		key:       key,
+		id:        id,
+		ep:        ep,
+		pool:      pool,
+		model:     model,
+		bytes:     bytes,
+		buildCost: buildCost,
+		lastUsed:  time.Now(),
 	}
 
 	r.entries[key] = e
@@ -373,6 +447,14 @@ func (r *ModelRegistry) release(e *entry) *entry {
 	}
 
 	return nil
+}
+
+// touch stamps e as having been active just now. See Lease.Touch for why this exists.
+func (r *ModelRegistry) touch(e *entry) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	e.lastUsed = time.Now()
 }
 
 // lockedStartEvicting removes e from the map and reports whether it can be destroyed right now.
@@ -582,12 +664,12 @@ func (r *ModelRegistry) stopJanitor() {
 	}
 }
 
-// sweepIdle removes models that have gone unused for longer than the idle TTL, returning them for the caller to
-// destroy after unlocking.
+// sweepIdle removes models that have gone unused for longer than their own idle TTL - the configured one at a minimum,
+// longer for a model that was expensive to build - returning them for the caller to destroy after unlocking.
 //
-// It also reports models that have been held continuously for a very long time. Nothing in the app does that, so it
-// almost certainly means a lease was never released - which silently shrinks the budget and stops eviction working,
-// and is otherwise invisible.
+// It also reports models that have been held for a very long time without reporting progress. Nothing in the app does
+// that, so it almost certainly means a lease was never released - which silently shrinks the budget and stops eviction
+// working, and is otherwise invisible. A run that is merely long keeps itself out of this by touching its lease.
 //
 // The log lines are collected under mu and emitted after it is released. The library logger writes to a rotating file,
 // so writing one per entry while holding the lock would block every concurrent acquire and release on disk I/O - the
@@ -598,6 +680,7 @@ func (r *ModelRegistry) sweepIdle() []*entry {
 	type note struct {
 		id      string
 		elapsed time.Duration
+		ttl     time.Duration
 		refs    int
 		bytes   int64
 	}
@@ -628,11 +711,12 @@ func (r *ModelRegistry) sweepIdle() []*entry {
 			continue
 		}
 
-		if elapsed <= r.idleTTL {
+		ttl := e.idleTTLFor(r.idleTTL)
+		if elapsed <= ttl {
 			continue
 		}
 
-		evicted = append(evicted, note{id: e.id, elapsed: elapsed, bytes: e.bytes})
+		evicted = append(evicted, note{id: e.id, elapsed: elapsed, ttl: ttl, bytes: e.bytes})
 
 		if victim := r.lockedEvict(e); victim != nil {
 			victims = append(victims, victim)
@@ -649,8 +733,11 @@ func (r *ModelRegistry) sweepIdle() []*entry {
 			"op", n.id, "refs", n.refs, "held_for", n.elapsed)
 	}
 
+	// Info rather than Debug: this is the one line that explains why an operation the user just ran twice was fast the
+	// first time and slow the second. At Debug it never reached the shipped log, so a rebuild looked no different from
+	// the model simply being slow. It fires at most once per model per idle period, so it costs nothing.
 	for _, n := range evicted {
-		Log().Debug("evicting idle model", "op", n.id, "idle_for", n.elapsed, "bytes", n.bytes)
+		Log().Info("evicting idle model", "op", n.id, "idle_for", n.elapsed, "ttl", n.ttl, "bytes", n.bytes)
 	}
 
 	return victims

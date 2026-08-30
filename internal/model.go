@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"time"
+
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -145,15 +147,26 @@ func buildAndInstall(
 	}()
 
 	Log().Info("creating model", "op", id, "ep", ep)
+
+	// What this build costs is what a rebuild would cost the user, which is what decides how long the model is worth
+	// keeping resident. It is timed per attempt rather than across the whole function: a build that fails on the GPU
+	// and succeeds on the CPU must be charged only what the CPU actually took, or the failure would inflate the TTL of
+	// a model that is cheap to rebuild. It includes a first-run download, which MaxIdleTTL is the ceiling on.
+	start := time.Now()
 	model, err := create(ep)
+	buildCost := time.Since(start)
 
 	if err != nil && ep != types.ExecutionProviderCPU && errors.Is(err, ErrCreateSession) {
 		Log().Warn("model creation failed; retrying on CPU", "op", id, "ep", ep, "err", err)
 
+		start = time.Now()
 		cpuModel, cpuErr := create(types.ExecutionProviderCPU)
+		cpuCost := time.Since(start)
 
 		// Only report the downgrade once it actually worked; if the CPU fails too, the caller surfaces the error.
 		if cpuErr == nil {
+			buildCost = cpuCost
+
 			// Latch a copy, not &ep: ep is reassigned on the next line, and storing its address would leave the latch
 			// pointing at "CPU" - which would then send every CPU request down the fallback path.
 			failed := ep
@@ -188,7 +201,8 @@ func buildAndInstall(
 
 	// After a fallback this is not buildKey: the model is filed under the CPU. Waiters re-resolve the provider when
 	// they wake, see the latch, and look up that same CPU key - so the move needs no hand-off.
-	lease, dup, trim := Registry.install(registryKey(id, ep), id, ep, landed, model, residentBytes(model), estimate)
+	lease, dup, trim := Registry.install(
+		registryKey(id, ep), id, ep, landed, model, residentBytes(model), estimate, buildCost)
 
 	// install consumed whatever was still reserved, whether or not it filed the model.
 	reserved = 0

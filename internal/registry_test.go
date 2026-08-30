@@ -478,6 +478,19 @@ func acquireIn(pool types.MemoryPool, id string, bytes int64) (*Lease, error) {
 	})
 }
 
+// acquireCostly acquires id with a build that takes at least cost, so the entry lands with a measurable buildCost.
+func acquireCostly(pool types.MemoryPool, id string, bytes int64, cost time.Duration) (*Lease, error) {
+	ep := types.ExecutionProviderCPU
+	if pool == types.MemoryPoolDevice {
+		ep = types.ExecutionProviderCUDA
+	}
+
+	return AcquireModel(id, ep, func(types.ExecutionProvider) (any, error) {
+		time.Sleep(cost)
+		return &fakeModel{bytes: bytes}, nil
+	})
+}
+
 // TestBudgetEvictsLeastRecentlyUsed checks the core admission rule: when a pool is full, the model that has gone
 // unused the longest makes way, and the ones still in use never do.
 func TestBudgetEvictsLeastRecentlyUsed(t *testing.T) {
@@ -760,6 +773,171 @@ func TestIdleSweepDisabled(t *testing.T) {
 	}
 }
 
+// TestExpensiveModelOutlivesTheBaseTTL is the point of the cost-scaled TTL: a model that cost minutes to build must
+// survive an idle gap that would reclaim a cheap one, because dropping it charges the user those minutes again.
+func TestExpensiveModelOutlivesTheBaseTTL(t *testing.T) {
+	withRegistry(t)
+	Registry.SetIdleTTL(time.Millisecond)
+
+	// 10ms of build cost buys 10ms*idleTTLCostFactor, comfortably past the 1ms floor.
+	lease, err := acquireCostly(types.MemoryPoolHost, "costly", 100, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	lease.Release()
+
+	// Well past the base TTL, nowhere near the derived one.
+	time.Sleep(5 * time.Millisecond)
+
+	if victims := Registry.sweepIdle(); len(victims) != 0 {
+		t.Fatalf("swept %d expensive models after %v idle, want 0", len(victims), 5*time.Millisecond)
+	}
+
+	// Past the derived TTL too, so now it must go.
+	time.Sleep(10*time.Millisecond*idleTTLCostFactor + 20*time.Millisecond)
+
+	if victims := Registry.sweepIdle(); len(victims) != 1 {
+		t.Errorf("swept %d models once the derived TTL elapsed, want 1", len(victims))
+	}
+}
+
+// TestCheapModelStillEvictsAtTheBaseTTL guards the floor from being swallowed by the cost scaling: a model that is
+// effectively free to rebuild must still give its memory back on the configured schedule.
+func TestCheapModelStillEvictsAtTheBaseTTL(t *testing.T) {
+	withRegistry(t)
+	Registry.SetIdleTTL(time.Millisecond)
+
+	lease, err := acquireIn(types.MemoryPoolHost, "cheap", 100)
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	lease.Release()
+	time.Sleep(5 * time.Millisecond)
+
+	if victims := Registry.sweepIdle(); len(victims) != 1 {
+		t.Errorf("swept %d cheap models past the base TTL, want 1", len(victims))
+	}
+}
+
+// TestDerivedTTLIsClamped checks both ends of idleTTLFor. The ceiling is what stops a first-run download - which is
+// timed as part of the build - from pinning a model for hours.
+func TestDerivedTTLIsClamped(t *testing.T) {
+	base := 5 * time.Minute
+
+	cases := []struct {
+		name      string
+		buildCost time.Duration
+		want      time.Duration
+	}{
+		{"free build takes the floor", 0, base},
+		{"cheap build takes the floor", 200 * time.Millisecond, base},
+		{"costly build scales", 30 * time.Second, 30 * time.Second * idleTTLCostFactor},
+		{"pathological build is capped", time.Hour, MaxIdleTTL},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := &entry{buildCost: tc.buildCost}
+
+			if got := e.idleTTLFor(base); got != tc.want {
+				t.Errorf("idleTTLFor(%v) with cost %v = %v, want %v", base, tc.buildCost, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBudgetTieBreaksOnRebuildCost covers what a chain release creates: every model of one enhancement sequence is
+// released in the same instant and so shares a lastUsed. Without the tie-break the victim among them is whichever one
+// Go's map iteration reaches first, which can throw away the expensive model and keep the cheap one.
+func TestBudgetTieBreaksOnRebuildCost(t *testing.T) {
+	withRegistry(t)
+	Registry.SetBudget(types.MemoryPoolHost, 250)
+
+	cheap, err := acquireIn(types.MemoryPoolHost, "cheap", 100)
+	if err != nil {
+		t.Fatalf("acquire cheap: %v", err)
+	}
+
+	costly, err := acquireCostly(types.MemoryPoolHost, "costly", 100, 5*time.Millisecond)
+	if err != nil {
+		t.Fatalf("acquire costly: %v", err)
+	}
+
+	// Released together, exactly as a chain does, then forced to the same instant so the tie-break is what decides.
+	cheap.Release()
+	costly.Release()
+
+	now := time.Now()
+
+	Registry.mu.Lock()
+	for _, e := range Registry.entries {
+		e.lastUsed = now
+	}
+	Registry.mu.Unlock()
+
+	third, err := acquireIn(types.MemoryPoolHost, "third", 100)
+	if err != nil {
+		t.Fatalf("acquire third: %v", err)
+	}
+
+	defer third.Release()
+
+	Registry.mu.Lock()
+	_, cheapSurvived := Registry.entries[registryKey("cheap", types.ExecutionProviderCPU)]
+	_, costlySurvived := Registry.entries[registryKey("costly", types.ExecutionProviderCPU)]
+	Registry.mu.Unlock()
+
+	if cheapSurvived {
+		t.Error("the cheap-to-rebuild model survived; it should have been the victim")
+	}
+
+	if !costlySurvived {
+		t.Error("the expensive-to-rebuild model was evicted over an equally idle cheap one")
+	}
+}
+
+// TestTouchKeepsALongRunFromLookingLeaked covers the janitor's leaked-lease report. A run that lasts longer than
+// leaseLeakAfter is normal for the diffusion upscaler, so what separates it from a genuine leak is whether it is still
+// reporting progress.
+func TestTouchKeepsALongRunFromLookingLeaked(t *testing.T) {
+	withRegistry(t)
+
+	lease, err := acquireIn(types.MemoryPoolHost, "running", 100)
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	defer lease.Release()
+
+	// Backdate the entry to what a long-running model looks like to the sweep.
+	Registry.mu.Lock()
+	e := Registry.entries[registryKey("running", types.ExecutionProviderCPU)]
+	e.lastUsed = time.Now().Add(-2 * leaseLeakAfter)
+	Registry.mu.Unlock()
+
+	lease.Touch()
+
+	Registry.mu.Lock()
+	elapsed := time.Since(e.lastUsed)
+	refs := e.refs
+	Registry.mu.Unlock()
+
+	if elapsed > leaseLeakAfter {
+		t.Errorf("elapsed = %v after Touch, want it below the leak threshold %v", elapsed, leaseLeakAfter)
+	}
+
+	// Touching must not make a leased model evictable - that guarantee belongs to the refcount, not the timestamp.
+	if refs != 1 {
+		t.Errorf("refs = %d after Touch, want 1", refs)
+	}
+
+	if victims := Registry.sweepIdle(); len(victims) != 0 {
+		t.Errorf("swept %d leased models, want 0", len(victims))
+	}
+}
+
 // TestResidentAccountingReturnsToZero guards the counter arithmetic across every path that moves bytes. A leak here
 // silently shrinks the usable budget until eviction stops working, with nothing to show for it.
 func TestResidentAccountingReturnsToZero(t *testing.T) {
@@ -899,12 +1077,12 @@ func TestInstallAdoptsIncumbent(t *testing.T) {
 	incumbent := &fakeModel{bytes: 10}
 	loser := &fakeModel{bytes: 10}
 
-	first, dup, _ := Registry.install("op", "op", types.ExecutionProviderCPU, types.MemoryPoolHost, incumbent, 10, 0)
+	first, dup, _ := Registry.install("op", "op", types.ExecutionProviderCPU, types.MemoryPoolHost, incumbent, 10, 0, 0)
 	if dup != nil {
 		t.Fatal("the first install should not report a duplicate")
 	}
 
-	second, dup, _ := Registry.install("op", "op", types.ExecutionProviderCPU, types.MemoryPoolHost, loser, 10, 0)
+	second, dup, _ := Registry.install("op", "op", types.ExecutionProviderCPU, types.MemoryPoolHost, loser, 10, 0, 0)
 	if dup == nil {
 		t.Fatal("the second install should have reported the loser as a duplicate")
 	}
@@ -933,7 +1111,7 @@ func TestInstallTrimsWhenTheModelOutgrewItsEstimate(t *testing.T) {
 
 	// An idle neighbour, installed and released so it is eligible for eviction.
 	idle := &fakeModel{bytes: 60}
-	lease, _, trim := Registry.install("idle", "idle", types.ExecutionProviderCPU, types.MemoryPoolHost, idle, 60, 0)
+	lease, _, trim := Registry.install("idle", "idle", types.ExecutionProviderCPU, types.MemoryPoolHost, idle, 60, 0, 0)
 
 	if len(trim) != 0 {
 		t.Fatalf("the first install fits the budget and should trim nothing, got %d", len(trim))
@@ -944,7 +1122,7 @@ func TestInstallTrimsWhenTheModelOutgrewItsEstimate(t *testing.T) {
 	// The manifest said this model was free, so nothing was reserved for it; charging its real 60 bytes takes the pool
 	// to 120 against a ceiling of 100.
 	big := &fakeModel{bytes: 60}
-	bigLease, dup, trim := Registry.install("big", "big", types.ExecutionProviderCPU, types.MemoryPoolHost, big, 60, 0)
+	bigLease, dup, trim := Registry.install("big", "big", types.ExecutionProviderCPU, types.MemoryPoolHost, big, 60, 0, 0)
 
 	if dup != nil {
 		t.Fatal("install reported a duplicate where there was no race")

@@ -80,13 +80,17 @@ func SetModelBudget(pool types.MemoryPool, bytes int64) {
 	internal.Registry.SetBudget(pool, bytes)
 }
 
-// SetModelIdleTTL sets how long a model stays loaded after nothing is using it. Passing 0 disables the idle sweep,
-// leaving the memory budget as the only thing that unloads models.
+// SetModelIdleTTL sets the minimum time a model stays loaded after nothing is using it. Passing 0 disables the idle
+// sweep entirely, leaving the memory budget as the only thing that unloads models.
 //
 // Models are kept resident between operations because building an ONNX session is expensive - full graph optimization,
-// plus the provider's own compilation, which for TensorRT means building an engine. The TTL is what eventually gives
-// that memory back when the user has moved on. It is deliberately longer than any gap within a batch export, so a
-// batch never rebuilds a model it is still working through.
+// plus the provider's own compilation, which for TensorRT means building an engine and for CoreML compiling an
+// MLProgram. The TTL is what eventually gives that memory back when the user has moved on. It is deliberately longer
+// than any gap within a batch export, so a batch never rebuilds a model it is still working through.
+//
+// This is a floor, not the whole TTL: a model that was expensive to build earns proportionally longer, up to
+// internal.MaxIdleTTL, because dropping it costs the user minutes of rebuild rather than a fraction of a second. So
+// raising this value lengthens every model's residency, while lowering it only shortens the cheap ones.
 func SetModelIdleTTL(ttl time.Duration) {
 	internal.Registry.SetIdleTTL(ttl)
 }

@@ -172,6 +172,10 @@ func Execute[T any](
 	// early return.
 	defer lease.Release()
 
+	// Same as the image path: progress reports are what tell the janitor the lease is live. Nothing routed through
+	// here runs long enough to be mistaken for a leak today, but the two paths are kept alike deliberately.
+	split.lease = lease
+
 	dataModel, ok := lease.Model().(types.Model[T])
 	if !ok {
 		internal.Log().Warn("operation type not supported", "op", operation.Id())
@@ -262,6 +266,38 @@ type progressSplitter struct {
 	// downloaded records whether a download actually happened, and is atomic because the download callback runs on
 	// whichever goroutine deps.Install reports from rather than this one.
 	downloaded atomic.Bool
+
+	// lease is the model this operation is running on, set once selectModel has returned. Progress reports double as
+	// the proof that the lease is alive, which is what stops the janitor reporting a legitimately long run as leaked.
+	//
+	// lastTouch is when that was last recorded, as Unix nanoseconds. Touching takes the registry lock, and the run
+	// callback fires once per tile, so this throttles it to touchInterval - the hot path pays one atomic load.
+	lease     *internal.Lease
+	lastTouch atomic.Int64
+}
+
+// touchInterval is how often a running operation reminds the registry it is alive. Far shorter than the threshold the
+// janitor reports a leak at, so a run in progress can never be mistaken for one, and far longer than a tile, so the
+// registry lock stays off the inference hot path.
+const touchInterval = 30 * time.Second
+
+// touch records a sign of life on the leased model, at most once per touchInterval.
+func (s *progressSplitter) touch() {
+	if s.lease == nil {
+		return
+	}
+
+	now := time.Now().UnixNano()
+
+	last := s.lastTouch.Load()
+	if now-last < int64(touchInterval) {
+		return
+	}
+
+	// CompareAndSwap rather than Store, so concurrent tiles produce one touch rather than one each.
+	if s.lastTouch.CompareAndSwap(last, now) {
+		s.lease.Touch()
+	}
 }
 
 // download is the types.DownloadProgress to hand to selectModel.
@@ -296,6 +332,8 @@ func (s *progressSplitter) run() types.InferenceProgress {
 	}
 
 	return func(progress float64) {
+		s.touch()
+
 		s.onProgress(types.Progress{
 			Operation: s.id,
 			Phase:     types.PhaseInference,
@@ -329,6 +367,10 @@ func runInference(
 	}
 
 	leases.add(lease)
+
+	// From here on the splitter's progress reports double as proof the lease is alive. Set after selectModel rather
+	// than at construction, because there is no lease to touch until it returns.
+	split.lease = lease
 
 	imageModel, ok := lease.Model().(types.Model[image.Image])
 	if !ok {
