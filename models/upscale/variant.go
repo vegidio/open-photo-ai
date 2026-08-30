@@ -46,8 +46,30 @@ type GraphSpec struct {
 	// Suffix distinguishes this graph's artifact from the variant's base model id.
 	Suffix string
 
+	// Precision pins this graph's artifact regardless of the precision the operation asks for. Empty - the usual
+	// case - means the graph follows the operation.
+	//
+	// It exists because a multi-stage model is not published as one precision throughout. Osaka's diffusion
+	// transformer holds nearly all of its weight and is published both as fp16 and quantized to int8, while its two
+	// VAE halves are convolutional, small by comparison, and published only as fp16 - one pair of files shared by
+	// both builds. Without this the int8 build would resolve them to `_int8` names that do not exist.
+	Precision types.Precision
+
 	Inputs  []string
 	Outputs []string
+}
+
+// modelId is the artifact this graph resolves to: the variant's codename, this graph's suffix, and a precision that
+// is the operation's unless the graph pinned its own.
+//
+// It is a method rather than three lines inside newDiffusion so that the naming rule can be tested without opening a
+// session, which for this family means a multi-gigabyte download.
+func (g GraphSpec) modelId(codename string, precision types.Precision) string {
+	if g.Precision != "" {
+		precision = g.Precision
+	}
+
+	return fmt.Sprintf("up_%s%s_%s", codename, g.Suffix, precision)
 }
 
 // DiffusionSpec is the alternative contract, for a model that restores detail at a fixed resolution rather than
@@ -60,23 +82,17 @@ type DiffusionSpec struct {
 	// Profile is the provider tuning every graph of this variant needs.
 	Profile func() utils.EPProfile
 
-	// Precision is pinned: the precision the caller asks for is ignored. Honouring an fp32 request for a model
-	// published only as fp16 would produce an Id with no entry in the remote manifest, which the dependency installer
-	// treats as a model to fetch unverified - so a typo downstream would become a 404 downloaded without a hash check
-	// rather than a clear failure.
-	Precision types.Precision
-
 	// Run is the variant's own pipeline, given the loaded model and the per-run scale.
 	Run func(ctx context.Context, m *Model, img image.Image, scale float64,
 		onProgress types.InferenceProgress) (image.Image, error)
 }
 
 // Op builds this variant's operation at the given scale, clamped to the supported range.
+//
+// The precision is the caller's, whichever contract the variant uses: which precisions a model publishes is implicit
+// in what exists on the remote, exactly as it is for the convolutional variants. A precision that was never published
+// resolves to a model id with no manifest entry, which deps.ModelDependency downloads unverified and says so.
 func (v *Variant) Op(scale float64, precision types.Precision) Op {
-	if v.Diffusion != nil {
-		precision = v.Diffusion.Precision
-	}
-
 	return Op{
 		variant:   v,
 		precision: precision,
@@ -126,7 +142,7 @@ func (v *Variant) newDiffusion(
 	specs := make([]utils.SessionSpec, 0, len(v.Diffusion.Graphs))
 	for _, g := range v.Diffusion.Graphs {
 		specs = append(specs, utils.SessionSpec{
-			ModelId: fmt.Sprintf("up_%s%s_%s", v.Codename, g.Suffix, op.precision),
+			ModelId: g.modelId(v.Codename, op.precision),
 			Inputs:  g.Inputs,
 			Outputs: g.Outputs,
 		})

@@ -6,6 +6,8 @@ import {
     ENHANCEMENTS,
     getEnhancementType,
     getOp,
+    modelPrecisions,
+    qualityTier,
     upscaleFactor,
 } from './enhancement.ts';
 
@@ -15,6 +17,7 @@ describe('getEnhancementType', () => {
     it('reads the type from the id prefix', () => {
         expect(getEnhancementType('dn_stockholm_fp32')).toBe('dn');
         expect(getEnhancementType('up_osaka_fp16')).toBe('up');
+        expect(getEnhancementType('up_osaka_int8')).toBe('up');
     });
 
     // The cast this replaced made ENHANCEMENTS[type] look total. A stale persisted operation, or one from a newer
@@ -66,6 +69,29 @@ describe('the enhancement catalog', () => {
     });
 });
 
+describe('modelPrecisions / qualityTier', () => {
+    it('defaults to fp32 for HD and fp16 for SD', () => {
+        expect(modelPrecisions('up', 'kyoto')).toEqual({ hd: 'fp32', md: 'fp16' });
+        expect(qualityTier('up', 'kyoto', 'fp32')).toBe('hd');
+        expect(qualityTier('up', 'kyoto', 'fp16')).toBe('md');
+    });
+
+    // Osaka is the reason the tier stopped being derivable from the precision alone: no fp32 build of it exists, so
+    // its fp16 build is the HD tier and an int8 one is the SD tier. Reading the tier off `precision === 'fp32'` would
+    // label both of its entries "SD".
+    it('follows the model when its tiers are not the convention', () => {
+        expect(modelPrecisions('up', 'osaka')).toEqual({ hd: 'fp16', md: 'int8' });
+        expect(qualityTier('up', 'osaka', 'fp16')).toBe('hd');
+        expect(qualityTier('up', 'osaka', 'int8')).toBe('md');
+    });
+
+    // Same rehydration case getEnhancementType guards: an id from a persisted setting or an older cache entry.
+    it('falls back to the convention for an unknown model', () => {
+        expect(modelPrecisions('up', 'not-a-real-model')).toEqual({ hd: 'fp32', md: 'fp16' });
+        expect(qualityTier('up', 'not-a-real-model', 'fp32')).toBe('hd');
+    });
+});
+
 describe('getOp', () => {
     it('builds an operation whose id carries the requested model', () => {
         for (const type of ENHANCEMENT_ORDER) {
@@ -74,6 +100,11 @@ describe('getOp', () => {
 
             expect(built.id.startsWith(`${type}_${info.defaultModel}_`)).toBe(true);
         }
+    });
+
+    it("builds at the model's HD precision", () => {
+        expect(getOp('up', 'kyoto').id.endsWith('_fp32')).toBe(true);
+        expect(getOp('up', 'osaka').id.endsWith('_fp16')).toBe(true);
     });
 
     // A stored setting naming a model that was since renamed or removed must not produce a broken id.

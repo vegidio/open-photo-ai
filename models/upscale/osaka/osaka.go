@@ -25,10 +25,9 @@ var variant = &upscale.Variant{
 	Codename: "osaka",
 	Label:    "Osaka",
 	Diffusion: &upscale.DiffusionSpec{
-		Graphs:    graphs,
-		Profile:   profileFor,
-		Precision: types.PrecisionFp16,
-		Run:       runPipeline,
+		Graphs:  graphs,
+		Profile: profileFor,
+		Run:     runPipeline,
 	},
 }
 
@@ -42,10 +41,11 @@ func New(
 	return variant.New(ctx, operation, ep, onProgress)
 }
 
-// Op builds an osaka operation at the given scale.
+// Op builds an osaka operation at the given scale and precision.
 //
-// The precision argument is accepted for symmetry with the other upscalers but ignored: only an fp16 build of this
-// model is published, and the variant pins it.
+// Two precisions are published: fp16, and int8 for the diffusion transformer alone - half the download and about
+// twice as fast on the CPU, measured visually lossless against fp16. Both share one pair of fp16 VAE halves; see
+// graphs in loader.go.
 func Op(scale float64, precision types.Precision) upscale.Op {
 	return variant.Op(scale, precision)
 }

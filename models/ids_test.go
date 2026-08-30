@@ -221,19 +221,23 @@ func TestFaceOperationIds(t *testing.T) {
 	}
 }
 
-// TestOsakaOperationId pins the two ways Osaka's identity deliberately differs from its siblings': the scale is not in
-// the Id (one 7 GB session set serves every scale, so a scale change must not be a registry miss), and the precision
-// is pinned to fp16 whatever the caller asks for, because no fp32 build is published.
+// TestOsakaOperationId pins the one way Osaka's identity deliberately differs from its siblings': the scale is not in
+// the Id, because one 7 GB session set serves every scale and a scale change must not be a registry miss.
+//
+// The precision is in the Id and follows the caller, exactly as it does for the convolutional upscalers - which is
+// what keeps the fp16 and int8 builds from colliding on one registry key and evicting each other. Both are published;
+// the two ids below are the names of real files on the remote.
 func TestOsakaOperationId(t *testing.T) {
 	for _, scale := range []float64{1, 2, 4, 8} {
-		for _, precision := range []types.Precision{types.PrecisionFp32, types.PrecisionFp16} {
+		for _, precision := range []types.Precision{types.PrecisionFp16, types.PrecisionInt8} {
 			op := osaka.Op(scale, precision)
+			want := "up_osaka_" + string(precision)
 
-			if got := op.Id(); got != "up_osaka_fp16" {
-				t.Errorf("scale %v, precision %s: Id() = %q, want %q", scale, precision, got, "up_osaka_fp16")
+			if got := op.Id(); got != want {
+				t.Errorf("scale %v, precision %s: Id() = %q, want %q", scale, precision, got, want)
 			}
-			if got := op.Precision(); got != types.PrecisionFp16 {
-				t.Errorf("scale %v, precision %s: Precision() = %q, want fp16", scale, precision, got)
+			if got := op.Precision(); got != precision {
+				t.Errorf("scale %v, precision %s: Precision() = %q, want %q", scale, precision, got, precision)
 			}
 		}
 	}

@@ -45,6 +45,34 @@ func TestProfileDeclaresTheGraphDynamic(t *testing.T) {
 	}
 }
 
+// TestOnlyTheDiTFollowsTheOperationPrecision pins the split that makes the int8 build possible at all: the diffusion
+// transformer is published at both precisions, the two VAE halves only at fp16, and one pair of VAE files serves both
+// builds. If a VAE graph lost its pin it would follow an int8 operation into `up_osaka_vae_encoder_int8`, which does
+// not exist on the remote - and a missing artifact is not a build error, it is an unverified download of a 404.
+func TestOnlyTheDiTFollowsTheOperationPrecision(t *testing.T) {
+	pinned := map[string]types.Precision{
+		roleEncoder: types.PrecisionFp16,
+		roleDecoder: types.PrecisionFp16,
+		roleDiT:     "",
+	}
+
+	if len(graphs) != len(pinned) {
+		t.Fatalf("graphs has %d entries, want %d - a new graph needs a precision decision here", len(graphs), len(pinned))
+	}
+
+	for _, g := range graphs {
+		want, known := pinned[g.Role]
+		if !known {
+			t.Errorf("unexpected graph role %q", g.Role)
+			continue
+		}
+
+		if g.Precision != want {
+			t.Errorf("%s: Precision = %q, want %q", g.Role, g.Precision, want)
+		}
+	}
+}
+
 func contains(eps []types.ExecutionProvider, want types.ExecutionProvider) bool {
 	return slices.Contains(eps, want)
 }

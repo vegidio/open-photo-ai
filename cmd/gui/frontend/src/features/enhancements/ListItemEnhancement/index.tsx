@@ -15,7 +15,7 @@ import { OptionsUpscale } from '@/features/enhancements/OptionsUpscale';
 import { useCurrentFile, useFileDisabledFaces, useFileFaces } from '@/hooks';
 import { qualityLabel } from '@/i18n/format';
 import { useEnhancementStore } from '@/stores';
-import { ENHANCEMENTS, type EnhancementType, getEnhancementType } from '@/utils/enhancement.ts';
+import { ENHANCEMENTS, type EnhancementType, getEnhancementType, qualityTier } from '@/utils/enhancement.ts';
 
 type ListItemEnhancementProps = {
     op: Operation;
@@ -121,7 +121,7 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
 const opInfo = (t: TFunction, op: Operation, type: EnhancementType, faceText: string): string =>
     t(ENHANCEMENTS[type].infoKey, {
         name: titleCase(op.options.name),
-        quality: qualityLabel(t, op.options.precision),
+        quality: qualityLabel(t, qualityTier(type, op.options.name, op.options.precision)),
         faces: faceText,
         scale: parseFloat(parseFloat(op.options.scale).toFixed(3)),
         intensity: parseFloat(op.options.intensity) * 100,

@@ -61,10 +61,11 @@ func TestIdsToOperationsIdentity(t *testing.T) {
 		"up_tokyo_4x_fp32":   "up_tokyo_4x_fp32",
 		"up_kyoto_2x_fp32":   "up_kyoto_2x_fp32",
 		"up_saitama_1x_fp16": "up_saitama_1x_fp16",
-		// ...except for osaka, whose sessions are over 7 GB and are the same whatever the scale, so the scale is a
-		// per-run parameter instead and the identity drops it. It also has no fp32 build, so the request is coerced.
+		// ...except for osaka, whose sessions are multiple GB and are the same whatever the scale, so the scale is a
+		// per-run parameter instead and the identity drops it. The precision is kept: osaka is published both as fp16
+		// and with its diffusion transformer quantized to int8, and the two must not share a registry key.
 		"up_osaka_4x_fp16": "up_osaka_fp16",
-		"up_osaka_2x_fp32": "up_osaka_fp16",
+		"up_osaka_2x_int8": "up_osaka_int8",
 		// face recovery
 		"fr_athens_fp32":    "fr_athens_fp32",
 		"fr_santorini_fp16": "fr_santorini_fp16",

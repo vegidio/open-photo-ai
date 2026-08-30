@@ -11,10 +11,18 @@ import (
 //
 // The tensor names are not shared with the rest of the codebase, which uses "input"/"output" everywhere: these graphs
 // were exported with meaningful names.
+//
+// Only the diffusion transformer follows the operation's precision. It is where nearly all of the weight is - 6.8 GB
+// against the VAE pair's 0.5 GB - so it alone was worth quantizing, and it is published both as fp16 and as int8.
+// The two VAE halves are convolutional and published only as fp16: one pair of files, shared by both builds, which is
+// why they pin their precision rather than following the operation into a `_int8` name that does not exist.
 var graphs = []upscale.GraphSpec{
 	{Role: roleDiT, Suffix: "", Inputs: []string{"vid_input", "timestep"}, Outputs: []string{"denoised_latent"}},
-	{Role: roleEncoder, Suffix: "_vae_encoder", Inputs: []string{"pixel_image"}, Outputs: []string{"latent"}},
-	{Role: roleDecoder, Suffix: "_vae_decoder", Inputs: []string{"latent"}, Outputs: []string{"pixel_image"}},
+
+	{Role: roleEncoder, Suffix: "_vae_encoder", Precision: types.PrecisionFp16,
+		Inputs: []string{"pixel_image"}, Outputs: []string{"latent"}},
+	{Role: roleDecoder, Suffix: "_vae_decoder", Precision: types.PrecisionFp16,
+		Inputs: []string{"latent"}, Outputs: []string{"pixel_image"}},
 }
 
 // profileFor is the provider tuning every Osaka graph needs.

@@ -57,6 +57,16 @@ export const upscaleFactor = (operations: Operation[]): number => {
 // menu offering them in one order while the pipeline ran them in another would be a silent inconsistency.
 export const ENHANCEMENT_ORDER: readonly EnhancementType[] = ['dn', 'fr', 'cl', 'la', 'cb', 'sh', 'up'];
 
+// The two quality tiers the model selector offers, as the user sees them. `md` is the catalog key behind the label
+// "SD"; renaming it would touch all thirteen catalogs, so the key and the string differ on purpose.
+export type QualityTier = 'hd' | 'md';
+
+// Which precision backs each tier for one model.
+type Precisions = Record<QualityTier, string>;
+
+// The convention every model but Osaka follows.
+const DEFAULT_PRECISIONS: Precisions = { hd: 'fp32', md: 'fp16' };
+
 // One model a user can pick for an enhancement. Model names are proper nouns and stay out of the catalogs; only the
 // description is translated.
 type ModelInfo = {
@@ -67,9 +77,12 @@ type ModelInfo = {
 
     descriptionKey: ParseKeys;
 
-    // Set when the model has no fp32 build to select. The fp32 slot is still shown, disabled, so the selector's shape
-    // stays the same across models.
-    fp16Only?: true;
+    // The precision behind each quality tier, when it is not the app-wide convention of fp32 for HD and fp16 for SD.
+    //
+    // Osaka is the only model that overrides it, and it needs to: no fp32 build of it was ever published, and its
+    // diffusion transformer is now also published quantised to int8. So its two tiers are fp16 and int8 — the tier a
+    // user picks is a statement about quality, not about a number of bits, and the two stopped agreeing here.
+    precisions?: Precisions;
 
     // Builds the operation. `amount` is the intensity or scale where the enhancement has one, and ignored otherwise.
     build: (precision: string, amount: number) => Operation;
@@ -277,7 +290,7 @@ export const ENHANCEMENTS: Record<EnhancementType, EnhancementInfo> = {
                 id: 'osaka',
                 label: 'Osaka',
                 descriptionKey: 'enhancements.upscale.models.osaka',
-                fp16Only: true,
+                precisions: { hd: 'fp16', md: 'int8' },
                 build: (precision, amount) => new Osaka(amount, precision),
             },
         ],
@@ -295,6 +308,25 @@ export const modelItems = (type: EnhancementType) =>
     ENHANCEMENTS[type].models.map(({ id, label }) => ({ value: id, label }));
 
 /**
+ * The precision behind each quality tier for one model, defaulting to the app-wide convention.
+ *
+ * An unknown model falls back to the convention rather than throwing: the id can come from a persisted setting or a
+ * cached operation written by an older build, the same rehydration case `getEnhancementType` guards against.
+ */
+export const modelPrecisions = (type: EnhancementType, model: string): Precisions =>
+    ENHANCEMENTS[type].models.find((m) => m.id === model)?.precisions ?? DEFAULT_PRECISIONS;
+
+/**
+ * The tier a precision represents, for a given model. The inverse of `modelPrecisions`, and the only thing that should
+ * decide whether a label reads "HD" or "SD".
+ *
+ * It takes the model because the answer depends on it — Osaka's fp16 build is its HD tier, every other model's fp16 is
+ * its SD one — and that is exactly what makes a bare `precision === 'fp32'` test wrong now.
+ */
+export const qualityTier = (type: EnhancementType, model: string, precision: string): QualityTier =>
+    modelPrecisions(type, model).hd === precision ? 'hd' : 'md';
+
+/**
  * Builds the operation for an enhancement at the user's chosen model, at the precision that model defaults to.
  *
  * The fallback chain is one rule, not two: an unknown model falls back to the enhancement's default, and a default
@@ -305,7 +337,7 @@ export const getOp = (type: EnhancementType, model: string, amount?: number): Op
     const { models, defaultModel, defaultAmount } = ENHANCEMENTS[type];
     const chosen = models.find((m) => m.id === model) ?? models.find((m) => m.id === defaultModel) ?? models[0];
 
-    return chosen.build(chosen.fp16Only ? 'fp16' : 'fp32', amount ?? defaultAmount);
+    return chosen.build(modelPrecisions(type, chosen.id).hd, amount ?? defaultAmount);
 };
 
 /**

@@ -39,6 +39,9 @@ var providers = map[string]types.ExecutionProvider{
 var precisions = map[string]types.Precision{
 	"fp32": types.PrecisionFp32,
 	"fp16": types.PrecisionFp16,
+
+	// int8 is published for osaka alone. Asking any other model for it resolves to a file that does not exist.
+	"int8": types.PrecisionInt8,
 }
 
 func main() {
@@ -100,7 +103,7 @@ func flags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name: "precision", Value: "fp32", Local: true,
-			Usage:            "model precision: fp32 or fp16 (not every model publishes fp16 weights)",
+			Usage:            "model precision: fp32, fp16 or int8 (not every model publishes every precision)",
 			Validator:        oneOf(precisions),
 			ValidateDefaults: true,
 		},

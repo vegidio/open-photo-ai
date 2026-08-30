@@ -7,7 +7,6 @@ export type ModelSelectorOption = {
     value: string;
     label: string;
     description?: string;
-    disabled?: boolean;
 };
 
 type ModelSelectorProps = {
@@ -32,12 +31,11 @@ export const ModelSelector = ({ options, value, onChange }: ModelSelectorProps) 
                 onChange={onButtonClick}
                 className='bg-[#171717] grid grid-cols-2 gap-1 p-1'
             >
-                {options.map(({ value, label, description, disabled = false }) => (
+                {options.map(({ value, label, description }) => (
                     <ToggleButton
                         key={value}
                         size='small'
                         value={value}
-                        disabled={disabled}
                         className='relative border-0 rounded'
                     >
                         {description && (

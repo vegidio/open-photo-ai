@@ -49,6 +49,13 @@ const (
 // estimateActivationBytes predicts the peak activation footprint of one pass over a region of the given output size,
 // excluding the weights, which the registry already accounts for.
 //
+// That accounting is optimistic for both builds, and more so for the int8 one. utils.Session budgets on the *file*
+// size of the graphs behind it, which is a proxy for resident memory rather than a measurement of it, and ONNX Runtime
+// has no int8 compute path here: it dequantizes the weights back to fp32 to run them. So the int8 build's 3.4 GB of
+// files sit resident at around 13.5 GB, a factor of 4, against 2.2 for the fp16 build's 6.8 GB. Osaka has always been
+// charged less than it occupies and works, so this is more of the same rather than a new kind of problem - but it does
+// mean picking Osaka SD buys a smaller download and a faster run, not a smaller memory footprint.
+//
 // The two terms are added rather than maxed: the DiT's peak and the decoder's peak do not coincide, but the latents
 // bridging them stay live across both, and adding is the conservative reading.
 func estimateActivationBytes(width, height int) int64 {

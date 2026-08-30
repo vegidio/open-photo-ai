@@ -61,8 +61,8 @@ var catalog = []entry{
 	scaleEntry("kyoto", types.ModelTypeUpscale, kyoto.Op),
 	scaleEntry("saitama", types.ModelTypeUpscale, saitama.Op),
 
-	// Osaka is the diffusion upscaler: the first run downloads 7.3 GB, and it is orders of magnitude slower than
-	// the others on anything but a capable GPU.
+	// Osaka is the diffusion upscaler: the first run downloads 7.3 GB at fp16, or 3.9 GB with --precision int8, and
+	// it is orders of magnitude slower than the others on anything but a capable GPU.
 	scaleEntry("osaka", types.ModelTypeUpscale, osaka.Op),
 
 	// Denoise
