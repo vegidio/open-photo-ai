@@ -68,9 +68,10 @@ several gigabytes. Start with `list` and a single model name.
 ./build/perftest
 ```
 
-Budget hours, not minutes. Some models are far slower than the rest on some platforms — `tokyo` in particular takes a
-very long time on macOS — so a full sweep is an overnight job rather than something to run while you wait. Name the
-models you care about instead when you just want a number.
+Budget hours, not minutes. Some models are far slower than the rest on some platforms — `osaka` is orders of magnitude
+slower than the others without a capable GPU, and every model is slow on the CPU provider — so a full sweep is an
+overnight job rather than something to run while you wait. Name the models you care about instead when you just want a
+number.
 
 **Compare models of the same type.** Fix the parameter so the comparison is fair:
 
@@ -124,6 +125,17 @@ charged to the model under test. The embedded sample has two faces:
 ```bash
 ./build/perftest newyork athens santorini
 ```
+
+**Benchmark a model you re-exported but haven't published.** The installer compares what is on disk against the
+hashes in the remote manifest, so a locally rebuilt model is normally downloaded back over before it can be measured —
+which silently benchmarks the model you were trying to replace. `--skip-verify` uses what is on disk as it is:
+
+```bash
+cp up_tokyo_4x_fp32.onnx ~/Library/Application\ Support/open-photo-ai/models/
+./build/perftest --skip-verify tokyo
+```
+
+Drop the flag once the model is published; the normal verified path then picks it up on its own.
 
 **Capture the results to a file.** Non-TTY output is detected automatically: the report goes to stdout, progress to
 stderr, and the colour codes are stripped:
@@ -199,6 +211,7 @@ marked `INTERRUPTED` rather than `FAILED`, so a cancelled run is never mistaken 
 | `--scale`     | `-s`  | 4       | Upscale factor, 1–8. Ignored by non-upscale models                                        |
 | `--intensity` | `-i`  | 1       | Blend intensity, -1–1, for the denoise/sharpen/light/colour models. Ignored by the others |
 | `--cache`     |       | off     | Keep the library's image cache on, so timings include its PNG encode and disk write       |
+| `--skip-verify` |     | off     | Use the model files already on disk without checking them against the remote manifest     |
 | `--plain`     |       | auto    | Force line-by-line output instead of the live view                                        |
 | `--verbose`   | `-v`  | off     | Library debug log plus every timed run in order; implies `--plain`                        |
 

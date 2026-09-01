@@ -32,6 +32,21 @@ type Variant struct {
 	// Diffusion, when non-nil, replaces the convolutional contract wholesale: a fixed set of named graphs, the scale
 	// carried per-run rather than in the Id, and a variant-supplied Run.
 	Diffusion *DiffusionSpec
+
+	// Profile is the provider tuning this variant's passes need. A nil Profile means the provider defaults, which is
+	// what a variant nobody has measured should get: the right settings follow the graph's op mix, so carrying one
+	// variant's findings to another because both upscale is how a profile ends up pessimising a model it was never
+	// measured against. Ignored when Diffusion is set - that contract carries its own DiffusionSpec.Profile.
+	Profile func() utils.EPProfile
+}
+
+// profile returns the variant's provider tuning, or the zero value when it declares none.
+func (v *Variant) profile() utils.EPProfile {
+	if v.Profile == nil {
+		return utils.EPProfile{}
+	}
+
+	return v.Profile()
 }
 
 // GraphSpec names one graph of a multi-stage variant and the tensors it takes and returns. The names are not shared
@@ -118,7 +133,7 @@ func (v *Variant) New(
 
 	scales := SelectScaleMatrix(op.scale, v.ScaleBuckets)
 
-	sessions, err := LoadSessions(ctx, v.Codename, op.precision, scales, ep, onProgress)
+	sessions, err := LoadSessions(ctx, v.Codename, op.precision, scales, ep, v.profile(), onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s sessions", v.Codename)
 	}

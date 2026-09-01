@@ -124,6 +124,11 @@ func flags() []cli.Flag {
 				"— i.e. what Process costs a real caller",
 		},
 		&cli.BoolFlag{
+			Name: "skip-verify", Local: true,
+			Usage: "use the model files already on disk without checking them against the remote manifest, " +
+				"so a re-exported model can be benchmarked before it is published",
+		},
+		&cli.BoolFlag{
 			Name: "plain", Local: true,
 			Usage: "force the line-by-line output instead of the live view (automatic when stdout isn't a terminal)",
 		},
@@ -194,6 +199,13 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	// inside the call being timed. Measuring that as if it were inference is the single biggest distortion this tool
 	// used to have.
 	opai.SetImageCacheEnabled(cfg.cache)
+
+	// Benchmarking a model that is not published yet is the whole point of re-exporting one: without this the
+	// installer sees a hash that does not match the remote manifest and downloads the old weights back over it, and
+	// the run silently measures the model being replaced rather than the one under test.
+	if cmd.Bool("skip-verify") {
+		opai.SetSkipModelVerification(true)
+	}
 
 	if err = opai.Initialize(ctx, shared.AppName, printDownloadProgress); err != nil {
 		return fmt.Errorf("failed to initialize the model runtime: %w", err)
