@@ -5,7 +5,7 @@ import { AnalyticsEvent, track } from '@/analytics';
 import { useSyncFaces } from '@/hooks/useSyncFaces.ts';
 import { useEnhancementStore } from '@/stores';
 import { getEnhancementType } from '@/utils/enhancement.ts';
-import { hasFaceRecovery } from '@/utils/face.ts';
+import { faceRecoveryPrecision } from '@/utils/face.ts';
 
 /** Who asked for the enhancement: a deliberate pick from the menu, or one of Autopilot's suggestions. */
 export type EnhancementSource = 'manual' | 'autopilot';
@@ -35,8 +35,11 @@ export const useAddEnhancements = () => {
                 });
             }
 
-            if (hasFaceRecovery(operations.map((op) => op.id))) {
-                await syncFaces(file);
+            // The detection pass runs at the face-recovery operation's own precision, so an undefined result is
+            // exactly the "nothing here needs faces" case the `hasFaceRecovery` check used to cover.
+            const precision = faceRecoveryPrecision(operations.map((op) => op.id));
+            if (precision) {
+                await syncFaces(file, precision);
             }
         },
         [addEnhancements, syncFaces],

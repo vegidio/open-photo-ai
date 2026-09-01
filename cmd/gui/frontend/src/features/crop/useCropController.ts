@@ -6,7 +6,7 @@ import { FULL_TURN, normalizeAngle, ROTATE_STEP, snapToStep } from '@/features/c
 import { useCurrentFile, useFileCrop, useFileOperations, useSyncFaces } from '@/hooks';
 import { useCropStore } from '@/stores';
 import { MIN_CROP_SIZE } from '@/utils/constants.ts';
-import { hasFaceRecovery } from '@/utils/face.ts';
+import { faceRecoveryPrecision } from '@/utils/face.ts';
 import { getImage, type ImageData } from '@/utils/image.ts';
 
 // Owns all the Crop/Rotate modal's state, effects, and cropper-control handlers, keeping CropRotate itself a thin
@@ -282,9 +282,11 @@ export const useCropController = (open: boolean, onClose: () => void) => {
         }
 
         // The crop is now in the store; re-detect faces against it so the face count/overlay reflect the cropped
-        // image (detection runs in the cropped coordinate space). Only needed when a face-recovery op is active.
-        if (hasFaceRecovery(operations.map((op) => op.id))) {
-            syncFaces(currentFile);
+        // image (detection runs in the cropped coordinate space). Only needed when a face-recovery op is active,
+        // which is what an undefined precision reports.
+        const precision = faceRecoveryPrecision(operations.map((op) => op.id));
+        if (precision) {
+            syncFaces(currentFile, precision);
         }
 
         onClose();

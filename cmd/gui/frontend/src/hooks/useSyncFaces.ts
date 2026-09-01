@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import type { Precision } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import type { File } from '@/bindings/gui/types';
 import { AnalyticsEvent, track } from '@/analytics';
 import { useNotify } from '@/hooks/useNotify.ts';
@@ -14,6 +15,10 @@ import { detectFaces } from '@/utils/face.ts';
  * Detection runs on the cropped image, so a crop change re-numbers the faces; `setFaces` resets any prior face
  * de-selection, which is the intended behavior. On failure an empty array is stored and an error snackbar is shown;
  * when no faces are found an empty array is stored silently.
+ *
+ * `precision` is the face-recovery operation's, so the overlay is built by the same detection graph that will feed
+ * the recovery. Both callers derive it with `faceRecoveryPrecision` and only call this when it is defined, which is
+ * the same condition as "a face-recovery operation is active".
  */
 export const useSyncFaces = () => {
     const { enqueueSnackbar } = useNotify();
@@ -21,11 +26,11 @@ export const useSyncFaces = () => {
     const ep = useSettingsStore((s) => s.executionProvider);
 
     return useCallback(
-        async (file: File) => {
+        async (file: File, precision: Precision) => {
             const crop = useCropStore.getState().crops.get(file.Path);
 
             try {
-                const faces = await detectFaces(file, ep, crop);
+                const faces = await detectFaces(file, ep, precision, crop);
                 setFaces(file, faces);
 
                 // How often face recovery finds anything, and how many faces a typical photo has - which is what

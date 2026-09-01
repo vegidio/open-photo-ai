@@ -227,12 +227,12 @@ func faceEntry[T types.Operation](
 
 // detectFaces runs the auxiliary detection pass that the face-recovery models need as input.
 //
-// The precision is pinned to fp32 rather than taken from cfg: this mirrors the library's own auxiliary detection
-// (models/facerecovery.GetDtModel pins fp32), and an fp16 detection model may not be published. Taking cfg.precision
-// here would break face recovery under --precision fp16 for a reason that has nothing to do with the model being
-// benchmarked.
+// The precision follows cfg rather than being pinned, which mirrors what the app does: detection runs at the
+// precision of the face-recovery operation it is feeding. It used to be pinned to fp32 because no fp16 detection
+// model was published and taking cfg.precision would have failed the whole --precision fp16 sweep on a missing file.
+// Both precisions are published now, so the pin would only mean benchmarking a tier combination the app never runs.
 func detectFaces(ctx context.Context, input *types.ImageData, cfg config) ([]detection.Face, error) {
-	faces, err := opai.Execute[[]detection.Face](ctx, input, cfg.provider, nil, newyork.Op(types.PrecisionFp32))
+	faces, err := opai.Execute[[]detection.Face](ctx, input, cfg.provider, nil, newyork.Op(cfg.precision))
 	if err != nil {
 		return nil, fmt.Errorf("face detection failed: %w", err)
 	}

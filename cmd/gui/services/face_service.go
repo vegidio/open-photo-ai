@@ -33,12 +33,17 @@ func NewFaceService(app *application.App, otel *o11y.Telemetry) *FaceService {
 // The frontend calls this independently and then passes the result back to ProcessImage/ExportImage so that face
 // recovery no longer triggers detection internally. The crop is applied (flip→rotate→crop) before detection so the
 // resulting bounding boxes live in the cropped image's coordinate space — matching the cropped source that face
-// recovery and the preview operate on. Results are deterministic for a given image+crop, so the frontend caches them
-// by file hash plus a crop token.
+// recovery and the preview operate on. Results are deterministic for a given image+crop+precision, so the frontend
+// caches them by file hash plus a crop token plus the precision.
+//
+// precision is the one the face-recovery operation these faces are for was built at, so a recovery on the SD tier
+// detects with the fp16 graph and one on HD with the fp32 graph, instead of every run pulling the fp32 graph down to
+// feed whichever the user picked.
 func (s *FaceService) DetectFaces(
 	ctx context.Context,
 	filePath string,
 	ep types.ExecutionProvider,
+	precision types.Precision,
 	crop guitypes.CropInfo,
 ) ([]detection.Face, error) {
 	if err := ctx.Err(); err != nil {
@@ -57,7 +62,7 @@ func (s *FaceService) DetectFaces(
 	inputImage.Pixels = guiutils.ApplyCropInfo(inputImage.Pixels, crop)
 	inputImage.Hash += guiutils.CropCacheKey(crop)
 
-	faces, err := opai.Execute[[]detection.Face](ctx, inputImage, ep, nil, newyork.Op(types.PrecisionFp32))
+	faces, err := opai.Execute[[]detection.Face](ctx, inputImage, ep, nil, newyork.Op(precision))
 	if err != nil {
 		// Cancellation is expected (user navigated away / cancelled) — log it as info, not an error.
 		if errors.Is(err, context.Canceled) {

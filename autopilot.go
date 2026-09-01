@@ -44,7 +44,12 @@ func SuggestEnhancements(ctx context.Context, input *types.ImageData) []types.Mo
 // region - Private functions
 
 func shouldFaceRecovery(ctx context.Context, input *types.ImageData) bool {
-	model, lease, err := facerecovery.GetDtModel(ctx, types.ExecutionProviderAuto)
+	// fp32 rather than the caller's precision, because at this point there is no caller's precision: autopilot runs
+	// before any face-recovery operation exists to take one from. fp32 is not an arbitrary pick, though - it is the
+	// precision the operation this suggestion turns into will be built at, since a suggested enhancement is added at
+	// its model's HD tier. Detecting here at anything else would download a second detection graph to answer a
+	// question the first one already answered.
+	model, lease, err := facerecovery.GetDtModel(ctx, types.ExecutionProviderAuto, types.PrecisionFp32)
 	if err != nil {
 		internal.Log().Warn("face detection model unavailable; skipping face-recovery suggestion", "err", err)
 		return false

@@ -27,11 +27,23 @@ const (
 // The caller owns the lease and must release it once it is done with the model - deferred immediately after the error
 // check. Holding the model without the lease is a use-after-free waiting to happen, which is why the two are returned
 // together rather than the lease being hidden inside.
+//
+// precision is the caller's, not this package's, and it should be the precision of the face-recovery operation the
+// faces are being detected for: a run that recovers at fp16 detects at fp16 too. It used to be pinned to fp32 here
+// because no fp16 detection model was published; now that one is, pinning would mean a user on the SD tier paying
+// for the 88 MB fp32 graph purely to feed a 44 MB fp16 one.
+//
+// The two precisions agree on what they find. Measured over 25 variants of the sample image - rotations, scales,
+// flips, brightness, contrast, grayscale, crops and extreme aspect ratios - fp16 returned the same faces in the same
+// order every time, differing only in sub-pixel box and landmark positions. The order matters as much as the count:
+// the GUI's per-face de-selection is stored as indices into this slice, so a precision that reordered faces would
+// silently re-target it.
 func GetDtModel(
 	ctx context.Context,
 	ep types.ExecutionProvider,
+	precision types.Precision,
 ) (types.Model[[]detection.Face], *internal.Lease, error) {
-	dtOp := newyork.Op(types.PrecisionFp32)
+	dtOp := newyork.Op(precision)
 
 	lease, err := internal.AcquireModel(dtOp.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
 		return newyork.New(ctx, dtOp, ep, nil)

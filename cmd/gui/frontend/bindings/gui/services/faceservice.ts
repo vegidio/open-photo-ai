@@ -21,11 +21,15 @@ import * as types$1 from "../types/models.js";
  * The frontend calls this independently and then passes the result back to ProcessImage/ExportImage so that face
  * recovery no longer triggers detection internally. The crop is applied (flip→rotate→crop) before detection so the
  * resulting bounding boxes live in the cropped image's coordinate space — matching the cropped source that face
- * recovery and the preview operate on. Results are deterministic for a given image+crop, so the frontend caches them
- * by file hash plus a crop token.
+ * recovery and the preview operate on. Results are deterministic for a given image+crop+precision, so the frontend
+ * caches them by file hash plus a crop token plus the precision.
+ * 
+ * precision is the one the face-recovery operation these faces are for was built at, so a recovery on the SD tier
+ * detects with the fp16 graph and one on HD with the fp32 graph, instead of every run pulling the fp32 graph down to
+ * feed whichever the user picked.
  */
-export function DetectFaces(filePath: string, ep: types$0.ExecutionProvider, crop: types$1.CropInfo): $CancellablePromise<detection$0.Face[]> {
-    return $Call.ByID(347646086, filePath, ep, crop).then(($result: any) => {
+export function DetectFaces(filePath: string, ep: types$0.ExecutionProvider, precision: types$0.Precision, crop: types$1.CropInfo): $CancellablePromise<detection$0.Face[]> {
+    return $Call.ByID(347646086, filePath, ep, precision, crop).then(($result: any) => {
         return $$createType1($result);
     });
 }

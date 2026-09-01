@@ -23,6 +23,12 @@ type Variant struct {
 	// Outputs names the graph's output tensors. Detection graphs return three of them - boxes, scores and landmarks -
 	// rather than the single "output" the rest of the codebase's models use.
 	Outputs []string
+
+	// Profile is the provider tuning this variant's graph needs. A nil Profile means the provider defaults, which
+	// is what a variant nobody has measured should get: the tuning here is per-graph, and carrying one model's
+	// findings over to another on the strength of them being the same kind of model is how a profile ends up
+	// pessimising the model it was never measured against.
+	Profile func() utils.EPProfile
 }
 
 // Op builds this variant's operation at the given precision.
@@ -49,7 +55,12 @@ func (v *Variant) New(
 	// variant rather than from the one-in-one-out convention.
 	specs := []utils.SessionSpec{{ModelId: op.Id(), Inputs: []string{"input"}, Outputs: v.Outputs}}
 
-	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.EPProfile{}, onProgress)
+	var profile utils.EPProfile
+	if v.Profile != nil {
+		profile = v.Profile()
+	}
+
+	sessions, err := utils.LoadSessions(ctx, specs, ep, profile, onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}

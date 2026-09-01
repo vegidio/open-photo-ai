@@ -1,6 +1,6 @@
 import { LRUCache } from 'lru-cache';
 import type { Face } from '@/bindings/github.com/vegidio/open-photo-ai/models/detection';
-import type { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
+import type { ExecutionProvider, Precision } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import type { CropInfo, File } from '@/bindings/gui/types';
 import { DetectFaces } from '@/bindings/gui/services/faceservice.ts';
 import { useEnhancementStore } from '@/stores/enhancements.ts';
@@ -19,19 +19,41 @@ import { cropToken } from '@/utils/crop.ts';
 const facesCache = new LRUCache<string, Promise<Face[]>>({ max: 500 });
 
 /**
- * Detects the faces in an image, caching the result by file hash (plus a crop token) to avoid redundant detection.
+ * The precision the detection pass runs at for a set of operations: the one the face-recovery operation itself was
+ * built at, so a recovery on the SD tier is fed by the fp16 detection graph and one on HD by the fp32 one. Undefined
+ * when there is no face-recovery operation, which is also the answer to "should anything be detected at all".
+ *
+ * The id layout is the `<prefix>_<name>_<precision>` contract that `operations/factory.ts` owns. The cast is the
+ * boundary between the frontend, which carries precisions as the plain strings those ids are built from, and the
+ * generated binding, which types them as the Go enum — the two are the same set of strings.
+ */
+export const faceRecoveryPrecision = (opIds: string[]): Precision | undefined =>
+    opIds.find((id) => id.startsWith('fr_'))?.split('_')[2] as Precision | undefined;
+
+/**
+ * Detects the faces in an image, caching the result by file hash (plus the precision and a crop token) to avoid
+ * redundant detection.
  *
  * Detection runs on the cropped image, so the returned bounding boxes live in the cropped image's coordinate space —
  * matching the cropped source that face recovery and the preview operate on. The resulting faces are passed back to
- * the inference calls (ProcessImage/ExportImage). Faces are deterministic for a given image+crop, so caching by hash
- * plus the crop is always safe. Omit `crop` to detect against the uncropped image.
+ * the inference calls (ProcessImage/ExportImage). Faces are deterministic for a given image+crop+precision, so
+ * caching by the three is always safe. Omit `crop` to detect against the uncropped image.
+ *
+ * The precision is in the key because it selects the model file, not because the two disagree about what they find:
+ * measured over 25 variants of the sample image, fp16 and fp32 returned the same faces in the same order, differing
+ * only sub-pixel. That is what keeps `disabledFaces` — indices into this array — valid across a tier switch.
  */
-export const detectFaces = (file: File, ep: ExecutionProvider, crop?: CropInfo): Promise<Face[]> => {
-    const key = `${file.Hash}${cropToken(crop)}`;
+export const detectFaces = (
+    file: File,
+    ep: ExecutionProvider,
+    precision: Precision,
+    crop?: CropInfo,
+): Promise<Face[]> => {
+    const key = `${file.Hash}_${precision}${cropToken(crop)}`;
     let faces = facesCache.get(key);
 
     if (!faces) {
-        faces = DetectFaces(file.Path, ep, crop ?? EMPTY_CROP).catch((e) => {
+        faces = DetectFaces(file.Path, ep, precision, crop ?? EMPTY_CROP).catch((e) => {
             // Only successes are cached: a detection that failed (or was cancelled) must be retried on the next call,
             // not replayed from the cache forever.
             facesCache.delete(key);
@@ -72,9 +94,12 @@ export const getEnabledFaces = async (
     disabled?: Set<number>,
     crop?: CropInfo,
 ): Promise<Face[]> => {
-    if (!hasFaceRecovery(opIds)) return [];
+    // Subsumes the `hasFaceRecovery` guard this used to open with: no face-recovery operation means no precision to
+    // detect at, which is the same "there is nothing to detect for" answer arrived at one step earlier.
+    const precision = faceRecoveryPrecision(opIds);
+    if (!precision) return [];
 
-    const faces = await detectFaces(file, ep, crop);
+    const faces = await detectFaces(file, ep, precision, crop);
     const d = disabled ?? useEnhancementStore.getState().disabledFaces.get(file.Path);
 
     return d?.size ? faces.filter((_, i) => !d.has(i)) : faces;
