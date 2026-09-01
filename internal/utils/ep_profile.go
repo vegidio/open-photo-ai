@@ -72,6 +72,18 @@ type EPProfile struct {
 	Extra map[string]string
 }
 
+// ResolveProfile returns the profile a variant declares, or the zero value when it declares none.
+//
+// Every model family spells "nobody has measured this graph" the same way - a nil Profile func on the variant - so
+// the unwrap lives here next to EPProfile rather than being re-written in each family's variant.go.
+func ResolveProfile(fn func() EPProfile) EPProfile {
+	if fn == nil {
+		return EPProfile{}
+	}
+
+	return fn()
+}
+
 // CoreMLComputeUnits is the set of engines CoreML may dispatch a model to.
 //
 // It is a per-model property because the right answer follows the graph's op mix, not the machine. The Neural Engine
@@ -128,11 +140,12 @@ const (
 )
 
 func (c CoreMLSpecialization) value() string {
-	if c == CoreMLSpecializationFastPrediction {
+	switch c {
+	case CoreMLSpecializationFastPrediction:
 		return "FastPrediction"
+	default:
+		return "Default"
 	}
-
-	return "Default"
 }
 
 // GraphOptimization is how far ONNX Runtime is allowed to rewrite a graph.

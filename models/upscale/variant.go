@@ -40,15 +40,6 @@ type Variant struct {
 	Profile func() utils.EPProfile
 }
 
-// profile returns the variant's provider tuning, or the zero value when it declares none.
-func (v *Variant) profile() utils.EPProfile {
-	if v.Profile == nil {
-		return utils.EPProfile{}
-	}
-
-	return v.Profile()
-}
-
 // GraphSpec names one graph of a multi-stage variant and the tensors it takes and returns. The names are not shared
 // with the rest of the codebase, which uses "input"/"output" everywhere: these graphs were exported with meaningful
 // names.
@@ -133,7 +124,7 @@ func (v *Variant) New(
 
 	scales := SelectScaleMatrix(op.scale, v.ScaleBuckets)
 
-	sessions, err := LoadSessions(ctx, v.Codename, op.precision, scales, ep, v.profile(), onProgress)
+	sessions, err := LoadSessions(ctx, v.Codename, op.precision, scales, ep, utils.ResolveProfile(v.Profile), onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s sessions", v.Codename)
 	}

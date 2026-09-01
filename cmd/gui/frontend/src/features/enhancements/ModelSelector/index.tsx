@@ -32,12 +32,7 @@ export const ModelSelector = ({ options, value, onChange }: ModelSelectorProps) 
                 className='bg-[#171717] grid grid-cols-2 gap-1 p-1'
             >
                 {options.map(({ value, label, description }) => (
-                    <ToggleButton
-                        key={value}
-                        size='small'
-                        value={value}
-                        className='relative border-0 rounded'
-                    >
+                    <ToggleButton key={value} size='small' value={value} className='relative border-0 rounded'>
                         {description && (
                             <Tooltip
                                 title={description}

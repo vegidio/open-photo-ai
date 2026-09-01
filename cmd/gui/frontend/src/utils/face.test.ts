@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+import { faceRecoveryPrecision, hasFaceRecovery } from './face.ts';
 import { Precision } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { Athens, Santorini } from '@/operations';
 
 // face.ts reaches utils/constants.ts, which top-level-awaits Version() and GetOS() over the Wails bridge — so
 // importing it under `environment: 'node'` throws on the missing `window` before a single test runs. Only these two
 // calls are stubbed, rather than the whole constants module: the real module graph then loads, so this exercises
-// face.ts as it actually ships instead of a stand-in for it.
+// face.ts as it actually ships instead of a stand-in for it. Vitest hoists these above the imports above, which is
+// why face.ts can be imported normally — same arrangement as export.test.ts.
 vi.mock('@/bindings/gui/services/appservice.ts', () => ({ Version: () => Promise.resolve('0.0.0-test') }));
 vi.mock('@/bindings/gui/services/osservice.ts', () => ({ GetOS: () => Promise.resolve('darwin') }));
-
-const { faceRecoveryPrecision, hasFaceRecovery } = await import('./face.ts');
 
 // The detection pass runs at whatever precision the face-recovery operation was built at, so this function is the
 // only thing deciding which of the two New York graphs gets downloaded and run. Getting it wrong is quiet: the
@@ -37,7 +37,12 @@ describe('faceRecoveryPrecision', () => {
 
     // The prefix test must not match an operation that merely contains "fr_", only one that starts with it.
     it('agrees with hasFaceRecovery about whether faces are needed', () => {
-        for (const ops of [[], ['cl_delhi_fp32'], [new Athens('fp32').id], ['sh_moscow_1_fp16', new Santorini('fp32').id]]) {
+        for (const ops of [
+            [],
+            ['cl_delhi_fp32'],
+            [new Athens('fp32').id],
+            ['sh_moscow_1_fp16', new Santorini('fp32').id],
+        ]) {
             expect(faceRecoveryPrecision(ops) !== undefined).toBe(hasFaceRecovery(ops));
         }
     });

@@ -55,12 +55,7 @@ func (v *Variant) New(
 	// variant rather than from the one-in-one-out convention.
 	specs := []utils.SessionSpec{{ModelId: op.Id(), Inputs: []string{"input"}, Outputs: v.Outputs}}
 
-	var profile utils.EPProfile
-	if v.Profile != nil {
-		profile = v.Profile()
-	}
-
-	sessions, err := utils.LoadSessions(ctx, specs, ep, profile, onProgress)
+	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.ResolveProfile(v.Profile), onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}

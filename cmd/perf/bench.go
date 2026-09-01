@@ -25,6 +25,10 @@ type config struct {
 	warmup    int
 	cache     bool
 
+	// skipVerify uses the model files already on disk without checking them against the remote manifest, so a model
+	// that has been re-exported but not published can be benchmarked as it is.
+	skipVerify bool
+
 	// onProgress is handed to opai.Process on every run, including the timed ones, so it must be cheap enough to be
 	// invisible in the measurement: the live UI's implementation does a single atomic store per tile and nothing else.
 	// It is nil when there is no live view to feed.

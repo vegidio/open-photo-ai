@@ -135,7 +135,7 @@ These are the features I plan to implement in the future, in no particular order
 - [x] Attempt to include diffusion-based models (this will be hard!)
 - [x] Internationalization to other languages.
 - [x] Add new models to colorize black and white photos.
-- [ ] Rework the architecture of some models to improve performance.
+- [x] Rework the architecture of some models to improve performance.
 - [ ] Add a new model to fix imperfections and remove objects from photos.
 - [ ] CLI implementation.
 - [ ] Improve documentation for the library.

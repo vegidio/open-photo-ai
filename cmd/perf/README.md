@@ -202,18 +202,18 @@ marked `INTERRUPTED` rather than `FAILED`, so a cancelled run is never mistaken 
 
 ## Flags
 
-| Flag          | Alias | Default | Meaning                                                                                   |
-|---------------|-------|---------|-------------------------------------------------------------------------------------------|
-| `--runs`      | `-n`  | 5       | Timed runs per model (min 1)                                                              |
-| `--warmup`    | `-w`  | 1       | Untimed warm-up runs; also what downloads a missing model                                 |
-| `--provider`  | `-p`  | `auto`  | `auto`, `cpu`, `cuda`, `tensorrt`, `directml`, `openvino` or `coreml`                     |
-| `--precision` |       | `fp32`  | `fp32` or `fp16`                                                                          |
-| `--scale`     | `-s`  | 4       | Upscale factor, 1–8. Ignored by non-upscale models                                        |
-| `--intensity` | `-i`  | 1       | Blend intensity, -1–1, for the denoise/sharpen/light/colour models. Ignored by the others |
-| `--cache`     |       | off     | Keep the library's image cache on, so timings include its PNG encode and disk write       |
-| `--skip-verify` |     | off     | Use the model files already on disk without checking them against the remote manifest     |
-| `--plain`     |       | auto    | Force line-by-line output instead of the live view                                        |
-| `--verbose`   | `-v`  | off     | Library debug log plus every timed run in order; implies `--plain`                        |
+| Flag            | Alias | Default | Meaning                                                                                   |
+|-----------------|-------|---------|-------------------------------------------------------------------------------------------|
+| `--runs`        | `-n`  | 5       | Timed runs per model (min 1)                                                              |
+| `--warmup`      | `-w`  | 1       | Untimed warm-up runs; also what downloads a missing model                                 |
+| `--provider`    | `-p`  | `auto`  | `auto`, `cpu`, `cuda`, `tensorrt`, `directml`, `openvino` or `coreml`                     |
+| `--precision`   |       | `fp32`  | `fp32` or `fp16`                                                                          |
+| `--scale`       | `-s`  | 4       | Upscale factor, 1–8. Ignored by non-upscale models                                        |
+| `--intensity`   | `-i`  | 1       | Blend intensity, -1–1, for the denoise/sharpen/light/colour models. Ignored by the others |
+| `--cache`       |       | off     | Keep the library's image cache on, so timings include its PNG encode and disk write       |
+| `--skip-verify` |       | off     | Use the model files already on disk without checking them against the remote manifest     |
+| `--plain`       |       | auto    | Force line-by-line output instead of the live view                                        |
+| `--verbose`     | `-v`  | off     | Library debug log plus every timed run in order; implies `--plain`                        |
 
 ## Caveats
 

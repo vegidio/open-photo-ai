@@ -186,13 +186,14 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	cfg := config{
-		provider:  providers[strings.ToLower(cmd.String("provider"))],
-		precision: precisions[strings.ToLower(cmd.String("precision"))],
-		scale:     cmd.Float("scale"),
-		intensity: float32(cmd.Float("intensity")),
-		runs:      cmd.Int("runs"),
-		warmup:    cmd.Int("warmup"),
-		cache:     cmd.Bool("cache"),
+		provider:   providers[strings.ToLower(cmd.String("provider"))],
+		precision:  precisions[strings.ToLower(cmd.String("precision"))],
+		scale:      cmd.Float("scale"),
+		intensity:  float32(cmd.Float("intensity")),
+		runs:       cmd.Int("runs"),
+		warmup:     cmd.Int("warmup"),
+		cache:      cmd.Bool("cache"),
+		skipVerify: cmd.Bool("skip-verify"),
 	}
 
 	// Off by default: Process writes every result to the disk image cache, which means a PNG encode of the output
@@ -203,9 +204,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	// Benchmarking a model that is not published yet is the whole point of re-exporting one: without this the
 	// installer sees a hash that does not match the remote manifest and downloads the old weights back over it, and
 	// the run silently measures the model being replaced rather than the one under test.
-	if cmd.Bool("skip-verify") {
-		opai.SetSkipModelVerification(true)
-	}
+	opai.SetSkipModelVerification(cfg.skipVerify)
 
 	if err = opai.Initialize(ctx, shared.AppName, printDownloadProgress); err != nil {
 		return fmt.Errorf("failed to initialize the model runtime: %w", err)
