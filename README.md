@@ -178,11 +178,6 @@ This is one of the fastest ways to run the models; however, TensorRT needs to op
 
 If you don't want to use TensorRT acceleration, you can disable it in the app Settings.
 
-## 🐞 Known Issues
-
-1. Using half-precision (FP16) models with a CPU execution provider often doesn't give any performance boost; a bug fix for this is expected to be available in the next ONNX release.
-2. The **Tokyo** and **Osaka** models don't work with Apple's CoreML, so on a Mac they run on the CPU and will be slow. For Osaka this is a limitation of CoreML itself rather than of the model: it cannot load the two VAE graphs at all, and on the main graph it either fails outright or returns a visibly wrong result, so the app doesn't offer it.
-
 ## 🐛 Error Reporting
 
 If you encounter any issues while using the app, please report them by [creating a new issue](https://github.com/vegidio/open-photo-ai/issues) on our repository and give as much detail as possible, including steps to reproduce the issue, screenshots, and any error messages you receive.
