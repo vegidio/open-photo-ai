@@ -51,6 +51,10 @@ type EPProfile struct {
 	// chain is used instead, never a silent drop to the CPU.
 	ExcludeEPs []types.ExecutionProvider
 
+	// CoreMLComputeUnits selects which of the Mac's engines CoreML may dispatch this model to. The zero value is
+	// ALL, which is what every model used before profiles existed.
+	CoreMLComputeUnits CoreMLComputeUnits
+
 	// GraphOptimization selects how far ONNX Runtime rewrites the graph before running it. The zero value is the
 	// full pipeline, which is what every model used before profiles existed.
 	GraphOptimization GraphOptimization
@@ -62,6 +66,44 @@ type EPProfile struct {
 
 	// Extra carries raw session config entries, for the settings that have no typed field here.
 	Extra map[string]string
+}
+
+// CoreMLComputeUnits is the set of engines CoreML may dispatch a model to.
+//
+// It is a per-model property because the right answer follows the graph's op mix, not the machine. The Neural Engine
+// is fp16-only and is built for dense convolution and matmul; a graph that is heavy in normalization, reshape and
+// transpose spends more time crossing on and off it than it saves, and CoreML's planner does not work that out on its
+// own - it takes the Neural Engine whenever ALL permits it.
+type CoreMLComputeUnits int
+
+const (
+	// CoreMLComputeUnitsAll lets CoreML choose freely between the CPU, the GPU and the Neural Engine. It is the
+	// right default: most of these graphs are convolutional, which is what the Neural Engine is good at.
+	CoreMLComputeUnitsAll CoreMLComputeUnits = iota
+
+	// CoreMLComputeUnitsCPUAndGPU keeps a model off the Neural Engine. It is for the graphs the Neural Engine
+	// handles badly, where ALL costs real time in transitions.
+	CoreMLComputeUnitsCPUAndGPU
+
+	// CoreMLComputeUnitsCPUAndNeuralEngine keeps a model off the GPU, leaving it for other work.
+	CoreMLComputeUnitsCPUAndNeuralEngine
+
+	// CoreMLComputeUnitsCPUOnly runs the CoreML partition on the CPU. It is a diagnostic: it isolates whether a
+	// wrong result came from the GPU's or the Neural Engine's reduced precision.
+	CoreMLComputeUnitsCPUOnly
+)
+
+func (c CoreMLComputeUnits) value() string {
+	switch c {
+	case CoreMLComputeUnitsCPUAndGPU:
+		return "CPUAndGPU"
+	case CoreMLComputeUnitsCPUAndNeuralEngine:
+		return "CPUAndNeuralEngine"
+	case CoreMLComputeUnitsCPUOnly:
+		return "CPUOnly"
+	default:
+		return "ALL"
+	}
 }
 
 // GraphOptimization is how far ONNX Runtime is allowed to rewrite a graph.
@@ -296,7 +338,7 @@ func coreMLOptions(cachePath string, p EPProfile) map[string]string {
 
 	return map[string]string{
 		"ModelFormat":              "MLProgram",
-		"MLComputeUnits":           "ALL",
+		"MLComputeUnits":           p.CoreMLComputeUnits.value(),
 		"RequireStaticInputShapes": staticShapes,
 		"EnableOnSubgraphs":        "0",
 		"ModelCacheDirectory":      cachePath,

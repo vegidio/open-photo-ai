@@ -33,6 +33,12 @@ type Variant struct {
 	// graph that takes no weight at all.
 	Fidelity float32
 
+	// Profile is the provider tuning this variant's graph needs. A nil Profile means the provider defaults, which
+	// is what a variant nobody has measured should get: the tuning here is per-graph, and carrying one model's
+	// findings over to another on the strength of them being the same kind of model is how a profile ends up
+	// pessimising the model it was never measured against.
+	Profile func() utils.EPProfile
+
 	// The feathered blend mask is a pure function of TileSize, which is fixed per variant - but building it means
 	// filling a TileSize-square image and then Gaussian-blurring it, which was being redone on every single Run.
 	// Variants are package-level values that outlive any one run, so it is built once and shared from then on.
@@ -74,7 +80,12 @@ func (v *Variant) New(
 	// variant rather than from the one-in-one-out convention.
 	specs := []utils.SessionSpec{{ModelId: op.Id(), Inputs: v.Inputs, Outputs: []string{"output"}}}
 
-	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.EPProfile{}, onProgress)
+	var profile utils.EPProfile
+	if v.Profile != nil {
+		profile = v.Profile()
+	}
+
+	sessions, err := utils.LoadSessions(ctx, specs, ep, profile, onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}

@@ -33,6 +33,30 @@ func TestCoreMLOptionsFollowTheProfile(t *testing.T) {
 	}
 }
 
+func TestCoreMLComputeUnitsFollowTheProfile(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile EPProfile
+		want    string
+	}{
+		{"the zero value keeps the shipped behaviour", EPProfile{}, "ALL"},
+		{"a model the Neural Engine handles badly opts out",
+			EPProfile{CoreMLComputeUnits: CoreMLComputeUnitsCPUAndGPU}, "CPUAndGPU"},
+		{"the GPU can be left for other work",
+			EPProfile{CoreMLComputeUnits: CoreMLComputeUnitsCPUAndNeuralEngine}, "CPUAndNeuralEngine"},
+		{"the diagnostic setting pins the partition to the CPU",
+			EPProfile{CoreMLComputeUnits: CoreMLComputeUnitsCPUOnly}, "CPUOnly"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := coreMLOptions("/cache", tt.profile)["MLComputeUnits"]; got != tt.want {
+				t.Fatalf("MLComputeUnits = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTensorRTOptionsFollowTheProfile(t *testing.T) {
 	zero := tensorRTOptions("/cache", EPProfile{})
 
