@@ -57,6 +57,26 @@ func TestCoreMLComputeUnitsFollowTheProfile(t *testing.T) {
 	}
 }
 
+func TestCoreMLSpecializationFollowsTheProfile(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile EPProfile
+		want    string
+	}{
+		{"the zero value keeps the shipped behaviour", EPProfile{}, "Default"},
+		{"a fixed-shape model can specialise for latency",
+			EPProfile{CoreMLSpecialization: CoreMLSpecializationFastPrediction}, "FastPrediction"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := coreMLOptions("/cache", tt.profile)["SpecializationStrategy"]; got != tt.want {
+				t.Fatalf("SpecializationStrategy = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTensorRTOptionsFollowTheProfile(t *testing.T) {
 	zero := tensorRTOptions("/cache", EPProfile{})
 

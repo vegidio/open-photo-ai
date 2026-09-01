@@ -25,10 +25,10 @@ var variant = &facerecovery.Variant{
 // Measured through this code path on an M2 Max (macOS 26.6, ONNX Runtime 1.26), one 512x512 face, median of 7 runs
 // against the fp32 result:
 //
-//	                       fp16              fp32
-//	MLComputeUnits=ALL     146.7ms           104.7ms
-//	CPUAndGPU               93.5ms (1.57x)   104.7ms (unchanged)
-//	CPUAndNeuralEngine       1.313s (14x slower)  1.017s (10x slower)
+//	                       fp16                 fp32
+//	MLComputeUnits=ALL     146.7ms              104.7ms
+//	CPUAndGPU              93.5ms (1.57x)       104.7ms (unchanged)
+//	CPUAndNeuralEngine     1.313s (14x slower)  1.017s (10x slower)
 //
 // The fp32 graph is unaffected because the Neural Engine is fp16-only, so CoreML never had work to put there. The
 // fp16 graph is a different matter: ALL makes most of the graph eligible, CoreML takes it, and the transitions cost

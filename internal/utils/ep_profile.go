@@ -23,10 +23,10 @@ import (
 // The zero value reproduces the behaviour that shipped before profiles existed, which is what lets every existing
 // call site keep passing no profile at all.
 //
-// Not every field is driven by a model yet: today only Osaka builds a profile, and it sets DynamicShapes,
-// DisableMemPattern, DisableOptimizers and ExcludeEPs. The rest are reserved for per-model TensorRT and precision
-// tuning that is already planned - they are deliberately kept rather than trimmed to what has a caller today, so
-// treat "no setter" here as "not wired up yet", not as dead code.
+// Not every field is driven by a model yet: today Osaka sets DynamicShapes, DisableMemPattern, DisableOptimizers
+// and ExcludeEPs, Athens sets CoreMLComputeUnits, and Santorini sets CoreMLSpecialization. The rest are reserved for
+// per-model TensorRT and precision tuning that is already planned - they are deliberately kept rather than trimmed
+// to what has a caller today, so treat "no setter" here as "not wired up yet", not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -54,6 +54,10 @@ type EPProfile struct {
 	// CoreMLComputeUnits selects which of the Mac's engines CoreML may dispatch this model to. The zero value is
 	// ALL, which is what every model used before profiles existed.
 	CoreMLComputeUnits CoreMLComputeUnits
+
+	// CoreMLSpecialization picks how CoreML compiles the model. The zero value is its default strategy, which is
+	// what every model used before profiles existed.
+	CoreMLSpecialization CoreMLSpecialization
 
 	// GraphOptimization selects how far ONNX Runtime rewrites the graph before running it. The zero value is the
 	// full pipeline, which is what every model used before profiles existed.
@@ -104,6 +108,31 @@ func (c CoreMLComputeUnits) value() string {
 	default:
 		return "ALL"
 	}
+}
+
+// CoreMLSpecialization is the strategy CoreML uses when it compiles a model for a device.
+//
+// It is a per-model property because it is a trade: the default strategy compiles once and produces a plan that is
+// good across input sizes, while FastPrediction spends longer specialising for the shapes it was given. That is only
+// worth paying for on a fixed-shape graph that stays resident, which is exactly the shape of these tile models - and
+// on a graph whose partition CoreML was already handling well it buys nothing.
+type CoreMLSpecialization int
+
+const (
+	// CoreMLSpecializationDefault leaves CoreML to its own default strategy.
+	CoreMLSpecializationDefault CoreMLSpecialization = iota
+
+	// CoreMLSpecializationFastPrediction trades compile time for prediction latency. It needs macOS 15 or newer;
+	// older systems ignore it rather than failing, so setting it is safe on any Mac.
+	CoreMLSpecializationFastPrediction
+)
+
+func (c CoreMLSpecialization) value() string {
+	if c == CoreMLSpecializationFastPrediction {
+		return "FastPrediction"
+	}
+
+	return "Default"
 }
 
 // GraphOptimization is how far ONNX Runtime is allowed to rewrite a graph.
@@ -339,6 +368,7 @@ func coreMLOptions(cachePath string, p EPProfile) map[string]string {
 	return map[string]string{
 		"ModelFormat":              "MLProgram",
 		"MLComputeUnits":           p.CoreMLComputeUnits.value(),
+		"SpecializationStrategy":   p.CoreMLSpecialization.value(),
 		"RequireStaticInputShapes": staticShapes,
 		"EnableOnSubgraphs":        "0",
 		"ModelCacheDirectory":      cachePath,
