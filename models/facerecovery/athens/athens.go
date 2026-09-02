@@ -20,7 +20,8 @@ var variant = &facerecovery.Variant{
 	Profile:  profileFor,
 }
 
-// profileFor keeps athens off the Neural Engine, and runs its fp16 graph in NHWC on CUDA.
+// profileFor keeps athens off the Neural Engine, runs its fp16 graph in NHWC on CUDA, and runs the graph
+// sequentially.
 //
 // # CoreML
 //
@@ -44,12 +45,28 @@ var variant = &facerecovery.Variant{
 //
 // # Execution mode
 //
-// Athens declares no ExecutionMode, unlike santorini next door, so it takes the zero value and runs PARALLEL - which
-// applyProfile sets explicitly, rather than leaving to ONNX Runtime, whose own default is sequential. That is a gap
-// rather than a finding, but the CoreML half of it is measured: `go test -tags coremlbench -run
+// Athens runs sequentially, like every other tuned model in the catalogue. CUDA is where that is worth something;
+// CoreML leans 0.2% the other way, which is not enough to be worth diverging over.
+//
+// On CUDA it is the largest single win this model has, larger than the layout below, and it is free - the outputs
+// are bit-identical, not merely close, because the mode changes only who schedules the nodes. Same machine as the
+// CUDA section below, isolating Run over 24 blocks of 10 runs across three interleaved rounds, each precision
+// measured against the layout it actually ships:
+//
+//	                              parallel      sequential
+//	fp32 (ships NCHW)             46.728ms      37.080ms (-20.6%)
+//	fp16 (ships NHWC)             27.976ms      24.271ms (-13.2%)
+//
+// End to end the win is diluted by roughly half, because most of what perftest measures here is not the graph: the
+// align and blend around each of the two faces is CPU work that this does not touch. On the CUDA provider, mean of
+// 40 runs averaged over two alternating rounds, fp32 goes 124.8ms to 114.2ms (-8.5%) and fp16 88.6ms to 84.5ms
+// (-4.6%). On TensorRT it is a tie either way (-0.7% at both precisions), as it is for newyork - that provider
+// schedules its own engine, so there is nothing for the inter-op pool to have been doing.
+//
+// On CoreML it does not pay, and that is measured too: `go test -tags coremlbench -run
 // TestCoreMLExecutionModeAthens ./internal/utils/`. That test sweeps this model in BOTH build orders, which the
 // other three do not need - they already ship sequential on the strength of what it is worth on CUDA, so their
-// CoreML sweeps only have to show it costs nothing, whereas here a CoreML number is the only evidence there is:
+// CoreML sweeps only have to show it costs nothing, whereas here CoreML is the side that leans the other way:
 //
 //	                    parallel first        sequential first
 //	fp32 parallel       106.280ms             106.657ms
@@ -62,9 +79,12 @@ var variant = &facerecovery.Variant{
 // worth recording is that athens is the only fp16 graph in the catalogue that does NOT prefer sequential on CoreML,
 // where tokyo, santorini and newyork gain 3.5-6.5%.
 //
-// A tie on CoreML is still no reason to set the mode either way. The reason santorini sets it is what it is worth on
-// CUDA, and this graph has never been measured there. Anyone with a CUDA machine should try it: santorini is the
-// same kind of backbone and gains 4-9%, and tokyo, which shares this model's transformer, gains far more.
+// ExecutionMode is not per-provider, so this has to be one answer, and 0.1-0.3% is not a reason to make athens the
+// one model that runs a different mode from the rest. Sequential everywhere: it is worth 5-9% end to end on a CUDA
+// machine, 13-21% of the graph itself, and on a Mac it is inside the noise.
+//
+// Do not read the CoreML table as an argument for switching back. The number to beat is on the CUDA side, and it is
+// two orders of magnitude larger.
 //
 // How far this carries to other Macs: the cause is the graph's op mix, which is the same everywhere, and the Neural
 // Engine is close to uniform across Apple Silicon while the GPU is not - so the direction should hold on any Mac,
@@ -97,7 +117,10 @@ var variant = &facerecovery.Variant{
 // use_ep_level_unified_stream, tunable_op_enable and sdpa_kernel all measure as ties, use_tf32=0 costs 37%, and
 // fuse_conv_bias=1 returns a different answer on every run and must stay off.
 func profileFor(precision types.Precision) utils.EPProfile {
-	profile := utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU}
+	profile := utils.EPProfile{
+		CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
+		ExecutionMode:      utils.ExecutionModeSequential,
+	}
 
 	if precision == types.PrecisionFp16 {
 		profile.CudaPreferNHWC = true

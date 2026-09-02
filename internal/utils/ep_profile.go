@@ -24,11 +24,11 @@ import (
 // call site keep passing no profile at all.
 //
 // Not every field is driven by a model yet: today Osaka sets DynamicShapes, DisableMemPattern, DisableOptimizers and
-// ExcludeEPs, Athens sets CoreMLComputeUnits and - for its fp16 export only - CudaPreferNHWC, Santorini sets
-// CoreMLSpecialization and ExecutionMode, Tokyo sets CoreMLComputeUnits and ExecutionMode, and New York sets
-// CudaPreferNHWC and ExecutionMode. The rest are reserved for per-model TensorRT and precision tuning that is already
-// planned - they are deliberately kept rather than trimmed to what has a caller today, so treat "no setter" here as
-// "not wired up yet", not as dead code.
+// ExcludeEPs, Athens sets CoreMLComputeUnits and ExecutionMode and - for its fp16 export only - CudaPreferNHWC,
+// Santorini sets CoreMLSpecialization and ExecutionMode, Tokyo sets CoreMLComputeUnits and ExecutionMode, and New
+// York sets CudaPreferNHWC and ExecutionMode. The rest are reserved for per-model TensorRT and precision tuning that
+// is already planned - they are deliberately kept rather than trimmed to what has a caller today, so treat "no
+// setter" here as "not wired up yet", not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.

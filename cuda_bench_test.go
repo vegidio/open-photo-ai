@@ -5,7 +5,7 @@
 // It is behind a build tag because it needs a CUDA GPU, the downloaded weights and several minutes; it is not part
 // of the normal test run. Run it with:
 //
-//	go test -tags cudabench -run TestCudaSweep -timeout 90m -v .
+//	go test -tags cudabench -run TestCuda -timeout 90m -v .
 package opai
 
 import (
@@ -23,8 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/disintegration/imaging"
 	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
+	iutils "github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/detection"
 	pub "github.com/vegidio/open-photo-ai/utils"
 	ort "github.com/yalue/onnxruntime_go"
@@ -39,6 +41,22 @@ var baseCuda = map[string]string{
 	"enable_cuda_graph":            "0",
 	"gpu_mem_limit":                "0",
 	"prefer_nhwc":                  "0",
+}
+
+// graph is one model's session shape: what to open, and how to build the tensors a Run needs.
+//
+// It exists because the two graphs measured here do not agree on either end - newyork is one input and three
+// outputs, athens is two inputs and one - so the timing loop cannot assume a shape.
+type graph struct {
+	id      string
+	inputs  []string
+	outputs []string
+
+	// tensors builds a fresh set of input and output tensors for one session.
+	tensors func() (ins, outs []*ort.Tensor[float32], err error)
+
+	// probe indexes the output whose contents are compared between configs.
+	probe int
 }
 
 type benchConfig struct {
@@ -60,6 +78,7 @@ type benchConfig struct {
 func (c benchConfig) cudaMap() map[string]string {
 	out := maps.Clone(baseCuda)
 	maps.Copy(out, c.cuda)
+
 	return out
 }
 
@@ -71,16 +90,16 @@ type benchResult struct {
 	// graph rounds every config to the same two values and hides anything smaller than 25%.
 	samples []float64
 
-	// firstOut and lastOut are the conf tensor of the first and the last timed run, so a config that returns stale
-	// or zeroed data on later runs cannot pass on the strength of its first one.
+	// firstOut and lastOut are the probe output of the first and the last timed run, so a config that returns
+	// stale or zeroed data on later runs cannot pass on the strength of its first one.
 	firstOut []float32
 	lastOut  []float32
-	faces    int
 }
 
 func (r benchResult) sorted() []float64 {
 	s := append([]float64(nil), r.samples...)
 	sort.Float64s(s)
+
 	return s
 }
 
@@ -91,10 +110,9 @@ func (r benchResult) fastest() float64 { return r.sorted()[0] }
 type benchSession struct {
 	sess      *ort.DynamicAdvancedSession
 	opts      *ort.SessionOptions
-	in        *ort.Tensor[float32]
-	loc       *ort.Tensor[float32]
-	conf      *ort.Tensor[float32]
-	landmarks *ort.Tensor[float32]
+	ins       []*ort.Tensor[float32]
+	outs      []*ort.Tensor[float32]
+	probe     int
 	buildTime time.Duration
 }
 
@@ -110,7 +128,7 @@ func (b *benchSession) destroy() {
 		_ = b.opts.Destroy()
 	}
 
-	for _, t := range []*ort.Tensor[float32]{b.in, b.loc, b.conf, b.landmarks} {
+	for _, t := range append(append([]*ort.Tensor[float32]{}, b.ins...), b.outs...) {
 		if t != nil {
 			t.Destroy()
 		}
@@ -118,10 +136,22 @@ func (b *benchSession) destroy() {
 }
 
 func (b *benchSession) run() error {
-	return b.sess.Run([]ort.Value{b.in}, []ort.Value{b.loc, b.conf, b.landmarks})
+	ins := make([]ort.Value, len(b.ins))
+	for i, t := range b.ins {
+		ins[i] = t
+	}
+
+	outs := make([]ort.Value, len(b.outs))
+	for i, t := range b.outs {
+		outs[i] = t
+	}
+
+	return b.sess.Run(ins, outs)
 }
 
-func buildBenchSession(modelPath string, input []float32, cfg benchConfig) (*benchSession, error) {
+func (b *benchSession) probeData() []float32 { return copyOf(b.outs[b.probe]) }
+
+func buildBenchSession(modelPath string, g graph, cfg benchConfig) (*benchSession, error) {
 	start := time.Now()
 
 	opts, err := ort.NewSessionOptions()
@@ -170,29 +200,15 @@ func buildBenchSession(modelPath string, input []float32, cfg benchConfig) (*ben
 		}
 	}
 
-	sess, err := ort.NewDynamicAdvancedSession(modelPath,
-		[]string{"input"}, []string{"loc", "conf", "landmarks"}, opts)
+	sess, err := ort.NewDynamicAdvancedSession(modelPath, g.inputs, g.outputs, opts)
 	if err != nil {
 		_ = opts.Destroy()
 		return nil, err
 	}
 
-	b := &benchSession{sess: sess, opts: opts, buildTime: time.Since(start)}
-	n := int64(detection.AnchorCount())
+	b := &benchSession{sess: sess, opts: opts, probe: g.probe, buildTime: time.Since(start)}
 
-	if b.in, err = ort.NewTensor(ort.NewShape(1, 3, 640, 640), input); err != nil {
-		b.destroy()
-		return nil, err
-	}
-	if b.loc, err = ort.NewEmptyTensor[float32](ort.NewShape(1, n, 4)); err != nil {
-		b.destroy()
-		return nil, err
-	}
-	if b.conf, err = ort.NewEmptyTensor[float32](ort.NewShape(1, n, 2)); err != nil {
-		b.destroy()
-		return nil, err
-	}
-	if b.landmarks, err = ort.NewEmptyTensor[float32](ort.NewShape(1, n, 10)); err != nil {
+	if b.ins, b.outs, err = g.tensors(); err != nil {
 		b.destroy()
 		return nil, err
 	}
@@ -200,7 +216,9 @@ func buildBenchSession(modelPath string, input []float32, cfg benchConfig) (*ben
 	return b, nil
 }
 
-func loadTestInput(t *testing.T) []float32 {
+// region - Graphs
+
+func sampleImage(t *testing.T) image.Image {
 	t.Helper()
 
 	raw, err := os.ReadFile(filepath.Join("cmd", "perf", "test.dat"))
@@ -213,9 +231,81 @@ func loadTestInput(t *testing.T) []float32 {
 		t.Fatalf("failed to decode the sample image: %v", err)
 	}
 
-	in, _, _ := detection.PreprocessImage(img, detection.TargetSize)
-	return in
+	return img
 }
+
+func newyorkGraph(t *testing.T, precision string) graph {
+	t.Helper()
+
+	in, _, _ := detection.PreprocessImage(sampleImage(t), detection.TargetSize)
+	n := int64(detection.AnchorCount())
+
+	return graph{
+		id:      "dt_newyork_" + precision,
+		inputs:  []string{"input"},
+		outputs: []string{"loc", "conf", "landmarks"},
+		probe:   1, // conf
+		tensors: func() (ins, outs []*ort.Tensor[float32], err error) {
+			input, err := ort.NewTensor(ort.NewShape(1, 3, 640, 640), in)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			for _, shape := range []ort.Shape{
+				ort.NewShape(1, n, 4), ort.NewShape(1, n, 2), ort.NewShape(1, n, 10),
+			} {
+				out, oErr := ort.NewEmptyTensor[float32](shape)
+				if oErr != nil {
+					return nil, nil, oErr
+				}
+
+				outs = append(outs, out)
+			}
+
+			return []*ort.Tensor[float32]{input}, outs, nil
+		},
+	}
+}
+
+// athensGraph feeds the restorer a 512x512 crop of the sample rather than a properly aligned face. The alignment is
+// not exported, and it does not matter here: convolution timing does not depend on the pixel values, and the output
+// checks are all comparisons between two configs given the same input.
+func athensGraph(t *testing.T, precision string) graph {
+	t.Helper()
+
+	const tile = 512
+
+	face := imaging.Resize(sampleImage(t), tile, tile, imaging.Lanczos)
+	in := iutils.ImageToCHW(face, false, true)
+
+	return graph{
+		id:      "fr_athens_" + precision,
+		inputs:  []string{"input", "weight"},
+		outputs: []string{"output"},
+		probe:   0,
+		tensors: func() (ins, outs []*ort.Tensor[float32], err error) {
+			input, err := ort.NewTensor(ort.NewShape(1, 3, tile, tile), in)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			// 1.0 is the Fidelity the athens variant binds to this input.
+			weight, err := ort.NewTensor(ort.NewShape(1), []float32{1.0})
+			if err != nil {
+				return nil, nil, err
+			}
+
+			out, err := ort.NewEmptyTensor[float32](ort.NewShape(1, 3, tile, tile))
+			if err != nil {
+				return nil, nil, err
+			}
+
+			return []*ort.Tensor[float32]{input, weight}, []*ort.Tensor[float32]{out}, nil
+		},
+	}
+}
+
+// endregion
 
 func setupRuntime(t *testing.T) {
 	t.Helper()
@@ -267,7 +357,7 @@ func maxAbsDiff(a, b []float32) float64 {
 }
 
 // firstLine trims an ORT error down to something a table can sit next to: the CUDA provider dumps the whole cuDNN
-// frontend graph as JSON into the message, which is several thousand characters of one line per failure.
+// frontend graph as JSON into the message, which is several thousand characters on one line.
 func firstLine(s string) string {
 	if i := strings.IndexAny(s, "\r\n"); i >= 0 {
 		s = s[:i]
@@ -292,11 +382,10 @@ func copyOf(t *ort.Tensor[float32]) []float32 {
 // every row rather than the ones that happen to run late.
 //
 // Each sample is a block of blockSize runs divided by blockSize, for the clock-resolution reason on benchResult.
-func sweep(t *testing.T, modelID string, configs []benchConfig, blockSize, blocks, rounds, warmup int) {
+func sweep(t *testing.T, g graph, configs []benchConfig, blockSize, blocks, rounds, warmup int) {
 	t.Helper()
 
-	input := loadTestInput(t)
-	path := modelPathFor(t, modelID)
+	path := modelPathFor(t, g.id)
 
 	sessions := make([]*benchSession, 0, len(configs))
 	kept := make([]benchConfig, 0, len(configs))
@@ -305,11 +394,11 @@ func sweep(t *testing.T, modelID string, configs []benchConfig, blockSize, block
 		// ORT logs its provider diagnostics to stderr from C++, with nothing in the line saying which session
 		// produced it. This marker is the only thing that makes the "running in Fallback mode" warnings below
 		// attributable to a config.
-		fmt.Fprintf(os.Stderr, "\n##### building %s / %s #####\n", modelID, cfg.name)
+		fmt.Fprintf(os.Stderr, "\n##### building %s / %s #####\n", g.id, cfg.name)
 
-		s, err := buildBenchSession(path, input, cfg)
+		s, err := buildBenchSession(path, g, cfg)
 		if err != nil {
-			t.Logf("SKIP %-26s build failed: %v", cfg.name, err)
+			t.Logf("SKIP %-26s build failed: %v", cfg.name, firstLine(err.Error()))
 			continue
 		}
 
@@ -336,7 +425,7 @@ func sweep(t *testing.T, modelID string, configs []benchConfig, blockSize, block
 		kept = append(kept, cfg)
 	}
 
-	fmt.Fprintf(os.Stderr, "\n##### timing %s #####\n", modelID)
+	fmt.Fprintf(os.Stderr, "\n##### timing %s #####\n", g.id)
 
 	t.Cleanup(func() {
 		for _, s := range sessions {
@@ -356,49 +445,44 @@ func sweep(t *testing.T, modelID string, configs []benchConfig, blockSize, block
 
 				for range blockSize {
 					if err := s.run(); err != nil {
-						t.Fatalf("%s: run failed: %v", kept[i].name, err)
+						t.Fatalf("%s: run failed: %v", kept[i].name, firstLine(err.Error()))
 					}
 				}
 
-				elapsed := float64(time.Since(start)) / float64(blockSize)
-				results[i].samples = append(results[i].samples, elapsed)
+				results[i].samples = append(results[i].samples, float64(time.Since(start))/float64(blockSize))
 
 				if round == 0 && b == 0 {
-					results[i].firstOut = copyOf(s.conf)
+					results[i].firstOut = s.probeData()
 				}
 
 				if round == rounds-1 && b == blocks-1 {
-					results[i].lastOut = copyOf(s.conf)
-					faces := detection.PostProcessDetections(
-						copyOf(s.loc), results[i].lastOut, copyOf(s.landmarks), 1024, 1024, 0.5)
-					results[i].faces = len(faces)
+					results[i].lastOut = s.probeData()
 				}
 			}
 		}
 	}
 
-	report(t, modelID, results)
+	report(t, g.id, results)
 }
 
 func report(t *testing.T, modelID string, results []*benchResult) {
 	t.Helper()
 
 	baseline := results[0]
-	base := float64(baseline.median())
+	base := baseline.median()
 
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "\n=== %s (CUDA) - median of %d blocks ===\n", modelID, len(baseline.samples))
-	fmt.Fprintf(&sb, "%-26s %10s %10s %9s %6s %10s %10s\n",
-		"config", "median", "min", "vs base", "faces", "maxdiff", "drift")
+	fmt.Fprintf(&sb, "%-26s %11s %11s %9s %10s %10s\n",
+		"config", "median", "min", "vs base", "maxdiff", "drift")
 
 	for _, r := range results {
-		fmt.Fprintf(&sb, "%-26s %9.3fms %9.3fms %+8.1f%% %6d %10.2e %10.2e\n",
+		fmt.Fprintf(&sb, "%-26s %9.3fms %9.3fms %+8.1f%% %10.2e %10.2e\n",
 			r.name,
 			r.median()/1e6,
 			r.fastest()/1e6,
 			(r.median()-base)/base*100,
-			r.faces,
 			maxAbsDiff(r.lastOut, baseline.lastOut),
 			maxAbsDiff(r.firstOut, r.lastOut))
 	}
@@ -406,7 +490,7 @@ func report(t *testing.T, modelID string, results []*benchResult) {
 	t.Log(sb.String())
 }
 
-// region - Sweeps
+// region - New York
 
 func nhwc(extra ...map[string]string) map[string]string {
 	out := map[string]string{"prefer_nhwc": "1"}
@@ -446,6 +530,16 @@ func newyorkConfigs() []benchConfig {
 	}
 }
 
+func TestCudaSweepNewYorkFp32(t *testing.T) {
+	setupRuntime(t)
+	sweep(t, newyorkGraph(t, "fp32"), newyorkConfigs(), 20, 10, 3, 20)
+}
+
+func TestCudaSweepNewYorkFp16(t *testing.T) {
+	setupRuntime(t)
+	sweep(t, newyorkGraph(t, "fp16"), newyorkConfigs(), 20, 10, 3, 20)
+}
+
 // TestCudaNewYorkNHWCOutput checks the candidate against the shipping config through the decode the app actually
 // uses, over repeated runs on one session.
 //
@@ -455,20 +549,18 @@ func newyorkConfigs() []benchConfig {
 func TestCudaNewYorkNHWCOutput(t *testing.T) {
 	setupRuntime(t)
 
-	input := loadTestInput(t)
-
 	for _, precision := range []string{"fp32", "fp16"} {
 		t.Run(precision, func(t *testing.T) {
-			path := modelPathFor(t, "dt_newyork_"+precision)
+			g := newyorkGraph(t, precision)
+			path := modelPathFor(t, g.id)
 
-			base, err := buildBenchSession(path, input, benchConfig{name: "baseline"})
+			base, err := buildBenchSession(path, g, benchConfig{name: "baseline"})
 			if err != nil {
 				t.Fatalf("failed to build the baseline session: %v", err)
 			}
 			defer base.destroy()
 
-			cand, err := buildBenchSession(path, input,
-				benchConfig{name: "candidate", sequential: true, cuda: nhwc()})
+			cand, err := buildBenchSession(path, g, benchConfig{name: "candidate", sequential: true, cuda: nhwc()})
 			if err != nil {
 				t.Fatalf("failed to build the candidate session: %v", err)
 			}
@@ -510,14 +602,14 @@ func TestCudaNewYorkNHWCOutput(t *testing.T) {
 				t.Fatalf("faces differ by more than 0.1px\n got: %+v\nwant: %+v", gotFaces, wantFaces)
 			}
 
-			t.Logf("%s: %d faces, identical within 0.1px over 20 runs; confidences %v vs %v",
-				precision, len(gotFaces), confidences(gotFaces), confidences(wantFaces))
+			t.Logf("%s: %d faces, identical within 0.1px over 20 runs", precision, len(gotFaces))
 		})
 	}
 }
 
 func decodeFaces(s *benchSession) []detection.Face {
-	return detection.PostProcessDetections(copyOf(s.loc), copyOf(s.conf), copyOf(s.landmarks), 1024, 1024, 0.5)
+	return detection.PostProcessDetections(
+		copyOf(s.outs[0]), copyOf(s.outs[1]), copyOf(s.outs[2]), 1024, 1024, 0.5)
 }
 
 func facesEqual(a, b []detection.Face, tol float32) bool {
@@ -525,19 +617,19 @@ func facesEqual(a, b []detection.Face, tol float32) bool {
 		return false
 	}
 
-	close := func(x, y float32) bool { return math.Abs(float64(x-y)) <= float64(tol) }
+	near := func(x, y float32) bool { return math.Abs(float64(x-y)) <= float64(tol) }
 
 	for i := range a {
-		if !close(a[i].BoundingBox.Min.X, b[i].BoundingBox.Min.X) ||
-			!close(a[i].BoundingBox.Min.Y, b[i].BoundingBox.Min.Y) ||
-			!close(a[i].BoundingBox.Max.X, b[i].BoundingBox.Max.X) ||
-			!close(a[i].BoundingBox.Max.Y, b[i].BoundingBox.Max.Y) {
+		if !near(a[i].BoundingBox.Min.X, b[i].BoundingBox.Min.X) ||
+			!near(a[i].BoundingBox.Min.Y, b[i].BoundingBox.Min.Y) ||
+			!near(a[i].BoundingBox.Max.X, b[i].BoundingBox.Max.X) ||
+			!near(a[i].BoundingBox.Max.Y, b[i].BoundingBox.Max.Y) {
 			return false
 		}
 
 		for j := range a[i].Landmarks {
-			if !close(a[i].Landmarks[j].X, b[i].Landmarks[j].X) ||
-				!close(a[i].Landmarks[j].Y, b[i].Landmarks[j].Y) {
+			if !near(a[i].Landmarks[j].X, b[i].Landmarks[j].X) ||
+				!near(a[i].Landmarks[j].Y, b[i].Landmarks[j].Y) {
 				return false
 			}
 		}
@@ -546,23 +638,45 @@ func facesEqual(a, b []detection.Face, tol float32) bool {
 	return true
 }
 
-func confidences(faces []detection.Face) []float32 {
-	out := make([]float32, len(faces))
-	for i, f := range faces {
-		out[i] = f.Confidence
+// endregion
+
+// region - Athens
+
+// athensConfigs isolates the execution mode against the layout athens actually ships at each precision, which is
+// the only comparison that answers "should the variant set ExecutionMode": measuring sequential against an NCHW
+// fp16 session would be measuring it against a config that does not exist.
+func athensConfigs(shipsNHWC bool) []benchConfig {
+	shipping := map[string]string{}
+	if shipsNHWC {
+		shipping = nhwc()
 	}
 
-	return out
+	return []benchConfig{
+		{name: "shipping (parallel)", cuda: shipping},
+		{name: "shipping+sequential", cuda: shipping, sequential: true},
+		{name: "other layout, parallel", cuda: flipNHWC(shipsNHWC)},
+		{name: "other layout, sequential", cuda: flipNHWC(shipsNHWC), sequential: true},
+	}
 }
 
-func TestCudaSweepNewYorkFp32(t *testing.T) {
-	setupRuntime(t)
-	sweep(t, "dt_newyork_fp32", newyorkConfigs(), 20, 10, 3, 20)
+func flipNHWC(shipsNHWC bool) map[string]string {
+	if shipsNHWC {
+		return map[string]string{"prefer_nhwc": "0"}
+	}
+
+	return nhwc()
 }
 
-func TestCudaSweepNewYorkFp16(t *testing.T) {
+func TestCudaSweepAthensFp32(t *testing.T) {
 	setupRuntime(t)
-	sweep(t, "dt_newyork_fp16", newyorkConfigs(), 20, 10, 3, 20)
+	// athens ships NCHW at fp32.
+	sweep(t, athensGraph(t, "fp32"), athensConfigs(false), 10, 8, 3, 10)
+}
+
+func TestCudaSweepAthensFp16(t *testing.T) {
+	setupRuntime(t)
+	// athens ships NHWC at fp16.
+	sweep(t, athensGraph(t, "fp16"), athensConfigs(true), 10, 8, 3, 10)
 }
 
 // endregion
