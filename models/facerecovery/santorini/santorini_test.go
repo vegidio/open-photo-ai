@@ -28,3 +28,19 @@ func TestVariantSpecialisesSantoriniForLatency(t *testing.T) {
 		t.Fatalf("CoreMLComputeUnits = %v, want ALL: santorini's fp16 graph is faster on the Neural Engine", got)
 	}
 }
+
+// The execution mode is the one setting in this profile that is not about CoreML, and it is the one a reader is most
+// likely to drop as redundant - it looks like a default being restated. It is worth 4-9% through the CUDA provider,
+// and both precisions want it, which is why the assertion covers both.
+func TestVariantRunsSantoriniSequentially(t *testing.T) {
+	for _, precision := range []types.Precision{types.PrecisionFp32, types.PrecisionFp16} {
+		t.Run(string(precision), func(t *testing.T) {
+			got := utils.ResolveProfile(variant.Profile, precision).ExecutionMode
+
+			if got != utils.ExecutionModeSequential {
+				t.Fatalf("ExecutionMode = %v, want Sequential: santorini's graph is a backbone, so the "+
+					"inter-op pool only costs it a thread handoff per node", got)
+			}
+		})
+	}
+}

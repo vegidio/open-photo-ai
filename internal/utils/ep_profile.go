@@ -23,11 +23,11 @@ import (
 // The zero value reproduces the behaviour that shipped before profiles existed, which is what lets every existing
 // call site keep passing no profile at all.
 //
-// Not every field is driven by a model yet: today Osaka sets DynamicShapes, DisableMemPattern, DisableOptimizers
-// and ExcludeEPs, Athens sets CoreMLComputeUnits and - for its fp16 export only - CudaPreferNHWC, and Santorini sets
-// CoreMLSpecialization. The rest are reserved for per-model TensorRT and precision tuning that is already planned -
-// they are deliberately kept rather than trimmed to what has a caller today, so treat "no setter" here as "not
-// wired up yet", not as dead code.
+// Not every field is driven by a model yet: today Osaka sets DynamicShapes, DisableMemPattern, DisableOptimizers and
+// ExcludeEPs, Athens sets CoreMLComputeUnits and - for its fp16 export only - CudaPreferNHWC, and Santorini sets
+// CoreMLSpecialization and ExecutionMode. The rest are reserved for per-model TensorRT and precision tuning that is
+// already planned - they are deliberately kept rather than trimmed to what has a caller today, so treat "no setter"
+// here as "not wired up yet", not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -76,6 +76,10 @@ type EPProfile struct {
 	// GraphOptimization selects how far ONNX Runtime rewrites the graph before running it. The zero value is the
 	// full pipeline, which is what every model used before profiles existed.
 	GraphOptimization GraphOptimization
+
+	// ExecutionMode selects whether ONNX Runtime may run independent branches of the graph on separate threads. The
+	// zero value is parallel, which is what every model used before profiles existed.
+	ExecutionMode ExecutionMode
 
 	// DisableOptimizers names individual graph transformers to switch off while leaving the rest of the pipeline
 	// on. It is the scalpel to GraphOptimization's hammer: a model that one transformer miscompiles keeps every
@@ -165,6 +169,36 @@ func (c CoreMLSpecialization) value() string {
 	default:
 		return "Default"
 	}
+}
+
+// ExecutionMode is whether ONNX Runtime may run independent branches of a graph on separate threads.
+//
+// It is a per-model property because the win it is there for is a property of the graph's shape: the inter-op thread
+// pool only pays for itself when the graph has wide, genuinely independent branches, and it costs a thread handoff at
+// every node either way. These graphs are backbones - a U-Net, a StyleGAN decoder - which are close to linear, so on
+// them the handoff is all there is, and it is charged per Run rather than once.
+//
+// The cost is not confined to the CPU provider. Under a GPU provider every node is enqueued onto one stream, so
+// inter-op threading buys nothing at all there and the scheduling still has to happen: santorini measures -4% at
+// fp32 and -8% at fp16 through the CUDA provider from switching this to sequential, with a bit-identical output.
+type ExecutionMode int
+
+const (
+	// ExecutionModeParallel lets ONNX Runtime run independent branches on separate threads. It is the mode every
+	// model used before profiles existed, so it stays the zero value.
+	ExecutionModeParallel ExecutionMode = iota
+
+	// ExecutionModeSequential runs one node at a time on the calling thread. It is for the graphs that have no
+	// branch wide enough to pay for the inter-op pool, which is most of them.
+	ExecutionModeSequential
+)
+
+func (e ExecutionMode) mode() ort.ExecutionMode {
+	if e == ExecutionModeSequential {
+		return ort.ExecutionModeSequential
+	}
+
+	return ort.ExecutionModeParallel
 }
 
 // GraphOptimization is how far ONNX Runtime is allowed to rewrite a graph.
@@ -325,6 +359,10 @@ func applyProfile(options *ort.SessionOptions, p EPProfile) error {
 		return errors.Wrap(err, "failed to set the graph optimization level")
 	}
 
+	if err := options.SetExecutionMode(p.ExecutionMode.mode()); err != nil {
+		return errors.Wrap(err, "failed to set the execution mode")
+	}
+
 	if len(p.DisableOptimizers) > 0 {
 		if err := options.AddSessionConfigEntry(disableOptimizersKey, strings.Join(p.DisableOptimizers, ";")); err != nil {
 			return errors.Wrap(err, "failed to disable the specified optimizers")
@@ -406,10 +444,10 @@ func cudaOptions(p EPProfile) map[string]string {
 	}
 
 	return map[string]string{
-		"device_id":                    "0",
-		"do_copy_in_default_stream":    "1",
 		"cudnn_conv_algo_search":       "EXHAUSTIVE",
 		"cudnn_conv_use_max_workspace": "1",
+		"device_id":                    "0",
+		"do_copy_in_default_stream":    "1",
 		"enable_cuda_graph":            "0",
 		"gpu_mem_limit":                "0",
 		"prefer_nhwc":                  preferNHWC,
@@ -425,12 +463,12 @@ func coreMLOptions(cachePath string, p EPProfile) map[string]string {
 	}
 
 	return map[string]string{
-		"ModelFormat":              "MLProgram",
-		"MLComputeUnits":           p.CoreMLComputeUnits.value(),
-		"SpecializationStrategy":   p.CoreMLSpecialization.value(),
-		"RequireStaticInputShapes": staticShapes,
 		"EnableOnSubgraphs":        "0",
+		"MLComputeUnits":           p.CoreMLComputeUnits.value(),
 		"ModelCacheDirectory":      cachePath,
+		"ModelFormat":              "MLProgram",
+		"RequireStaticInputShapes": staticShapes,
+		"SpecializationStrategy":   p.CoreMLSpecialization.value(),
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/vegidio/open-photo-ai/types"
+	ort "github.com/yalue/onnxruntime_go"
 )
 
 func TestCoreMLOptionsFollowTheProfile(t *testing.T) {
@@ -127,6 +128,28 @@ func TestCudaOptionsFollowTheProfile(t *testing.T) {
 
 // A profile that ignores the precision it was handed would silently apply one export's tuning to the other, which is
 // exactly what CudaPreferNHWC must not do.
+// The execution mode is applied by applyProfile rather than by a provider appender, so nothing else in this file
+// covers it - and getting it wrong is silent, since the session still builds and still returns the right answer.
+func TestExecutionModeFollowsTheProfile(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile EPProfile
+		want    ort.ExecutionMode
+	}{
+		{"the zero value keeps the shipped behaviour", EPProfile{}, ort.ExecutionModeParallel},
+		{"a backbone graph opts out of the inter-op pool",
+			EPProfile{ExecutionMode: ExecutionModeSequential}, ort.ExecutionModeSequential},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.profile.ExecutionMode.mode(); got != tt.want {
+				t.Fatalf("mode() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveProfilePassesThePrecisionThrough(t *testing.T) {
 	if got := ResolveProfile(nil, types.PrecisionFp16); !reflect.DeepEqual(got, EPProfile{}) {
 		t.Fatalf("a variant with no profile must get the zero value, got %+v", got)

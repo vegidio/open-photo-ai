@@ -254,12 +254,8 @@ func createSessionInner(
 	}
 	defer options.Destroy()
 
-	// Extra session options. The graph optimization level is applied by applyProfile below, since how far the graph
-	// may be rewritten is a per-model property.
-	if err = options.SetExecutionMode(ort.ExecutionModeParallel); err != nil {
-		return nil, errors.Wrap(err, "failed to set execution mode")
-	}
-
+	// The session-level settings - the graph optimization level, the execution mode, the memory planner - are all
+	// applied by applyProfile, since each of them is a per-model property.
 	if err = applyProfile(options, p); err != nil {
 		return nil, err
 	}
