@@ -25,9 +25,10 @@ import (
 //
 // Not every field is driven by a model yet: today Osaka sets DynamicShapes, DisableMemPattern, DisableOptimizers and
 // ExcludeEPs, Athens sets CoreMLComputeUnits and - for its fp16 export only - CudaPreferNHWC, Santorini sets
-// CoreMLSpecialization and ExecutionMode, and Tokyo sets CoreMLComputeUnits and ExecutionMode. The rest are reserved
-// for per-model TensorRT and precision tuning that is already planned - they are deliberately kept rather than
-// trimmed to what has a caller today, so treat "no setter" here as "not wired up yet", not as dead code.
+// CoreMLSpecialization and ExecutionMode, Tokyo sets CoreMLComputeUnits and ExecutionMode, and New York sets
+// CudaPreferNHWC and ExecutionMode. The rest are reserved for per-model TensorRT and precision tuning that is already
+// planned - they are deliberately kept rather than trimmed to what has a caller today, so treat "no setter" here as
+// "not wired up yet", not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -54,10 +55,16 @@ type EPProfile struct {
 
 	// CudaPreferNHWC runs the CUDA provider's convolutions in NHWC rather than ONNX Runtime's default NCHW.
 	//
-	// It is per-model, and per-precision within a model, because it is not an optimisation the runtime can pick on
-	// its own merits: NHWC is the layout cuDNN's fp16 tensor-core kernels want, so an fp16 graph stops paying for
-	// the transposes around every convolution, while the same graph in fp32 has no tensor-core path to reach and
-	// only pays the layout conversion. Athens measures -4% end to end in fp16 and +8% in fp32 from this one flag.
+	// It is per-model, and can differ per-precision within a model, because it is not an optimisation the runtime
+	// can pick on its own merits. The intuition is that NHWC is the layout cuDNN's fp16 tensor-core kernels want,
+	// so an fp16 graph stops paying for the transposes around every convolution while an fp32 one has no
+	// tensor-core path to reach and only pays the layout conversion: athens measures -4% end to end in fp16 and
+	// +8% in fp32 from this one flag, and sets it for fp16 alone.
+	//
+	// Do not turn that into a rule. New York wants NHWC in BOTH precisions - -35% in fp16 and -17.5% in fp32 on
+	// the graph alone - because what actually decides it is which layouts cuDNN has kernels for on the shapes the
+	// graph asks for, and a RetinaFace backbone at a fixed 640x640 gets a different answer from a CodeFormer at
+	// 512x512. Two models here, opposite answers in fp32: measure it per graph, per precision.
 	//
 	// It is also not universally safe. ORT's layout transform mishandles a Conv whose weights are computed rather
 	// than an initializer - a StyleGAN-style modulated convolution - and the graph then fails at Run with a channel
@@ -440,8 +447,8 @@ func tensorRTOptions(cachePath string, p EPProfile) map[string]string {
 }
 
 func cudaOptions(p EPProfile) map[string]string {
-	// NCHW is ORT's default and stays the default here. NHWC is a win only where the convolutions run on fp16
-	// tensor cores, and it is a measured loss on the same graph in fp32 - see EPProfile.CudaPreferNHWC.
+	// NCHW is ORT's default and stays the default here, because the models that want NHWC do not agree on when:
+	// athens is a win in fp16 and a loss in fp32, newyork is a win in both - see EPProfile.CudaPreferNHWC.
 	preferNHWC := "0"
 	if p.CudaPreferNHWC {
 		preferNHWC = "1"
