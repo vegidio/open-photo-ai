@@ -52,7 +52,7 @@ var graphs = []upscale.GraphSpec{
 // TensorRT needs explicit optimization profiles for dynamic inputs, and without them it either rebuilds an engine for
 // every distinct tile size - minutes each - or grows an unbounded engine cache. Adding them means committing to shape
 // ranges this pipeline does not yet have measurements for.
-func profileFor() utils.EPProfile {
+func profileFor(types.Precision) utils.EPProfile {
 	return utils.EPProfile{
 		DynamicShapes:     true,
 		DisableMemPattern: true,

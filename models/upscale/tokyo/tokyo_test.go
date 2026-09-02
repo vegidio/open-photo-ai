@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/vegidio/open-photo-ai/internal/utils"
+	"github.com/vegidio/open-photo-ai/types"
 )
 
 // Tokyo is the one convolutional upscale variant with provider tuning, and the tuning is what stops CoreML from
@@ -15,7 +16,7 @@ func TestVariantKeepsTokyoOffTheNeuralEngine(t *testing.T) {
 		t.Fatal("tokyo must carry a provider profile")
 	}
 
-	if got := variant.Profile().CoreMLComputeUnits; got != utils.CoreMLComputeUnitsCPUAndGPU {
+	if got := variant.Profile(types.PrecisionFp16).CoreMLComputeUnits; got != utils.CoreMLComputeUnitsCPUAndGPU {
 		t.Fatalf("CoreMLComputeUnits = %v, want CPUAndGPU", got)
 	}
 }
@@ -24,7 +25,7 @@ func TestVariantKeepsTokyoOffTheNeuralEngine(t *testing.T) {
 // slowly when measured - it wedged the process at 11.5 GB resident. The default strategy is therefore load-bearing
 // here rather than simply un-tuned, which is worth pinning so nobody adopts Santorini's setting by analogy.
 func TestVariantLeavesTokyoOnTheDefaultSpecialization(t *testing.T) {
-	if got := variant.Profile().CoreMLSpecialization; got != utils.CoreMLSpecializationDefault {
+	if got := variant.Profile(types.PrecisionFp16).CoreMLSpecialization; got != utils.CoreMLSpecializationDefault {
 		t.Fatalf("CoreMLSpecialization = %v, want Default: FastPrediction hangs on tokyo's graph", got)
 	}
 }

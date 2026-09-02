@@ -37,7 +37,7 @@ type Variant struct {
 	// what a variant nobody has measured should get: the right settings follow the graph's op mix, so carrying one
 	// variant's findings to another because both upscale is how a profile ends up pessimising a model it was never
 	// measured against. Ignored when Diffusion is set - that contract carries its own DiffusionSpec.Profile.
-	Profile func() utils.EPProfile
+	Profile func(precision types.Precision) utils.EPProfile
 }
 
 // GraphSpec names one graph of a multi-stage variant and the tensors it takes and returns. The names are not shared
@@ -86,7 +86,7 @@ type DiffusionSpec struct {
 	Graphs []GraphSpec
 
 	// Profile is the provider tuning every graph of this variant needs.
-	Profile func() utils.EPProfile
+	Profile func(precision types.Precision) utils.EPProfile
 
 	// Run is the variant's own pipeline, given the loaded model and the per-run scale.
 	Run func(ctx context.Context, m *Model, img image.Image, scale float64,
@@ -124,7 +124,7 @@ func (v *Variant) New(
 
 	scales := SelectScaleMatrix(op.scale, v.ScaleBuckets)
 
-	sessions, err := LoadSessions(ctx, v.Codename, op.precision, scales, ep, utils.ResolveProfile(v.Profile), onProgress)
+	sessions, err := LoadSessions(ctx, v.Codename, op.precision, scales, ep, utils.ResolveProfile(v.Profile, op.precision), onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s sessions", v.Codename)
 	}
@@ -156,7 +156,7 @@ func (v *Variant) newDiffusion(
 
 	// The shared loader destroys a partially-opened set for us, so a failure here leaks nothing - which matters most
 	// for this kind of model, whose first graph alone can be nearly 7 GB.
-	sessions, err := utils.LoadSessions(ctx, specs, ep, v.Diffusion.Profile(), onProgress)
+	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.ResolveProfile(v.Diffusion.Profile, op.precision), onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s sessions", v.Codename)
 	}

@@ -41,7 +41,7 @@ var variant = &facerecovery.Variant{
 // the Neural Engine takes it whole. Before these weights were re-exported its Resize nodes were held at fp32, 84
 // Cast nodes wrapping all 42 upsamples, and ALL measured 324.6ms against CPUAndGPU's 244.0ms - the Athens rule
 // looked right for it too. If the weights are re-exported again, that ordering is the thing to re-measure.
-func profileFor() utils.EPProfile {
+func profileFor(types.Precision) utils.EPProfile {
 	return utils.EPProfile{CoreMLSpecialization: utils.CoreMLSpecializationFastPrediction}
 }
 

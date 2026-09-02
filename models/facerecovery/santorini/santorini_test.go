@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/vegidio/open-photo-ai/internal/utils"
+	"github.com/vegidio/open-photo-ai/types"
 )
 
 // The tuning is the only thing asserting santorini's CoreML settings, and getting either half wrong is silent: the
@@ -15,7 +16,7 @@ func TestVariantSpecialisesSantoriniForLatency(t *testing.T) {
 		t.Fatal("santorini must carry a provider profile")
 	}
 
-	profile := variant.Profile()
+	profile := variant.Profile(types.PrecisionFp16)
 
 	if got := profile.CoreMLSpecialization; got != utils.CoreMLSpecializationFastPrediction {
 		t.Fatalf("CoreMLSpecialization = %v, want FastPrediction", got)

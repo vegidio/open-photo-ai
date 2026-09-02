@@ -37,7 +37,7 @@ type Variant struct {
 	// is what a variant nobody has measured should get: the tuning here is per-graph, and carrying one model's
 	// findings over to another on the strength of them being the same kind of model is how a profile ends up
 	// pessimising the model it was never measured against.
-	Profile func() utils.EPProfile
+	Profile func(precision types.Precision) utils.EPProfile
 
 	// The feathered blend mask is a pure function of TileSize, which is fixed per variant - but building it means
 	// filling a TileSize-square image and then Gaussian-blurring it, which was being redone on every single Run.
@@ -80,7 +80,7 @@ func (v *Variant) New(
 	// variant rather than from the one-in-one-out convention.
 	specs := []utils.SessionSpec{{ModelId: op.Id(), Inputs: v.Inputs, Outputs: []string{"output"}}}
 
-	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.ResolveProfile(v.Profile), onProgress)
+	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.ResolveProfile(v.Profile, op.precision), onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}

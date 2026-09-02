@@ -10,7 +10,7 @@ import (
 // Both exclusions were established empirically and are cheap to lose in a refactor, so they are pinned here with the
 // reason attached rather than left to the comment in loader.go alone.
 func TestProfileExcludesTheProvidersThatCannotRunThisModel(t *testing.T) {
-	p := profileFor()
+	p := profileFor(types.PrecisionFp32)
 
 	excluded := map[types.ExecutionProvider]string{
 		types.ExecutionProviderCoreML:   "the VAE cannot initialize, and the DiT either aborts or silently returns a wrong result",
@@ -29,7 +29,7 @@ func TestProfileExcludesTheProvidersThatCannotRunThisModel(t *testing.T) {
 // provider to expect static shapes makes it decline the varying subgraphs, and the memory-pattern planner reserves
 // for the largest region it has seen and never gives it back.
 func TestProfileDeclaresTheGraphDynamic(t *testing.T) {
-	p := profileFor()
+	p := profileFor(types.PrecisionFp32)
 
 	if !p.DynamicShapes {
 		t.Error("DynamicShapes must be set: all three graphs have dynamic spatial axes")

@@ -28,7 +28,7 @@ type Variant struct {
 	// is what a variant nobody has measured should get: the tuning here is per-graph, and carrying one model's
 	// findings over to another on the strength of them being the same kind of model is how a profile ends up
 	// pessimising the model it was never measured against.
-	Profile func() utils.EPProfile
+	Profile func(precision types.Precision) utils.EPProfile
 }
 
 // Op builds this variant's operation at the given precision.
@@ -55,7 +55,7 @@ func (v *Variant) New(
 	// variant rather than from the one-in-one-out convention.
 	specs := []utils.SessionSpec{{ModelId: op.Id(), Inputs: []string{"input"}, Outputs: v.Outputs}}
 
-	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.ResolveProfile(v.Profile), onProgress)
+	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.ResolveProfile(v.Profile, op.precision), onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}

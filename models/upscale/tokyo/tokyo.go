@@ -40,7 +40,7 @@ var variant = &upscale.Variant{
 // How far this carries to other Macs: the cause is the graph's op mix and an ANE compiler limitation, both of which
 // are the same everywhere, so the direction should hold on any Apple Silicon Mac; on Intel there is no Neural Engine
 // and the setting is a no-op. The 1.67x is this machine's number - a smaller GPU narrows it.
-func profileFor() utils.EPProfile {
+func profileFor(types.Precision) utils.EPProfile {
 	return utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU}
 }
 

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/vegidio/open-photo-ai/types"
@@ -101,6 +102,45 @@ func TestTensorRTOptionsFollowTheProfile(t *testing.T) {
 	}
 	if tuned["trt_profile_min_shapes"] != "vid_input:1x33x32x32" {
 		t.Fatalf("shape profile not merged: %q", tuned["trt_profile_min_shapes"])
+	}
+}
+
+func TestCudaOptionsFollowTheProfile(t *testing.T) {
+	zero := cudaOptions(EPProfile{})
+
+	// NCHW is ORT's default, and a model nobody has measured must get it: NHWC is a loss on an fp32 graph and
+	// fails outright on a graph whose Conv weights are computed rather than stored.
+	if zero["prefer_nhwc"] != "0" {
+		t.Fatalf("NHWC must be opt-in, got %q", zero["prefer_nhwc"])
+	}
+
+	// The capture run is the only correct one on TensorRT, and it dies outright on this provider. See the comment
+	// above tensorRTOptions.
+	if zero["enable_cuda_graph"] != "0" {
+		t.Fatalf("CUDA graph capture must stay off, got %q", zero["enable_cuda_graph"])
+	}
+
+	if tuned := cudaOptions(EPProfile{CudaPreferNHWC: true}); tuned["prefer_nhwc"] != "1" {
+		t.Fatalf("NHWC not applied: %q", tuned["prefer_nhwc"])
+	}
+}
+
+// A profile that ignores the precision it was handed would silently apply one export's tuning to the other, which is
+// exactly what CudaPreferNHWC must not do.
+func TestResolveProfilePassesThePrecisionThrough(t *testing.T) {
+	if got := ResolveProfile(nil, types.PrecisionFp16); !reflect.DeepEqual(got, EPProfile{}) {
+		t.Fatalf("a variant with no profile must get the zero value, got %+v", got)
+	}
+
+	profile := func(precision types.Precision) EPProfile {
+		return EPProfile{CudaPreferNHWC: precision == types.PrecisionFp16}
+	}
+
+	if !ResolveProfile(profile, types.PrecisionFp16).CudaPreferNHWC {
+		t.Error("fp16 profile not resolved")
+	}
+	if ResolveProfile(profile, types.PrecisionFp32).CudaPreferNHWC {
+		t.Error("fp32 resolved to the fp16 profile")
 	}
 }
 

@@ -20,7 +20,9 @@ var variant = &facerecovery.Variant{
 	Profile:  profileFor,
 }
 
-// profileFor keeps athens off the Neural Engine.
+// profileFor keeps athens off the Neural Engine, and runs its fp16 graph in NHWC on CUDA.
+//
+// # CoreML
 //
 // Measured through this code path on an M2 Max (macOS 26.6, ONNX Runtime 1.26), one 512x512 face, median of 7 runs
 // against the fp32 result:
@@ -44,8 +46,40 @@ var variant = &facerecovery.Variant{
 // Engine is close to uniform across Apple Silicon while the GPU is not - so the direction should hold on any Mac,
 // and on Intel there is no Neural Engine and the setting is a no-op. The 1.57x is this machine's number, though. A
 // smaller GPU narrows the gap, so expect less there. It has not been measured on another chip or another macOS.
-func profileFor() utils.EPProfile {
-	return utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU}
+//
+// # CUDA
+//
+// NHWC is set for fp16 only, and the fp32 row is why it is not set for both. Measured on an RTX 5090 (driver 610.88,
+// ONNX Runtime 1.26, CUDA EP) - the graph alone is one 512x512 face, median of 20 runs; end to end is perftest's
+// median over 20 runs of the two faces in its sample, which also carries the align and blend work:
+//
+//	                  graph alone            end to end
+//	fp16 NCHW         29.3ms                 91.6ms
+//	fp16 NHWC         27.1ms (-7.7%)         87.9ms (-4.0%)
+//	fp32 NCHW         45.6ms                 124.1ms
+//	fp32 NHWC         48.3ms (+5.9%)         133.9ms (+7.9%)
+//
+// The split is the tensor cores: cuDNN's fp16 kernels are written for NHWC, so in fp16 the flag removes a transpose
+// pair around every convolution and reaches those kernels, while in fp32 there are no such kernels to reach and the
+// layout conversion is pure cost. CodeFormer is convolution-heavy enough for that to be worth measuring even though
+// its transformer stack is not.
+//
+// Output quality is unaffected. Through the real pipeline - detection, align, restore, blend - NHWC lands 67.1 dB
+// PSNR from the NCHW result, while both sit 56.6 dB from the fp32 model: the layout moves the answer by well under
+// what choosing fp16 at all already moves it, and the two restored faces are indistinguishable at 3x zoom.
+//
+// The rest of the CUDA knobs were measured on this graph and left alone: cudnn_conv_algo_search=HEURISTIC is inside
+// the noise of EXHAUSTIVE (and DEFAULT is 70% slower), do_copy_in_default_stream, arena_extend_strategy,
+// use_ep_level_unified_stream, tunable_op_enable and sdpa_kernel all measure as ties, use_tf32=0 costs 37%, and
+// fuse_conv_bias=1 returns a different answer on every run and must stay off.
+func profileFor(precision types.Precision) utils.EPProfile {
+	profile := utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU}
+
+	if precision == types.PrecisionFp16 {
+		profile.CudaPreferNHWC = true
+	}
+
+	return profile
 }
 
 // New loads the athens session for the given operation.

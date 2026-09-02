@@ -24,9 +24,10 @@ import (
 // call site keep passing no profile at all.
 //
 // Not every field is driven by a model yet: today Osaka sets DynamicShapes, DisableMemPattern, DisableOptimizers
-// and ExcludeEPs, Athens sets CoreMLComputeUnits, and Santorini sets CoreMLSpecialization. The rest are reserved for
-// per-model TensorRT and precision tuning that is already planned - they are deliberately kept rather than trimmed
-// to what has a caller today, so treat "no setter" here as "not wired up yet", not as dead code.
+// and ExcludeEPs, Athens sets CoreMLComputeUnits and - for its fp16 export only - CudaPreferNHWC, and Santorini sets
+// CoreMLSpecialization. The rest are reserved for per-model TensorRT and precision tuning that is already planned -
+// they are deliberately kept rather than trimmed to what has a caller today, so treat "no setter" here as "not
+// wired up yet", not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -51,6 +52,19 @@ type EPProfile struct {
 	// chain is used instead, never a silent drop to the CPU.
 	ExcludeEPs []types.ExecutionProvider
 
+	// CudaPreferNHWC runs the CUDA provider's convolutions in NHWC rather than ONNX Runtime's default NCHW.
+	//
+	// It is per-model, and per-precision within a model, because it is not an optimisation the runtime can pick on
+	// its own merits: NHWC is the layout cuDNN's fp16 tensor-core kernels want, so an fp16 graph stops paying for
+	// the transposes around every convolution, while the same graph in fp32 has no tensor-core path to reach and
+	// only pays the layout conversion. Athens measures -4% end to end in fp16 and +8% in fp32 from this one flag.
+	//
+	// It is also not universally safe. ORT's layout transform mishandles a Conv whose weights are computed rather
+	// than an initializer - a StyleGAN-style modulated convolution - and the graph then fails at Run with a channel
+	// mismatch rather than at session build. That is the strongest reason this is opt-in per model: turning it on
+	// globally would break models nobody re-measured.
+	CudaPreferNHWC bool
+
 	// CoreMLComputeUnits selects which of the Mac's engines CoreML may dispatch this model to. The zero value is
 	// ALL, which is what every model used before profiles existed.
 	CoreMLComputeUnits CoreMLComputeUnits
@@ -72,16 +86,21 @@ type EPProfile struct {
 	Extra map[string]string
 }
 
-// ResolveProfile returns the profile a variant declares, or the zero value when it declares none.
+// ResolveProfile returns the profile a variant declares for the precision being loaded, or the zero value when it
+// declares none.
 //
 // Every model family spells "nobody has measured this graph" the same way - a nil Profile func on the variant - so
 // the unwrap lives here next to EPProfile rather than being re-written in each family's variant.go.
-func ResolveProfile(fn func() EPProfile) EPProfile {
+//
+// The precision is passed in because tuning does not survive the precision change: the same graph exported in fp16
+// and in fp32 wants opposite answers from CudaPreferNHWC, and a profile that could not see the precision would have
+// to pick the one that pessimises the other export.
+func ResolveProfile(fn func(types.Precision) EPProfile, precision types.Precision) EPProfile {
 	if fn == nil {
 		return EPProfile{}
 	}
 
-	return fn()
+	return fn(precision)
 }
 
 // CoreMLComputeUnits is the set of engines CoreML may dispatch a model to.
@@ -332,6 +351,25 @@ func applyProfile(options *ort.SessionOptions, p EPProfile) error {
 // Each provider's settings are built by a pure function so the mapping from profile to options can be tested without
 // an ONNX Runtime present, which is the only part of this file a unit test can reach.
 
+// CUDA graph capture - trt_cuda_graph_enable on TensorRT, enable_cuda_graph on the CUDA provider - is off in both
+// option maps below, and this is why. It is not a "revisit when there is time" setting: it is measured, and both
+// providers fail it, in opposite ways.
+//
+// On TensorRT the capture run is correct and every run after it silently returns an all-zero output. Re-measured
+// against athens on 2026-09-02 (RTX 5090, driver 610.88, ONNX Runtime 1.26, both precisions): the first Run matches
+// the graph-off result exactly, then 20 of 20 subsequent Runs on that session return zeros, with no error and with
+// plausible timings - the replay writes nothing, which is also where the "9% faster" that makes this tempting comes
+// from. In the app that surfaces as no faces found from the second detection on, or blank recovered faces, so a
+// benchmark that only checks its first run will report a win and ship a broken model.
+//
+// On the CUDA provider it fails loudly instead: the capture run dies in cudaStreamEndCapture because cuBLAS
+// initialises lazily inside the captured stream ("CUBLAS failure 1: the library was not initialized"), so the very
+// first inference errors out. ORT also requires every input and output to be bound to device memory for capture,
+// which this codebase's host tensors are not.
+//
+// Anyone revisiting this needs one thing the earlier attempt lacked: verify the SECOND Run on the SAME session
+// against a CPU or graph-off result. A single-run comparison cannot see either failure.
+
 func tensorRTOptions(cachePath string, p EPProfile) map[string]string {
 	workspace := int64(4294967296)
 	if p.TrtWorkspaceBytes > 0 {
@@ -359,7 +397,14 @@ func tensorRTOptions(cachePath string, p EPProfile) map[string]string {
 	return options
 }
 
-func cudaOptions(_ EPProfile) map[string]string {
+func cudaOptions(p EPProfile) map[string]string {
+	// NCHW is ORT's default and stays the default here. NHWC is a win only where the convolutions run on fp16
+	// tensor cores, and it is a measured loss on the same graph in fp32 - see EPProfile.CudaPreferNHWC.
+	preferNHWC := "0"
+	if p.CudaPreferNHWC {
+		preferNHWC = "1"
+	}
+
 	return map[string]string{
 		"device_id":                    "0",
 		"do_copy_in_default_stream":    "1",
@@ -367,6 +412,7 @@ func cudaOptions(_ EPProfile) map[string]string {
 		"cudnn_conv_use_max_workspace": "1",
 		"enable_cuda_graph":            "0",
 		"gpu_mem_limit":                "0",
+		"prefer_nhwc":                  preferNHWC,
 	}
 }
 
@@ -399,9 +445,9 @@ func appendTensorRT(cachePath string, options *ort.SessionOptions, p EPProfile) 
 	}
 	defer trtOptions.Destroy()
 
-	// TODO: Review 'trt_cuda_graph_enable' in the future; it can drastically increase the performance, but it often
-	//  causes crashes when re-using the same session.
-	trtOptions.Update(tensorRTOptions(cachePath, p))
+	if err = trtOptions.Update(tensorRTOptions(cachePath, p)); err != nil {
+		return errors.Wrap(err, "failed to apply the TensorRT EP options")
+	}
 
 	return options.AppendExecutionProviderTensorRT(trtOptions)
 }
@@ -413,9 +459,9 @@ func appendCuda(_ string, options *ort.SessionOptions, p EPProfile) error {
 	}
 	defer cudaOpts.Destroy()
 
-	// TODO: Review 'enable_cuda_graph' in the future; it can drastically increase the performance, but it often
-	//  causes crashes when re-using the same session.
-	cudaOpts.Update(cudaOptions(p))
+	if err = cudaOpts.Update(cudaOptions(p)); err != nil {
+		return errors.Wrap(err, "failed to apply the CUDA EP options")
+	}
 
 	return options.AppendExecutionProviderCUDA(cudaOpts)
 }
