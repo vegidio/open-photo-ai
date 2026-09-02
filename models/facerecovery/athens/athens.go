@@ -42,6 +42,30 @@ var variant = &facerecovery.Variant{
 // Both precisions are set, though only fp16 moves. It documents the intent, and it means a future export that shifts
 // what the Neural Engine will accept cannot silently re-enable it.
 //
+// # Execution mode
+//
+// Athens declares no ExecutionMode, unlike santorini next door, so it takes the zero value and runs PARALLEL - which
+// applyProfile sets explicitly, rather than leaving to ONNX Runtime, whose own default is sequential. That is a gap
+// rather than a finding, but the CoreML half of it is measured: `go test -tags coremlbench -run
+// TestCoreMLExecutionModeAthens ./internal/utils/`. That test sweeps this model in BOTH build orders, which the
+// other three do not need - they already ship sequential on the strength of what it is worth on CUDA, so their
+// CoreML sweeps only have to show it costs nothing, whereas here a CoreML number is the only evidence there is:
+//
+//	                    parallel first        sequential first
+//	fp32 parallel       106.280ms             106.657ms
+//	fp32 sequential     106.404ms             106.975ms
+//	fp16 parallel        94.379ms              94.550ms
+//	fp16 sequential      94.662ms              94.737ms
+//
+// Parallel is ahead in all four, including in the rows where it is the session that runs second, so the sign is real
+// rather than an artifact of the order - but it is 0.1-0.3%, which is a tie in any sense that matters. What makes it
+// worth recording is that athens is the only fp16 graph in the catalogue that does NOT prefer sequential on CoreML,
+// where tokyo, santorini and newyork gain 3.5-6.5%.
+//
+// A tie on CoreML is still no reason to set the mode either way. The reason santorini sets it is what it is worth on
+// CUDA, and this graph has never been measured there. Anyone with a CUDA machine should try it: santorini is the
+// same kind of backbone and gains 4-9%, and tokyo, which shares this model's transformer, gains far more.
+//
 // How far this carries to other Macs: the cause is the graph's op mix, which is the same everywhere, and the Neural
 // Engine is close to uniform across Apple Silicon while the GPU is not - so the direction should hold on any Mac,
 // and on Intel there is no Neural Engine and the setting is a no-op. The 1.57x is this machine's number, though. A

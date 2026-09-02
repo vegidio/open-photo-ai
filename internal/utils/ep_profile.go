@@ -192,6 +192,35 @@ func (c CoreMLSpecialization) value() string {
 // What it is worth scales with the node count, since the handoff is charged per node: tokyo, at 2682 nodes against
 // santorini's few hundred, measures -27% at fp32 and -18% at fp16 the same way. That is the reason to try this on
 // any new graph before reaching for a provider option - it is usually the larger number, and it costs nothing.
+//
+// It is a session setting rather than a per-provider one, so a model that sets it sets it everywhere, and the
+// question of whether that is safe has been settled by measurement on every provider this codebase ships. On
+// TensorRT it is a tie, because that provider fuses the graph into one node and leaves the inter-op pool nothing to
+// schedule. On CoreML it splits cleanly by precision - measured with internal/utils/coreml_bench_test.go on an M2
+// Max (macOS 26.6, ONNX Runtime 1.29), sequential against parallel:
+//
+//	              fp32        fp16
+//	tokyo         +0.2%       -3.5%
+//	santorini     +0.5%       -4.8%
+//	newyork       +0.5%       -6.5%
+//	athens        +0.3%       +0.2%
+//
+// Every fp16 graph but athens wins, every fp32 graph is a tie, nothing loses by more than half a percent, and the
+// output is bit-identical in all of them. So there is no provider for which this needs to be made conditional, and
+// the field stays a plain per-model setting.
+//
+// Two cautions for anyone re-measuring it on a Mac, because both can manufacture an effect the size of the one being
+// looked for, and both did before the harness was corrected.
+//
+// The first is position bias inside a sweep. Interleaving at round granularity is not enough: if the two sessions
+// always run in the same order within a round, whatever the machine does over a round is charged entirely to
+// whichever runs second, which measured about 2% - and reversing the order reversed the sign, which is what gave it
+// away. The harness now alternates the order every round and wants an even round count so that cancels.
+//
+// The second is thermal drift, which on this hardware is larger than anything being measured. The same tokyo fp16
+// configuration measured 1619ms, then 4780ms on a loaded machine, then 2319ms after a three-minute pause; the
+// median-to-minimum spread within a sweep is the tell that it is happening. Compare only rows from the same sweep,
+// never an absolute number against one recorded earlier.
 type ExecutionMode int
 
 const (

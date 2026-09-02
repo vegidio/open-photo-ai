@@ -82,9 +82,16 @@ var variant = &detection.Variant{
 // for. And CPUAndNeuralEngine at fp32 is the reminder that the Neural Engine is fp16-only: with the GPU withheld the
 // fp32 graph has nowhere to go but the CPU.
 //
-// ExecutionMode is not per-provider, so the sequential setting above reaches CoreML too, and that has not been
-// measured on a Mac - the CoreML rows predate it. The graph is the same near-linear backbone there, which is the
-// argument the ExecutionMode doc makes for expecting no loss, but it is an expectation and not a measurement.
+// ExecutionMode is not per-provider, so the sequential setting above reaches CoreML too. That is now measured rather
+// than assumed - `go test -tags coremlbench -run TestCoreMLExecutionModeNewYork ./internal/utils/`, same machine,
+// isolating Run over 20 blocks of 20 runs across four interleaved rounds:
+//
+//	                    fp32                fp16
+//	Parallel            9.94ms              7.27ms
+//	Sequential          9.99ms (+0.5%)      6.80ms (-6.5%)
+//
+// This is the largest CoreML win the mode has in the catalogue, and it is the fp16 half alone; fp32 is a tie. Both
+// rows are bit-identical to the parallel result, so it is a setting rather than a trade here too.
 //
 // # Export
 //

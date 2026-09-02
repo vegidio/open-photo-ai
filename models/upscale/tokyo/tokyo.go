@@ -70,9 +70,23 @@ var variant = &upscale.Variant{
 // schedule either way. Setting the mode unconditionally is still right - the CUDA provider is what a machine without
 // TensorRT runs on, and it is where the 1.37x is.
 //
-// CoreML has not been re-measured with it, since the mode is set on the session rather than per provider and the
-// Mac numbers above predate it. The expectation is the TensorRT one rather than the CUDA one - CoreML also takes
-// the graph in a small number of partitions - so it should be a tie there, but that is reasoning, not a measurement.
+// CoreML has now been measured rather than reasoned about, and the reasoning above was only half right: fp32 is the
+// predicted tie, but fp16 is a real win. Run with `go test -tags coremlbench -run TestCoreMLExecutionModeTokyo
+// ./internal/utils/` on the M2 Max above, isolating Run over one 256x256 tile, 8 blocks of 3 runs across four
+// interleaved rounds:
+//
+//	                    fp32                fp16
+//	Parallel            1903.2ms            2318.5ms
+//	Sequential          1907.9ms (+0.2%)    2237.8ms (-3.5%)
+//
+// So the mode costs this graph nothing on a Mac and gains it something at fp16, while being worth 1.37x on CUDA.
+// Output is bit-identical between the two modes in both precisions there as well.
+//
+// Read those two columns as ratios and not as absolutes: they come from different sweeps, and this graph is slow
+// enough that the Mac's thermal state moves it more than the mode does. The same fp16 parallel configuration
+// measured 1619ms on a cold machine, 4780ms on a hot one and 2319ms after a three-minute pause. For the same reason,
+// do not try to reproduce this end to end through perftest with one mode per process - that put one configuration at
+// 12.2s and then 31.4s two rounds later. The in-process harness interleaves the modes so drift moves both rows.
 //
 // # What the CUDA provider options cannot do for it
 //

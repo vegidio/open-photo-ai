@@ -58,6 +58,21 @@ var variant = &facerecovery.Variant{
 // comparison on the CPU provider is 288.6ms against 265.1ms, so this is the graph's shape rather than anything about
 // CUDA - the provider only decides how much the handoff costs.
 //
+// CoreML agrees at fp16 and is a tie at fp32. Run with `go test -tags coremlbench -run
+// TestCoreMLExecutionModeSantorini ./internal/utils/` on the M2 Max above, isolating Run over 12 blocks of 10 runs
+// across four interleaved rounds:
+//
+//	                    fp32                fp16
+//	Parallel            109.0ms             95.0ms
+//	Sequential          109.5ms (+0.5%)     90.5ms (-4.8%)
+//
+// End to end through perftest the fp16 margin is much wider than the graph alone accounts for - 228.9ms against
+// 206.6ms over the 640x640 sample's two faces, -9.8%, holding across four interleaved rounds with the two ranges not
+// overlapping. Twice the graph's 2.4ms is 4.8ms, not 22ms, so most of that is not the graph: the inter-op pool is
+// process-wide, and in parallel mode it competes with the goroutines doing this model's align, blend and paste work
+// on the same cores. That part only shows up in the app's own pipeline, which is the reason to keep an end-to-end
+// number here next to the isolated one rather than trusting either alone.
+//
 // # What the CUDA provider options cannot do for it
 //
 // Nothing in cudaOptions moves this graph, and two entries would break it, so the profile deliberately leaves them
