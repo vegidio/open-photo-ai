@@ -24,10 +24,10 @@ import (
 // call site keep passing no profile at all.
 //
 // Not every field is driven by a model yet: today Osaka sets DynamicShapes, DisableMemPattern, DisableOptimizers and
-// ExcludeEPs, Athens sets CoreMLComputeUnits and - for its fp16 export only - CudaPreferNHWC, and Santorini sets
-// CoreMLSpecialization and ExecutionMode. The rest are reserved for per-model TensorRT and precision tuning that is
-// already planned - they are deliberately kept rather than trimmed to what has a caller today, so treat "no setter"
-// here as "not wired up yet", not as dead code.
+// ExcludeEPs, Athens sets CoreMLComputeUnits and - for its fp16 export only - CudaPreferNHWC, Santorini sets
+// CoreMLSpecialization and ExecutionMode, and Tokyo sets CoreMLComputeUnits and ExecutionMode. The rest are reserved
+// for per-model TensorRT and precision tuning that is already planned - they are deliberately kept rather than
+// trimmed to what has a caller today, so treat "no setter" here as "not wired up yet", not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -181,6 +181,10 @@ func (c CoreMLSpecialization) value() string {
 // The cost is not confined to the CPU provider. Under a GPU provider every node is enqueued onto one stream, so
 // inter-op threading buys nothing at all there and the scheduling still has to happen: santorini measures -4% at
 // fp32 and -8% at fp16 through the CUDA provider from switching this to sequential, with a bit-identical output.
+//
+// What it is worth scales with the node count, since the handoff is charged per node: tokyo, at 2682 nodes against
+// santorini's few hundred, measures -27% at fp32 and -18% at fp16 the same way. That is the reason to try this on
+// any new graph before reaching for a provider option - it is usually the larger number, and it costs nothing.
 type ExecutionMode int
 
 const (
