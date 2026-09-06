@@ -238,7 +238,8 @@
         "lightAdjustment": {
             "name": "Ajustement de la lumière",
             "models": {
-                "paris": "Utilisez ce modèle pour les images souffrant d'un éclairage médiocre ou inégal, comme les scènes de nuit, les photos à contre-jour, les ombres ou les zones surexposées. Utile lorsque vous devez améliorer la visibilité et le contraste pour rendre les images plus lisibles."
+                "paris": "Utilisez ce modèle pour les images souffrant d'un éclairage médiocre ou inégal, comme les scènes de nuit, les photos à contre-jour, les ombres ou les zones surexposées. Utile lorsque vous devez améliorer la visibilité et le contraste pour rendre les images plus lisibles.",
+                "lyon": "Utilisez ce modèle lorsque c'est l'exposition elle-même qui est incorrecte, et pas seulement l'éclairage : hautes lumières brûlées en plein jour, ou sujet perdu dans l'ombre devant un fond lumineux. Il corrige les photos surexposées et sous-exposées en une seule passe, en rééquilibrant toute l'image au lieu d'éclaircir seulement les zones sombres."
             }
         },
         "colorBalance": {

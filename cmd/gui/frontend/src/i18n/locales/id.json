@@ -236,7 +236,8 @@
         "lightAdjustment": {
             "name": "Penyesuaian Cahaya",
             "models": {
-                "paris": "Gunakan model ini saat bekerja dengan gambar yang pencahayaannya buruk atau tidak merata, seperti pemandangan malam, foto backlit, bayangan, atau area yang terlalu terang. Berguna ketika Anda perlu meningkatkan keterlihatan dan kontras agar gambar tampak lebih jelas."
+                "paris": "Gunakan model ini saat bekerja dengan gambar yang pencahayaannya buruk atau tidak merata, seperti pemandangan malam, foto backlit, bayangan, atau area yang terlalu terang. Berguna ketika Anda perlu meningkatkan keterlihatan dan kontras agar gambar tampak lebih jelas.",
+                "lyon": "Gunakan model ini saat yang keliru adalah eksposurnya sendiri, bukan sekadar pencahayaannya: sorotan yang pudar terbakar di hari yang terang, atau subjek yang hilang dalam bayangan di depan latar yang terang. Model ini memperbaiki foto yang terlalu terang dan terlalu gelap dalam satu proses, menyeimbangkan seluruh gambar alih-alih hanya mengangkat area gelap."
             }
         },
         "colorBalance": {

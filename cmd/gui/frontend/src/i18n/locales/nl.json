@@ -237,7 +237,8 @@
         "lightAdjustment": {
             "name": "Lichtaanpassing",
             "models": {
-                "paris": "Gebruik dit model bij afbeeldingen met slechte of ongelijkmatige belichting, zoals nachtopnamen, tegenlichtfoto's, schaduwen of overbelichte gebieden. Handig wanneer je de zichtbaarheid en het contrast wilt verbeteren zodat afbeeldingen helderder ogen."
+                "paris": "Gebruik dit model bij afbeeldingen met slechte of ongelijkmatige belichting, zoals nachtopnamen, tegenlichtfoto's, schaduwen of overbelichte gebieden. Handig wanneer je de zichtbaarheid en het contrast wilt verbeteren zodat afbeeldingen helderder ogen.",
+                "lyon": "Gebruik dit model wanneer de belichting zelf niet klopt en niet alleen het licht: uitgebeten hooglichten op een heldere dag, of een onderwerp dat in de schaduw verdwijnt tegen een lichte achtergrond. Het corrigeert over- en onderbelichte foto's in één keer en brengt het hele beeld in balans in plaats van alleen de donkere delen op te lichten."
             }
         },
         "colorBalance": {

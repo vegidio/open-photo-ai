@@ -20,6 +20,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/detection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
+	"github.com/vegidio/open-photo-ai/models/lightadjustment/lyon"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
 	"github.com/vegidio/open-photo-ai/models/sharpen/moscow"
 	"github.com/vegidio/open-photo-ai/models/sharpen/novgorod"
@@ -450,6 +451,7 @@ var modelConstructors = map[string]modelConstructor{
 
 	// Light Adjustment
 	"la_paris": constructor(paris.New),
+	"la_lyon":  constructor(lyon.New),
 
 	// Color Balance
 	"cb_rio": constructor(rio.New),

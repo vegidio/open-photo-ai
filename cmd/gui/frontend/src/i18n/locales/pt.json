@@ -237,7 +237,8 @@
         "lightAdjustment": {
             "name": "Ajuste de luz",
             "models": {
-                "paris": "Use este modelo em imagens com iluminação ruim ou irregular, como cenas noturnas, fotos em contraluz, sombras ou áreas superexpostas. É útil quando você precisa melhorar a visibilidade e o contraste para deixar a imagem mais clara."
+                "paris": "Use este modelo em imagens com iluminação ruim ou irregular, como cenas noturnas, fotos em contraluz, sombras ou áreas superexpostas. É útil quando você precisa melhorar a visibilidade e o contraste para deixar a imagem mais clara.",
+                "lyon": "Use este modelo quando o problema for a própria exposição, e não apenas a iluminação: altas luzes estouradas num dia claro ou um assunto perdido na sombra contra um fundo claro. Ele corrige fotos super e subexpostas numa única passagem, reequilibrando a imagem inteira em vez de apenas clarear as áreas escuras."
             }
         },
         "colorBalance": {

@@ -237,7 +237,8 @@
         "lightAdjustment": {
             "name": "Light Adjustment",
             "models": {
-                "paris": "Use this model when working with images affected by poor or uneven lighting, such as night scenes, backlit photos, shadows, or overexposed areas. It's useful when you need to enhance visibility and contrast so that images look clearer."
+                "paris": "Use this model when working with images affected by poor or uneven lighting, such as night scenes, backlit photos, shadows, or overexposed areas. It's useful when you need to enhance visibility and contrast so that images look clearer.",
+                "lyon": "Use this model when the exposure itself is wrong rather than just the lighting: blown-out highlights on a bright day, or a subject lost in shadow against a bright background. It corrects over- and under-exposed photos in one pass, rebalancing the whole image instead of only lifting the dark areas."
             }
         },
         "colorBalance": {

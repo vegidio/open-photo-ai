@@ -19,6 +19,42 @@ type Variant struct {
 
 	// Label is the display name shown in the UI, before the precision suffix is appended.
 	Label string
+
+	// Canvas is how this variant's graph wants the image framed before it is handed over.
+	Canvas Canvas
+
+	// Profile is the provider tuning this variant needs. A nil Profile means the provider defaults, which is what a
+	// variant nobody has measured should get: the right settings follow the graph's op mix, so carrying one variant's
+	// findings to another because both adjust light is how a profile ends up pessimising a model it was never
+	// measured against.
+	Profile func(precision types.Precision) utils.EPProfile
+}
+
+// Canvas is how a variant's graph wants the image framed. It is per-variant data rather than a constant in process.go
+// because the two graphs this family ships want opposite things.
+//
+// Paris takes any shape and only needs its sides aligned. Lyon is a window-attention transformer exported at a fixed
+// shape, and it is fixed for a reason that is not negotiable: with dynamic axes, every reshape and slice in a
+// window-attention graph has an unbounded dimension, CoreML's MLProgram runtime refuses all of them, and the graph
+// falls apart into hundreds of partitions that then fail at run time. A dynamic export of that architecture is
+// numerically correct - measured, pixel-identical to PyTorch at every resolution - and still unusable here.
+type Canvas struct {
+	// MaxSize caps the longest side handed to the graph. With Square set it is not a cap but the exact size: the
+	// image is always resized so its longest side is MaxSize.
+	MaxSize int
+
+	// Align is the multiple both sides of the graph input must be. It is met by reflection padding, never by a
+	// resize - see the note in process.go on why. Ignored when Square is set, since the square is already aligned.
+	Align int
+
+	// Square makes the graph input a fixed MaxSize x MaxSize regardless of the image's aspect ratio: the image is
+	// fitted so its longest side is MaxSize and the short side is reflection-padded out to fill the canvas.
+	//
+	// Two consequences follow from it, and both are the cost of the fixed shape rather than oversights. Every run
+	// resizes, so every run pays buildResult's full-resolution passes - the cost the comment in Process celebrates
+	// having removed from the images Paris leaves alone. And a 400x300 thumbnail costs the same inference time as a
+	// 6000x4000 photo, because the canvas is the same either way.
+	Square bool
 }
 
 // Op builds this variant's operation at the given per-run intensity.
@@ -42,7 +78,11 @@ func (v *Variant) New(
 		return nil, errors.Errorf("expected a light adjustment operation, got %T", operation)
 	}
 
-	session, err := utils.LoadSingleSession(ctx, "la", v.Codename, op.precision, ep, onProgress)
+	// utils.LoadSingleSession is not usable here: it hardcodes an empty EPProfile, and lyon needs its measured
+	// provider tuning. op.Id() is byte-identical to the model id that loader composes, so this is the same lookup.
+	specs := []utils.SessionSpec{utils.ModelSpec(op.Id())}
+
+	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.ResolveProfile(v.Profile, op.precision), onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}
@@ -50,7 +90,8 @@ func (v *Variant) New(
 	return &Model{
 		name:      utils.FormatModelName(v.Label, op.precision),
 		operation: op,
-		Session:   session,
+		variant:   v,
+		Session:   sessions[0],
 	}, nil
 }
 
@@ -96,6 +137,7 @@ var (
 type Model struct {
 	name      string
 	operation Op
+	variant   *Variant
 	*utils.Session
 }
 
@@ -125,7 +167,7 @@ func (m *Model) Run(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	result, err := Process(ctx, m.Session, img)
+	result, err := Process(ctx, m.Session, img, m.variant.Canvas)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to process image")
 	}

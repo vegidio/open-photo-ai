@@ -53,6 +53,7 @@ func TestIdsToOperationsIdentity(t *testing.T) {
 		"sh_novgorod_0.25_fp32": "sh_novgorod_fp32",
 		"sh_petersburg_2_fp16":  "sh_petersburg_fp16",
 		"la_paris_0.5_fp32":     "la_paris_fp32",
+		"la_lyon_0.5_fp32":      "la_lyon_fp32",
 		"cb_rio_0.5_fp32":       "cb_rio_fp32",
 		// legacy 3-segment denoise/sharpen form still parses
 		"dn_stockholm_fp32": "dn_stockholm_fp32",
@@ -91,6 +92,7 @@ func TestIdsToOperationsCarriesIntensity(t *testing.T) {
 		"dn_malmo_1_fp32":        1,
 		"sh_petersburg_0_fp32":   0,
 		"la_paris_0.5_fp32":      0.5,
+		"la_lyon_0.25_fp16":      0.25,
 		"cb_rio_0.75_fp32":       0.75,
 		// legacy form defaults to 1.0
 		"dn_stockholm_fp32": 1.0,
@@ -183,6 +185,7 @@ func TestIdsToOperationsRejectsBadInput(t *testing.T) {
 		"nope",                 // too few segments
 		"xx_unknown_1_fp32",    // unknown model
 		"la_paris_fp32",        // paris requires an intensity
+		"la_lyon_fp32",         // lyon requires an intensity
 		"cb_rio_fp32",          // rio requires an intensity
 		"up_tokyo_fp32",        // upscale requires a scale
 		"dn_stockholm_ab_fp32", // unparseable intensity

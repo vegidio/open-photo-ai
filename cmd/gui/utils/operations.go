@@ -23,6 +23,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/detection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
+	"github.com/vegidio/open-photo-ai/models/lightadjustment/lyon"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
 	"github.com/vegidio/open-photo-ai/models/sharpen/moscow"
 	"github.com/vegidio/open-photo-ai/models/sharpen/novgorod"
@@ -103,6 +104,7 @@ var operationBuilders = map[string]operationBuilder{
 
 	// Light Adjustment / Color Balance — "_<name>_<intensity>_<precision>", intensity always present
 	"la_paris": requiredIntensityBuilder(paris.Op),
+	"la_lyon":  requiredIntensityBuilder(lyon.Op),
 	"cb_rio":   requiredIntensityBuilder(rio.Op),
 
 	// Colorization — "_<name>_<precision>" (no per-run inputs)

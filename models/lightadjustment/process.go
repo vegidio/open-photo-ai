@@ -4,6 +4,7 @@ import (
 	"context"
 	"image"
 	"image/color"
+	"math"
 
 	"github.com/cockroachdb/errors"
 	"github.com/disintegration/imaging"
@@ -11,17 +12,65 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-// maxSize caps the longest side fed to the model. Light adjustment is a low-frequency tonal effect, so inference at a
-// reduced resolution is visually faithful while keeping the conv activations small enough to fit in memory.
-//
-// The full-resolution detail is preserved by applying the result as a gain map (see buildResult). Running the whole
-// image natively could request multi-GB buffers and fail to allocate on constrained machines.
-const maxSize = 1024
-
 // eps guards the per-channel gain division against near-black input pixels.
 const eps = 1e-3
 
-func Process(ctx context.Context, session *utils.Session, img image.Image) (image.Image, error) {
+// plan is the geometry one Process run uses: what the image is resized to, how much reflection padding brings that to
+// the graph's canvas, and whether a resize happened at all - which is what decides the gain-map path.
+type plan struct {
+	scaledW, scaledH int
+	padW, padH       int
+	resize           bool
+}
+
+// planCanvas works out that geometry from the image's size and the variant's Canvas. It is separate from Process, and
+// pure, so the claim that paris's geometry is unchanged is something a test can check rather than something a reader
+// has to take on trust.
+func planCanvas(fullW, fullH int, c Canvas) plan {
+	if c.Square {
+		// A fixed-shape graph accepts exactly one size, so the longest side always lands on MaxSize - enlarging a
+		// small image as readily as shrinking a large one - and the short side is padded out to the square.
+		sw, sh := fitLongSide(fullW, fullH, c.MaxSize)
+		return plan{
+			scaledW: sw, scaledH: sh,
+			padW: c.MaxSize - sw, padH: c.MaxSize - sh,
+			resize: true,
+		}
+	}
+
+	scaledW, scaledH := fullW, fullH
+	resize := max(fullW, fullH) > c.MaxSize
+	if resize {
+		scaledW, scaledH = utils.FitToMaxSize(fullW, fullH, c.MaxSize)
+	}
+
+	return plan{
+		scaledW: scaledW, scaledH: scaledH,
+		padW:   alignUp(scaledW, c.Align) - scaledW,
+		padH:   alignUp(scaledH, c.Align) - scaledH,
+		resize: resize,
+	}
+}
+
+// fitLongSide scales (w, h) so the longer side is exactly size, preserving the aspect ratio.
+//
+// utils.FitToMaxSize is close but not usable here: it rounds both sides up to a multiple of 16, which for a square
+// canvas would overshoot the exact dimension the fixed-shape graph demands.
+func fitLongSide(w, h, size int) (int, int) {
+	ratio := float64(size) / float64(max(w, h))
+	return max(1, int(math.Round(float64(w)*ratio))), max(1, int(math.Round(float64(h)*ratio)))
+}
+
+// alignUp rounds v up to the next multiple of n. It lives here rather than in internal/utils because the shared
+// RoundUpTo16 has its own pinned tests and callers, and this family is the only one that needs a second alignment.
+func alignUp(v, n int) int {
+	if n <= 1 || v%n == 0 {
+		return v
+	}
+	return v + (n - v%n)
+}
+
+func Process(ctx context.Context, session *utils.Session, img image.Image, canvas Canvas) (image.Image, error) {
 	bounds := img.Bounds()
 	fullW := bounds.Dx()
 	fullH := bounds.Dy()
@@ -30,8 +79,9 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	// The graph requires both sides to be a multiple of 16, and the model is only run on an image whose longest side
-	// is at most maxSize. Those are two separate requirements and they are met two different ways.
+	// The graph requires both sides to be a multiple of Canvas.Align (or exactly the square, for a fixed-shape
+	// variant), and it is only run on an image whose longest side is at most Canvas.MaxSize. Those are two separate
+	// requirements and they are met two different ways.
 	//
 	// Downscaling is a resample, because that is the point of it. Alignment is reflection padding, because it is not:
 	// the pixels the model was going to see must not change just because the image needed eight more columns.
@@ -40,25 +90,19 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 	// graph, the old path left the last column differing from its neighbour by 40.8 levels on average against an
 	// interior column-to-column gradient of 3.9 - a hard one-pixel line down the right edge of every image inside the
 	// ceiling whose width was not already a multiple of 16, which is most of them. Padding brings that to 2.9, in line
-	// with the interior. It is also far cheaper: the resize made `resized != img`, which sent every such image through
-	// buildResult's three further full-resolution passes for the sake of an eight-pixel adjustment.
-	//
-	// FitToMaxSize aligns its own result, so the downscale branch needs no padding; the pass-through branch is the
-	// one padding exists for. FitToMaxSize is not used unconditionally because it also enlarges, and running a small
-	// image at the ceiling costs inference time proportional to an area it never had.
-	scaledW, scaledH := fullW, fullH
+	// with the interior. It is also far cheaper: the resize made the image differ from the original, which sent every
+	// such image through buildResult's three further full-resolution passes for the sake of an eight-pixel adjustment.
+	p := planCanvas(fullW, fullH, canvas)
 
 	resized := img
-	if max(fullW, fullH) > maxSize {
-		scaledW, scaledH = utils.FitToMaxSize(fullW, fullH, maxSize)
-		resized = imaging.Resize(img, scaledW, scaledH, imaging.Lanczos)
+	if p.resize {
+		resized = imaging.Resize(img, p.scaledW, p.scaledH, imaging.Lanczos)
 	}
 
 	// Pad after any downscale, so the alignment is of what the model actually receives.
 	padded := resized
-	padW, padH := utils.RoundUpTo16(scaledW)-scaledW, utils.RoundUpTo16(scaledH)-scaledH
-	if padW > 0 || padH > 0 {
-		padded = utils.ReflectionPad(resized, 0, 0, padW, padH)
+	if p.padW > 0 || p.padH > 0 {
+		padded = utils.ReflectionPad(resized, 0, 0, p.padW, p.padH)
 	}
 
 	rb := padded.Bounds()
@@ -85,22 +129,20 @@ func Process(ctx context.Context, session *utils.Session, img image.Image) (imag
 	outLR := utils.CHWToImage(outputData, rW, rH, false)
 
 	// Drop the alignment padding again: everything downstream works in the scaled image's dimensions.
-	if padW > 0 || padH > 0 {
-		outLR = imaging.Crop(outLR, image.Rect(0, 0, scaledW, scaledH))
+	if p.padW > 0 || p.padH > 0 {
+		outLR = imaging.Crop(outLR, image.Rect(0, 0, p.scaledW, p.scaledH))
 	}
 
 	// If we never downscaled, the output is already at full resolution and is the result. Padding alone does not
-	// trigger the gain map - it did before, which is what made buildResult run for nearly every image.
-	if resized == img {
+	// trigger the gain map - it did before, which is what made buildResult run for nearly every image. A Square
+	// variant always resizes, so it always takes the gain-map path.
+	if !p.resize {
 		return outLR, nil
 	}
 
 	return buildResult(img, resized, outLR), nil
 }
 
-// buildResult applies the low-res relighting as a per-pixel multiplicative gain map on the full-resolution original.
-// Both the smoothed input the model saw (inUp) and its relit output (outUp) are upsampled to full size; the ratio
-// outUp/inUp is the low-frequency gain, applied to the full-res detail in img.
 func buildResult(img, resized, outLR image.Image) image.Image {
 	bounds := img.Bounds()
 	fullW, fullH := bounds.Dx(), bounds.Dy()

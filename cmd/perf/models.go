@@ -19,6 +19,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/detection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
+	"github.com/vegidio/open-photo-ai/models/lightadjustment/lyon"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
 	"github.com/vegidio/open-photo-ai/models/sharpen/moscow"
 	"github.com/vegidio/open-photo-ai/models/sharpen/novgorod"
@@ -77,6 +78,7 @@ var catalog = []entry{
 
 	// Light Adjustment / Color Balance
 	intensityEntry("paris", types.ModelTypeLightAdjustment, paris.Op),
+	intensityEntry("lyon", types.ModelTypeLightAdjustment, lyon.Op),
 	intensityEntry("rio", types.ModelTypeColorBalance, rio.Op),
 
 	// Colorization

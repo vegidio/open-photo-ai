@@ -13,6 +13,7 @@ import (
 	"github.com/vegidio/open-photo-ai/models/detection/newyork"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/athens"
 	"github.com/vegidio/open-photo-ai/models/facerecovery/santorini"
+	"github.com/vegidio/open-photo-ai/models/lightadjustment/lyon"
 	"github.com/vegidio/open-photo-ai/models/lightadjustment/paris"
 	"github.com/vegidio/open-photo-ai/models/sharpen/moscow"
 	"github.com/vegidio/open-photo-ai/models/sharpen/novgorod"
@@ -37,6 +38,7 @@ func TestIntensityOperationIds(t *testing.T) {
 		"novgorod":   func(i float32, p types.Precision) types.Operation { return novgorod.Op(i, p) },
 		"petersburg": func(i float32, p types.Precision) types.Operation { return petersburg.Op(i, p) },
 		"paris":      func(i float32, p types.Precision) types.Operation { return paris.Op(i, p) },
+		"lyon":       func(i float32, p types.Precision) types.Operation { return lyon.Op(i, p) },
 		"rio":        func(i float32, p types.Precision) types.Operation { return rio.Op(i, p) },
 	}
 
@@ -55,6 +57,8 @@ func TestIntensityOperationIds(t *testing.T) {
 		{"petersburg", "fp16", "sh_petersburg_fp16"},
 		{"paris", "fp32", "la_paris_fp32"},
 		{"paris", "fp16", "la_paris_fp16"},
+		{"lyon", "fp32", "la_lyon_fp32"},
+		{"lyon", "fp16", "la_lyon_fp16"},
 		{"rio", "fp32", "cb_rio_fp32"},
 		{"rio", "fp16", "cb_rio_fp16"},
 	}
