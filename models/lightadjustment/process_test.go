@@ -85,10 +85,14 @@ func TestBuildResultFastPathMatchesGeneric(t *testing.T) {
 	}
 }
 
-// planCanvas replaced two constants in Process with per-variant data. The risk that carries is a silent change to
-// paris, whose geometry had no test at all - so this reproduces the original arithmetic literally and requires the
-// new code to agree with it at every size that hits a different branch.
-func TestPlanCanvasParisMatchesLegacyGeometry(t *testing.T) {
+// TestPlanCanvasMatchesLegacyGeometry pins the non-square branch of planCanvas - downscale only above the ceiling,
+// reflection-pad to the alignment - against the arithmetic Process used before Canvas existed.
+//
+// No variant selects that branch any more: paris moved to a fixed square when its dynamic-shape graph turned out not
+// to reach CoreML at all, and lyon was square from the start. The branch and this test are kept anyway, because the
+// geometry is the general case a future variant would want and the transcription below is the only record of what it
+// is supposed to compute - it is not evidence about what paris renders today.
+func TestPlanCanvasMatchesLegacyGeometry(t *testing.T) {
 	// The code Process used before Canvas existed, transcribed rather than called.
 	legacy := func(fullW, fullH int) plan {
 		const maxSize = 1024
@@ -130,10 +134,10 @@ func TestPlanCanvasParisMatchesLegacyGeometry(t *testing.T) {
 		{1, 1},
 	}
 
-	paris := Canvas{MaxSize: 1024, Align: 16}
+	dynamic := Canvas{MaxSize: 1024, Align: 16}
 	for _, s := range sizes {
 		w, h := s[0], s[1]
-		got, want := planCanvas(w, h, paris), legacy(w, h)
+		got, want := planCanvas(w, h, dynamic), legacy(w, h)
 		if got != want {
 			t.Errorf("planCanvas(%d, %d) = %+v, legacy geometry = %+v", w, h, got, want)
 		}
