@@ -25,10 +25,11 @@ import (
 //
 // Not every field is driven by a model yet: today Osaka sets DynamicShapes, DisableMemPattern, DisableOptimizers and
 // ExcludeEPs, Athens sets CoreMLComputeUnits and ExecutionMode and - for its fp16 export only - CudaPreferNHWC,
-// Santorini sets CoreMLSpecialization and ExecutionMode, Tokyo sets CoreMLComputeUnits and ExecutionMode, and New
-// York sets CudaPreferNHWC and ExecutionMode. The rest are reserved for per-model TensorRT and precision tuning that
-// is already planned - they are deliberately kept rather than trimmed to what has a caller today, so treat "no
-// setter" here as "not wired up yet", not as dead code.
+// Santorini sets CoreMLSpecialization and ExecutionMode, Tokyo sets CoreMLComputeUnits and ExecutionMode, New York
+// sets CudaPreferNHWC and ExecutionMode, and Kyoto and Saitama each set CoreMLComputeUnits for their fp16 export
+// alone. The rest are reserved for per-model TensorRT and precision tuning that is already planned - they are
+// deliberately kept rather than trimmed to what has a caller today, so treat "no setter" here as "not wired up yet",
+// not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -502,6 +503,12 @@ func coreMLOptions(cachePath string, p EPProfile) map[string]string {
 		staticShapes = "0"
 	}
 
+	// ModelFormat is pinned rather than exposed on EPProfile, and that is a correctness decision rather than an
+	// oversight. NeuralNetwork is the older format and has no typed execution, so CoreML may put an fp32 graph on
+	// the Neural Engine and run it in half precision - and it does: Saitama's fp32 graph measures -38.9% under it,
+	// landing to four significant figures on the time AND the accuracy of that model's fp16 export. A model author
+	// sweeping provider options would read that as the largest win available and ship a precision downgrade the
+	// user never asked for. The honest way to take it is to select the fp16 model.
 	return map[string]string{
 		"EnableOnSubgraphs":        "0",
 		"MLComputeUnits":           p.CoreMLComputeUnits.value(),

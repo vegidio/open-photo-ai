@@ -47,6 +47,11 @@ type sweepRow struct {
 	// other in one sweep rather than compared across two - which on this machine measures the thermal drift
 	// rather than the export.
 	model string
+
+	// skip drops this row, for a setting that is only meaningful on some of the models a sweep is run over.
+	// Omitting it from the slice instead would work, but a row that is present and skipped keeps the reason
+	// beside the setting rather than in the loop that builds the rows.
+	skip bool
 }
 
 // buildRowSession is buildBenchSession with raw CoreML keys layered on top of the profile's own.
@@ -211,6 +216,10 @@ func profileSweep(t *testing.T, modelID string, rows []sweepRow, blockSize, bloc
 	results := make([]*benchResult, 0, len(rows))
 
 	for _, row := range rows {
+		if row.skip {
+			continue
+		}
+
 		id := modelID
 		if row.model != "" {
 			id = row.model
