@@ -19,6 +19,34 @@ type Variant struct {
 
 	// Label is the display name shown in the UI, before the precision suffix is appended.
 	Label string
+
+	// Canvas is the fixed square this variant's graph is exported at.
+	Canvas Canvas
+
+	// Profile is the provider tuning this variant needs. A nil Profile means the provider defaults, which is what a
+	// variant nobody has measured should get: the right settings follow the graph's op mix, so carrying one
+	// variant's findings to another because both correct colour is how a profile ends up pessimising a model it was
+	// never measured against.
+	Profile func(precision types.Precision) utils.EPProfile
+}
+
+// Canvas is the fixed square a variant's graph is exported at. It is per-variant data rather than a constant in
+// process.go so that a variant can be re-exported at a different size without touching the shared geometry.
+//
+// A colour balance graph is fixed-shape for a different reason from the light adjustment ones, and the difference is
+// worth knowing before changing this. Those architectures cannot be exported dynamically at all. This one can - it
+// shipped that way - and the export is perfectly correct; what a dynamic export costs is the CoreML provider, which
+// refuses every node of a graph whose spatial axes vary and hands the whole thing back to CPU kernels.
+//
+// The size costs less here than it does there, because the model's output is never shown. It is only used to fit the
+// global polynomial in Process, and an 11-term fit over a few hundred thousand samples barely moves with the
+// resolution it was sampled at - which is why a square canvas is affordable at all on a model that used to run at the
+// image's own aspect ratio.
+type Canvas struct {
+	// Size is the exact width and height the graph accepts. The image is fitted so its longest side lands on Size
+	// and the short side is reflection-padded out to fill the square - padded, never stretched, so the pixels the
+	// model sees are the ones the photo has.
+	Size int
 }
 
 // Op builds this variant's operation at the given per-run intensity.
@@ -42,7 +70,8 @@ func (v *Variant) New(
 		return nil, errors.Errorf("expected a colour balance operation, got %T", operation)
 	}
 
-	session, err := utils.LoadSingleSession(ctx, "cb", v.Codename, op.precision, ep, onProgress)
+	session, err := utils.LoadSingleSession(ctx, "cb", v.Codename, op.precision, ep, onProgress,
+		utils.ResolveProfile(v.Profile, op.precision))
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}
@@ -50,6 +79,7 @@ func (v *Variant) New(
 	return &Model{
 		name:      utils.FormatModelName(v.Label, v.Codename, op.precision),
 		operation: op,
+		variant:   v,
 		Session:   session,
 	}, nil
 }
@@ -96,6 +126,7 @@ var (
 type Model struct {
 	name      string
 	operation Op
+	variant   *Variant
 	*utils.Session
 }
 
@@ -125,7 +156,7 @@ func (m *Model) Run(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	result, err := Process(ctx, m.Session, img)
+	result, err := Process(ctx, m.Session, img, m.variant.Canvas)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to process image")
 	}

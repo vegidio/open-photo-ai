@@ -84,3 +84,70 @@ func TestApplyMappingFastPathMatchesGeneric(t *testing.T) {
 		})
 	}
 }
+
+// TestPlanCanvasSquare covers rio's geometry: the longest side lands exactly on Canvas.Size whichever way the image
+// is oriented, and the short side is padded out to the square.
+func TestPlanCanvasSquare(t *testing.T) {
+	c := Canvas{Size: 656}
+
+	tests := []struct {
+		name string
+		w, h int
+		want plan
+	}{
+		{"landscape 3:2", 6000, 4000, plan{scaledW: 656, scaledH: 437, padW: 0, padH: 219}},
+		{"portrait 2:3", 4000, 6000, plan{scaledW: 437, scaledH: 656, padW: 219, padH: 0}},
+		{"already square", 2048, 2048, plan{scaledW: 656, scaledH: 656, padW: 0, padH: 0}},
+		// Smaller than the canvas is still enlarged: a fixed-shape graph accepts one size and nothing else. This is
+		// the one case the old FitWithinMaxSize geometry handled differently, where it ran at the image's own size.
+		{"smaller than canvas", 400, 300, plan{scaledW: 656, scaledH: 492, padW: 0, padH: 164}},
+		{"very wide", 4000, 100, plan{scaledW: 656, scaledH: 16, padW: 0, padH: 640}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := planCanvas(tt.w, tt.h, c)
+			if got != tt.want {
+				t.Errorf("planCanvas(%d, %d) = %+v, want %+v", tt.w, tt.h, got, tt.want)
+			}
+			if got.scaledW+got.padW != c.Size || got.scaledH+got.padH != c.Size {
+				t.Errorf("geometry does not fill the %d square: %+v", c.Size, got)
+			}
+			if max(got.scaledW, got.scaledH) != c.Size {
+				t.Errorf("longest side is %d, want %d", max(got.scaledW, got.scaledH), c.Size)
+			}
+		})
+	}
+}
+
+// TestChwToHWCCrops guards the one thing the fit depends on: chwToHWC must return the un-padded top-left region of
+// the canvas, in row-major order, with the three planes recombined per pixel. Reading the padding back into the fit
+// re-weights the image's border against the rest of the photo, and because the fit is global that moves every pixel
+// of the result.
+func TestChwToHWCCrops(t *testing.T) {
+	const canvasW, canvasH, cropW, cropH = 5, 4, 3, 2
+
+	plane := canvasW * canvasH
+	data := make([]float32, 3*plane)
+	for i := range plane {
+		data[i] = float32(i) // R carries the canvas index, so a wrong offset is visible
+		data[plane+i] = float32(100 + i)
+		data[2*plane+i] = float32(200 + i)
+	}
+
+	got := chwToHWC(data, canvasW, canvasH, cropW, cropH)
+
+	want := [][3]float32{
+		{0, 100, 200}, {1, 101, 201}, {2, 102, 202},
+		{5, 105, 205}, {6, 106, 206}, {7, 107, 207},
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("got %d pixels, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("pixel %d = %v, want %v", i, got[i], want[i])
+		}
+	}
+}
