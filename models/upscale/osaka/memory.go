@@ -49,12 +49,18 @@ const (
 // estimateActivationBytes predicts the peak activation footprint of one pass over a region of the given output size,
 // excluding the weights, which the registry already accounts for.
 //
-// That accounting is optimistic for both builds, and more so for the int8 one. utils.Session budgets on the *file*
-// size of the graphs behind it, which is a proxy for resident memory rather than a measurement of it, and ONNX Runtime
-// has no int8 compute path here: it dequantizes the weights back to fp32 to run them. So the int8 build's 3.4 GB of
-// files sit resident at around 13.5 GB, a factor of 4, against 2.2 for the fp16 build's 6.8 GB. Osaka has always been
-// charged less than it occupies and works, so this is more of the same rather than a new kind of problem - but it does
-// mean picking Osaka SD buys a smaller download and a faster run, not a smaller memory footprint.
+// That accounting is optimistic for both builds. utils.Session budgets on the *file* size of the graphs behind it,
+// which is a proxy for resident memory rather than a measurement of it. Measured peak RSS for one 960x960 region on
+// an M2 Max, CPU provider: the int8 build's 3.4 GB of files sit resident at 9.8 GB, a factor of 2.9, against 2.6 for
+// the fp16 build's 6.8 GB at 17.8 GB. Osaka has always been charged less than it occupies and works, so this is more
+// of the same rather than a new kind of problem.
+//
+// Note that int8 is the *smaller* footprint, by 8 GB, which an earlier version of this comment had backwards. It
+// assumed ONNX Runtime has no int8 compute path and dequantizes the weights to fp32 to run them; it does not. ORT
+// fuses DequantizeLinear+MatMul into MatMulNBits and keeps the weights packed, which is also why the int8 build is
+// about twice as fast as fp16 on the CPU rather than merely equal. Do not "fix" that graph's fp32 activations to
+// fp16: the Cast it inserts breaks the fusion, and the model measures 1.7x slower on the CPU and 2.7x slower on
+// CoreML for it.
 //
 // The two terms are added rather than maxed: the DiT's peak and the decoder's peak do not coincide, but the latents
 // bridging them stay live across both, and adding is the conservative reading.

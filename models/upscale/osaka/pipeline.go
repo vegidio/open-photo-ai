@@ -175,8 +175,9 @@ func restoreRegion(
 	noise := gaussianNoise(latentChannels*latentPlane, originX, originY, noiseSeed)
 	vidInput := packVidInput(cond, noise, latentPlane)
 
-	prediction, err := runStep(m.Graph(roleDiT),
-		vidInput, ditTimestep,
+	// One input, not two: the timestep is a constant inside the graph now - see graphs in loader.go.
+	prediction, err := utils.RunUnary(m.Graph(roleDiT),
+		vidInput,
 		ort.NewShape(1, ditChannels, int64(latentH), int64(latentW)),
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)))
 	if err != nil {
@@ -213,21 +214,4 @@ func schedulerStep(prediction, noise []float32) []float32 {
 	}
 
 	return out
-}
-
-// runStep runs the diffusion transformer, which takes the packed latent and the timestep.
-func runStep(session *utils.Session, vidInput []float32, timestep float32, inShape, outShape ort.Shape) ([]float32, error) {
-	vidTensor, err := ort.NewTensor(inShape, vidInput)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create the vid_input tensor")
-	}
-	defer vidTensor.Destroy()
-
-	stepTensor, err := ort.NewTensor(ort.NewShape(1), []float32{timestep})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create the timestep tensor")
-	}
-	defer stepTensor.Destroy()
-
-	return utils.RunSession(session, []ort.Value{vidTensor, stepTensor}, outShape)
 }

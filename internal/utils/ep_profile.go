@@ -20,11 +20,17 @@ import (
 // with dynamic spatial axes, where CoreML silently pushes the varying subgraphs back to the CPU partition and reports
 // nothing - the run is simply slow, with no error to explain it.
 //
+// The reverse mistake is worth knowing too, because it does not present as a tuning problem at all. Setting
+// DynamicShapes on a graph that is in fact fixed-shape turns RequireStaticInputShapes off, and CoreML will then try to
+// convert nodes it would otherwise have declined - which for Osaka's VAE meant failing session creation outright with
+// "axis 4 is not in valid range [-4,3]". That was read as a CoreML bug and cost the model its whole provider for
+// several releases. A setting here can manufacture the failure it appears to be documenting.
+//
 // The zero value reproduces the behaviour that shipped before profiles existed, which is what lets every existing
 // call site keep passing no profile at all.
 //
-// Not every field is driven by a model yet: today Osaka sets DynamicShapes, DisableMemPattern, DisableOptimizers and
-// ExcludeEPs, Athens sets CoreMLComputeUnits and ExecutionMode and - for its fp16 export only - CudaPreferNHWC,
+// Not every field is driven by a model yet: today Osaka sets DisableMemPattern, DisableOptimizers, ExcludeEPs and
+// CoreMLComputeUnits, Athens sets CoreMLComputeUnits and ExecutionMode and - for its fp16 export only - CudaPreferNHWC,
 // Santorini sets CoreMLSpecialization and ExecutionMode, Tokyo sets CoreMLComputeUnits and ExecutionMode, New York
 // sets CudaPreferNHWC and ExecutionMode, Paris sets CoreMLComputeUnits and ExecutionMode for its fp16 export, and
 // Kyoto, Saitama and Lyon each set CoreMLComputeUnits for their fp16 export alone. The rest are reserved for

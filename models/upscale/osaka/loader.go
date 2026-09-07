@@ -13,11 +13,17 @@ import (
 // were exported with meaningful names.
 //
 // Only the diffusion transformer follows the operation's precision. It is where nearly all of the weight is - 6.8 GB
-// against the VAE pair's 0.5 GB - so it alone was worth quantizing, and it is published both as fp16 and as int8.
+// against the VAE pair's 0.17 GB - so it alone was worth quantizing, and it is published both as fp16 and as int8.
 // The two VAE halves are convolutional and published only as fp16: one pair of files, shared by both builds, which is
 // why they pin their precision rather than following the operation into a `_int8` name that does not exist.
+//
+// The DiT takes the packed latent alone. The timestep is baked into the graph as a constant, because this is a
+// one-step model and the pipeline has only ever passed 1000 - see schedulerStep in pipeline.go, whose arithmetic
+// collapses for exactly that reason. Leaving it as an input cost a rank-1 tensor per region and, more to the point,
+// held the whole timestep embedding out of constant folding: 128 of the graph's 129 Sin/Cos pairs fold away once it
+// is fixed, and what is left of that subgraph is what kept CoreML from taking the model in one piece.
 var graphs = []upscale.GraphSpec{
-	{Role: roleDiT, Suffix: "", Inputs: []string{"vid_input", "timestep"}, Outputs: []string{"denoised_latent"}},
+	{Role: roleDiT, Suffix: "", Inputs: []string{"vid_input"}, Outputs: []string{"denoised_latent"}},
 
 	{Role: roleEncoder, Suffix: "_vae_encoder", Precision: types.PrecisionFp16,
 		Inputs: []string{"pixel_image"}, Outputs: []string{"latent"}},
@@ -27,38 +33,45 @@ var graphs = []upscale.GraphSpec{
 
 // profileFor is the provider tuning every Osaka graph needs.
 //
-// All three graphs have dynamic spatial axes, so ONNX Runtime's memory-pattern planner must be off: it assumes shapes
-// repeat, and otherwise reserves for the largest region seen and never releases it. DynamicShapes says the same thing
-// to any provider that would otherwise be told to expect fixed inputs.
+// Every graph is fixed-shape: the DiT accepts one region size and nothing else, and the re-exported VAE halves are
+// frozen at the 960x960 / 120x120 geometry restoreRegion is the only caller of. So DynamicShapes is deliberately not
+// set, and that is load-bearing rather than tidy-up. It feeds CoreML's RequireStaticInputShapes, and setting it was
+// what made the CoreML EP decline the VAE's every convolution and then fail session creation outright with
+// "axis 4 is not in valid range [-4,3]" - a crash this profile was itself causing while the comment here blamed the
+// runtime for it.
 //
-// CoreML must not be used for this model. Measured through this code path against the ONNX Runtime the app bundles
-// (1.26), across three separate attempts:
+// DisableMemPattern stays on, but not for the reason it used to give. The shapes never vary, so the planner's
+// assumption holds fine; it is simply a loss on activations this large - measured +22% on the VAE encoder with the
+// planner enabled, on an M2 Max.
 //
-//   - the two VAE graphs fail session creation with "axis 4 is not in valid range [-4,3]". The VAE is a causal video
-//     autoencoder whose 3D convolutions sit behind a 4-D boundary, and the CoreML EP mishandles the rank.
-//   - the DiT creates a session and then aborts the process on the first Run, with the Metal assertion
-//     "MPSNDArray initWithDevice: Error: device may not be nil".
-//   - baking the rotary tables into constants does stop that abort, and CoreML is then 1.35x faster than the CPU -
-//     but it returns the wrong answer: cosine 0.77 against the CPU result, worst element off by 6.1 on a +-7 range,
-//     with no NaNs and a plausible range. That is the dangerous failure: a quietly degraded image and no error.
+// CoreMLComputeUnits is the single largest provider knob here. The default ALL lets CoreML dispatch to the Neural
+// Engine, which these graphs are consistently worse on: measured against CPUAndGPU on an M2 Max, ALL costs 4.2x on
+// the VAE encoder and 3.9x on the decoder, and pinning the Neural Engine costs 2.5x on the DiT. SpecializationStrategy
+// is left at its default - FastPrediction lands within noise on all three graphs and costs ~134 s of session build on
+// the DiT.
 //
-// The last point is why this exclusion matters more than a normal one. A provider that crashes announces itself; one
-// that silently miscomputes does not. Do not re-enable on the strength of "it runs now" - compare the output against
-// the CPU element by element, on both the DiT and the VAE.
+// CoreML is no longer excluded. The three failures recorded here before - the VAE's rank error, the DiT's
+// "MPSNDArray initWithDevice: Error: device may not be nil" abort, and a silently wrong result at cosine 0.77 - were
+// all export defects, and all three are gone with the re-exported graphs: each is a single CoreML partition, and the
+// output matches the CPU at cosine 0.99999 or better. The int8 DiT is the exception and stays fragmented at ~36
+// partitions, because ONNX Runtime's CoreML EP has no DequantizeLinear builder in any form - per-channel or
+// per-tensor, weight-only or full QDQ, opset 17 or 21 - so its 216 dequantize nodes cut the graph wherever they sit.
+// It still runs correctly there, just slower than fp16; see Op in osaka.go for which build to prefer.
 //
-// None of this is caused by the 960 re-export: the VAE files are unchanged from the original publication, so CoreML
-// never worked for this pipeline.
+// The caution the old comment ended on still stands, though its specific findings no longer do: a provider that
+// crashes announces itself, one that silently miscomputes does not. Anything that changes these graphs should be
+// re-checked against the CPU element by element, on the DiT and both VAE halves.
 //
 // TensorRT needs explicit optimization profiles for dynamic inputs, and without them it either rebuilds an engine for
-// every distinct tile size - minutes each - or grows an unbounded engine cache. Adding them means committing to shape
-// ranges this pipeline does not yet have measurements for.
+// every distinct tile size - minutes each - or grows an unbounded engine cache. The graphs are fixed-shape now, so
+// that objection has largely dissolved, but nobody has measured this model on TensorRT since - hence the exclusion
+// stays until someone does.
 func profileFor(types.Precision) utils.EPProfile {
 	return utils.EPProfile{
-		DynamicShapes:     true,
-		DisableMemPattern: true,
-		DisableOptimizers: brokenOptimizers,
+		DisableMemPattern:  true,
+		DisableOptimizers:  brokenOptimizers,
+		CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
 		ExcludeEPs: []types.ExecutionProvider{
-			types.ExecutionProviderCoreML,
 			types.ExecutionProviderTensorRT,
 		},
 	}

@@ -9,16 +9,17 @@ import (
 // The DiT takes 33 channels, laid out as concat([noise, encoded_latent, ones_mask]) - noise first, then the latent of
 // the image being restored, then a mask channel of ones - and driven at the first timestep of a 1000-step schedule.
 //
+// That timestep is no longer passed in. It is baked into the graph as a constant, because it never varied and holding
+// it as an input kept the whole timestep embedding out of constant folding; schedulerStep in pipeline.go is the other
+// half of the same assumption, and both would have to change together to run this model at more than one step.
+//
 // The convention is not discoverable from the graph: all 33 channels go through a single projection, so nothing in the
 // structure says which group is which, and getting it wrong does not fail loudly - it just returns a worse image. The
 // values below are taken from SeedVR2's reference implementation rather than guessed.
 //
 // Nothing is rescaled on the way in. SeedVR2's VAE declares a scaling factor of 0.9152, but the reference pipeline
 // does not apply it - the encoder's output goes into the DiT untouched.
-const (
-	taskValue   float32 = 1
-	ditTimestep float32 = 1000
-)
+const taskValue float32 = 1
 
 const (
 	latentChannels = 16
