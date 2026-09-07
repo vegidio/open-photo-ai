@@ -35,9 +35,9 @@ var Releases = map[string]Release{
 	"cuda": {
 		Tag: "cuda/13.3.0",
 		Archives: map[string]Artifact{
-			"linux_amd64":   {Hash: "7e81d7b5c9dc4c976fb083a49153bb2541fb1e2891749fa1cb2766009676643d", Size: 546082624},
-			"linux_arm64":   {Hash: "71d3a660f72404f52dcc8a3d4a9be4badf807b95b567385a4933d489c24332d2", Size: 655813726},
-			"windows_amd64": {Hash: "0db5ab009f6a32a91f20f42a1e4dafa55c69fed383c49133a693ddc7b90c79c9", Size: 539777095},
+			"linux_amd64":   {Hash: "fb4eb6ef362973c6cdefeae43e09cea05270288acbdd47cc0fc4f50ca6bc47c0", Size: 587322552},
+			"linux_arm64":   {Hash: "ed5eb63005e30a098c270b2020b66eab87a5142d9936886fe820c19693487a24", Size: 697083065},
+			"windows_amd64": {Hash: "b85d858e4fd97bab2c808c7ad7106a89dc8dfba535a0f20f63c4decc4d24452b", Size: 585185362},
 		},
 	},
 
