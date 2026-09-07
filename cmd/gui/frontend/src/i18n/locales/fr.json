@@ -325,6 +325,8 @@
         "autopilotFailed": "Une erreur s'est produite. Impossible d'exécuter l'autopilote.",
         "enhanceFailed": "Une erreur s'est produite. Impossible d'améliorer l'image.",
         "faceDetectFailed": "Une erreur s'est produite. Impossible de détecter les visages.",
-        "showLogsFailed": "Impossible d'ouvrir le fichier journal. Vous le trouverez dans le dossier de configuration de l'application."
+        "showLogsFailed": "Impossible d'ouvrir le fichier journal. Vous le trouverez dans le dossier de configuration de l'application.",
+        "revealFailed": "Impossible d'ouvrir le gestionnaire de fichiers. Le fichier reste enregistré à son emplacement d'exportation.",
+        "openUrlFailed": "Impossible d'ouvrir le navigateur. Consultez la page des versions sur GitHub pour télécharger la mise à jour."
     }
 }

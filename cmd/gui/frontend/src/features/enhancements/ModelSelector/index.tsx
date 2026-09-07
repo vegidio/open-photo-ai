@@ -29,7 +29,7 @@ export const ModelSelector = ({ options, value, onChange }: ModelSelectorProps) 
                 value={value}
                 exclusive
                 onChange={onButtonClick}
-                className='bg-[#171717] grid grid-cols-2 gap-1 p-1'
+                className='bg-surface-base grid grid-cols-2 gap-1 p-1'
             >
                 {options.map(({ value, label, description }) => (
                     <ToggleButton key={value} size='small' value={value} className='relative border-0 rounded'>
@@ -45,9 +45,7 @@ export const ModelSelector = ({ options, value, onChange }: ModelSelectorProps) 
                             </Tooltip>
                         )}
 
-                        <Typography className={`text-[13px] normal-case font-normal ${description ? 'ml-3' : ''}`}>
-                            {label}
-                        </Typography>
+                        <Typography className={`option-label ${description ? 'ml-3' : ''}`}>{label}</Typography>
                     </ToggleButton>
                 ))}
             </ToggleButtonGroup>

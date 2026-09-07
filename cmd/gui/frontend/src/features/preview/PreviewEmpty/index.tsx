@@ -10,16 +10,16 @@ export const PreviewEmpty = () => {
 
     return (
         <div className='flex flex-col items-center justify-center size-full'>
-            <MdFolderOpen className='size-20 text-[#009aff]' />
+            <MdFolderOpen className='size-20 text-brand' />
 
-            <div className='flex flex-col text-center gap-3 mb-4 bg-[#171717]'>
+            <div className='flex flex-col text-center gap-3 mb-4 bg-surface-base'>
                 {/* The line break is part of the centred two-line layout, so it sits in the catalog where a
                     translator can move or drop it — <br/> is one of i18next's default kept nodes. */}
-                <Typography className='text-[#f2f2f2]'>
+                <Typography className='text-content-primary'>
                     <Trans i18nKey='preview.empty.title' />
                 </Typography>
 
-                <Typography variant='subtitle2' className='text-[#979797]'>
+                <Typography variant='subtitle2' className='text-content-subtle'>
                     {t('common.or')}
                 </Typography>
             </div>

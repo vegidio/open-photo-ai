@@ -52,7 +52,7 @@ const DimensionField = ({ label, value, onCommit }: DimensionFieldProps) => {
             className='flex-1 m-0'
             slotProps={{
                 input: {
-                    startAdornment: <Typography className='mr-2 text-[#b0b0b0]'>{label}</Typography>,
+                    startAdornment: <Typography className='mr-2 text-content-secondary'>{label}</Typography>,
                 },
             }}
         />

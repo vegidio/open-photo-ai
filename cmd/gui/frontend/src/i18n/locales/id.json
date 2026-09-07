@@ -319,6 +319,8 @@
         "autopilotFailed": "Terjadi kesalahan. Gagal menjalankan autopilot.",
         "enhanceFailed": "Terjadi kesalahan. Gagal meningkatkan gambar.",
         "faceDetectFailed": "Terjadi kesalahan. Gagal mendeteksi wajah.",
-        "showLogsFailed": "Tidak dapat membuka file log. Anda bisa menemukannya di folder konfigurasi aplikasi."
+        "showLogsFailed": "Tidak dapat membuka file log. Anda bisa menemukannya di folder konfigurasi aplikasi.",
+        "revealFailed": "Tidak dapat membuka pengelola berkas. Berkas tetap tersimpan di lokasi ekspornya.",
+        "openUrlFailed": "Tidak dapat membuka peramban. Kunjungi halaman rilis di GitHub untuk mengunduh pembaruannya."
     }
 }

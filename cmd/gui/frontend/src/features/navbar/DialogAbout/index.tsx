@@ -22,12 +22,12 @@ export const DialogAbout = ({ open, onClose }: DialogAboutProps) => {
                     <Typography variant='h5' className='font-bold'>
                         {APP_NAME}
                     </Typography>
-                    <Typography variant='body2' className='text-[#b0b0b0]'>
+                    <Typography variant='body2' className='text-content-secondary'>
                         {t('navbar.about_dialog.version', { version })}
                     </Typography>
                 </div>
 
-                <div className='flex flex-col mt-2 gap-1 items-center text-[#b0b0b0]'>
+                <div className='flex flex-col mt-2 gap-1 items-center text-content-secondary'>
                     <Typography className='text-sm'>{APP_COPYRIGHT}</Typography>
 
                     <div className='flex flex-row gap-2'>
@@ -35,7 +35,7 @@ export const DialogAbout = ({ open, onClose }: DialogAboutProps) => {
                             {APP_REPOSITORY.label}
                         </Link>
 
-                        <Divider orientation='vertical' flexItem className='bg-[#b0b0b0] my-0.5' />
+                        <Divider orientation='vertical' flexItem className='bg-content-secondary my-0.5' />
 
                         <Link href='#' className='text-sm' onClick={() => Browser.OpenURL(APP_WEBSITE.url)}>
                             {APP_WEBSITE.label}

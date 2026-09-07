@@ -18,7 +18,7 @@ export const DrawerBody = ({ drawerHeight }: FileListBodyProps) => {
     return (
         <div
             style={{ height: drawerHeight }}
-            className='flex flex-row px-4 py-3 gap-4 overflow-x-auto scrollbar-thin bg-[#353535]'
+            className='flex flex-row px-4 py-3 gap-4 overflow-x-auto scrollbar-thin bg-surface-overlay'
         >
             {files.map((file, index) => (
                 <DrawerItem

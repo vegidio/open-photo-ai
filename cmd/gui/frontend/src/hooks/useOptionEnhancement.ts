@@ -32,7 +32,11 @@ export const useOptionEnhancement = (
     const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);
 
     const currentOp = operations.find((op) => op.id.startsWith(prefix));
-    const [model, setModel] = useState(`${currentOp?.options.name}_${currentOp?.options.precision}`);
+
+    // Interpolating the optional chain directly produced the literal string "undefined_undefined" whenever no
+    // operation of this type was applied yet, and handed it to ModelSelector as a value that matches no option. An
+    // empty string is the honest "nothing selected", which the selector already renders as no selection.
+    const [model, setModel] = useState(currentOp ? `${currentOp.options.name}_${currentOp.options.precision}` : '');
     const [amount, setAmount] = useState(initialAmount(currentOp));
 
     const apply = (nextModel: string, nextAmount: string) => {

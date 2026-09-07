@@ -82,7 +82,9 @@ export const App = () => {
             }
         };
 
-        initDependencies();
+        // initDependencies handles its own failures internally, so the void marks the floating promise as deliberate
+        // rather than leaving it to the global unhandledrejection handler to decide it was an oversight.
+        void initDependencies();
 
         return () => {
             offDownload();

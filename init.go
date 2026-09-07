@@ -44,7 +44,7 @@ const shutdownDrainTimeout = 30 * time.Second
 //	}
 //	defer opai.Destroy() // Clean up resources
 func Initialize(ctx context.Context, name string, onProgress types.DownloadProgress) error {
-	internal.AppName = name
+	internal.SetAppName(name)
 
 	// Rearm the lifecycle. A previous Destroy latched the registry closed and marked itself done; without clearing
 	// both, this call would return successfully and then fail every single acquisition with ErrRegistryClosed.
@@ -62,7 +62,14 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 	if err != nil {
 		return errors.Wrap(err, "failed to create image cache")
 	}
-	internal.ImageCache = cache
+
+	// Swap rather than assign: a second Initialize with no Destroy between them would otherwise drop the previous
+	// cache's handle on the floor, leaking the badger store it keeps open.
+	if previous := internal.SwapImageCache(cache); previous != nil {
+		if err = previous.Close(); err != nil {
+			internal.Log().Warn("failed to close the previous image cache", "err", err)
+		}
+	}
 
 	// Two slow, independent lookups nothing below needs until much later: the model manifest is an HTTPS request with a
 	// five second timeout, and the memory budgets shell out to the OS. Started here, they run while the ONNX Runtime
@@ -80,12 +87,12 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 
 	go func() {
 		defer preludeWg.Done()
-		modelData, modelErr = utils.LoadModelData()
+		modelData, modelErr = utils.LoadModelData(ctx)
 	}()
 
 	go func() {
 		defer preludeWg.Done()
-		device, host = internal.DefaultBudgets()
+		device, host = internal.DefaultBudgets(ctx)
 	}()
 
 	// Drop what the execution providers compiled against an older runtime; the models themselves are plain ONNX graphs
@@ -114,7 +121,7 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 	preludeWg.Wait()
 
 	if modelErr == nil {
-		internal.ModelData = modelData
+		internal.SetModelData(modelData)
 	} else {
 		internal.Log().Warn("no model manifest is available; models will be downloaded without verification this "+
 			"session", "err", modelErr)
@@ -156,10 +163,12 @@ func Destroy() {
 
 	internal.Log().Info("destroying opai runtime")
 
-	if internal.ImageCache != nil {
+	// Clearing the pointer is what makes the close safe, not just tidy: Process guards on a non-nil cache, so leaving
+	// a closed store reachable would turn a stray call after Destroy into a use-after-close on the badger handle.
+	if cache := internal.SwapImageCache(nil); cache != nil {
 		// A failed flush loses cached results but changes nothing about the teardown, so it is logged rather than
 		// returned - Destroy has no error to give and the process is on its way out.
-		if err := internal.ImageCache.Close(); err != nil {
+		if err := cache.Close(); err != nil {
 			internal.Log().Warn("failed to close the image cache", "err", err)
 		}
 	}
@@ -213,7 +222,7 @@ func pruneLegacyLayout() {
 }
 
 func startRuntime() error {
-	configDir, err := fs.MkUserConfigDir(internal.AppName, internal.RuntimeDir)
+	configDir, err := fs.MkUserConfigDir(internal.AppName(), internal.RuntimeDir)
 	if err != nil {
 		return errors.Wrap(err, "failed to create config directory")
 	}

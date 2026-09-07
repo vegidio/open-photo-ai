@@ -322,6 +322,8 @@
         "autopilotFailed": "Etwas ist schiefgelaufen. Der Autopilot konnte nicht ausgeführt werden.",
         "enhanceFailed": "Etwas ist schiefgelaufen. Das Bild konnte nicht verbessert werden.",
         "faceDetectFailed": "Etwas ist schiefgelaufen. Gesichter konnten nicht erkannt werden.",
-        "showLogsFailed": "Die Protokolldatei konnte nicht geöffnet werden. Sie befindet sich im Konfigurationsordner der App."
+        "showLogsFailed": "Die Protokolldatei konnte nicht geöffnet werden. Sie befindet sich im Konfigurationsordner der App.",
+        "revealFailed": "Der Dateimanager konnte nicht geöffnet werden. Die Datei liegt weiterhin am Exportort.",
+        "openUrlFailed": "Der Browser konnte nicht geöffnet werden. Besuchen Sie die Releases-Seite auf GitHub, um das Update zu laden."
     }
 }

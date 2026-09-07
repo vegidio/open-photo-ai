@@ -25,7 +25,7 @@ func TestLiveResumeAgainstHuggingFace(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", root)
 	t.Setenv("AppData", root)
 
-	internal.AppName = "opai-live-test"
+	internal.SetAppName("opai-live-test")
 
 	dep := Dependency{
 		Name:        "fr_athens_fp32",
@@ -42,7 +42,7 @@ func TestLiveResumeAgainstHuggingFace(t *testing.T) {
 		t.Fatalf("failed to resolve the config directory: %v", err)
 	}
 
-	dir := filepath.Join(config, internal.AppName, internal.ModelsDir)
+	dir := filepath.Join(config, internal.AppName(), internal.ModelsDir)
 	part, state := partPaths(dir, "fr_athens_fp32.onnx")
 
 	// Interrupt the first attempt partway through.

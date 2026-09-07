@@ -9,14 +9,14 @@ import (
 // TestModelDependency covers the translation from a model id to something installable, which is where the split-model
 // case lives: a model can be a graph plus a multi-gigabyte weights blob, and only the graph used to be fetched.
 func TestModelDependency(t *testing.T) {
-	original := internal.ModelData
-	t.Cleanup(func() { internal.ModelData = original })
+	original := internal.ModelData()
+	t.Cleanup(func() { internal.SetModelData(original) })
 
-	internal.ModelData = []internal.RemoteModelData{
+	internal.SetModelData([]internal.RemoteModelData{
 		{Name: "dn_stockholm_fp32.onnx", Size: 100, Hash: "aaa"},
 		{Name: "up_osaka_fp16.onnx", Size: 10, Hash: "bbb"},
 		{Name: "up_osaka_fp16.onnx.data", Size: 5000, Hash: "ccc"},
-	}
+	})
 
 	t.Run("a single-file model", func(t *testing.T) {
 		dep := ModelDependency("dn_stockholm_fp32")

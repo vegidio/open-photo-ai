@@ -4,30 +4,22 @@ import (
 	"bytes"
 	"image"
 	"image/gif"
-	_ "image/gif"
 	"image/jpeg"
-	_ "image/jpeg"
 	"image/png"
-	_ "image/png"
 	"io"
 	"os"
 	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/avif-go"
-	_ "github.com/vegidio/avif-go"
 	"github.com/vegidio/go-sak/crypto"
 	"github.com/vegidio/heif-go"
-	_ "github.com/vegidio/heif-go"
 	"github.com/vegidio/raw-go"
 	"github.com/vegidio/webp-go"
-	_ "github.com/vegidio/webp-go"
 
 	"github.com/vegidio/open-photo-ai/types"
 	"golang.org/x/image/bmp"
-	_ "golang.org/x/image/bmp"
 	"golang.org/x/image/tiff"
-	_ "golang.org/x/image/tiff"
 )
 
 // rawMu serializes all calls into raw-go (LibRaw). The bundled LibRaw is not safe for concurrent
@@ -179,7 +171,7 @@ func SaveImage(data *types.ImageData, format types.ImageFormat, quality int) (in
 		return 0, errors.Wrap(err, "failed to encode image")
 	}
 
-	err = os.WriteFile(data.FilePath, imageBytes, 0644)
+	err = os.WriteFile(data.FilePath, imageBytes, 0o644)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to write image file")
 	}

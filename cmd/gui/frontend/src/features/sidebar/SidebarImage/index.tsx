@@ -18,7 +18,9 @@ export const SidebarImage = () => {
                 whose wording is longer than English it renders edge-to-edge on one line — or clips — without room to
                 wrap. Constraining the width here forces the wrap and keeps the image below at full sidebar width. */}
             {!originalImage && (
-                <Typography className='px-6 text-center text-[#545454] text-sm'>{t('sidebar.noPreview')}</Typography>
+                <Typography className='px-6 text-center text-content-faint text-sm'>
+                    {t('sidebar.noPreview')}
+                </Typography>
             )}
 
             {originalImage && (

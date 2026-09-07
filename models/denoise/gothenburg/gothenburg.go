@@ -10,6 +10,7 @@ import (
 // variant holds everything specific to gothenburg; the shared implementation lives in the denoise package.
 var variant = &denoise.Variant{
 	Codename: "gothenburg",
+	Label:    "Gothenburg",
 }
 
 // New loads the gothenburg session for the given operation.

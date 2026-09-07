@@ -13,12 +13,12 @@ export const ExportQueueState = ({ state }: ExportQueueStateProps) => {
     const [msg, color] = useMemo(() => {
         switch (state) {
             case 'RUNNING':
-                return [t('export.queue.processing'), 'text-[#009aff]'];
+                return [t('export.queue.processing'), 'text-brand'];
             case 'COMPLETED':
-                return [t('export.queue.completed'), 'text-[#009aff]'];
+                return [t('export.queue.completed'), 'text-brand'];
             case 'ERROR':
             case 'ERROR_DOWNLOAD':
-                return [t('export.queue.error'), 'text-[#ff5555]'];
+                return [t('export.queue.error'), 'text-danger'];
             default:
                 return ['<Invisible>', ''];
         }

@@ -63,7 +63,19 @@ func GetDtModel(
 }
 
 func alignFace(img image.Image, landmarks [5]detection.PointF, tileSize int) (image.Image, AffineMatrix) {
-	transform := calculateSimilarityTransform(landmarks[:], detection.ArcfaceTemplate)
+	// The template's coordinates are expressed at ArcfaceTemplateSize, but the warp below renders into a tileSize
+	// canvas. Both shipping variants run at 512, so this scale is exactly 1 today and the output is unchanged - but
+	// leaving the two numbers independent meant a variant at any other tile size would have aligned every face
+	// against a template in the wrong coordinate space, with nothing to signal it.
+	scale := float32(tileSize) / float32(detection.ArcfaceTemplateSize)
+
+	template := detection.ArcfaceTemplate
+	scaled := make([]detection.PointF, len(template))
+	for i, point := range template {
+		scaled[i] = detection.PointF{X: point.X * scale, Y: point.Y * scale}
+	}
+
+	transform := calculateSimilarityTransform(landmarks[:], scaled)
 	aligned := warpAffine(img, transform, tileSize, tileSize)
 	return aligned, transform
 }

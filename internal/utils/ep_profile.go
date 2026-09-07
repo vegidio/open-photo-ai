@@ -406,7 +406,16 @@ func createOptions(goos, cachePath string, ep types.ExecutionProvider, p EPProfi
 	// Debug it was invisible in every log anyone would actually send us. It fires at most once per provider per
 	// session build, so it costs a handful of lines even on a machine where every provider declines.
 	for _, provider := range providers {
-		if err = providerAppenders[provider](cachePath, options, p); err != nil {
+		// Looked up rather than called straight out of the map: providers comes from autoChain, which is a separate
+		// table. The two agree today, but adding a provider to the chain and forgetting its appender would panic on a
+		// nil func here - at session build, far from the edit - instead of declining like any other unusable provider.
+		appender, ok := providerAppenders[provider]
+		if !ok {
+			internal.Log().Warn("no appender is registered for the execution provider; skipping it", "ep", provider)
+			continue
+		}
+
+		if err = appender(cachePath, options, p); err != nil {
 			internal.Log().Warn("execution provider declined to attach; the graph will run on the next provider "+
 				"in the chain", "ep", provider, "requested_ep", ep, "err", err)
 		}
@@ -471,7 +480,7 @@ func applyProfile(options *ort.SessionOptions, p EPProfile) error {
 // against a CPU or graph-off result. A single-run comparison cannot see either failure.
 
 func tensorRTOptions(cachePath string, p EPProfile) map[string]string {
-	workspace := int64(4294967296)
+	workspace := int64(4) << 30
 	if p.TrtWorkspaceBytes > 0 {
 		workspace = p.TrtWorkspaceBytes
 	}

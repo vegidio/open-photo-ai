@@ -52,7 +52,7 @@ func (v *Variant) New(
 	}
 
 	return &Model{
-		name:      utils.FormatModelName(v.Label, op.precision),
+		name:      utils.FormatModelName(v.Label, v.Codename, op.precision),
 		operation: op,
 		variant:   v,
 		Session:   session,

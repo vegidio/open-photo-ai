@@ -51,7 +51,7 @@ export const ExportSettingsLocation = () => {
 
     return (
         <div className='flex flex-col gap-2'>
-            <Typography variant='body2' className='text-[#b0b0b0]'>
+            <Typography variant='body2' className='text-content-secondary'>
                 {t('export.settings.location.title')}
             </Typography>
 

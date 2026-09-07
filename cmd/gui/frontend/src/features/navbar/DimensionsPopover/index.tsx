@@ -43,41 +43,41 @@ export const DimensionsPopover = ({
             }}
         >
             <ClickAwayListener onClickAway={onClose}>
-                <div className='flex flex-col gap-2 p-4 pr-5 bg-black border border-[#2b2b2b] rounded'>
+                <div className='flex flex-col gap-2 p-4 pr-5 bg-black border border-surface-header rounded'>
                     <div className='flex flex-row items-center gap-3'>
                         <Icon option='upscale' className='size-4' />
 
-                        <Typography variant='body2' className='text-[#f2f2f2]'>
+                        <Typography variant='body2' className='text-content-primary'>
                             {t('navbar.dimensions.title')}
                         </Typography>
                     </div>
 
                     <div className='grid grid-cols-[56px_auto] ml-7 gap-2'>
-                        <Typography variant='caption' className='text-[#f2f2f2]'>
+                        <Typography variant='caption' className='text-content-primary'>
                             {t('navbar.dimensions.original')}
                         </Typography>
 
-                        <Typography variant='caption' className='text-[#b0b0b0]'>
+                        <Typography variant='caption' className='text-content-secondary'>
                             {originalDims}
                         </Typography>
 
                         {croppedDims && (
                             <>
-                                <Typography variant='caption' className='text-[#f2f2f2]'>
+                                <Typography variant='caption' className='text-content-primary'>
                                     {t('navbar.dimensions.cropped')}
                                 </Typography>
 
-                                <Typography variant='caption' className='text-[#b0b0b0]'>
+                                <Typography variant='caption' className='text-content-secondary'>
                                     {croppedDims}
                                 </Typography>
                             </>
                         )}
 
-                        <Typography variant='caption' className='text-[#f2f2f2]'>
+                        <Typography variant='caption' className='text-content-primary'>
                             {t('navbar.dimensions.output')}
                         </Typography>
 
-                        <Typography variant='caption' className='text-[#b0b0b0]'>
+                        <Typography variant='caption' className='text-content-secondary'>
                             {outputDims}
                         </Typography>
                     </div>

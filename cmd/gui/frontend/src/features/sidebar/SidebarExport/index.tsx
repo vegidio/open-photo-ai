@@ -24,8 +24,8 @@ export const SidebarExport = ({ className = '' }: TailwindProps) => {
         <div>
             <Button
                 variant='contained'
-                startIcon={<PiExport className='text-[#019aff]' />}
-                className={`${className} bg-[#353535] hover:bg-[#171717] disabled:opacity-30 text-[#f2f2f2] normal-case font-normal rounded-none w-full h-12`}
+                startIcon={<PiExport className='text-brand' />}
+                className={`${className} bg-surface-overlay hover:bg-surface-base disabled:opacity-30 text-content-primary normal-case font-normal rounded-none w-full h-12`}
                 disabled={exportEligible.size === 0}
                 onClick={() => setOpenExport(true)}
             >

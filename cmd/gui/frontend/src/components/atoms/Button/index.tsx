@@ -10,7 +10,7 @@ export const Button = ({ option = 'primary', className = '', ...props }: ButtonP
             return (
                 <MuiButton
                     variant='contained'
-                    className={`bg-[#009aff] hover:bg-[#007eff] text-[#f2f2f2] normal-case font-normal whitespace-nowrap ${className}`}
+                    className={`bg-brand hover:bg-brand-hover text-content-primary normal-case font-normal whitespace-nowrap ${className}`}
                     {...props}
                 />
             );
@@ -19,7 +19,7 @@ export const Button = ({ option = 'primary', className = '', ...props }: ButtonP
             return (
                 <MuiButton
                     variant='contained'
-                    className={`bg-[#353535] hover:bg-[#171717] text-[#f2f2f2] normal-case font-normal whitespace-nowrap ${className}`}
+                    className={`bg-surface-overlay hover:bg-surface-base text-content-primary normal-case font-normal whitespace-nowrap ${className}`}
                     {...props}
                 />
             );
@@ -28,7 +28,7 @@ export const Button = ({ option = 'primary', className = '', ...props }: ButtonP
             return (
                 <MuiButton
                     variant='outlined'
-                    className={`text-[#f2f2f2] normal-case font-normal whitespace-nowrap ${className}`}
+                    className={`text-content-primary normal-case font-normal whitespace-nowrap ${className}`}
                     {...props}
                 />
             );
@@ -38,7 +38,7 @@ export const Button = ({ option = 'primary', className = '', ...props }: ButtonP
                 <MuiButton
                     variant='text'
                     color='inherit'
-                    className={`text-[#f2f2f2] normal-case font-normal whitespace-nowrap ${className}`}
+                    className={`text-content-primary normal-case font-normal whitespace-nowrap ${className}`}
                     {...props}
                 />
             );

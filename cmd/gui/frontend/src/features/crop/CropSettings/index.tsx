@@ -56,7 +56,7 @@ export const CropSettings = ({
     const ratios = useMemo(() => buildRatios(t), [t]);
 
     return (
-        <div className='flex flex-col w-64 shrink-0 overflow-y-auto bg-[#212121] p-4 gap-2'>
+        <div className='flex flex-col w-64 shrink-0 overflow-y-auto bg-surface p-4 gap-2'>
             <Typography variant='body2'>{t('crop.aspectRatio')}</Typography>
 
             <div className='grid grid-cols-2 my-1 gap-x-2 gap-y-4'>
@@ -83,7 +83,7 @@ export const CropSettings = ({
                 onSwap={onSwap}
             />
 
-            <Typography variant='body2' className='mt-6 text-center text-[#b0b0b0]'>
+            <Typography variant='body2' className='mt-6 text-center text-content-secondary'>
                 {t('crop.zoomHint')}
             </Typography>
 
@@ -93,7 +93,7 @@ export const CropSettings = ({
                 <Button
                     variant='contained'
                     onClick={onCancel}
-                    className='flex-1 bg-[#353535] hover:bg-[#171717] text-[#f2f2f2] normal-case font-normal'
+                    className='flex-1 bg-surface-overlay hover:bg-surface-base text-content-primary normal-case font-normal'
                 >
                     {t('common.cancel')}
                 </Button>
@@ -101,7 +101,7 @@ export const CropSettings = ({
                 <Button
                     variant='contained'
                     onClick={onApply}
-                    className='flex-1 bg-[#009aff] hover:bg-[#007eff] disabled:opacity-50 text-[#f2f2f2] normal-case font-normal'
+                    className='flex-1 bg-brand hover:bg-brand-hover disabled:opacity-50 text-content-primary normal-case font-normal'
                 >
                     {t('common.apply')}
                 </Button>

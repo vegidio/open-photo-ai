@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"os"
 	"runtime"
 	"strconv"
@@ -83,10 +84,21 @@ func hasDiscreteGPU() bool {
 // Both are computed once, at Initialize, because the underlying sysinfo probes shell out to the OS - `system_profiler`
 // on macOS, two separate PowerShell CIM queries on Windows. They are independent, so they run concurrently rather than
 // adding both latencies to startup.
-func DefaultBudgets() (device, host int64) {
+//
+// ctx only decides whether the probes are *started*, not whether a running one is abandoned: they go through go-sak's
+// memoized GetGPUInfo/GetMemoryInfo, which own the subprocess and expose no way to cancel it. That still matters -
+// an Initialize cancelled before this point no longer pays seconds for numbers nobody will read - but a probe already
+// in flight runs to completion. Cancelling yields the same ceilings an unqueryable machine gets.
+func DefaultBudgets(ctx context.Context) (device, host int64) {
 	if override, ok := budgetOverride(); ok {
 		Log().Info("model memory budget overridden", "env", BudgetEnvVar, "bytes", override)
 		return override, override
+	}
+
+	if err := ctx.Err(); err != nil {
+		Log().Warn("skipping the memory probes because initialization was cancelled; using the default budgets",
+			"err", err)
+		return deviceBudgetFor(0), hostBudgetFor(0)
 	}
 
 	var wg sync.WaitGroup

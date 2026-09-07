@@ -45,7 +45,9 @@ const inFlight = new Map<string, Promise<ImageData>>();
 
 // The source dimensions of a file: the crop box (post-rotation) when cropped, otherwise the file's own dimensions.
 export const cropDimensions = (file: File, crop?: CropInfo): [number, number] =>
-    crop ? [crop.Width, crop.Height] : [file.Dimensions[0], file.Dimensions[1]];
+    // The bindings type Dimensions as number[], so the two reads are optional as far as the compiler is concerned. Go
+    // always sends both, and 0 is what the rest of the pipeline already treats as "unknown size".
+    crop ? [crop.Width, crop.Height] : [file.Dimensions[0] ?? 0, file.Dimensions[1] ?? 0];
 
 /**
  * Publishes a freshly produced image, unless an equivalent entry landed while it was being produced.

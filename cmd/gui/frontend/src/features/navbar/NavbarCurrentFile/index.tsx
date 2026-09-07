@@ -29,12 +29,12 @@ export const NavbarCurrentFile = ({ file, className = '' }: NavbarCurrentFilePro
             <div className={`${className} flex flex-row h-full items-center`}>
                 <Divider orientation='vertical' variant='middle' flexItem />
 
-                <Typography variant='caption' className='ml-4 mr-2 text-[#b0b0b0]'>
+                <Typography variant='caption' className='ml-4 mr-2 text-content-secondary'>
                     {basename(file.Path)}
                 </Typography>
 
                 <IconButton type='button' onClick={onMenuOpen}>
-                    <IoIosMore className='size-4 text-[#b0b0b0]' />
+                    <IoIosMore className='size-4 text-content-secondary' />
                 </IconButton>
             </div>
 

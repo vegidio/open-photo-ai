@@ -37,7 +37,7 @@ export const DialogTensorRT = ({ open, onClose }: DialogTensorRTProps) => {
             <div className='flex flex-col p-6 gap-6 items-center'>
                 <img src={logo_tensorrt} alt={t('dialogs.tensorRT.logoAlt')} className='aspect-auto h-24' />
 
-                <div className='flex flex-col text-center text-[#f2f2f2] gap-3'>
+                <div className='flex flex-col text-center text-content-primary gap-3'>
                     <Typography variant='body2'>{t('dialogs.tensorRT.intro')}</Typography>
 
                     {/* The emphasis is inside the sentence, so it has to travel with it. The object form of
@@ -64,7 +64,7 @@ export const DialogTensorRT = ({ open, onClose }: DialogTensorRTProps) => {
 
                 {/* The manual <br/> that used to balance these two lines is gone: it was tuned to the English
                     wording, and a translator has no way to know where the break belongs. Natural wrapping is right. */}
-                <Typography variant='caption' className='text-[#9e9e9e] text-center'>
+                <Typography variant='caption' className='text-content-muted text-center'>
                     <Trans
                         i18nKey='dialogs.tensorRT.footer'
                         components={{ b: <span className='font-bold' />, u: <span className='underline' /> }}

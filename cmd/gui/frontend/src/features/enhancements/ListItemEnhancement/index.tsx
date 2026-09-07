@@ -102,7 +102,7 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
                                 className: 'text-[13px] text-white',
                             },
                             secondary: {
-                                className: 'text-[13px] text-[#545454] italic',
+                                className: 'text-[13px] text-content-faint italic',
                             },
                         }}
                     />
@@ -118,18 +118,24 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
 // intensity, or nothing but the model -- so the key comes from the ENHANCEMENTS registry rather than a switch here.
 // That way a new enhancement cannot be added without declaring which shape its line takes; previously, forgetting to
 // add a case rendered "NaN%".
+// options is a Record<string, string>, so every read below is optional as far as the compiler is concerned. Which
+// keys an operation actually carries depends on its enhancement - an upscale has `scale`, a denoise has `intensity` -
+// and the interpolation only reads the ones its own infoKey names. The defaults are therefore what an absent key has
+// always meant here, made explicit: an empty name/precision, and a numeric field that contributes nothing.
 const opInfo = (t: TFunction, op: Operation, type: EnhancementType, faceText: string): string =>
     t(ENHANCEMENTS[type].infoKey, {
-        name: titleCase(op.options.name),
-        quality: qualityLabel(t, qualityTier(type, op.options.name, op.options.precision)),
+        name: titleCase(op.options.name ?? ''),
+        quality: qualityLabel(t, qualityTier(type, op.options.name ?? '', op.options.precision ?? '')),
         faces: faceText,
-        scale: parseFloat(parseFloat(op.options.scale).toFixed(3)),
-        intensity: parseFloat(op.options.intensity) * 100,
+        scale: parseFloat(parseFloat(op.options.scale ?? '0').toFixed(3)),
+        intensity: parseFloat(op.options.intensity ?? '0') * 100,
     });
 
 const titleCase = (input: string): string => {
-    if (!input) return input;
-    return input[0].toUpperCase() + input.slice(1);
+    const first = input[0];
+    if (!first) return input;
+
+    return first.toUpperCase() + input.slice(1);
 };
 
 // `count` drives i18next's CLDR plural selection and `context` picks the partial-selection wording; the two

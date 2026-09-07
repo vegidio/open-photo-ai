@@ -35,18 +35,24 @@ export const SettingsList = ({ className = '', ref }: SettingsListProps) => {
     const { t } = useTranslation();
     const containerRef = useRef<HTMLUListElement>(null);
 
-    useImperativeHandle(ref, () => ({
-        scrollToSection: (itemId: string) => {
-            const target = containerRef.current?.querySelector(`#${CSS.escape(itemId)}`);
-            target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        },
-    }));
+    // The empty dependency list keeps the handle identity stable: it closes over nothing but containerRef, which is
+    // itself stable, so rebuilding it on every render of this component only churned the parent's ref.
+    useImperativeHandle(
+        ref,
+        () => ({
+            scrollToSection: (itemId: string) => {
+                const target = containerRef.current?.querySelector(`#${CSS.escape(itemId)}`);
+                target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            },
+        }),
+        [],
+    );
 
     return (
         <List ref={containerRef} className={`${className} py-0 w-full scroll-pt-12 overflow-x-hidden`}>
             {SETTINGS_SECTIONS.map((section) => (
                 <div key={section.id}>
-                    <ListSubheader id={section.id} className='bg-[#2b2b2b] text-[#f2f2f2]'>
+                    <ListSubheader id={section.id} className='bg-surface-header text-content-primary'>
                         {t(section.labelKey)}
                     </ListSubheader>
 
@@ -207,9 +213,19 @@ const ENHANCEMENT_ROWS: Record<string, EnhancementRow> = {
     enh_upscale: { type: 'up', descriptionKey: 'settings.enhancements.upscale.description' },
 };
 
+// Split in two so the table lookup can be narrowed before any hook runs: guarding inside the component that calls
+// useSettingsStore would either put a hook behind a condition or leave `row` optional at every use. An id with no row
+// is not reachable from SETTINGS_SECTIONS today, but the table is keyed by string, so nothing enforced that - and the
+// failure mode was a crash on `row.type` rather than a missing row.
 const ItemEnhancement = ({ id }: SettingsRowProps) => {
-    const { t } = useTranslation();
     const row = ENHANCEMENT_ROWS[id ?? ''];
+    if (!row) return null;
+
+    return <ItemEnhancementRow id={id} row={row} />;
+};
+
+const ItemEnhancementRow = ({ id, row }: SettingsRowProps & { row: EnhancementRow }) => {
+    const { t } = useTranslation();
     const selected = useSettingsStore((state) => state.models[row.type]);
     const setModel = useSettingsStore((state) => state.setModel);
 
@@ -258,8 +274,14 @@ const EXPORT_TITLE_KEYS: Record<QualityFormat, ParseKeys> = {
 // The difference is deliberate: this dialog already has Save/Cancel around it, and 'quality' is in SNAPSHOT_KEYS, so
 // Cancel reverts these the same way it reverts every other setting.
 const ItemExportQuality = ({ id }: SettingsRowProps) => {
-    const { t } = useTranslation();
     const format = EXPORT_ROWS[id ?? ''];
+    if (!format) return null;
+
+    return <ItemExportQualityRow id={id} format={format} />;
+};
+
+const ItemExportQualityRow = ({ id, format }: SettingsRowProps & { format: QualityFormat }) => {
+    const { t } = useTranslation();
     const value = useSettingsStore((state) => state.quality[format]);
     const setQuality = useSettingsStore((state) => state.setQuality);
 

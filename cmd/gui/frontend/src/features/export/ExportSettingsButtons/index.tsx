@@ -150,7 +150,7 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose }: Export
         <div className='flex gap-3'>
             <Button
                 variant='contained'
-                className='flex-1 bg-[#353535] hover:bg-[#171717] text-[#f2f2f2] normal-case font-normal'
+                className='flex-1 bg-surface-overlay hover:bg-surface-base text-content-primary normal-case font-normal'
                 onClick={handleCancel}
             >
                 {state === 'idle'
@@ -163,7 +163,7 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose }: Export
             <Button
                 variant='contained'
                 disabled={state === 'processing'}
-                className={`flex-1 ${state === 'completed' ? 'bg-[#353535] hover:bg-[#171717]' : 'bg-[#009aff] hover:bg-[#007eff]'} disabled:opacity-50 text-[#f2f2f2] normal-case font-normal`}
+                className={`flex-1 ${state === 'completed' ? 'bg-surface-overlay hover:bg-surface-base' : 'bg-brand hover:bg-brand-hover'} disabled:opacity-50 text-content-primary normal-case font-normal`}
                 onClick={handleExport}
             >
                 {state === 'completed' ? t('export.settings.exportAgain') : t('common.save')}

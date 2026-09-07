@@ -29,14 +29,14 @@ func setup(t *testing.T) string {
 	t.Setenv("XDG_CONFIG_HOME", root)
 	t.Setenv("AppData", root)
 
-	internal.AppName = "opai-test"
+	internal.SetAppName("opai-test")
 
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		t.Fatalf("failed to resolve the user config directory: %v", err)
 	}
 
-	return filepath.Join(dir, internal.AppName)
+	return filepath.Join(dir, internal.AppName())
 }
 
 // server hands out named payloads and counts the requests, which is how "already installed" is asserted: the check is

@@ -21,7 +21,7 @@ export const SettingsMenu = ({ className = '', onItemClick }: SettingsMenuProps)
             sx={{
                 '& .MuiTreeItem-label': {
                     fontSize: '0.875rem',
-                    color: '#b0b0b0',
+                    color: 'var(--color-content-secondary)',
                 },
             }}
         >
@@ -32,7 +32,7 @@ export const SettingsMenu = ({ className = '', onItemClick }: SettingsMenuProps)
                     label={t(section.labelKey)}
                     slotProps={{
                         label: {
-                            className: 'font-bold text-[#f2f2f2]',
+                            className: 'font-bold text-content-primary',
                         },
                     }}
                 >

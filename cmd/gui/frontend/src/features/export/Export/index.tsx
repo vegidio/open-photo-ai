@@ -24,7 +24,7 @@ export const Export = ({ enhancements, open, onClose }: ExportProps) => {
             }}
             slotProps={{
                 paper: {
-                    className: 'bg-[#212121] w-[70rem] h-[42rem] max-w-full bg-none',
+                    className: 'bg-surface w-[70rem] h-[42rem] max-w-full bg-none',
                 },
             }}
         >
@@ -33,7 +33,7 @@ export const Export = ({ enhancements, open, onClose }: ExportProps) => {
             <div className='flex flex-row h-full overflow-hidden'>
                 <ExportQueue enhancements={enhancements} className='flex-1' />
 
-                <Divider orientation='vertical' flexItem className='border-[#171717] my-0.5' />
+                <Divider orientation='vertical' flexItem className='border-surface-base my-0.5' />
 
                 <ExportSettings enhancements={enhancements} onClose={onClose} className='w-80' />
             </div>

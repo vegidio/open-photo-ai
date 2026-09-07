@@ -47,7 +47,7 @@ export const CropRotate = ({ open, onClose }: CropRotateProps) => {
             slotProps={{
                 paper: {
                     className:
-                        'bg-[#212121] bg-none max-w-none max-h-none m-8 w-[calc(100vw-64px)] h-[calc(100vh-64px)] flex flex-col',
+                        'bg-surface bg-none max-w-none max-h-none m-8 w-[calc(100vw-64px)] h-[calc(100vh-64px)] flex flex-col',
                 },
             }}
         >

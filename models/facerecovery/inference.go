@@ -16,6 +16,11 @@ import (
 // maskBlurSigma is the Gaussian blur sigma applied to the feathered circular blend mask.
 const maskBlurSigma = 15.0
 
+// progressAfterDetect is the fraction of the bar that detection owns, before any face is restored. Named because it
+// appears three times below - as the report, as the running total's origin, and in the per-face step - and the three
+// have to agree or the bar either jumps or never reaches 1.
+const progressAfterDetect = 0.2
+
 func RestoreFaces(
 	ctx context.Context,
 	session *utils.Session,
@@ -37,11 +42,12 @@ func RestoreFaces(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 	if onProgress != nil {
-		onProgress(0.2)
+		onProgress(progressAfterDetect)
 	}
 
-	total := 0.2
-	step := 0.8 / float64(len(faces)*2)
+	// Detection owns the first slice of the bar; the rest is split evenly over the two passes each face takes.
+	total := progressAfterDetect
+	step := (1 - progressAfterDetect) / float64(len(faces)*2)
 
 	// One clone for the whole run: every face is then composited into this buffer in place. The caller's image is
 	// never written to, which is the guarantee the clone is here for - it just no longer costs a full-frame copy per

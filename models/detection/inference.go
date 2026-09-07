@@ -15,6 +15,15 @@ const confidenceThreshold = 0.5
 // Run detects faces in img with a RetinaFace-style session: the graph takes a letterboxed CHW image at TargetSize and
 // returns three tensors - box offsets, class scores and landmarks - one row per anchor, which are decoded back into
 // image coordinates here.
+// The fractions Run reports at. They are phase boundaries rather than measurements: the tensors are built, the graph
+// runs, and the raw outputs are decoded, and only the middle one takes any real time. Named so the two call sites
+// below cannot drift apart from each other the way bare literals had begun to.
+const (
+	progressAfterInput  = 0.2
+	progressAfterGraph  = 0.6
+	progressAfterDecode = 1.0
+)
+
 func Run(
 	ctx context.Context,
 	session *utils.Session,
@@ -62,7 +71,7 @@ func Run(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 	if onProgress != nil {
-		onProgress(0.2)
+		onProgress(progressAfterInput)
 	}
 
 	err = session.Run([]ort.Value{inputTensor}, []ort.Value{locTensor, confTensor, landmarksTensor})
@@ -78,14 +87,14 @@ func Run(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 	if onProgress != nil {
-		onProgress(0.6)
+		onProgress(progressAfterGraph)
 	}
 
 	faces := PostProcessDetections(locData, confData, landmarksData,
 		originalWidth, originalHeight, confidenceThreshold)
 
 	if onProgress != nil {
-		onProgress(1)
+		onProgress(progressAfterDecode)
 	}
 
 	return faces, nil

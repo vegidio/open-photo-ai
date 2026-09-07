@@ -322,6 +322,8 @@
         "autopilotFailed": "Something went wrong. Failed to run autopilot.",
         "enhanceFailed": "Something went wrong. Failed to enhance image.",
         "faceDetectFailed": "Something went wrong. Failed to detect faces.",
-        "showLogsFailed": "Couldn't open the log file. You can find it in the app's configuration folder."
+        "showLogsFailed": "Couldn't open the log file. You can find it in the app's configuration folder.",
+        "revealFailed": "Couldn't open the file manager. The file is still saved at its export location.",
+        "openUrlFailed": "Couldn't open your browser. Visit the releases page on GitHub to download the update."
     }
 }

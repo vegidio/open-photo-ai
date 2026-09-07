@@ -9,19 +9,28 @@ import { DialogAbout } from '@/features/navbar/DialogAbout';
 import { NavbarCurrentFile } from '@/features/navbar/NavbarCurrentFile';
 import { NavbarDimensions } from '@/features/navbar/NavbarDimensions';
 import { Settings } from '@/features/settings';
-import { useCurrentFile } from '@/hooks';
+import { useCurrentFile, useNotify } from '@/hooks';
 import { APP_NAME, os, version } from '@/utils/constants.ts';
 
 export const Navbar = () => {
     const { t } = useTranslation();
+    const { enqueueSnackbar } = useNotify();
     const currentFile = useCurrentFile();
 
     const [openSettings, setOpenSettings] = useState(false);
     const [openAbout, setOpenAbout] = useState(false);
     const [updateAvailable, setUpdateAvailable] = useState(false);
 
-    const onUpdateClick = () => {
-        Browser.OpenURL('https://github.com/vegidio/open-photo-ai/releases');
+    // Guarded rather than left floating: OpenURL hands off to the OS, which can decline - no default browser, a
+    // sandbox that blocks the handoff - and the button then did nothing at all with no indication why. The message
+    // names the destination so the user can still get there by hand.
+    const onUpdateClick = async () => {
+        try {
+            await Browser.OpenURL('https://github.com/vegidio/open-photo-ai/releases');
+        } catch (e) {
+            console.error('Failed to open the releases page', e);
+            enqueueSnackbar(t('errors.openUrlFailed'), { variant: 'error' });
+        }
     };
 
     useEffect(() => {
@@ -68,7 +77,7 @@ export const Navbar = () => {
                             {t('navbar.about')}
                         </Button>
 
-                        <Typography variant='caption' className='text-[#545454]'>
+                        <Typography variant='caption' className='text-content-faint'>
                             {t('navbar.version', { version })}
                         </Typography>
 

@@ -15,6 +15,7 @@
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "noImplicitAny": true,
+        "noUncheckedIndexedAccess": true,
         "noFallthroughCasesInSwitch": true,
         "paths": {
             "@/bindings/*": ["./bindings/*"],

@@ -10,13 +10,13 @@ import {
     Gothenburg,
     Jaipur,
     Kyoto,
+    Lyon,
     Malmo,
     Moscow,
     Mumbai,
     Novgorod,
     type Operation,
     Osaka,
-    Lyon,
     Paris,
     Petersburg,
     Rio,
@@ -344,6 +344,11 @@ export const getOp = (type: EnhancementType, model: string, amount?: number): Op
     const { models, defaultModel, defaultAmount } = ENHANCEMENTS[type];
     const chosen = models.find((m) => m.id === model) ?? models.find((m) => m.id === defaultModel) ?? models[0];
 
+    // Every enhancement in the registry declares at least one model, so models[0] is always present - but the registry
+    // is data, and an entry edited down to an empty list would otherwise fail here as an unreadable "cannot read
+    // properties of undefined" deep in the build call rather than naming the enhancement that is malformed.
+    if (!chosen) throw new Error(`enhancement "${type}" declares no models`);
+
     return chosen.build(modelPrecisions(type, chosen.id).hd, amount ?? defaultAmount);
 };
 
@@ -382,7 +387,7 @@ export const suggestEnhancement = (file: File, models: ModelChoices) => {
 
 // The scale a freshly added upscale gets, chosen so the result lands in a sensible range for the source resolution.
 export const defaultUpscaleScale = (file: File | undefined): number => {
-    const [width, height] = file?.Dimensions ?? [0, 0];
+    const [width = 0, height = 0] = file?.Dimensions ?? [0, 0];
     const mp = width * height;
 
     return mp <= 1_048_576 ? 4 : mp <= 4_194_304 ? 2 : 1;

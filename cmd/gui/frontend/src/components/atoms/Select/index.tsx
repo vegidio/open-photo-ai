@@ -28,7 +28,7 @@ export const Select = ({ items, onValueChange, className, ...props }: SelectProp
         <MuiSelect
             onChange={handleChange}
             size='small'
-            className={`bg-[#171717] ${className ?? ''}`}
+            className={`bg-surface-base ${className ?? ''}`}
             slotProps={{
                 input: {
                     className: 'text-sm',
@@ -38,7 +38,7 @@ export const Select = ({ items, onValueChange, className, ...props }: SelectProp
             MenuProps={{
                 slotProps: {
                     paper: {
-                        className: 'bg-[#171717] bg-none border border-[#2b2b2b]',
+                        className: 'bg-surface-base bg-none border border-surface-header',
                     },
                 },
             }}

@@ -1,13 +1,32 @@
 package internal
 
-import "strings"
+import (
+	"strings"
+	"sync/atomic"
+)
 
-// AppName is the name of the application using Open Photo AI's library.
+// appName is the name of the application using Open Photo AI's library.
 //
 // This name is used to create a dedicated config directory for the application, where the ONNX runtime, model files and
-// their dependencies are stored, under the user's configuration path. This variable is set by the Initialize() function
-// and should never be changed directly.
-var AppName = "open-photo-ai"
+// their dependencies are stored, under the user's configuration path. It is set by the Initialize() function.
+//
+// Atomic rather than a plain string because Initialize writes it while download and inference goroutines from a
+// previous lifecycle may still be reading it - the same reason logger and fallbackHandler are atomic pointers.
+var appName atomic.Pointer[string]
+
+func init() {
+	SetAppName("open-photo-ai")
+}
+
+// SetAppName sets the config-directory name the library works under. Safe for concurrent use.
+func SetAppName(name string) {
+	appName.Store(&name)
+}
+
+// AppName returns the config-directory name the library is working under.
+func AppName() string {
+	return *appName.Load()
+}
 
 type RemoteModelData struct {
 	Name string
@@ -15,8 +34,24 @@ type RemoteModelData struct {
 	Hash string
 }
 
-// ModelData is the remote model manifest. It is populated during Initialize and should not be modified directly.
-var ModelData []RemoteModelData
+// modelData is the remote model manifest, populated during Initialize. Atomic for the same reason as appName: the
+// manifest is replaced by a re-Initialize while model downloads started by the previous one may still be reading it.
+var modelData atomic.Pointer[[]RemoteModelData]
+
+// SetModelData replaces the remote model manifest. Safe for concurrent use.
+func SetModelData(data []RemoteModelData) {
+	modelData.Store(&data)
+}
+
+// ModelData returns the remote model manifest. It is nil when no manifest could be loaded, which callers must read as
+// "unverified", not "empty".
+func ModelData() []RemoteModelData {
+	if data := modelData.Load(); data != nil {
+		return *data
+	}
+
+	return nil
+}
 
 // ModelFiles returns the manifest entries that make up the model behind id: the graph, plus any external-data blob
 // stored beside it.
@@ -28,7 +63,7 @@ var ModelData []RemoteModelData
 func ModelFiles(id string) []RemoteModelData {
 	var found []RemoteModelData
 
-	for _, model := range ModelData {
+	for _, model := range ModelData() {
 		if strings.HasPrefix(model.Name, id+".onnx") {
 			found = append(found, model)
 		}
@@ -52,4 +87,17 @@ func EstimateModelBytes(id string) int64 {
 	return total
 }
 
-var ImageCache *Cache
+// imageCache is the disk-backed cache of per-operation results. Atomic because Destroy closes it while an in-flight
+// Process may still be holding the lifecycle-free path open, and because a re-Initialize replaces it.
+var imageCache atomic.Pointer[Cache]
+
+// SwapImageCache installs cache and returns whatever it replaced, so the caller can close the old one. Passing nil
+// clears the cache, which is what Destroy does to keep a closed store from being reachable.
+func SwapImageCache(cache *Cache) *Cache {
+	return imageCache.Swap(cache)
+}
+
+// ImageCache returns the current image cache, or nil when the library was never initialized or has been destroyed.
+func ImageCache() *Cache {
+	return imageCache.Load()
+}

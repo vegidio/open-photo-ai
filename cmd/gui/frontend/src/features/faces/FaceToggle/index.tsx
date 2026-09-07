@@ -69,7 +69,7 @@ export const FaceToggle = ({ file, open, onClose }: FaceToggleProps) => {
             }}
             slotProps={{
                 paper: {
-                    className: 'bg-[#212121] max-w-none max-h-none m-0 bg-none flex flex-col',
+                    className: 'bg-surface max-w-none max-h-none m-0 bg-none flex flex-col',
                     style: { width: imageW, height: imageH + TITLE },
                 },
             }}

@@ -28,8 +28,16 @@ func PreprocessImage(img image.Image, targetSize int) ([]float32, float32, float
 	return inputData, originalWidth, originalHeight
 }
 
-// calculateResizeDimensions calculates new dimensions maintaining aspect ratio
+// calculateResizeDimensions calculates new dimensions maintaining aspect ratio.
+//
+// A degenerate image is rejected before the ratio is taken rather than after: height/width on a zero width is NaN or
+// +Inf, and converting either to int is implementation-defined in Go, so the bad input would propagate as a plausible
+// looking tensor shape instead of a wrong one. Falling back to the square target keeps the caller on a valid path.
 func calculateResizeDimensions(width, height float32, targetSize int) (int, int) {
+	if width <= 0 || height <= 0 {
+		return targetSize, targetSize
+	}
+
 	imRatio := height / width
 	var newWidth, newHeight int
 

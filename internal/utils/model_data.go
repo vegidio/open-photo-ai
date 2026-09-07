@@ -45,8 +45,8 @@ type huggingFaceFile struct {
 //
 // The hash is the Git LFS object ID, which for LFS is the SHA-256 of the file contents, so it can be compared directly
 // against a hash computed over the download.
-func LoadModelData() ([]internal.RemoteModelData, error) {
-	data, err := fetchModelData()
+func LoadModelData(ctx context.Context) ([]internal.RemoteModelData, error) {
+	data, err := fetchModelData(ctx)
 	if err == nil {
 		if saveErr := saveModelData(data); saveErr != nil {
 			internal.Log().Warn("failed to cache the model manifest", "err", saveErr)
@@ -69,10 +69,13 @@ func LoadModelData() ([]internal.RemoteModelData, error) {
 
 // region - Private functions
 
-func fetchModelData() ([]internal.RemoteModelData, error) {
+func fetchModelData(ctx context.Context) ([]internal.RemoteModelData, error) {
 	// Bounded because this runs before the UI is usable. A failure is no longer costly, so the budget is generous
 	// enough to survive a slow handshake without being long enough to feel like a hang.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	//
+	// Derived from the caller's ctx rather than from Background, so that cancelling Initialize actually aborts the
+	// fetch. Deriving keeps both bounds: whichever of the deadline and the cancellation comes first wins.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	url := modelDataUrl
@@ -116,7 +119,7 @@ func fetchModelData() ([]internal.RemoteModelData, error) {
 
 // saveModelData writes the manifest atomically, so a fallback never reads a half-written cache.
 func saveModelData(data []internal.RemoteModelData) error {
-	dir, err := fs.MkUserConfigDir(internal.AppName, internal.ModelsDir)
+	dir, err := fs.MkUserConfigDir(internal.AppName(), internal.ModelsDir)
 	if err != nil {
 		return errors.Wrap(err, "failed to resolve the models directory")
 	}
@@ -125,7 +128,7 @@ func saveModelData(data []internal.RemoteModelData) error {
 }
 
 func readModelData() ([]internal.RemoteModelData, error) {
-	dir, err := fs.MkUserConfigDir(internal.AppName, internal.ModelsDir)
+	dir, err := fs.MkUserConfigDir(internal.AppName(), internal.ModelsDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to resolve the models directory")
 	}

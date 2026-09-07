@@ -16,12 +16,12 @@ export const SidebarAutopilot = ({ className = '' }: SidebarAutopilotProps) => {
     return (
         <Toggle
             label={
-                <Typography variant='subtitle2' className='text-[#79e800]'>
+                <Typography variant='subtitle2' className='text-success'>
                     {t('sidebar.autopilot')}
                 </Typography>
             }
             value={autopilot}
-            color='#79e800'
+            color='var(--color-success)'
             onChange={toggle}
             className={className}
         />

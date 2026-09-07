@@ -78,7 +78,7 @@ func InitializeNvidiaLib(ctx context.Context, libName string, onProgress types.D
 		return errors.Wrap(err, "failed to prepare NVIDIA library")
 	}
 
-	libPath, err := fs.MkUserConfigDir(internal.AppName, "libs", libName)
+	libPath, err := fs.MkUserConfigDir(internal.AppName(), "libs", libName)
 	if err != nil {
 		return errors.Wrap(err, "failed to create NVIDIA library directory")
 	}

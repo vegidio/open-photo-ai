@@ -290,7 +290,7 @@ func EmptyDir(dir string) error {
 // configDir resolves one of the slash-separated paths a Dependency names - Destination, or an entry in Derived - to an
 // OS path under the user's config directory, creating it if it isn't there.
 func configDir(rel string) (string, error) {
-	dir, err := fs.MkUserConfigDir(internal.AppName, strings.Split(rel, "/")...)
+	dir, err := fs.MkUserConfigDir(internal.AppName(), strings.Split(rel, "/")...)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to resolve the %s directory", rel)
 	}

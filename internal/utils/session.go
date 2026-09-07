@@ -202,7 +202,18 @@ func LoadSingleSession(
 }
 
 // FormatModelName builds the display name a model family shows in the UI, e.g. "Denoise (FP16)".
-func FormatModelName(label string, precision types.Precision) string {
+//
+// codename is the fallback for a variant that was registered without a Label. Every family funnels through here, so
+// this is the one place that can catch the omission - and it is worth catching: an empty label used to render as a
+// bare " (FP32)", a name that says nothing about which model produced it and reads as a UI bug rather than a missing
+// field. The warning names the variant so the fix is obvious; the title-cased codename keeps the name usable until it
+// lands.
+func FormatModelName(label, codename string, precision types.Precision) string {
+	if label == "" {
+		internal.Log().Warn("model variant has no Label; falling back to its codename", "codename", codename)
+		label = cases.Title(language.English).String(codename)
+	}
+
 	return fmt.Sprintf("%s (%s)", label, cases.Upper(language.English).String(string(precision)))
 }
 
@@ -240,7 +251,7 @@ func createSessionInner(
 	ep types.ExecutionProvider,
 	p EPProfile,
 ) (*Session, error) {
-	modelsPath, err := fs.MkUserConfigDir(internal.AppName, internal.ModelsDir)
+	modelsPath, err := fs.MkUserConfigDir(internal.AppName(), internal.ModelsDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to resolve the models directory")
 	}
@@ -253,7 +264,7 @@ func createSessionInner(
 	//
 	// The directory comes from EngineCacheFor, which is also what deps.Install clears when it replaces the weights.
 	stem := strings.TrimSuffix(modelFile, filepath.Ext(modelFile))
-	cachePath, err := fs.MkUserConfigDir(internal.AppName, strings.Split(internal.EngineCacheFor(stem), "/")...)
+	cachePath, err := fs.MkUserConfigDir(internal.AppName(), strings.Split(internal.EngineCacheFor(stem), "/")...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to resolve the engine cache directory")
 	}

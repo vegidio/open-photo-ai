@@ -56,7 +56,7 @@ func TestLoadModelDataCachesAndFallsBack(t *testing.T) {
 		defer srv.Close()
 		withModelDataUrl(t, srv.URL+"/tree?limit=1000")
 
-		data, err := LoadModelData()
+		data, err := LoadModelData(t.Context())
 		if err != nil {
 			t.Fatalf("LoadModelData: %v", err)
 		}
@@ -76,7 +76,7 @@ func TestLoadModelDataCachesAndFallsBack(t *testing.T) {
 			w.Write([]byte(payload))
 		}))
 		withModelDataUrl(t, good.URL+"/tree?limit=1000")
-		if _, err := LoadModelData(); err != nil {
+		if _, err := LoadModelData(t.Context()); err != nil {
 			t.Fatalf("priming LoadModelData: %v", err)
 		}
 		good.Close()
@@ -87,7 +87,7 @@ func TestLoadModelDataCachesAndFallsBack(t *testing.T) {
 		defer bad.Close()
 		withModelDataUrl(t, bad.URL+"/tree?limit=1000")
 
-		data, err := LoadModelData()
+		data, err := LoadModelData(t.Context())
 		if err != nil {
 			t.Fatalf("LoadModelData must fall back rather than fail: %v", err)
 		}
@@ -104,7 +104,7 @@ func TestLoadModelDataCachesAndFallsBack(t *testing.T) {
 		defer bad.Close()
 		withModelDataUrl(t, bad.URL+"/tree?limit=1000")
 
-		if _, err := LoadModelData(); err == nil {
+		if _, err := LoadModelData(t.Context()); err == nil {
 			t.Error("LoadModelData succeeded with no source of data, want an error")
 		}
 	})

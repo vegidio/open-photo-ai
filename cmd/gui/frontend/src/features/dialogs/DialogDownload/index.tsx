@@ -67,7 +67,7 @@ export const DialogDownload = ({ open, hasError = false, onClose }: DialogDownlo
             }}
             slotProps={{
                 paper: {
-                    className: 'bg-none bg-[#212121] w-[32rem] p-6 overflow-hidden',
+                    className: 'bg-none bg-surface w-[32rem] p-6 overflow-hidden',
                 },
             }}
         >

@@ -10,7 +10,10 @@ export default mergeConfig(
             // Everything covered here is pure TypeScript — operation ids, output filenames, crop cache keys, locale
             // catalogs. Nothing renders, so there is no jsdom or browser provider to configure.
             environment: 'node',
-            include: ['src/**/*.test.ts'],
+            // Both extensions, so a test written as .test.tsx is not silently skipped - the glob matched only .ts,
+            // which fails by running nothing rather than by failing. Note that a real component test would also need
+            // a DOM environment; this only removes the trap.
+            include: ['src/**/*.test.{ts,tsx}'],
             // export.ts / enhancement.ts import CancellablePromise from '@wailsio/runtime', whose system.js probes
             // for a WebView2/WKWebView bridge on import and console.warns when it finds none. Under `environment:
             // 'node'` there is no `window` at all, so it always warns - once per test file that reaches it. The

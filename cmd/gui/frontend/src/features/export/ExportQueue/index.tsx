@@ -35,7 +35,7 @@ const ImageList = ({ enhancements }: ImageListProps) => {
             sx={{ paddingRight: padding }}
         >
             <Table stickyHeader className='[&_td]:p-0 [&_td]:border-0 [&_th]:p-0 [&_th]:border-0'>
-                <TableHead className='[&_th]:text-[#b0b0b0] [&_th]:text-[13px] [&_th]:font-normal [&_th]:bg-[#212121]'>
+                <TableHead className='[&_th]:text-content-secondary [&_th]:text-[13px] [&_th]:font-normal [&_th]:bg-surface'>
                     <TableRow>
                         <TableCell className='w-[72px]'>{t('export.queue.image')}</TableCell>
                         <TableCell>{t('navbar.dimensions.output')}</TableCell>

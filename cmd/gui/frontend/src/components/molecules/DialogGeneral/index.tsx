@@ -21,7 +21,7 @@ export const DialogGeneral = ({ title, open, onClose, children, className = '' }
             }}
             slotProps={{
                 paper: {
-                    className: `${className} bg-[#212121] max-w-full bg-none`,
+                    className: `${className} bg-surface max-w-full bg-none`,
                 },
             }}
         >

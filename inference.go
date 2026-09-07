@@ -67,10 +67,14 @@ func Process(
 	// Read once per call rather than per operation, so a concurrent SetImageCacheEnabled can't have this loop read
 	// from the cache and then decline to write back to it.
 	//
-	// The nil check is not redundant with the setting: ImageCache is only assigned by a successful Initialize, so a
+	// The nil check is not redundant with the setting: the cache is only installed by a successful Initialize, so a
 	// caller that skipped it - or whose Initialize failed and whose error was ignored - would otherwise take a nil
 	// dereference here rather than simply running uncached.
-	useCache := internal.ImageCacheEnabled() && internal.ImageCache != nil
+	//
+	// Binding it to a local is what makes that check hold for the whole call: Destroy clears the pointer, so reading
+	// it again per operation could pass the check here and then find a closed store further down the loop.
+	cache := internal.ImageCache()
+	useCache := internal.ImageCacheEnabled() && cache != nil
 	if !useCache {
 		internal.Log().Debug("image cache disabled for this call")
 	}
@@ -94,7 +98,7 @@ func Process(
 		}
 
 		if useCache {
-			if cachedImg, err := internal.ImageCache.GetImage(ctx, input.Hash, applied...); err == nil {
+			if cachedImg, err := cache.GetImage(ctx, input.Hash, applied...); err == nil {
 				internal.Log().Debug("cache hit", "op", op.Id(), "index", i)
 				output = cachedImg
 
@@ -128,7 +132,7 @@ func Process(
 		// A cache write that fails must not fail the operation: the pixels the user asked for are already computed and
 		// sitting in `output`. Failing here threw away finished work because the disk was full or read-only, which is
 		// the cache's problem, not the enhancement's. The cost of carrying on is a re-run next time, not a wrong image.
-		if err := internal.ImageCache.SetImage(ctx, output, input.Hash, applied...); err != nil {
+		if err := cache.SetImage(ctx, output, input.Hash, applied...); err != nil {
 			internal.Log().Warn("failed to cache the processed image",
 				"op", op.Id(), "hash", input.Hash, "err", err)
 		}

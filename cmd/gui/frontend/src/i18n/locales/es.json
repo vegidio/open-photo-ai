@@ -322,6 +322,8 @@
         "autopilotFailed": "Algo ha ido mal. No se ha podido ejecutar el piloto automático.",
         "enhanceFailed": "Algo ha ido mal. No se ha podido mejorar la imagen.",
         "faceDetectFailed": "Algo ha ido mal. No se han podido detectar rostros.",
-        "showLogsFailed": "No se pudo abrir el archivo de registro. Lo encontrarás en la carpeta de configuración de la app."
+        "showLogsFailed": "No se pudo abrir el archivo de registro. Lo encontrarás en la carpeta de configuración de la app.",
+        "revealFailed": "No se pudo abrir el gestor de archivos. El archivo sigue guardado en su ubicación de exportación.",
+        "openUrlFailed": "No se pudo abrir el navegador. Visita la página de versiones en GitHub para descargar la actualización."
     }
 }

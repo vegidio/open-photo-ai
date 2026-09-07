@@ -24,13 +24,17 @@ describe('mpBucket', () => {
 
     // This runs on the analytics path, which must never be able to throw into the call site that reports an event.
     it('degrades to the smallest band rather than throwing', () => {
-        for (const [w, h] of [
+        // Typed as tuples so destructuring yields numbers: an untyped literal widens to number[][], and the pair
+        // would then read as possibly-undefined at the call below.
+        const cases: [number, number][] = [
             [0, 0],
             [-100, 100],
             [100, -100],
             [Number.NaN, 100],
             [Number.POSITIVE_INFINITY, 100],
-        ]) {
+        ];
+
+        for (const [w, h] of cases) {
             expect(mpBucket(w, h)).toBe('<2');
         }
     });

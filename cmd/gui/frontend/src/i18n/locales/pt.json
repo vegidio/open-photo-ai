@@ -322,6 +322,8 @@
         "autopilotFailed": "Algo deu errado. Falha ao executar o piloto automático.",
         "enhanceFailed": "Algo deu errado. Falha ao melhorar a imagem.",
         "faceDetectFailed": "Algo deu errado. Falha ao detectar rostos.",
-        "showLogsFailed": "Não foi possível abrir o ficheiro de registo. Encontra-o na pasta de configuração da aplicação."
+        "showLogsFailed": "Não foi possível abrir o ficheiro de registo. Encontra-o na pasta de configuração da aplicação.",
+        "revealFailed": "Não foi possível abrir o gerenciador de arquivos. O arquivo continua salvo no local de exportação.",
+        "openUrlFailed": "Não foi possível abrir o navegador. Acesse a página de versões no GitHub para baixar a atualização."
     }
 }

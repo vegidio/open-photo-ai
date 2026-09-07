@@ -47,11 +47,11 @@ export const NavbarDimensions = ({ file, className = '' }: NavbarDimensionsProps
                     onMouseLeave={onPopoverClose}
                     className={`flex flex-col items-center px-3 py-0.5`}
                 >
-                    <Typography variant='caption' className='text-[#f2f2f2]'>
+                    <Typography variant='caption' className='text-content-primary'>
                         {t('navbar.dimensions.title')}
                     </Typography>
 
-                    <Typography variant='caption' className='text-[#b0b0b0]'>
+                    <Typography variant='caption' className='text-content-secondary'>
                         {scale > 1 ? outputDims : (croppedDims ?? originalDims)}
                     </Typography>
                 </Button>

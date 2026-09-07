@@ -31,15 +31,15 @@ const (
 func bootstrap(t *testing.T) {
 	t.Helper()
 
-	internal.AppName = "open-photo-ai"
+	internal.SetAppName("open-photo-ai")
 
 	modelData, err := utils.LoadModelData()
 	if err != nil {
 		t.Fatalf("load model manifest: %v", err)
 	}
-	internal.ModelData = modelData
+	internal.SetModelData(modelData)
 
-	dir, err := fs.MkUserConfigDir(internal.AppName, internal.RuntimeDir)
+	dir, err := fs.MkUserConfigDir(internal.AppName(), internal.RuntimeDir)
 	if err != nil {
 		t.Fatalf("runtime dir: %v", err)
 	}

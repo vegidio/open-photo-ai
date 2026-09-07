@@ -35,7 +35,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         if (!error) return this.props.children;
 
         return (
-            <div className='flex h-screen items-center justify-center bg-[#353535] p-8'>
+            <div className='flex h-screen items-center justify-center bg-surface-overlay p-8'>
                 <Paper elevation={8} className='flex max-w-lg flex-col gap-4 p-6'>
                     <Typography variant='h6'>{i18n.t('errors.boundary.title')}</Typography>
 

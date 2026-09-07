@@ -9,7 +9,7 @@ import { AnalyticsEvent, track } from '@/analytics';
 import { mpBucket } from '@/analytics/buckets.ts';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
 import { ExportQueueState } from '@/features/export/ExportQueueState';
-import { useFileCrop, useThumbnail } from '@/hooks';
+import { useFileCrop, useNotify, useThumbnail } from '@/hooks';
 import { useExportStore, useSettingsStore } from '@/stores';
 import { upscaleFactor } from '@/utils/enhancement.ts';
 import { getExportInfo } from '@/utils/export.ts';
@@ -23,6 +23,7 @@ type ExportQueueRowProps = {
 
 export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
     const { t } = useTranslation();
+    const { enqueueSnackbar } = useNotify();
     const format = useExportStore((state) => state.format);
     const prefix = useExportStore((state) => state.prefix);
     const suffix = useExportStore((state) => state.suffix);
@@ -53,9 +54,30 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
     // Read through a ref rather than closed over, so the effect can key on the hash alone. Both are analytics
     // properties read once when an export completes, and `operationCount` changes on every enhancement edit - as
     // dependencies they tore down and re-registered the listener of every queued row each time.
-    const telemetry = { mpBand: mpBucket(file.Dimensions[0], file.Dimensions[1]), operationCount: operations.length };
-    const telemetryRef = useRef(telemetry);
-    telemetryRef.current = telemetry;
+    const mpBand = mpBucket(file.Dimensions[0] ?? 0, file.Dimensions[1] ?? 0);
+    const operationCount = operations.length;
+    const telemetryRef = useRef({ mpBand, operationCount });
+
+    // Written in an effect rather than during render. Mutating a ref in the render body is unsafe under concurrent
+    // rendering, where a render can be started and thrown away - the ref would keep the discarded render's value. The
+    // commit phase is where the rendered values are the current ones.
+    //
+    // Keyed on the two primitives rather than on an object built inline, which would be a new identity every render
+    // and so would run this on every render for nothing.
+    useEffect(() => {
+        telemetryRef.current = { mpBand, operationCount };
+    }, [mpBand, operationCount]);
+
+    // Guarded rather than left floating, matching the log-file button in Settings: revealing can fail on a file that
+    // was moved or deleted after the export, and silently doing nothing reads as a broken button.
+    const onReveal = async () => {
+        try {
+            await RevealInFileManager(filePath);
+        } catch (e) {
+            console.error('Failed to reveal the exported file', e);
+            enqueueSnackbar(t('errors.revealFailed'), { variant: 'error' });
+        }
+    };
 
     useEffect(() => {
         return Events.On('app:export', (event) => {
@@ -112,7 +134,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                     <div className='flex flex-col text-[13px] gap-1'>
                         <span>{fileName}</span>
                         <div>
-                            <span className='text-[#b0b0b0]'>{oldDims}</span>
+                            <span className='text-content-secondary'>{oldDims}</span>
                             {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                             {oldDims !== newDims && <span> → {newDims}</span>}
                         </div>
@@ -125,7 +147,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                         {/* biome-ignore lint/style/noJsxLiterals: never rendered — a spacer that reserves the row's first line */}
                         <span className='invisible'>invisible</span>
                         <div>
-                            <span className='text-[#b0b0b0]'>{oldSize}</span>
+                            <span className='text-content-secondary'>{oldSize}</span>
                             {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                             {newSize && <span> → {newSize}</span>}
                         </div>
@@ -137,7 +159,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                     <div className='flex flex-col text-[13px] gap-1'>
                         <ExportQueueState state={state} />
                         <div>
-                            <span className='text-[#b0b0b0]'>{file.Extension.toUpperCase()}</span>
+                            <span className='text-content-secondary'>{file.Extension.toUpperCase()}</span>
                             {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
                             {file.Extension !== newExt && <span> → {newExt.toUpperCase()}</span>}
                         </div>
@@ -147,7 +169,7 @@ export const ExportQueueRow = ({ file, operations }: ExportQueueRowProps) => {
                 {/* Loading & Open in File Manager */}
                 <TableCell align='center'>
                     {state === 'COMPLETED' ? (
-                        <IconButton size='small' onClick={() => RevealInFileManager(filePath)}>
+                        <IconButton size='small' onClick={onReveal}>
                             <RiFolderImageLine />
                         </IconButton>
                     ) : state === 'RUNNING' ? (

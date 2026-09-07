@@ -61,27 +61,30 @@ export const ScaleSelector = ({ value, onChange }: ScaleSelectorProps) => {
                 </Button>
             </div>
 
-            <ToggleButtonGroup value={value} exclusive onChange={onButtonClick} className='bg-[#171717] gap-1 p-1 flex'>
+            <ToggleButtonGroup
+                value={value}
+                exclusive
+                onChange={onButtonClick}
+                className='bg-surface-base gap-1 p-1 flex'
+            >
                 <ToggleButton size='small' value='1' className='flex-1 border-0 rounded'>
                     {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
-                    <Typography className='text-[13px] normal-case font-normal'>1x</Typography>
+                    <Typography className='option-label'>1x</Typography>
                 </ToggleButton>
                 <ToggleButton size='small' value='2' className='flex-1 border-0 rounded'>
                     {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
-                    <Typography className='text-[13px] normal-case font-normal'>2x</Typography>
+                    <Typography className='option-label'>2x</Typography>
                 </ToggleButton>
                 <ToggleButton size='small' value='4' className='flex-1 border-0 rounded'>
                     {/* biome-ignore lint/style/noJsxLiterals: symbol, not translatable copy */}
-                    <Typography className='text-[13px] normal-case font-normal'>4x</Typography>
+                    <Typography className='option-label'>4x</Typography>
                 </ToggleButton>
                 <ToggleButton
                     size='small'
                     value={['1', '2', '4'].includes(value) ? '-' : value}
                     className='flex-2 border-0 rounded'
                 >
-                    <Typography className='text-[13px] normal-case font-normal'>
-                        {t('enhancements.scale.custom')}
-                    </Typography>
+                    <Typography className='option-label'>{t('enhancements.scale.custom')}</Typography>
                 </ToggleButton>
             </ToggleButtonGroup>
         </div>

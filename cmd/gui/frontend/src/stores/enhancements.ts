@@ -75,7 +75,9 @@ export const useEnhancementStore = create(
 
             replaceEnhancement: (file: File, operation: Operation) => {
                 set((state) => {
-                    const prefix = operation.id.split('_')[0];
+                    // split always yields at least one element, so the ?? '' is unreachable rather than a real
+                    // fallback - it is here because the index signature cannot express that.
+                    const prefix = operation.id.split('_')[0] ?? '';
                     const ops = (state.enhancements.get(file.Path) ?? []).map((op) =>
                         op.id.startsWith(prefix) ? operation : op,
                     );

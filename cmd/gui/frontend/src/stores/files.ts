@@ -64,8 +64,11 @@ export const useFileStore = create(
                 }
             });
 
-            if (wasEmpty && get().files.length > 0) {
-                get().addSelectedFile(get().files[0]);
+            // Bound to a local so the type follows the runtime check: `length > 0` told the compiler nothing about
+            // what files[0] holds, and the guard's whole purpose is that it may hold nothing.
+            const first = get().files[0];
+            if (wasEmpty && first) {
+                get().addSelectedFile(first);
             }
         },
 

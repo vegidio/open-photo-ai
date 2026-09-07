@@ -15,7 +15,7 @@ export const ExportSettingsFilename = () => {
 
     return (
         <div className='flex flex-col'>
-            <Typography variant='body2' className='text-[#b0b0b0]'>
+            <Typography variant='body2' className='text-content-secondary'>
                 {t('export.settings.filename.title')}
             </Typography>
 
@@ -33,17 +33,17 @@ export const ExportSettingsFilename = () => {
 
             <Toggle
                 label={
-                    <Typography variant='body2' className='text-[#b0b0b0]'>
+                    <Typography variant='body2' className='text-content-secondary'>
                         {t('export.settings.filename.allowOverwrite')}
                     </Typography>
                 }
                 value={overwrite}
-                color='#009aff'
+                color='var(--color-brand)'
                 onChange={(value) => setOverwrite(value)}
                 className='mt-1'
             />
 
-            <Typography variant='caption' className={`${overwrite ? 'text-[#ffcc00]' : ''} mt-1.5`}>
+            <Typography variant='caption' className={`${overwrite ? 'text-warning' : ''} mt-1.5`}>
                 {t(
                     overwrite
                         ? 'export.settings.filename.sameLocationOverwrite'

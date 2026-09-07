@@ -23,7 +23,8 @@ export const EMPTY_DISABLED: ReadonlySet<number> = new Set();
 export const EMPTY_CROP = new CropInfo({});
 
 // Dark canvas with a dotted grid, shared by the Preview and the Crop/Rotate modal.
-export const DOTTED_BACKGROUND = 'bg-[#171717] bg-[radial-gradient(#383838_1px,transparent_1px)] bg-size-[3rem_3rem]';
+export const DOTTED_BACKGROUND =
+    'bg-surface-base bg-[radial-gradient(var(--color-surface-dot)_1px,transparent_1px)] bg-size-[3rem_3rem]';
 
 // Smallest allowed crop side (px), shared by the Crop/Rotate clamp and the dimension fields.
 export const MIN_CROP_SIZE = 16;

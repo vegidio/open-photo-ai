@@ -16,7 +16,7 @@ export const FaceSelector = ({ selectedCount, onClick }: FaceSelectorProps) => {
 
             {/* The line break is part of the centred two-line layout, so it sits in the catalog where a translator
                 can move or drop it. <br/> is one of i18next's default kept nodes, so no components prop is needed. */}
-            <Typography align='center' className='text-[13px] text-[#b0b0b0]'>
+            <Typography align='center' className='text-[13px] text-content-secondary'>
                 <Trans i18nKey='enhancements.faceSelector.help' />
             </Typography>
 

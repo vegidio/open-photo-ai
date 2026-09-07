@@ -138,7 +138,7 @@ func (v *Variant) New(
 	}
 
 	return &Model{
-		name:      FormatUpscaleName(v.Label, op.scale, op.precision),
+		name:      FormatUpscaleName(v.Label, v.Codename, op.scale, op.precision),
 		operation: op,
 		variant:   v,
 		Sessions:  sessions,
@@ -180,7 +180,7 @@ func (v *Variant) newDiffusion(
 	return &Model{
 		// No scale in the name, unlike the convolutional branch: one set of sessions serves every scale, so a name
 		// naming one would be frozen at whichever scale happened to build the model first.
-		name:      utils.FormatModelName(v.Label, op.precision),
+		name:      utils.FormatModelName(v.Label, v.Codename, op.precision),
 		operation: op,
 		variant:   v,
 		Sessions:  sessions,

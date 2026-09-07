@@ -41,7 +41,7 @@ var modelExtensions = []string{".onnx", ".onnx.data", ".onnx_data"}
 // Failures are worth logging but not worth failing a launch over - the runtime now in use is the one in RuntimeDir,
 // and a stale file at the root is wasted disk rather than a hazard.
 func PruneLegacyRuntime() (int, error) {
-	root, err := fs.MkUserConfigDir(internal.AppName)
+	root, err := fs.MkUserConfigDir(internal.AppName())
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to resolve the config directory")
 	}
@@ -92,7 +92,7 @@ func PruneLegacyRuntime() (int, error) {
 // cannot do this job itself - models/ is shared by every model, so it only ever touches the paths its own manifest
 // names, and these files were named by nobody.
 func PruneLegacyEPCache() (int, error) {
-	dir, err := fs.MkUserConfigDir(internal.AppName, internal.ModelsDir)
+	dir, err := fs.MkUserConfigDir(internal.AppName(), internal.ModelsDir)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to resolve the models directory")
 	}

@@ -10,7 +10,7 @@ export const Sidebar = ({ className }: TailwindProps) => {
     const fileLength = useFileStore((state) => state.files.length);
 
     return (
-        <div className={`flex flex-col bg-[#272727] border-t border-t-[#171717] border-solid ${className}`}>
+        <div className={`flex flex-col bg-surface-raised border-t border-t-surface-base border-solid ${className}`}>
             <SidebarImage />
 
             <div className='flex flex-col bg-black p-6 gap-5'>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/fs"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/bodgit/sevenzip"
@@ -50,9 +51,11 @@ func extractArchive(ctx context.Context, archive, dst string, onProgress func(do
 	onProgress(0, total)
 
 	done := make(chan struct{})
-	defer close(done)
+	stopped := make(chan struct{})
 
 	go func() {
+		defer close(stopped)
+
 		ticker := time.NewTicker(extractSampleInterval)
 		defer ticker.Stop()
 
@@ -68,10 +71,21 @@ func extractArchive(ctx context.Context, archive, dst string, onProgress func(do
 		}
 	}()
 
+	// Signalling the sampler is not enough; it has to be *joined*. A tick that already won its select races on past
+	// the close and reports a mid-extraction size, which would land after the completion below and walk the bar
+	// backwards - the one thing the progress contract promises never happens. Waiting on stopped makes the final
+	// report the last one, on both the success and the failure path.
+	stop := sync.OnceFunc(func() {
+		close(done)
+		<-stopped
+	})
+	defer stop()
+
 	if err = sak.Un7zip(archive, dst); err != nil {
 		return err
 	}
 
+	stop()
 	onProgress(total, total)
 
 	return nil

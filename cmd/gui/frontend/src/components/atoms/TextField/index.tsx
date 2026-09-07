@@ -8,7 +8,7 @@ export const TextField = ({ slotProps, ...props }: MuiTextFieldProps) => {
             margin='dense'
             slotProps={{
                 input: {
-                    className: 'text-sm bg-[#171717]',
+                    className: 'text-sm bg-surface-base',
                     ...slotProps?.input,
                 },
                 inputLabel: {

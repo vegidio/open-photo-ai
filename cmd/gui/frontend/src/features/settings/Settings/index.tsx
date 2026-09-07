@@ -65,7 +65,7 @@ export const Settings = ({ open, onClose }: SettingsProps) => {
             }}
             slotProps={{
                 paper: {
-                    className: 'bg-[#212121] w-[48rem] h-[40rem] max-w-full bg-none',
+                    className: 'bg-surface w-[48rem] h-[40rem] max-w-full bg-none',
                 },
             }}
         >
@@ -77,7 +77,7 @@ export const Settings = ({ open, onClose }: SettingsProps) => {
                     onItemClick={(itemId) => listRef.current?.scrollToSection(itemId)}
                 />
 
-                <Divider orientation='vertical' flexItem className='border-[#171717] my-0.5' />
+                <Divider orientation='vertical' flexItem className='border-surface-base my-0.5' />
 
                 <div className='flex flex-col flex-1'>
                     <SettingsList ref={listRef} className='flex-1 overflow-y-auto scrollbar-thin' />

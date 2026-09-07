@@ -37,7 +37,7 @@ type Cache struct {
 func NewCache(maxEntries int64) (*Cache, error) {
 	// AppName, not a hardcoded name: Initialize promises the caller a config directory under the name it passed, and
 	// the model cache already honours that. Hardcoding here would split an embedder's two caches across two directories.
-	cachePath, err := fs.MkUserConfigDir(AppName, "cache")
+	cachePath, err := fs.MkUserConfigDir(AppName(), "cache")
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create cache directory")
 	}

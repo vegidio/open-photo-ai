@@ -35,7 +35,10 @@ export const Preview = ({ className = '' }: TailwindProps) => {
 
     const [isRunning, setIsRunning] = useState(false);
 
-    // biome-ignore lint/correctness/useExhaustiveDependencies: enqueueSnackbar
+    // enqueueSnackbar is stable now that useNotify memoises it, but the list still deviates deliberately:
+    // disabledFaces re-runs the preview when a face is toggled even though the effect body reads it only
+    // indirectly, and t would re-run it on a language change for a message it merely formats.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
     useEffect(() => {
         let p: CancellablePromise<ImageData>;
         let isCancelled = false;

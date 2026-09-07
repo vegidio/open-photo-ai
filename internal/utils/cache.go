@@ -23,7 +23,7 @@ import (
 // The wipe goes through deps.EmptyDir, which is the same "remove the entries, keep the directory" the installer uses
 // when it replaces an exclusive dependency - and keeps the LD_LIBRARY_PATH reason for that in one place.
 func CleanEPCache(version string) (bool, error) {
-	cacheDir, err := fs.MkUserConfigDir(internal.AppName, internal.EngineCacheDir)
+	cacheDir, err := fs.MkUserConfigDir(internal.AppName(), internal.EngineCacheDir)
 	if err != nil {
 		return false, errors.Wrapf(err, "failed to resolve the %s directory", internal.EngineCacheDir)
 	}

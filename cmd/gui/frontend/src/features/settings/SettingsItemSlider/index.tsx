@@ -29,8 +29,8 @@ export const SettingsItemSlider = ({
     return (
         <ListItem id={id} divider={true} className={`${className} pt-2 pb-3`}>
             <div className='flex flex-col flex-1 gap-2'>
-                <div className='flex flex-row flex-1 items-center justify-between gap-4'>
-                    <Typography variant='body2' className='flex-1 text-[#b0b0b0]'>
+                <div className='settings-row'>
+                    <Typography variant='body2' className='flex-1 text-content-secondary'>
                         {title}
                     </Typography>
 

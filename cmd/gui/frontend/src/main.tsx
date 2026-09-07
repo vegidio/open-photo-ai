@@ -43,10 +43,11 @@ useSettingsStore.subscribe((state, prev) => {
     if (state.analyticsEnabled !== prev.analyticsEnabled) setAnalyticsEnabled(state.analyticsEnabled);
 });
 
-// Dark only, deliberately. The UI's colours are hardcoded dark hex literals throughout (bg-[#212121], #009aff and so
-// on), so a light MUI palette would not produce a working light theme - it would produce dark panels with light
-// controls. The light theme and the prefers-color-scheme check that used to sit here were both unreachable; making
-// light mode real means moving those literals into theme tokens first.
+// Dark only, still - but no longer because the colours make it impossible. The palette now lives as semantic tokens
+// in style.css (--color-surface-*, --color-content-*, --color-brand*), so a light theme is a second set of values for
+// those same names rather than an edit to every component. What is still missing is the values themselves and the
+// prefers-color-scheme wiring; until both exist, a light MUI palette would still produce light controls on panels
+// painted by the dark tokens.
 const darkTheme = createTheme({
     palette: {
         mode: 'dark',
