@@ -62,13 +62,25 @@ tasks:
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` files from an image
     dir: build
+    # Two sources, deliberately. macOS 26 masks every app icon to the system squircle itself, so artwork that already
+    # carries its own rounded shape and padding gets treated as non-conforming: the OS shrinks it onto a grey squircle
+    # backplate. appicon-macos.png is therefore full-bleed and fully opaque, and lets the OS supply the shape. Windows
+    # and Linux draw icon artwork literally, with no mask, so they keep appicon.png and the rounded corners baked into
+    # it - handing them the full-bleed version would render a hard-cornered square. Re-apply after
+    # `wails3 update build-assets`.
     sources:
       - "appicon.png"
+      - "appicon-macos.png"
     generates:
       - "darwin/icons.icns"
       - "windows/icon.ico"
     cmds:
-      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico
+      # `generate icons` always writes both an .icns and an .ico, falling back to its default path for whichever
+      # output is not named, so each run has to send the file it is not producing to a throwaway directory.
+      - mkdir -p .icons-discard
+      - wails3 generate icons -input appicon-macos.png -macfilename darwin/icons.icns -windowsfilename .icons-discard/unused.ico
+      - wails3 generate icons -input appicon.png -macfilename .icons-discard/unused.icns -windowsfilename windows/icon.ico
+      - rm -rf .icons-discard
 
   dev:frontend:
     summary: Runs the frontend in development mode
