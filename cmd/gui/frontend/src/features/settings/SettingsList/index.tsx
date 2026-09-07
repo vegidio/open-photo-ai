@@ -12,10 +12,11 @@ import { SettingsItemSelect } from '@/features/settings/SettingsItemSelect';
 import { SettingsItemSlider } from '@/features/settings/SettingsItemSlider';
 import { SettingsItemSwitch } from '@/features/settings/SettingsItemSwitch';
 import { SETTINGS_SECTIONS } from '@/features/settings/sections';
+import { useModelItems } from '@/hooks/useModelItems.ts';
 import { useNotify } from '@/hooks/useNotify.ts';
 import { LANGUAGE_NAMES, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n/languages';
 import { useSettingsStore } from '@/stores';
-import { ENHANCEMENTS, type EnhancementType, modelItems } from '@/utils/enhancement';
+import { ENHANCEMENTS, type EnhancementType, qualityTier } from '@/utils/enhancement';
 import { DEFAULT_QUALITY, MAX_QUALITY, MIN_QUALITY, type QualityFormat } from '@/utils/quality';
 
 export type SettingsListHandle = {
@@ -226,6 +227,7 @@ const ItemEnhancement = ({ id }: SettingsRowProps) => {
 
 const ItemEnhancementRow = ({ id, row }: SettingsRowProps & { row: EnhancementRow }) => {
     const { t } = useTranslation();
+    const items = useModelItems(row.type);
     const selected = useSettingsStore((state) => state.models[row.type]);
     const setModel = useSettingsStore((state) => state.setModel);
 
@@ -234,14 +236,22 @@ const ItemEnhancementRow = ({ id, row }: SettingsRowProps & { row: EnhancementRo
             id={id}
             title={t(ENHANCEMENTS[row.type].nameKey)}
             description={t(row.descriptionKey)}
-            items={modelItems(row.type)}
+            items={items}
             selected={selected}
             onSelect={(value) => {
                 setModel(row.type, value);
 
                 // The most interesting signal the app has no data on: each enhancement family ships three models, and
                 // nothing so far said which one anyone actually settles on.
-                track(AnalyticsEvent.ModelChanged, { type: row.type, model: value });
+                //
+                // Model and tier are reported as separate fields rather than as the raw `stockholm_fp32` selection, so
+                // the model distribution stays comparable with everything logged before the tier was selectable.
+                const [model = '', precision = ''] = value.split('_');
+                track(AnalyticsEvent.ModelChanged, {
+                    type: row.type,
+                    model,
+                    quality: qualityTier(row.type, model, precision),
+                });
             }}
         />
     );

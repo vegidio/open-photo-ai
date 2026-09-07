@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { Operation } from '@/operations';
 import {
     buildSelection,
+    DEFAULT_MODELS,
     ENHANCEMENT_ORDER,
     ENHANCEMENTS,
     getEnhancementType,
     getOp,
     modelPrecisions,
+    modelTiers,
+    normalizeModels,
     qualityTier,
     upscaleFactor,
 } from './enhancement.ts';
@@ -67,6 +70,95 @@ describe('the enhancement catalog', () => {
             expect(info.models.map((m) => m.id)).toContain(info.defaultModel);
         }
     });
+
+    // Both `getOp` and `buildSelection` read a `<model>_<precision>` selection by splitting on the underscore, so a
+    // codename containing one would silently resolve to the wrong model rather than fail.
+    it('gives no model an id containing an underscore', () => {
+        for (const type of ENHANCEMENT_ORDER) {
+            for (const model of ENHANCEMENTS[type].models) {
+                expect(model.id).not.toContain('_');
+            }
+        }
+    });
+});
+
+describe('modelTiers', () => {
+    it('lists every model at both tiers, HD first', () => {
+        for (const type of ENHANCEMENT_ORDER) {
+            const tiers = modelTiers(type);
+            const models = ENHANCEMENTS[type].models;
+
+            expect(tiers).toHaveLength(models.length * 2);
+            expect(tiers.map((entry) => entry.tier)).toEqual(models.flatMap(() => ['hd', 'md']));
+            expect(tiers.map((entry) => entry.model)).toEqual(models.flatMap((m) => [m.id, m.id]));
+        }
+    });
+
+    it('carries the precision each tier is backed by', () => {
+        expect(
+            modelTiers('up')
+                .filter((entry) => entry.model === 'kyoto')
+                .map((entry) => entry.value),
+        ).toEqual(['kyoto_fp32', 'kyoto_fp16']);
+
+        // The reason the tier cannot be assumed to be a precision: Osaka has no fp32 build at all.
+        expect(
+            modelTiers('up')
+                .filter((entry) => entry.model === 'osaka')
+                .map((entry) => entry.value),
+        ).toEqual(['osaka_fp16', 'osaka_int8']);
+    });
+});
+
+describe('DEFAULT_MODELS', () => {
+    // DEFAULT_MODELS is built at module scope from modelSelection, which is built from modelPrecisions. Declared in
+    // the wrong order those are a temporal dead zone error thrown on import - a blank app rather than a red test - so
+    // this asserts the values as well as their shape.
+    it('is a valid HD selection for every enhancement', () => {
+        for (const type of ENHANCEMENT_ORDER) {
+            const info = ENHANCEMENTS[type];
+            const [model, precision] = DEFAULT_MODELS[type].split('_');
+
+            expect(model).toBe(info.defaultModel);
+            expect(precision).toBe(modelPrecisions(type, info.defaultModel).hd);
+        }
+    });
+});
+
+describe('normalizeModels', () => {
+    it('fills in a missing or unusable record', () => {
+        expect(normalizeModels(undefined)).toEqual(DEFAULT_MODELS);
+        expect(normalizeModels({})).toEqual(DEFAULT_MODELS);
+        expect(normalizeModels('nonsense')).toEqual(DEFAULT_MODELS);
+        expect(normalizeModels({ up: 42 })).toEqual(DEFAULT_MODELS);
+    });
+
+    // The upgrade path: everything persisted before the quality tier was selectable is a bare codename, and it meant
+    // HD. Getting this wrong would move every existing user to the SD build of their chosen model.
+    it('upgrades a bare codename to its HD selection', () => {
+        expect(normalizeModels({ ...DEFAULT_MODELS, dn: 'malmo', up: 'osaka' })).toMatchObject({
+            dn: 'malmo_fp32',
+            up: 'osaka_fp16',
+        });
+    });
+
+    it('keeps a selection that already names a real build', () => {
+        expect(normalizeModels({ ...DEFAULT_MODELS, up: 'osaka_int8' }).up).toBe('osaka_int8');
+        expect(normalizeModels({ ...DEFAULT_MODELS, dn: 'malmo_fp16' }).dn).toBe('malmo_fp16');
+    });
+
+    it('repairs a precision the named model does not publish', () => {
+        expect(normalizeModels({ ...DEFAULT_MODELS, up: 'osaka_fp32' }).up).toBe('osaka_fp16');
+        expect(normalizeModels({ ...DEFAULT_MODELS, up: 'kyoto_int8' }).up).toBe('kyoto_fp32');
+    });
+
+    it('falls back to a known model but keeps the tier asked for', () => {
+        expect(normalizeModels({ ...DEFAULT_MODELS, up: 'nope_fp16' }).up).toBe('kyoto_fp16');
+    });
+
+    it('covers every enhancement whatever it is given', () => {
+        expect(Object.keys(normalizeModels({ dn: 'malmo' })).sort()).toEqual([...ENHANCEMENT_ORDER].sort());
+    });
 });
 
 describe('modelPrecisions / qualityTier', () => {
@@ -102,15 +194,35 @@ describe('getOp', () => {
         }
     });
 
-    it("builds at the model's HD precision", () => {
+    // Also the migration case: a selection with no precision is what every build before the quality tier was
+    // selectable persisted, and it has to keep meaning HD.
+    it("builds at the model's HD precision when the selection names none", () => {
         expect(getOp('up', 'kyoto').id.endsWith('_fp32')).toBe(true);
         expect(getOp('up', 'osaka').id.endsWith('_fp16')).toBe(true);
+    });
+
+    it('builds at the precision the selection names', () => {
+        expect(getOp('up', 'kyoto_fp16').id.endsWith('_fp16')).toBe(true);
+        expect(getOp('up', 'osaka_int8').id.endsWith('_int8')).toBe(true);
+        expect(getOp('dn', 'malmo_fp16').id.endsWith('_fp16')).toBe(true);
+    });
+
+    // Asking for a build that was never published would send the backend after a model file that does not exist, so
+    // an impossible precision collapses onto the tier it was closest to.
+    it('repairs a precision the model does not publish', () => {
+        expect(getOp('up', 'osaka_fp32').id.endsWith('_fp16')).toBe(true);
+        expect(getOp('up', 'kyoto_int8').id.endsWith('_fp32')).toBe(true);
     });
 
     // A stored setting naming a model that was since renamed or removed must not produce a broken id.
     it('falls back to a known model for an unknown one', () => {
         const built = getOp('up', 'not-a-real-model');
         expect(getEnhancementType(built.id)).toBe('up');
+    });
+
+    // The tier is the user's statement about quality, and it outlives the model they picked it on.
+    it('keeps the tier when it falls back to another model', () => {
+        expect(getOp('up', 'not-a-real-model_fp16').id.endsWith('_fp16')).toBe(true);
     });
 });
 

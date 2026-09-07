@@ -29,7 +29,10 @@ import {
 
 export type EnhancementType = 'dn' | 'fr' | 'cl' | 'la' | 'cb' | 'sh' | 'up';
 
-// The user's chosen default model for each enhancement, as held by the settings store.
+// The user's chosen default for each enhancement, as held by the settings store. The value is a *selection* -
+// `<model>_<precision>`, e.g. `stockholm_fp32` or `osaka_int8` - not a bare model, because the quality tier is part
+// of the choice. It is the same string the Options popovers' model selector carries, deliberately: one vocabulary
+// means the two model pickers in the app cannot drift apart, and `buildSelection` reads either one.
 export type ModelChoices = Record<EnhancementType, string>;
 
 // The first two letters of an operation ID are its enhancement type, e.g. `dn`, `fr`, `up`.
@@ -311,16 +314,6 @@ export const ENHANCEMENTS: Record<EnhancementType, EnhancementInfo> = {
     },
 };
 
-// The model each enhancement starts on, as the settings store's initial value. Derived from the registry so the
-// defaults are stated once.
-export const DEFAULT_MODELS: ModelChoices = Object.fromEntries(
-    ENHANCEMENT_ORDER.map((type) => [type, ENHANCEMENTS[type].defaultModel]),
-) as ModelChoices;
-
-// The models an enhancement offers, as plain select items for the settings picker.
-export const modelItems = (type: EnhancementType) =>
-    ENHANCEMENTS[type].models.map(({ id, label }) => ({ value: id, label }));
-
 /**
  * The precision behind each quality tier for one model, defaulting to the app-wide convention.
  *
@@ -329,6 +322,116 @@ export const modelItems = (type: EnhancementType) =>
  */
 export const modelPrecisions = (type: EnhancementType, model: string): Precisions =>
     ENHANCEMENTS[type].models.find((m) => m.id === model)?.precisions ?? DEFAULT_PRECISIONS;
+
+// The tiers every model is offered at, in the order they are presented. HD before SD, which the popover's two-column
+// selector lays out as a row per model.
+const QUALITY_TIERS: readonly QualityTier[] = ['hd', 'md'];
+
+// The selection string for one model at one tier: `<model>_<precision>`. Built from the registry rather than written
+// out, because the precision behind a tier is a per-model fact — see `modelPrecisions`.
+const modelSelection = (type: EnhancementType, model: string, tier: QualityTier = 'hd'): string =>
+    `${model}_${modelPrecisions(type, model)[tier]}`;
+
+// The model and precision a stored selection names, repaired to something that exists.
+type ResolvedSelection = { id: string; precision: string; build: ModelInfo['build'] };
+
+/**
+ * Resolves a stored selection to a model the enhancement offers and a precision that model actually publishes.
+ *
+ * Three things can be wrong with the string, and all three come from the same place — a value persisted by an older
+ * build, a hand-edited store, or a model that has since been renamed or removed:
+ *
+ *   - it names no known model                            -> the enhancement's default, then its first
+ *   - it carries no precision at all                     -> HD, which is what every value written before the tier was
+ *                                                           selectable meant
+ *   - it carries a precision the model does not publish  -> that model's precision for the tier asked for, so the
+ *                                                           backend is never asked to download an artifact that was
+ *                                                           never built (there is no fp32 Osaka, no int8 Kyoto)
+ */
+const resolveSelection = (type: EnhancementType, selection: string): ResolvedSelection => {
+    const { models, defaultModel } = ENHANCEMENTS[type];
+    const [id = '', precision = ''] = selection.split('_');
+
+    const chosen = models.find((m) => m.id === id) ?? models.find((m) => m.id === defaultModel) ?? models[0];
+
+    // Every enhancement in the registry declares at least one model, so models[0] is always present - but the registry
+    // is data, and an entry edited down to an empty list would otherwise fail here as an unreadable "cannot read
+    // properties of undefined" deep in the build call rather than naming the enhancement that is malformed.
+    if (!chosen) throw new Error(`enhancement "${type}" declares no models`);
+
+    // The tier is read against the model the selection *names*, not the one we landed on, so a selection for a model
+    // that no longer exists still says which tier the user asked for: `osaka_int8` with Osaka gone lands on the
+    // fallback model's SD build rather than its HD one.
+    //
+    // Deliberately not `qualityTier()`: that reads anything which is not the HD precision as SD, which is right for a
+    // precision taken off a real operation and wrong here. A bare codename persisted before the tier was selectable
+    // carries no precision at all, and must land on HD - what `getOp` built back then - rather than being silently
+    // downgraded to SD on upgrade.
+    const tier: QualityTier = precision === modelPrecisions(type, id).md ? 'md' : 'hd';
+
+    return { id: chosen.id, precision: modelPrecisions(type, chosen.id)[tier], build: chosen.build };
+};
+
+// The model each enhancement starts on, as the settings store's initial value. Derived from the registry so the
+// defaults are stated once, and at the HD tier because that is what the app did before the tier was selectable.
+export const DEFAULT_MODELS: ModelChoices = Object.fromEntries(
+    ENHANCEMENT_ORDER.map((type) => [type, modelSelection(type, ENHANCEMENTS[type].defaultModel)]),
+) as ModelChoices;
+
+// One model at one quality tier, as both model pickers enumerate them.
+export type ModelTier = {
+    // The codename, so consumers can tell where one model's tiers end and the next model's begin.
+    model: string;
+
+    // The proper name, untranslated. The tier half of the label comes from the catalog; see `modelLabel`.
+    label: string;
+
+    tier: QualityTier;
+
+    // `<model>_<precision>`, the value the picker stores.
+    value: string;
+
+    descriptionKey: ParseKeys;
+};
+
+/**
+ * Every model an enhancement offers, once per quality tier, in presentation order.
+ *
+ * The settings picker and the Options popovers list exactly this and differ only in how they draw it — which is what
+ * stops the two model pickers in the app offering different things. It is pure so it can be tested without i18n; the
+ * labels are built under `t` by the hooks that render it.
+ */
+export const modelTiers = (type: EnhancementType): ModelTier[] =>
+    ENHANCEMENTS[type].models.flatMap(({ id, label, descriptionKey }) =>
+        QUALITY_TIERS.map((tier) => ({
+            model: id,
+            label,
+            tier,
+            value: modelSelection(type, id, tier),
+            descriptionKey,
+        })),
+    );
+
+/**
+ * Repairs the persisted default-model record into selections that name something real.
+ *
+ * The same rehydration case `normalizeQuality` handles, and it has to be done in the store rather than left to
+ * `getOp`'s tolerance: MUI's Select matches its value against its items literally, so a bare codename written by an
+ * older build would leave the Settings row blank and log an out-of-range warning, even though the enhancement it
+ * eventually built was correct.
+ */
+export const normalizeModels = (value: unknown): ModelChoices => {
+    const stored = (value ?? {}) as Partial<Record<EnhancementType, unknown>>;
+    const result = {} as ModelChoices;
+
+    for (const type of ENHANCEMENT_ORDER) {
+        const raw = stored[type];
+        const { id, precision } = resolveSelection(type, typeof raw === 'string' ? raw : '');
+        result[type] = `${id}_${precision}`;
+    }
+
+    return result;
+};
 
 /**
  * The display name of a model, as the registry declares it.
@@ -362,29 +465,28 @@ export const qualityTier = (type: EnhancementType, model: string, precision: str
     modelPrecisions(type, model).hd === precision ? 'hd' : 'md';
 
 /**
- * Builds the operation for an enhancement at the user's chosen model, at the precision that model defaults to.
+ * Builds the operation for an enhancement at the user's chosen model and quality tier, as held by the settings store.
  *
- * The fallback chain is one rule, not two: an unknown model falls back to the enhancement's default, and a default
- * that is itself unknown falls back to its first. Both arms are what a stored setting from an older build, or a
- * renamed model, lands on.
+ * Every path that adds an enhancement without the user picking a model goes through here — the add menu, autopilot,
+ * and the export queue's fill-in — so this is the single place the stored default is honoured. What can be wrong with
+ * that stored selection, and what it falls back to, is `resolveSelection`.
+ *
+ * Repairing rather than rejecting is the difference from `buildSelection` below: this one is handed a setting that
+ * must produce *something*, that one is handed a live picker value where the honest answer to an unknown string is
+ * "do nothing".
  */
-export const getOp = (type: EnhancementType, model: string, amount?: number): Operation => {
-    const { models, defaultModel, defaultAmount } = ENHANCEMENTS[type];
-    const chosen = models.find((m) => m.id === model) ?? models.find((m) => m.id === defaultModel) ?? models[0];
+export const getOp = (type: EnhancementType, selection: string, amount?: number): Operation => {
+    const { precision, build } = resolveSelection(type, selection);
 
-    // Every enhancement in the registry declares at least one model, so models[0] is always present - but the registry
-    // is data, and an entry edited down to an empty list would otherwise fail here as an unreadable "cannot read
-    // properties of undefined" deep in the build call rather than naming the enhancement that is malformed.
-    if (!chosen) throw new Error(`enhancement "${type}" declares no models`);
-
-    return chosen.build(modelPrecisions(type, chosen.id).hd, amount ?? defaultAmount);
+    return build(precision, amount ?? ENHANCEMENTS[type].defaultAmount);
 };
 
 /**
  * Builds the operation for a `<model>_<precision>` selection, the value the options popovers' model selector carries.
  *
  * Returns `undefined` for a selection that names no known model, which is what `useOptionEnhancement` treats as
- * "leave the enhancement alone".
+ * "leave the enhancement alone". It does not fall back the way `getOp` does, on purpose: a transient or stale value
+ * here must not silently rewrite the enhancement the user is looking at.
  */
 export const buildSelection = (type: EnhancementType, selection: string, amount?: number): Operation | undefined => {
     const [id, precision] = selection.split('_');

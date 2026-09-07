@@ -244,8 +244,8 @@
         "colorBalance": {
             "name": "Färgbalans",
             "models": {
-                "rio": "Använd den här modellen när dina foton ser för orangea eller för blå ut, eller bara har en skev, onaturlig ton, som inomhusbilder under varma lampor, mulna utomhusmotiv eller bilder tagna i blandat ljus där färgerna helt enkelt inte ser naturliga ut.",
-                "saopaulo": "Använd den här modellen när olika delar av bilden lyses upp av olika ljuskällor, så att ingen enskild korrigering kan rätta till allt på en gång, till exempel ett rum med en varm lampa på ena sidan och dagsljus från ett fönster på den andra, eller ett motiv i skugga mot en solbelyst bakgrund. Den korrigerar varje område för sig i stället för att förskjuta hela bilden."
+                "rio": "Använd den här modellen när hela bilden lutar åt samma håll — orange under lampor inomhus, blå i skugga eller en mulen dag. Den återger bilden som om kameran valt rätt vitbalans och korrigerar färgsticket i hela bilden.",
+                "saopaulo": "Använd den här modellen när två ljuskällor krockar i samma bild, som en varm lampa inomhus mot dagsljus från fönstret. Den återger scenen med flera vitbalanser och blandar dem pixel för pixel, område för område."
             }
         },
         "sharpen": {

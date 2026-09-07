@@ -244,8 +244,8 @@
         "colorBalance": {
             "name": "Kleurbalans",
             "models": {
-                "rio": "Gebruik dit model wanneer je foto's te oranje of te blauw ogen, of gewoon een vreemde, onnatuurlijke zweem hebben, zoals binnenopnamen onder warme lampen, bewolkte buitenscènes of foto's bij gemengd licht waarbij de kleuren simpelweg niet natuurlijk lijken.",
-                "saopaulo": "Gebruik dit model wanneer verschillende delen van de foto door verschillend licht worden beschenen, zodat één correctie ze niet allemaal tegelijk kan verhelpen, zoals een kamer met aan de ene kant een warme lamp en aan de andere kant daglicht door een raam, of een onderwerp in de schaduw tegen een zonnige achtergrond. Het corrigeert elk gebied afzonderlijk in plaats van het hele beeld te verschuiven."
+                "rio": "Gebruik dit model wanneer de hele foto dezelfde kant op helt — oranje onder lampen binnen, blauw in de schaduw of op een bewolkte dag. Het rendert de opname alsof de camera de juiste witbalans had gekozen en corrigeert de zweem in één keer.",
+                "saopaulo": "Gebruik dit model wanneer twee lichtbronnen in hetzelfde beeld botsen, zoals een warme lamp binnen tegenover daglicht door het raam. Het rendert de scène met meerdere witbalansen en mengt die pixel voor pixel, gebied voor gebied."
             }
         },
         "sharpen": {

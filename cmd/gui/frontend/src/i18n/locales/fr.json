@@ -245,8 +245,8 @@
         "colorBalance": {
             "name": "Balance des couleurs",
             "models": {
-                "rio": "Utilisez ce modèle lorsque vos photos paraissent trop orangées, trop bleues, ou présentent simplement une teinte étrange et peu naturelle : prises de vue en intérieur sous des lampes chaudes, scènes extérieures par temps couvert, ou photos en éclairage mixte où les couleurs ne semblent tout simplement pas naturelles.",
-                "saopaulo": "Utilisez ce modèle lorsque différentes zones de la photo sont éclairées par des sources différentes, si bien qu'aucune correction unique ne peut toutes les traiter à la fois : une pièce éclairée par une lampe chaude d'un côté et par la lumière du jour d'une fenêtre de l'autre, ou un sujet à l'ombre devant un fond ensoleillé. Il corrige chaque zone séparément au lieu de décaler toute l'image."
+                "rio": "Utilisez ce modèle lorsque toute la photo penche du même côté : orangée sous des lampes d'intérieur, bleutée à l'ombre ou par temps couvert. Il recalcule l'image comme si l'appareil avait choisi la bonne balance des blancs, corrigeant la dominante globalement.",
+                "saopaulo": "Utilisez ce modèle lorsque deux sources de lumière s'affrontent dans le même cadre, comme une lampe chaude en intérieur face à la lumière du jour venant de la fenêtre. Il rend la scène sous plusieurs balances des blancs et les mélange pixel par pixel, zone par zone."
             }
         },
         "sharpen": {

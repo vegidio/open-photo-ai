@@ -5,7 +5,7 @@ import type { SupportedEPs } from '@/bindings/gui/services';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { DEFAULT_LANGUAGE, detectLanguage, isSupportedLanguage, type SupportedLanguage } from '@/i18n/languages';
 import { os } from '@/utils/constants';
-import { DEFAULT_MODELS, type EnhancementType, type ModelChoices } from '@/utils/enhancement';
+import { DEFAULT_MODELS, type EnhancementType, type ModelChoices, normalizeModels } from '@/utils/enhancement';
 import {
     clampQuality,
     DEFAULT_QUALITY,
@@ -30,8 +30,9 @@ type SettingsStore = {
     analyticsEnabled: boolean;
     language: SupportedLanguage;
 
-    // The default model for each enhancement, keyed by its two-letter type. One record rather than seven parallel
-    // fields, so adding an enhancement is an entry in ENHANCEMENTS and nothing here.
+    // The default model *and quality tier* for each enhancement, keyed by its two-letter type, each held as the
+    // `<model>_<precision>` selection string ModelChoices documents. One record rather than seven parallel fields, so
+    // adding an enhancement is an entry in ENHANCEMENTS and nothing here.
     models: ModelChoices;
 
     // The encoder quality for each lossy export format. Shared by the Settings dialog and the Export dialog rather
@@ -44,7 +45,7 @@ type SettingsStore = {
     setExecutionProvider: (ep: ExecutionProvider) => void;
     setAnalyticsEnabled: (enabled: boolean) => void;
     setLanguage: (language: SupportedLanguage) => void;
-    setModel: (type: EnhancementType, model: string) => void;
+    setModel: (type: EnhancementType, selection: string) => void;
     setQuality: (format: QualityFormat, value: number) => void;
 
     saveSnapshot: () => void;
@@ -133,9 +134,9 @@ export const useSettingsStore = create(
                     });
                 },
 
-                setModel: (type: EnhancementType, model: string) => {
+                setModel: (type: EnhancementType, selection: string) => {
                     set((state) => {
-                        state.models[type] = model;
+                        state.models[type] = selection;
                     });
                 },
 
@@ -193,6 +194,13 @@ export const useSettingsStore = create(
                 // that merely looks wrong in the UI - it is handed straight to the native encoders, which take a 0 as
                 // a real request and write out a garbage image. See normalizeQuality.
                 state.quality = normalizeQuality(state.quality);
+
+                // Same reasoning as the language guard, with one extra wrinkle: builds before the quality tier was
+                // selectable persisted a bare codename ("stockholm"), which no longer matches any item in the Settings
+                // dropdown — MUI compares the value to its items literally, so the row would render blank and warn.
+                // Repairing here rather than leaving it to getOp's tolerance is what keeps the UI and the operation it
+                // eventually builds saying the same thing.
+                state.models = normalizeModels(state.models);
             },
         },
     ),

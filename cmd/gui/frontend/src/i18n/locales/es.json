@@ -244,8 +244,8 @@
         "colorBalance": {
             "name": "Balance de color",
             "models": {
-                "rio": "Usa este modelo cuando tus fotos se vean demasiado anaranjadas, demasiado azules o simplemente tengan un tinte extraño y poco natural, como tomas de interior con lámparas cálidas, escenas nubladas en exteriores o fotos con iluminación mixta donde los colores no se ven naturales.",
-                "saopaulo": "Usa este modelo cuando distintas zonas de la foto estén iluminadas por luces diferentes y ninguna corrección única pueda arreglarlas todas a la vez, como una habitación con una lámpara cálida de un lado y luz de día entrando por la ventana del otro, o un sujeto en la sombra sobre un fondo soleado. Corrige cada zona por separado en lugar de desplazar toda la imagen."
+                "rio": "Usa este modelo cuando toda la foto se inclina hacia el mismo tono: anaranjada bajo lámparas de interior, azulada en la sombra o en un día nublado. Reconstruye la toma como si la cámara hubiera elegido el balance de blancos correcto, corrigiendo el tinte de forma global.",
+                "saopaulo": "Usa este modelo cuando dos fuentes de luz compiten en el mismo encuadre, como una lámpara cálida en interior frente a la luz de día que entra por la ventana. Renderiza la escena con varios balances de blancos y los mezcla píxel a píxel, zona por zona."
             }
         },
         "sharpen": {

@@ -103,10 +103,10 @@ All enhancements available here come from open-source AI models that were adapte
 
 ### Color Balance
 
-- **Rio**: use when your photos look too orange, too blue, or just have an off, unnatural tint, like indoor shots under warm lamps, cloudy outdoor scenes, or pictures taken in mixed lighting conditions where the colors simply don't look natural.
-- **São Paulo**: use when different parts of the photo are lit by different lights, so no single correction can fix them all at once — a room with a warm lamp on one side and daylight from a window on the other, or a subject in the shade against a sunlit background. Instead of shifting the whole picture one way, it works out what each area needs and corrects them separately.
+- **Rio**: use when the whole photo leans one way — orange under indoor lamps, blue in open shade or on a cloudy day. It re-renders the shot as if the camera had picked the right white balance, correcting the cast globally.
+- **São Paulo**: use when two light sources fight inside the same frame, like a warm lamp indoors against daylight from the window. It renders the scene under several white balances and blends them pixel by pixel, area by area.
 
-*Verdict*: start with **Rio** when the whole photo leans the same wrong way, which is most of the time and is the faster of the two; switch to **São Paulo** when fixing one part of the frame throws another part off, because that's the case a single global correction can't solve.
+*Verdict*: start with **Rio**: most photos lean the same wrong way and it's the faster of the two; switch to **São Paulo** when fixing one part of the frame throws another off, which no single global correction can solve.
 
 ### Sharpen
 

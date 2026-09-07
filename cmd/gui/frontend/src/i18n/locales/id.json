@@ -243,8 +243,8 @@
         "colorBalance": {
             "name": "Keseimbangan Warna",
             "models": {
-                "rio": "Gunakan model ini saat foto Anda tampak terlalu oranye, terlalu biru, atau sekadar memiliki rona yang janggal dan tidak alami, seperti foto dalam ruangan di bawah lampu hangat, pemandangan luar ruangan saat berawan, atau foto dengan pencahayaan campuran yang warnanya terlihat tidak alami.",
-                "saopaulo": "Gunakan model ini saat bagian-bagian foto disinari cahaya yang berbeda, sehingga tidak ada satu koreksi pun yang bisa memperbaiki semuanya sekaligus, seperti ruangan dengan lampu hangat di satu sisi dan cahaya siang dari jendela di sisi lain, atau subjek di tempat teduh dengan latar yang terkena sinar matahari. Model ini memperbaiki tiap area secara terpisah, bukan menggeser seluruh gambar."
+                "rio": "Gunakan model ini saat seluruh foto condong ke satu arah — oranye di bawah lampu dalam ruangan, biru di tempat teduh atau saat berawan. Model ini merender ulang foto seolah kamera memilih white balance yang tepat, memperbaiki rona secara menyeluruh.",
+                "saopaulo": "Gunakan model ini saat dua sumber cahaya beradu dalam satu bingkai, misalnya lampu hangat di dalam ruangan melawan cahaya siang dari jendela. Model ini merender adegan dengan beberapa white balance lalu memadukannya piksel demi piksel, area demi area."
             }
         },
         "sharpen": {
