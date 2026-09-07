@@ -151,3 +151,61 @@ func TestChwToHWCCrops(t *testing.T) {
 		}
 	}
 }
+
+// randomSamples builds a deterministic pseudo-random sample set for the polynomial fit tests. The values stay inside
+// [0,1] because that is the range the canvas tensors carry, and the generator is a plain LCG so the same samples come
+// out on every platform.
+func randomSamples(n int, seed uint32) [][3]float32 {
+	out := make([][3]float32, n)
+	s := seed
+	next := func() float32 {
+		s = s*1664525 + 1013904223
+		return float32(s>>8) / float32(1<<24)
+	}
+
+	for i := range out {
+		out[i] = [3]float32{next(), next(), next()}
+	}
+
+	return out
+}
+
+// TestFitPolynomialMappingsMatchesSingle guards the shared-XtX refactor. Fitting several destinations together is a
+// performance change and nothing else, so each destination must come back exactly as fitting it alone would - not
+// merely close. Without this the optimisation is a silent output change waiting to happen, and rio's fit is the thing
+// that would move.
+func TestFitPolynomialMappingsMatchesSingle(t *testing.T) {
+	src := randomSamples(4096, 1)
+	dsts := [][][3]float32{randomSamples(4096, 2), randomSamples(4096, 3), randomSamples(4096, 4)}
+
+	together, err := fitPolynomialMappings(src, dsts...)
+	if err != nil {
+		t.Fatalf("fitPolynomialMappings: %v", err)
+	}
+	if len(together) != len(dsts) {
+		t.Fatalf("got %d mappings, want %d", len(together), len(dsts))
+	}
+
+	for d, dst := range dsts {
+		alone, err := fitPolynomialMapping(src, dst)
+		if err != nil {
+			t.Fatalf("fitPolynomialMapping(%d): %v", d, err)
+		}
+		if together[d] != alone {
+			t.Errorf("destination %d: fitted together %v, fitted alone %v", d, together[d], alone)
+		}
+	}
+}
+
+// TestFitPolynomialMappingsRejectsBadInput covers the two ways a caller can get the shape wrong. Both would otherwise
+// read past the end of a destination or silently fit nothing.
+func TestFitPolynomialMappingsRejectsBadInput(t *testing.T) {
+	src := randomSamples(64, 5)
+
+	if _, err := fitPolynomialMappings(src); err == nil {
+		t.Error("expected an error with no destinations")
+	}
+	if _, err := fitPolynomialMappings(src, randomSamples(63, 6)); err == nil {
+		t.Error("expected an error when a destination is shorter than the source")
+	}
+}

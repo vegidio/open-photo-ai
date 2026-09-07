@@ -22,6 +22,7 @@ import {
     Rio,
     Saitama,
     Santorini,
+    SaoPaulo,
     Stockholm,
     Tokyo,
 } from '@/operations';
@@ -237,6 +238,12 @@ export const ENHANCEMENTS: Record<EnhancementType, EnhancementInfo> = {
                 descriptionKey: 'enhancements.colorBalance.models.rio',
                 build: (precision, amount) => new Rio(amount, precision),
             },
+            {
+                id: 'saopaulo',
+                label: 'São Paulo',
+                descriptionKey: 'enhancements.colorBalance.models.saopaulo',
+                build: (precision, amount) => new SaoPaulo(amount, precision),
+            },
         ],
     },
     sh: {
@@ -255,7 +262,7 @@ export const ENHANCEMENTS: Record<EnhancementType, EnhancementInfo> = {
             },
             {
                 id: 'petersburg',
-                label: 'St. Petersburg',
+                label: 'Petersburg',
                 descriptionKey: 'enhancements.sharpen.models.petersburg',
                 build: (precision, amount) => new Petersburg(amount, precision),
             },
@@ -322,6 +329,27 @@ export const modelItems = (type: EnhancementType) =>
  */
 export const modelPrecisions = (type: EnhancementType, model: string): Precisions =>
     ENHANCEMENTS[type].models.find((m) => m.id === model)?.precisions ?? DEFAULT_PRECISIONS;
+
+/**
+ * The display name of a model, as the registry declares it.
+ *
+ * The enhancement list used to title-case the raw codename for its subtitle, which is only ever accidentally right:
+ * it renders `malmo` as "Malmo", `petersburg` as "Petersburg" and `saopaulo` as "Saopaulo". The label is already in
+ * the registry and is what the model picker shows, so this is what stops the two lines disagreeing about the name of
+ * the same model.
+ *
+ * An unknown model falls back to the title-cased id rather than to an empty string, for the same rehydration reason
+ * `modelPrecisions` documents: the id can come from a cached operation written by an older build.
+ */
+export const modelDisplayName = (type: EnhancementType, model: string): string =>
+    ENHANCEMENTS[type].models.find((m) => m.id === model)?.label ?? titleCase(model);
+
+const titleCase = (input: string): string => {
+    const first = input[0];
+    if (!first) return input;
+
+    return first.toUpperCase() + input.slice(1);
+};
 
 /**
  * The tier a precision represents, for a given model. The inverse of `modelPrecisions`, and the only thing that should

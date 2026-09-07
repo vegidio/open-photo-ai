@@ -23,6 +23,10 @@ type Variant struct {
 	// Canvas is the fixed square this variant's graph is exported at.
 	Canvas Canvas
 
+	// Mixed marks a variant whose graph predicts blending weights over several white-balance renderings instead of
+	// returning one corrected image. A nil Mixed is the single-output pipeline rio uses.
+	Mixed *MixedSpec
+
 	// Profile is the provider tuning this variant needs. A nil Profile means the provider defaults, which is what a
 	// variant nobody has measured should get: the right settings follow the graph's op mix, so carrying one
 	// variant's findings to another because both correct colour is how a profile ends up pessimising a model it was
@@ -47,6 +51,47 @@ type Canvas struct {
 	// and the short side is reflection-padded out to fill the square - padded, never stretched, so the pixels the
 	// model sees are the ones the photo has.
 	Size int
+}
+
+// MixedSpec describes the mixed-illuminant contract: the graph returns a per-pixel weight map over several
+// white-balance renderings of the photo, and the renderings themselves, rather than a single corrected image.
+//
+// It carries no geometry of its own on purpose. The graph works at Variant.Canvas from end to end - the editing
+// network, the weight predictor and its internal multi-scale ensemble all run on the same square - so the padded
+// canvas is built once and cropped once, and there is no second geometry for a rounding difference to creep into.
+//
+// One thing does not carry over from Variant.Canvas's reasoning, and it is worth stating because the two sizes look
+// interchangeable and are not. That comment argues a large square is affordable because the graph's output is never
+// shown, only sampled into a global polynomial fit. Half of this graph's output is shown: the weight map is
+// bilinearly upsampled to full resolution and multiplies the image. Its size is a real detail cap on how finely the
+// blend can follow an illuminant boundary, and it cannot be traded away the way the fit's sampling resolution can.
+type MixedSpec struct {
+	// Settings is how many renderings the graph blends. It is 3 - daylight, shade, tungsten - which is what the
+	// `_D_S_T` checkpoint was trained for, and it is what fixes the output channel layout below.
+	Settings int
+}
+
+// Renderings is how many of the settings the graph has to synthesize. Daylight is not one of them: it is the input
+// image, so a graph that returned it would be handing back what it was given.
+func (s *MixedSpec) Renderings() int {
+	return s.Settings - 1
+}
+
+// Channels is the number of channels the graph's output carries: one weight plane per setting, then one
+// three-channel rendering per synthesized setting.
+//
+// This is a method rather than arithmetic inlined at its one call site because it is not an implementation detail -
+// it is the contract between the conversion script and this package, and getting it wrong means reading the weight
+// planes out of the wrong offsets and rendering nonsense. Naming it is what lets a test pin the layout without
+// opening a session, the same reason upscale's GraphSpec makes its own naming rule a method.
+func (s *MixedSpec) Channels() int {
+	return s.Settings + 3*s.Renderings()
+}
+
+// RenderingOffset is the index of the first channel of the i-th synthesized rendering, counting from zero in the
+// order the settings are declared minus daylight - so 0 is shade and 1 is tungsten for a `_D_S_T` graph.
+func (s *MixedSpec) RenderingOffset(i int) int {
+	return s.Settings + 3*i
 }
 
 // Op builds this variant's operation at the given per-run intensity.
@@ -156,7 +201,17 @@ func (m *Model) Run(
 		return nil, errors.Wrap(err, "context cancelled")
 	}
 
-	result, err := Process(ctx, m.Session, img, m.variant.Canvas)
+	// Two pipelines share this family, and which one a variant wants is a property of its graph: rio's returns a
+	// corrected image, a mixed variant's returns blending weights and the renderings to blend.
+	var result image.Image
+	var err error
+
+	if m.variant.Mixed != nil {
+		result, err = ProcessMixed(ctx, m.Session, img, m.variant.Canvas, m.variant.Mixed)
+	} else {
+		result, err = Process(ctx, m.Session, img, m.variant.Canvas)
+	}
+
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to process image")
 	}

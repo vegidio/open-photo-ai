@@ -9,6 +9,7 @@ import (
 
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/colorbalance/saopaulo"
 	"github.com/vegidio/open-photo-ai/models/colorization/delhi"
 	"github.com/vegidio/open-photo-ai/models/colorization/jaipur"
 	"github.com/vegidio/open-photo-ai/models/colorization/mumbai"
@@ -80,6 +81,7 @@ var catalog = []entry{
 	intensityEntry("paris", types.ModelTypeLightAdjustment, paris.Op),
 	intensityEntry("lyon", types.ModelTypeLightAdjustment, lyon.Op),
 	intensityEntry("rio", types.ModelTypeColorBalance, rio.Op),
+	intensityEntry("saopaulo", types.ModelTypeColorBalance, saopaulo.Op),
 
 	// Colorization
 	precisionEntry("delhi", types.ModelTypeColorization, delhi.Op),

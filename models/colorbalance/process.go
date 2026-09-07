@@ -122,8 +122,47 @@ func kernelP(r, g, b float32) [11]float32 {
 // where each row of X is kernelP(src[i]) and each row of Y is dst[i].
 // A small ridge term is added to the diagonal to keep degenerate inputs stable.
 func fitPolynomialMapping(src, dst [][3]float32) ([11][3]float32, error) {
+	w, err := fitPolynomialMappings(src, dst)
+	if err != nil {
+		return [11][3]float32{}, err
+	}
+
+	return w[0], nil
+}
+
+// fitPolynomialMappings fits one mapping per destination from a shared source, solving them together. Every dst must
+// have the same length as src.
+//
+// The multi-destination form is what the mixed-illuminant pipeline needs: it fits the same low-resolution source to
+// two renderings at once. X^T X depends only on the source, so it is the same matrix for every destination, and the
+// pass that builds it is the expensive half - O(N*121) over a few hundred thousand samples, against a fixed 11x11
+// elimination afterwards. Accumulating it once rather than once per destination is therefore very nearly the whole
+// saving, and it is why this is one function taking several destinations rather than a loop around the single one.
+//
+// The single-destination case is arithmetically unchanged by this: the accumulation order, the ridge, the pivoting
+// and the elimination all run exactly as they did, so rio's fit is bit-for-bit what it was.
+//
+// BenchmarkFitPolynomialMappings measures the saving at the colour balance canvas: 32ms for two destinations together
+// against 53ms for the same two fitted separately.
+func fitPolynomialMappings(src [][3]float32, dsts ...[][3]float32) ([][11][3]float32, error) {
+	if len(dsts) == 0 {
+		return nil, errors.New("no destination to fit the colour balance mapping to")
+	}
+
+	for i, dst := range dsts {
+		if len(dst) != len(src) {
+			return nil, errors.Errorf("destination %d has %d samples but the source has %d", i, len(dst), len(src))
+		}
+	}
+
+	// One block of three columns per destination, laid out end to end so a single elimination solves all of them.
+	cols := 3 * len(dsts)
+
 	var xtx [11][11]float64
-	var xty [11][3]float64
+	xty := make([][]float64, 11)
+	for a := range 11 {
+		xty[a] = make([]float64, cols)
+	}
 
 	for i := range src {
 		k := kernelP(src[i][0], src[i][1], src[i][2])
@@ -136,9 +175,11 @@ func fitPolynomialMapping(src, dst [][3]float32) ([11][3]float32, error) {
 			for b := range 11 {
 				xtx[a][b] += ka * k64[b]
 			}
-			xty[a][0] += ka * float64(dst[i][0])
-			xty[a][1] += ka * float64(dst[i][1])
-			xty[a][2] += ka * float64(dst[i][2])
+			for d, dst := range dsts {
+				xty[a][3*d] += ka * float64(dst[i][0])
+				xty[a][3*d+1] += ka * float64(dst[i][1])
+				xty[a][3*d+2] += ka * float64(dst[i][2])
+			}
 		}
 	}
 
@@ -147,14 +188,14 @@ func fitPolynomialMapping(src, dst [][3]float32) ([11][3]float32, error) {
 	}
 
 	// Augmented matrix [XtX | XtY] -> Gauss-Jordan elimination with partial pivoting.
-	var aug [11][14]float64
+	width := 11 + cols
+	aug := make([][]float64, 11)
 	for i := range 11 {
+		aug[i] = make([]float64, width)
 		for j := range 11 {
 			aug[i][j] = xtx[i][j]
 		}
-		aug[i][11] = xty[i][0]
-		aug[i][12] = xty[i][1]
-		aug[i][13] = xty[i][2]
+		copy(aug[i][11:], xty[i])
 	}
 
 	for col := range 11 {
@@ -175,11 +216,11 @@ func fitPolynomialMapping(src, dst [][3]float32) ([11][3]float32, error) {
 		// destroyed image with nothing anywhere to say why. Fail loudly instead.
 		piv := aug[col][col]
 		if piv == 0 {
-			return [11][3]float32{}, errors.Errorf("singular normal equations at column %d; cannot fit the colour "+
+			return nil, errors.Errorf("singular normal equations at column %d; cannot fit the colour "+
 				"balance mapping", col)
 		}
 
-		for j := col; j < 14; j++ {
+		for j := col; j < width; j++ {
 			aug[col][j] /= piv
 		}
 		for r := range 11 {
@@ -190,19 +231,23 @@ func fitPolynomialMapping(src, dst [][3]float32) ([11][3]float32, error) {
 			if f == 0 {
 				continue
 			}
-			for j := col; j < 14; j++ {
+			for j := col; j < width; j++ {
 				aug[r][j] -= f * aug[col][j]
 			}
 		}
 	}
 
-	var w [11][3]float32
-	for i := range 11 {
-		w[i][0] = float32(aug[i][11])
-		w[i][1] = float32(aug[i][12])
-		w[i][2] = float32(aug[i][13])
+	out := make([][11][3]float32, len(dsts))
+	for d := range dsts {
+		base := 11 + 3*d
+		for i := range 11 {
+			out[d][i][0] = float32(aug[i][base])
+			out[d][i][1] = float32(aug[i][base+1])
+			out[d][i][2] = float32(aug[i][base+2])
+		}
 	}
-	return w, nil
+
+	return out, nil
 }
 
 // applyMapping renders a new full-resolution image by mapping each pixel of img

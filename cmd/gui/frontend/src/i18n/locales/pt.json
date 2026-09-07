@@ -244,7 +244,8 @@
         "colorBalance": {
             "name": "Equilíbrio de cores",
             "models": {
-                "rio": "Use este modelo quando suas fotos parecem laranjas ou azuis demais, ou têm um tom estranho e artificial, como fotos internas sob lâmpadas quentes, cenas externas nubladas ou imagens feitas sob iluminação mista, em que as cores simplesmente não parecem naturais."
+                "rio": "Use este modelo quando suas fotos parecem laranjas ou azuis demais, ou têm um tom estranho e artificial, como fotos internas sob lâmpadas quentes, cenas externas nubladas ou imagens feitas sob iluminação mista, em que as cores simplesmente não parecem naturais.",
+                "saopaulo": "Use este modelo quando partes diferentes da foto estiverem sob luzes diferentes, de modo que nenhuma correção única resolva todas de uma vez, como um cômodo com uma lâmpada quente de um lado e luz do dia pela janela do outro, ou uma pessoa na sombra diante de um fundo ensolarado. Ele corrige cada área separadamente, em vez de deslocar a imagem inteira."
             }
         },
         "sharpen": {

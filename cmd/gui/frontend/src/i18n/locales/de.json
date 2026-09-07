@@ -244,7 +244,8 @@
         "colorBalance": {
             "name": "Farbbalance",
             "models": {
-                "rio": "Verwenden Sie dieses Modell, wenn Ihre Fotos zu orange oder zu blau wirken oder einfach einen unnatürlichen Farbstich haben, etwa Innenaufnahmen unter warmem Lampenlicht, bewölkte Außenszenen oder Bilder bei Mischlicht, bei denen die Farben schlicht nicht natürlich aussehen."
+                "rio": "Verwenden Sie dieses Modell, wenn Ihre Fotos zu orange oder zu blau wirken oder einfach einen unnatürlichen Farbstich haben, etwa Innenaufnahmen unter warmem Lampenlicht, bewölkte Außenszenen oder Bilder bei Mischlicht, bei denen die Farben schlicht nicht natürlich aussehen.",
+                "saopaulo": "Verwenden Sie dieses Modell, wenn verschiedene Bildbereiche von unterschiedlichen Lichtquellen beleuchtet werden, sodass keine einzelne Korrektur alle zugleich beheben kann, etwa ein Raum, der auf einer Seite von einer warmen Lampe und auf der anderen von Tageslicht durch ein Fenster erhellt wird, oder ein Motiv im Schatten vor sonnigem Hintergrund. Es korrigiert jeden Bereich einzeln, statt das ganze Bild zu verschieben."
             }
         },
         "sharpen": {

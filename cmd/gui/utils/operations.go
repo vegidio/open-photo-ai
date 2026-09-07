@@ -13,6 +13,7 @@ import (
 	"github.com/disintegration/imaging"
 	opai "github.com/vegidio/open-photo-ai"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/colorbalance/saopaulo"
 	"github.com/vegidio/open-photo-ai/models/colorization/delhi"
 	"github.com/vegidio/open-photo-ai/models/colorization/jaipur"
 	"github.com/vegidio/open-photo-ai/models/colorization/mumbai"
@@ -103,9 +104,10 @@ var operationBuilders = map[string]operationBuilder{
 	"sh_novgorod":   intensityBuilder(novgorod.Op),
 
 	// Light Adjustment / Color Balance — "_<name>_<intensity>_<precision>", intensity always present
-	"la_paris": requiredIntensityBuilder(paris.Op),
-	"la_lyon":  requiredIntensityBuilder(lyon.Op),
-	"cb_rio":   requiredIntensityBuilder(rio.Op),
+	"la_paris":    requiredIntensityBuilder(paris.Op),
+	"la_lyon":     requiredIntensityBuilder(lyon.Op),
+	"cb_rio":      requiredIntensityBuilder(rio.Op),
+	"cb_saopaulo": requiredIntensityBuilder(saopaulo.Op),
 
 	// Colorization — "_<name>_<precision>" (no per-run inputs)
 	"cl_delhi":  precisionBuilder(delhi.Op),

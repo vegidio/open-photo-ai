@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/colorbalance/saopaulo"
 	"github.com/vegidio/open-photo-ai/models/colorization/delhi"
 	"github.com/vegidio/open-photo-ai/models/colorization/jaipur"
 	"github.com/vegidio/open-photo-ai/models/colorization/mumbai"
@@ -40,6 +41,7 @@ func TestIntensityOperationIds(t *testing.T) {
 		"paris":      func(i float32, p types.Precision) types.Operation { return paris.Op(i, p) },
 		"lyon":       func(i float32, p types.Precision) types.Operation { return lyon.Op(i, p) },
 		"rio":        func(i float32, p types.Precision) types.Operation { return rio.Op(i, p) },
+		"saopaulo":   func(i float32, p types.Precision) types.Operation { return saopaulo.Op(i, p) },
 	}
 
 	tests := []struct{ variant, precision, want string }{
@@ -61,6 +63,8 @@ func TestIntensityOperationIds(t *testing.T) {
 		{"lyon", "fp16", "la_lyon_fp16"},
 		{"rio", "fp32", "cb_rio_fp32"},
 		{"rio", "fp16", "cb_rio_fp16"},
+		{"saopaulo", "fp32", "cb_saopaulo_fp32"},
+		{"saopaulo", "fp16", "cb_saopaulo_fp16"},
 	}
 
 	for _, tt := range tests {

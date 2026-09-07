@@ -11,6 +11,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/models/colorbalance/rio"
+	"github.com/vegidio/open-photo-ai/models/colorbalance/saopaulo"
 	"github.com/vegidio/open-photo-ai/models/colorization/delhi"
 	"github.com/vegidio/open-photo-ai/models/colorization/jaipur"
 	"github.com/vegidio/open-photo-ai/models/colorization/mumbai"
@@ -458,7 +459,8 @@ var modelConstructors = map[string]modelConstructor{
 	"la_lyon":  constructor(lyon.New),
 
 	// Color Balance
-	"cb_rio": constructor(rio.New),
+	"cb_rio":      constructor(rio.New),
+	"cb_saopaulo": constructor(saopaulo.New),
 
 	// Colorization
 	"cl_delhi":  constructor(delhi.New),

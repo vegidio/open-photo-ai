@@ -15,7 +15,13 @@ import { OptionsUpscale } from '@/features/enhancements/OptionsUpscale';
 import { useCurrentFile, useFileDisabledFaces, useFileFaces } from '@/hooks';
 import { qualityLabel } from '@/i18n/format';
 import { useEnhancementStore } from '@/stores';
-import { ENHANCEMENTS, type EnhancementType, getEnhancementType, qualityTier } from '@/utils/enhancement.ts';
+import {
+    ENHANCEMENTS,
+    type EnhancementType,
+    getEnhancementType,
+    modelDisplayName,
+    qualityTier,
+} from '@/utils/enhancement.ts';
 
 type ListItemEnhancementProps = {
     op: Operation;
@@ -124,19 +130,12 @@ export const ListItemEnhancement = ({ op }: ListItemEnhancementProps) => {
 // always meant here, made explicit: an empty name/precision, and a numeric field that contributes nothing.
 const opInfo = (t: TFunction, op: Operation, type: EnhancementType, faceText: string): string =>
     t(ENHANCEMENTS[type].infoKey, {
-        name: titleCase(op.options.name ?? ''),
+        name: modelDisplayName(type, op.options.name ?? ''),
         quality: qualityLabel(t, qualityTier(type, op.options.name ?? '', op.options.precision ?? '')),
         faces: faceText,
         scale: parseFloat(parseFloat(op.options.scale ?? '0').toFixed(3)),
         intensity: parseFloat(op.options.intensity ?? '0') * 100,
     });
-
-const titleCase = (input: string): string => {
-    const first = input[0];
-    if (!first) return input;
-
-    return first.toUpperCase() + input.slice(1);
-};
 
 // `count` drives i18next's CLDR plural selection and `context` picks the partial-selection wording; the two
 // suffixes compose as key_context_plural, e.g. faces_partial_one. Pluralising on the total rather than the enabled
