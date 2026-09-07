@@ -96,10 +96,10 @@ All enhancements available here come from open-source AI models that were adapte
 
 ### Light Adjustment
 
-- **Paris**: use when working with images affected by poor or uneven lighting, such as night scenes, backlit photos, shadows, or overexposed areas. It’s useful when you need to enhance visibility and contrast so that images look clearer.
-- **Lyon**: use when the exposure itself is wrong rather than just the lighting — blown-out highlights on a bright day, or a subject lost in shadow against a bright background. It corrects over- and under-exposed photos in one pass, rebalancing the whole image instead of only lifting the dark areas.
+- **Paris**: use when the light in the photo is uneven — night scenes, backlit subjects, or a face lost in shadow while the rest looks fine. It brings back what the darkness hides, keeps colors natural, and is very fast.
+- **Lyon**: use when the whole photo came out too bright or too dark — washed-out skies, or a subject that disappears into shadow. It rebuilds the brightness of the entire image, rescuing detail at both ends at once.
 
-*Verdict*: use **Paris** for uneven or difficult lighting where you mainly need visibility back; use **Lyon** when the shot is simply over- or under-exposed and the whole frame needs rebalancing.
+*Verdict*: reach for **Paris** when only parts of the photo are too dark and you want them opened up; switch to **Lyon** when the whole shot is over- or under-exposed and the brightness needs fixing from end to end.
 
 ### Color Balance
 

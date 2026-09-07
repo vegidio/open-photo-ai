@@ -237,8 +237,8 @@
         "lightAdjustment": {
             "name": "Ajuste de luz",
             "models": {
-                "paris": "Usa este modelo con imágenes afectadas por una iluminación pobre o desigual, como escenas nocturnas, fotos a contraluz, sombras o zonas sobreexpuestas. Es útil cuando necesitas mejorar la visibilidad y el contraste para que las imágenes se vean más claras.",
-                "lyon": "Usa este modelo cuando el problema sea la exposición y no solo la iluminación: luces quemadas en un día luminoso o un sujeto perdido en la sombra frente a un fondo claro. Corrige fotos sobreexpuestas y subexpuestas en una sola pasada, reequilibrando toda la imagen en lugar de aclarar únicamente las zonas oscuras."
+                "paris": "Usa este modelo cuando la luz de la foto sea desigual: escenas nocturnas, sujetos a contraluz o una cara perdida en la sombra mientras el resto se ve bien. Recupera lo que oculta la oscuridad, mantiene los colores naturales y es muy rápido.",
+                "lyon": "Usa este modelo cuando la foto entera haya salido demasiado clara o demasiado oscura: cielos lavados o un sujeto que desaparece en la sombra. Reconstruye el brillo de toda la imagen y rescata el detalle en ambos extremos a la vez."
             }
         },
         "colorBalance": {

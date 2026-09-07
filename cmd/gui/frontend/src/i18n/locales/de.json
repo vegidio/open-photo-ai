@@ -237,8 +237,8 @@
         "lightAdjustment": {
             "name": "Lichtanpassung",
             "models": {
-                "paris": "Verwenden Sie dieses Modell bei Bildern mit schlechter oder ungleichmäßiger Beleuchtung, etwa Nachtaufnahmen, Gegenlichtfotos, Schatten oder überbelichteten Bereichen. Es ist nützlich, wenn Sie Sichtbarkeit und Kontrast verbessern möchten, damit Bilder klarer wirken.",
-                "lyon": "Verwenden Sie dieses Modell, wenn nicht nur die Beleuchtung, sondern die Belichtung selbst falsch ist: ausgebrannte Lichter an einem hellen Tag oder ein Motiv, das vor hellem Hintergrund im Schatten verschwindet. Es korrigiert über- und unterbelichtete Fotos in einem Durchgang und gleicht das gesamte Bild aus, statt nur die dunklen Bereiche aufzuhellen."
+                "paris": "Verwenden Sie dieses Modell, wenn das Licht im Foto ungleichmäßig ist – Nachtaufnahmen, Motive im Gegenlicht oder ein Gesicht im Schatten, während der Rest gut aussieht. Es holt zurück, was das Dunkel verbirgt, hält die Farben natürlich und ist sehr schnell.",
+                "lyon": "Verwenden Sie dieses Modell, wenn das ganze Foto zu hell oder zu dunkel geraten ist – ausgewaschener Himmel oder ein Motiv, das im Schatten verschwindet. Es baut die Helligkeit des gesamten Bildes neu auf und rettet Details an beiden Enden zugleich."
             }
         },
         "colorBalance": {

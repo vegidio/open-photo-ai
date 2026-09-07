@@ -237,8 +237,8 @@
         "lightAdjustment": {
             "name": "Ljusjustering",
             "models": {
-                "paris": "Använd den här modellen för bilder som påverkats av dålig eller ojämn belysning, som nattmotiv, motljusbilder, skuggor eller överexponerade partier. Den är användbar när du behöver förbättra synlighet och kontrast så att bilderna ser tydligare ut.",
-                "lyon": "Använd den här modellen när det är själva exponeringen som är fel och inte bara ljuset: utfrätta högdagrar en solig dag, eller ett motiv som försvinner i skugga mot en ljus bakgrund. Den korrigerar över- och underexponerade bilder i ett svep och balanserar om hela bilden i stället för att bara lyfta de mörka partierna."
+                "paris": "Använd den här modellen när ljuset i bilden är ojämnt – nattmotiv, motiv i motljus eller ett ansikte som försvinner i skugga medan resten ser bra ut. Den tar fram det som mörkret döljer, håller färgerna naturliga och är mycket snabb.",
+                "lyon": "Använd den här modellen när hela bilden blev för ljus eller för mörk – urblekt himmel eller ett motiv som försvinner i skugga. Den bygger om ljusstyrkan i hela bilden och räddar detaljer i båda ytterlägena samtidigt."
             }
         },
         "colorBalance": {
