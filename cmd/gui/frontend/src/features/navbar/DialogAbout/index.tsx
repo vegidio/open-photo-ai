@@ -22,13 +22,13 @@ export const DialogAbout = ({ open, onClose }: DialogAboutProps) => {
                     <Typography variant='h5' className='font-bold'>
                         {APP_NAME}
                     </Typography>
-                    <Typography variant='body2' className='text-content-secondary'>
+                    <Typography variant='body2' className='text-content-secondary select-text'>
                         {t('navbar.about_dialog.version', { version })}
                     </Typography>
                 </div>
 
                 <div className='flex flex-col mt-2 gap-1 items-center text-content-secondary'>
-                    <Typography className='text-sm'>{APP_COPYRIGHT}</Typography>
+                    <Typography className='text-sm select-text'>{APP_COPYRIGHT}</Typography>
 
                     <div className='flex flex-row gap-2'>
                         <Link href='#' className='text-sm' onClick={() => Browser.OpenURL(APP_REPOSITORY.url)}>

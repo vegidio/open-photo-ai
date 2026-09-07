@@ -46,7 +46,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                         {i18n.t('errors.boundary.message')}
                     </Typography>
 
-                    <Typography variant='caption' color='text.secondary' className='break-words font-mono'>
+                    <Typography variant='caption' color='text.secondary' className='break-words font-mono select-text'>
                         {getErrorMessage(error)}
                     </Typography>
 

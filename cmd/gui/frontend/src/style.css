@@ -51,6 +51,33 @@
 }
 
 /*
+ * This is a desktop app, not a web page: click-dragging across a model name or a settings row should do nothing, the
+ * way it does in any native window. Applied to `body` rather than to the React root because MUI portals every popover,
+ * dialog, menu and select - and notistack every snackbar - straight into `document.body`, so a rule on the root div
+ * would miss exactly the popups this is here to fix.
+ *
+ * It lives in `base` (the layer order is declared in main.tsx) so that Tailwind's `select-text`, which lands in
+ * `utilities`, wins wherever a component opts back in - the error boundary's message and the About version, both of
+ * which get copied into bug reports.
+ *
+ * The `input`/`textarea` exception is mandatory, not a courtesy: `user-select` inherits, and WebKit refuses to select
+ * text inside a form control that inherits `none`. Every text entry in the app is a MUI TextField, so this one rule
+ * covers all of them.
+ */
+@layer base {
+    body {
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    input,
+    textarea {
+        -webkit-user-select: text;
+        user-select: text;
+    }
+}
+
+/*
  * The native dark-mode scrollbar thumb renders as a bright gray and varies between dev and release builds. The
  * tailwind-scrollbar plugin already emits `background-color: var(--scrollbar-thumb)` / `var(--scrollbar-track)` for
  * `.scrollbar-thin` but never defines those custom properties. Define them here with explicit dark values so the
