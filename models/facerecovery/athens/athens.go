@@ -63,10 +63,9 @@ var variant = &facerecovery.Variant{
 // (-4.6%). On TensorRT it is a tie either way (-0.7% at both precisions), as it is for newyork - that provider
 // schedules its own engine, so there is nothing for the inter-op pool to have been doing.
 //
-// On CoreML it does not pay, and that is measured too: `go test -tags coremlbench -run
-// TestCoreMLExecutionModeAthens ./internal/utils/`. That test sweeps this model in BOTH build orders, which the
-// other three do not need - they already ship sequential on the strength of what it is worth on CUDA, so their
-// CoreML sweeps only have to show it costs nothing, whereas here CoreML is the side that leans the other way:
+// On CoreML it does not pay, and that is measured too, out of tree. This model was swept in BOTH build orders,
+// which the other three do not need - they already ship sequential on the strength of what it is worth on CUDA, so
+// their CoreML sweeps only have to show it costs nothing, whereas here CoreML is the side that leans the other way:
 //
 //	                    parallel first        sequential first
 //	fp32 parallel       106.280ms             106.657ms

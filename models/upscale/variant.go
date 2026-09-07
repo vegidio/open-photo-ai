@@ -124,7 +124,15 @@ func (v *Variant) New(
 
 	scales := SelectScaleMatrix(op.scale, v.ScaleBuckets)
 
-	sessions, err := LoadSessions(ctx, v.Codename, op.precision, scales, ep, utils.ResolveProfile(v.Profile, op.precision), onProgress)
+	// One session per scale pass. The ids match what this variant's Op.Id() composes -
+	// `up_<variant>_<scale>x_<precision>` - so the sessions the registry caches are the ones the operation names.
+	specs := make([]utils.SessionSpec, 0, len(scales))
+	for _, scale := range scales {
+		specs = append(specs, utils.ModelSpec(
+			fmt.Sprintf("up_%s_%.4gx_%s", v.Codename, float64(scale), op.precision)))
+	}
+
+	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.ResolveProfile(v.Profile, op.precision), onProgress)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s sessions", v.Codename)
 	}

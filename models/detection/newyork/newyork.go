@@ -83,8 +83,7 @@ var variant = &detection.Variant{
 // fp32 graph has nowhere to go but the CPU.
 //
 // ExecutionMode is not per-provider, so the sequential setting above reaches CoreML too. That is now measured rather
-// than assumed - `go test -tags coremlbench -run TestCoreMLExecutionModeNewYork ./internal/utils/`, same machine,
-// isolating Run over 20 blocks of 20 runs across four interleaved rounds:
+// than assumed - out of tree, same machine, isolating Run over 20 blocks of 20 runs across four interleaved rounds:
 //
 //	                    fp32                fp16
 //	Parallel            9.94ms              7.27ms

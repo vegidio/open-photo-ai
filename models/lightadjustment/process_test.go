@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"image"
 	"image/color"
-	"math"
 	"testing"
 )
 
@@ -85,82 +84,23 @@ func TestBuildResultFastPathMatchesGeneric(t *testing.T) {
 	}
 }
 
-// TestPlanCanvasMatchesLegacyGeometry pins the non-square branch of planCanvas - downscale only above the ceiling,
-// reflection-pad to the alignment - against the arithmetic Process used before Canvas existed.
-//
-// No variant selects that branch any more: paris moved to a fixed square when its dynamic-shape graph turned out not
-// to reach CoreML at all, and lyon was square from the start. The branch and this test are kept anyway, because the
-// geometry is the general case a future variant would want and the transcription below is the only record of what it
-// is supposed to compute - it is not evidence about what paris renders today.
-func TestPlanCanvasMatchesLegacyGeometry(t *testing.T) {
-	// The code Process used before Canvas existed, transcribed rather than called.
-	legacy := func(fullW, fullH int) plan {
-		const maxSize = 1024
-		roundUpTo16 := func(v int) int {
-			if v%16 == 0 {
-				return v
-			}
-			return v + (16 - v%16)
-		}
-		fitToMaxSize := func(w, h, maxSize int) (int, int) {
-			longest := max(h, w)
-			ratio := float64(maxSize) / float64(longest)
-			return roundUpTo16(int(math.Round(float64(w) * ratio))), roundUpTo16(int(math.Round(float64(h) * ratio)))
-		}
-
-		scaledW, scaledH := fullW, fullH
-		resize := max(fullW, fullH) > maxSize
-		if resize {
-			scaledW, scaledH = fitToMaxSize(fullW, fullH, maxSize)
-		}
-		return plan{
-			scaledW: scaledW, scaledH: scaledH,
-			padW:   roundUpTo16(scaledW) - scaledW,
-			padH:   roundUpTo16(scaledH) - scaledH,
-			resize: resize,
-		}
-	}
-
-	sizes := [][2]int{
-		{800, 600},   // inside the ceiling, both sides need padding
-		{1000, 750},  // the size measured in the comment in Process
-		{1024, 1024}, // exactly the ceiling, already aligned
-		{1024, 768},  // at the ceiling, no resize
-		{2000, 1500}, // over the ceiling, landscape
-		{1080, 1920}, // over the ceiling, portrait
-		{1920, 1080},
-		{100, 100},
-		{16, 16},
-		{1, 1},
-	}
-
-	dynamic := Canvas{MaxSize: 1024, Align: 16}
-	for _, s := range sizes {
-		w, h := s[0], s[1]
-		got, want := planCanvas(w, h, dynamic), legacy(w, h)
-		if got != want {
-			t.Errorf("planCanvas(%d, %d) = %+v, legacy geometry = %+v", w, h, got, want)
-		}
-	}
-}
-
 // TestPlanCanvasSquare covers lyon: the longest side lands exactly on MaxSize whichever way the image is oriented,
 // the short side is padded out to the square, and the result is always the gain-map path.
 func TestPlanCanvasSquare(t *testing.T) {
-	c := Canvas{MaxSize: 1024, Square: true}
+	c := Canvas{Size: 1024}
 
 	tests := []struct {
 		name string
 		w, h int
 		want plan
 	}{
-		{"landscape 3:2", 6000, 4000, plan{scaledW: 1024, scaledH: 683, padW: 0, padH: 341, resize: true}},
-		{"portrait 2:3", 4000, 6000, plan{scaledW: 683, scaledH: 1024, padW: 341, padH: 0, resize: true}},
-		{"already square", 2048, 2048, plan{scaledW: 1024, scaledH: 1024, padW: 0, padH: 0, resize: true}},
-		{"exactly the canvas", 1024, 683, plan{scaledW: 1024, scaledH: 683, padW: 0, padH: 341, resize: true}},
+		{"landscape 3:2", 6000, 4000, plan{scaledW: 1024, scaledH: 683, padW: 0, padH: 341}},
+		{"portrait 2:3", 4000, 6000, plan{scaledW: 683, scaledH: 1024, padW: 341, padH: 0}},
+		{"already square", 2048, 2048, plan{scaledW: 1024, scaledH: 1024, padW: 0, padH: 0}},
+		{"exactly the canvas", 1024, 683, plan{scaledW: 1024, scaledH: 683, padW: 0, padH: 341}},
 		// Smaller than the canvas is still enlarged: a fixed-shape graph accepts one size and nothing else.
-		{"smaller than canvas", 400, 300, plan{scaledW: 1024, scaledH: 768, padW: 0, padH: 256, resize: true}},
-		{"very wide", 4000, 100, plan{scaledW: 1024, scaledH: 26, padW: 0, padH: 998, resize: true}},
+		{"smaller than canvas", 400, 300, plan{scaledW: 1024, scaledH: 768, padW: 0, padH: 256}},
+		{"very wide", 4000, 100, plan{scaledW: 1024, scaledH: 26, padW: 0, padH: 998}},
 	}
 
 	for _, tt := range tests {
@@ -169,27 +109,12 @@ func TestPlanCanvasSquare(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("planCanvas(%d, %d) = %+v, want %+v", tt.w, tt.h, got, tt.want)
 			}
-			if got.scaledW+got.padW != c.MaxSize || got.scaledH+got.padH != c.MaxSize {
-				t.Errorf("geometry does not fill the %d square: %+v", c.MaxSize, got)
+			if got.scaledW+got.padW != c.Size || got.scaledH+got.padH != c.Size {
+				t.Errorf("geometry does not fill the %d square: %+v", c.Size, got)
 			}
-			if max(got.scaledW, got.scaledH) != c.MaxSize {
-				t.Errorf("longest side is %d, want %d", max(got.scaledW, got.scaledH), c.MaxSize)
+			if max(got.scaledW, got.scaledH) != c.Size {
+				t.Errorf("longest side is %d, want %d", max(got.scaledW, got.scaledH), c.Size)
 			}
 		})
-	}
-}
-
-func TestAlignUp(t *testing.T) {
-	tests := []struct{ v, n, want int }{
-		{100, 16, 112}, {112, 16, 112}, {1, 16, 16},
-		{100, 32, 128}, {128, 32, 128}, {683, 32, 704},
-		{7, 1, 7}, // n == 1 is already aligned
-		{7, 0, 7}, // a variant that declares no alignment must not divide by zero
-		{0, 16, 0},
-	}
-	for _, tt := range tests {
-		if got := alignUp(tt.v, tt.n); got != tt.want {
-			t.Errorf("alignUp(%d, %d) = %d, want %d", tt.v, tt.n, got, tt.want)
-		}
 	}
 }

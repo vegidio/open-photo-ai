@@ -31,13 +31,24 @@ func ClampProgress(val float64) float64 {
 	return val
 }
 
+// FitLongSide returns (newW, newH) scaled so the longest side is exactly size, preserving the aspect ratio and
+// rounding to nothing else.
+//
+// It is the half of FitToMaxSize a fixed-shape graph wants on its own: rounding up to 16 would overshoot the one
+// dimension such a graph accepts. Neither side is ever returned as zero - an aspect ratio extreme enough to round the
+// short side away still has to produce an image.
+func FitLongSide(w, h, size int) (int, int) {
+	ratio := float64(size) / float64(max(w, h))
+	nw := max(1, int(math.Round(float64(w)*ratio)))
+	nh := max(1, int(math.Round(float64(h)*ratio)))
+
+	return nw, nh
+}
+
 // FitToMaxSize returns (newW, newH) such that the longest side equals maxSize and both dimensions are rounded up to the
 // next multiple of 16.
 func FitToMaxSize(w, h, maxSize int) (int, int) {
-	longest := max(h, w)
-	ratio := float64(maxSize) / float64(longest)
-	nw := int(math.Round(float64(w) * ratio))
-	nh := int(math.Round(float64(h) * ratio))
+	nw, nh := FitLongSide(w, h, maxSize)
 	return RoundUpTo16(nw), RoundUpTo16(nh)
 }
 

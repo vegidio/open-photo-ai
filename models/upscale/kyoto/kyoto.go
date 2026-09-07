@@ -13,10 +13,10 @@ var variant = &upscale.Variant{
 	Label:        "Kyoto",
 	Codename:     "kyoto",
 	ScaleBuckets: kyotoScaleBuckets,
-	Profile:      profileFor,
+	Profile:      profile,
 }
 
-// profileFor puts kyoto's fp16 graphs on the Neural Engine, and leaves fp32 alone.
+// profile puts kyoto's fp16 graphs on the Neural Engine, and leaves fp32 alone.
 //
 // # Why only fp16
 //
@@ -34,8 +34,8 @@ var variant = &upscale.Variant{
 // # The fp16 passes
 //
 // This is an RRDBNet - 351 convolutions, 279 LeakyRelus and 276 concatenations, no attention anywhere - which is
-// exactly the dense-convolution mix the Neural Engine is built for. Medians of 36 blocks of 5 runs across nine
-// interleaved rounds, same machine, with `go test -tags coremlbench -run TestCoreMLKyotoANE ./internal/utils/`:
+// exactly the dense-convolution mix the Neural Engine is built for. Measured out of tree: medians of 36 blocks of 5
+// runs across nine interleaved rounds, same machine:
 //
 //	              ALL (default)   CPUAndGPU        CPUAndNeuralEngine
 //	2x fp16       44.9ms          70.1ms (+56%)    44.9ms (tie)
@@ -107,13 +107,7 @@ var variant = &upscale.Variant{
 // The 20% itself is this machine's number, and the balance between the Neural Engine and the GPU differs across
 // Apple Silicon generations. The direction should hold - it follows from the op mix, which is the same everywhere -
 // but re-measure before quoting the margin on other hardware.
-func profileFor(precision types.Precision) utils.EPProfile {
-	if precision == types.PrecisionFp16 {
-		return utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndNeuralEngine}
-	}
-
-	return utils.EPProfile{}
-}
+var profile = utils.Fp16Only(utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndNeuralEngine})
 
 // New loads the kyoto sessions for the given operation.
 func New(

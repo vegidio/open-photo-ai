@@ -76,11 +76,11 @@ import (
 var variant = &lightadjustment.Variant{
 	Codename: "paris",
 	Label:    "Paris",
-	Canvas:   lightadjustment.Canvas{MaxSize: 1024, Square: true},
-	Profile:  profileFor,
+	Canvas:   lightadjustment.Canvas{Size: 1024},
+	Profile:  profile,
 }
 
-// profileFor puts paris's fp16 graph on the GPU and leaves fp32 on the provider defaults.
+// profile puts paris's fp16 graph on the GPU and leaves fp32 on the provider defaults.
 //
 // Measured on an M2 Max at the 1024x1024 canvas, ONNX Runtime 1.26, CoreML MLProgram, medians of 18 blocks of five
 // runs with the run order rotated between rounds so position bias inside the sweep cancels:
@@ -106,17 +106,11 @@ var variant = &lightadjustment.Variant{
 // provider, which is a wash rather than a setting.
 //
 // Measured against, and not set: SpecializationStrategy=FastPrediction and AllowLowPrecisionAccumulationOnGPU, both
-// within 0.8% in both precisions and both build orders. TestCoreMLParisOtherSettings keeps that reproducible.
-func profileFor(precision types.Precision) utils.EPProfile {
-	if precision == types.PrecisionFp16 {
-		return utils.EPProfile{
-			CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
-			ExecutionMode:      utils.ExecutionModeSequential,
-		}
-	}
-
-	return utils.EPProfile{}
-}
+// within 0.8% in both precisions and both build orders.
+var profile = utils.Fp16Only(utils.EPProfile{
+	CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
+	ExecutionMode:      utils.ExecutionModeSequential,
+})
 
 // New loads the paris session for the given operation.
 func New(

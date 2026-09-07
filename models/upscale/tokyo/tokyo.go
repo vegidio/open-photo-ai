@@ -71,9 +71,8 @@ var variant = &upscale.Variant{
 // TensorRT runs on, and it is where the 1.37x is.
 //
 // CoreML has now been measured rather than reasoned about, and the reasoning above was only half right: fp32 is the
-// predicted tie, but fp16 is a real win. Run with `go test -tags coremlbench -run TestCoreMLExecutionModeTokyo
-// ./internal/utils/` on the M2 Max above, isolating Run over one 256x256 tile, 8 blocks of 3 runs across four
-// interleaved rounds:
+// predicted tie, but fp16 is a real win. Measured out of tree on the M2 Max above, isolating Run over one 256x256
+// tile, 8 blocks of 3 runs across four interleaved rounds:
 //
 //	                    fp32                fp16
 //	Parallel            1903.2ms            2318.5ms

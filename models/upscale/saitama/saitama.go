@@ -13,10 +13,10 @@ var variant = &upscale.Variant{
 	Label:        "Saitama",
 	Codename:     "saitama",
 	ScaleBuckets: upscale.DefaultScaleBuckets,
-	Profile:      profileFor,
+	Profile:      profile,
 }
 
-// profileFor puts Saitama's fp16 graph on the Neural Engine, and leaves fp32 alone.
+// profile puts Saitama's fp16 graph on the Neural Engine, and leaves fp32 alone.
 //
 // This is kyoto's profile arrived at independently, which is the expected answer for the expected reason: both are
 // RRDBNets, and this one is 96 convolutions, 75 LeakyRelus and 72 concatenations with no attention anywhere - the
@@ -138,13 +138,7 @@ var variant = &upscale.Variant{
 // The margins are this machine's, and the balance between the Neural Engine and the GPU differs across Apple Silicon
 // generations. The direction follows from the op mix, which is the same everywhere, but re-measure before quoting
 // the numbers on other hardware.
-func profileFor(precision types.Precision) utils.EPProfile {
-	if precision == types.PrecisionFp16 {
-		return utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndNeuralEngine}
-	}
-
-	return utils.EPProfile{}
-}
+var profile = utils.Fp16Only(utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndNeuralEngine})
 
 // New loads the saitama sessions for the given operation.
 func New(

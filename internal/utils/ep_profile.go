@@ -115,6 +115,23 @@ func ResolveProfile(fn func(types.Precision) EPProfile, precision types.Precisio
 	return fn(precision)
 }
 
+// Fp16Only applies a profile to a model's fp16 export alone, leaving fp32 on the provider defaults.
+//
+// It is the shape four variants share, and the fp32 half is the load-bearing one rather than a formality. Every one
+// of them tunes CoreMLComputeUnits, and at fp32 that setting is either a no-op or a large regression: an MLProgram at
+// fp32 cannot reach the Neural Engine at all, so CPUAndGPU there only ever restates the default, while pinning the
+// Neural Engine costs kyoto and saitama 9x to 19x. Writing the guard once means a new variant cannot ship the fp16
+// answer applied to both precisions.
+func Fp16Only(p EPProfile) func(types.Precision) EPProfile {
+	return func(precision types.Precision) EPProfile {
+		if precision == types.PrecisionFp16 {
+			return p
+		}
+
+		return EPProfile{}
+	}
+}
+
 // CoreMLComputeUnits is the set of engines CoreML may dispatch a model to.
 //
 // It is a per-model property because the right answer follows the graph's op mix, not the machine. The Neural Engine
@@ -201,8 +218,8 @@ func (c CoreMLSpecialization) value() string {
 // It is a session setting rather than a per-provider one, so a model that sets it sets it everywhere, and the
 // question of whether that is safe has been settled by measurement on every provider this codebase ships. On
 // TensorRT it is a tie, because that provider fuses the graph into one node and leaves the inter-op pool nothing to
-// schedule. On CoreML it splits cleanly by precision - measured with internal/utils/coreml_bench_test.go on an M2
-// Max (macOS 26.6, ONNX Runtime 1.29), sequential against parallel:
+// schedule. On CoreML it splits cleanly by precision - measured out of tree on an M2 Max (macOS 26.6, ONNX Runtime
+// 1.29), sequential against parallel:
 //
 //	              fp32        fp16
 //	tokyo         +0.2%       -3.5%

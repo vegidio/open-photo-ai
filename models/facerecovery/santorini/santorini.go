@@ -58,9 +58,8 @@ var variant = &facerecovery.Variant{
 // comparison on the CPU provider is 288.6ms against 265.1ms, so this is the graph's shape rather than anything about
 // CUDA - the provider only decides how much the handoff costs.
 //
-// CoreML agrees at fp16 and is a tie at fp32. Run with `go test -tags coremlbench -run
-// TestCoreMLExecutionModeSantorini ./internal/utils/` on the M2 Max above, isolating Run over 12 blocks of 10 runs
-// across four interleaved rounds:
+// CoreML agrees at fp16 and is a tie at fp32. Measured out of tree on the M2 Max above, isolating Run over 12
+// blocks of 10 runs across four interleaved rounds:
 //
 //	                    fp32                fp16
 //	Parallel            109.0ms             95.0ms

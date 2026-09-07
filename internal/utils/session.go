@@ -174,16 +174,26 @@ func LoadSessions(
 
 // LoadSingleSession downloads and opens the one session behind a model whose ID is `<prefix>_<variant>_<precision>`,
 // e.g. `dn_stockholm_fp16`. It covers the fixed-shape families that have no scale matrix - denoise and sharpen.
+//
+// An optional EPProfile carries the per-model provider tuning, the same variadic idiom CreateSession uses. It is not
+// decoration: this helper used to pass EPProfile{} unconditionally, which meant a family adopting a measured profile
+// had to stop using it, and the first one that did wrote the workaround out by hand rather than fixing this.
 func LoadSingleSession(
 	ctx context.Context,
 	prefix, variant string,
 	precision types.Precision,
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
+	profile ...EPProfile,
 ) (*Session, error) {
 	modelId := fmt.Sprintf("%s_%s_%s", prefix, variant, precision)
 
-	sessions, err := LoadSessions(ctx, []SessionSpec{ModelSpec(modelId)}, ep, EPProfile{}, onProgress)
+	var p EPProfile
+	if len(profile) > 0 {
+		p = profile[0]
+	}
+
+	sessions, err := LoadSessions(ctx, []SessionSpec{ModelSpec(modelId)}, ep, p, onProgress)
 	if err != nil {
 		return nil, err
 	}

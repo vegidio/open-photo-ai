@@ -61,14 +61,14 @@ import (
 var variant = &lightadjustment.Variant{
 	Codename: "lyon",
 	Label:    "Lyon",
-	Canvas:   lightadjustment.Canvas{MaxSize: 1024, Square: true},
-	Profile:  profileFor,
+	Canvas:   lightadjustment.Canvas{Size: 1024},
+	Profile:  profile,
 }
 
-// profileFor puts lyon's fp16 graph on the GPU and leaves fp32 on the provider defaults.
+// profile puts lyon's fp16 graph on the GPU and leaves fp32 on the provider defaults.
 //
-// Measured on an M2 Max at the 1024x1024 canvas (macOS 26.6, ONNX Runtime 1.29, CoreML MLProgram) with
-// internal/utils/coreml_lyon_bench_test.go, medians of blocks with the run order rotated between rounds:
+// Measured out of tree on an M2 Max at the 1024x1024 canvas (macOS 26.6, ONNX Runtime 1.29, CoreML MLProgram),
+// medians of blocks with the run order rotated between rounds:
 //
 //	           ALL (default)     CPUAndGPU
 //	fp32       827ms             827ms
@@ -96,8 +96,8 @@ var variant = &lightadjustment.Variant{
 //
 // fp16 is the row this function exists for. ALL scatters 363 of the graph's ops onto the Neural Engine among 1626
 // GPU ops, so every run pays hundreds of ANE-to-GPU transitions, and that is the whole of the 2.6x. It is also the
-// whole of the accuracy gap, because the ops that land on the ANE run at its reduced internal precision. Scored by
-// TestLyonOutputQuality against the fp32 CPU-provider result:
+// whole of the accuracy gap, because the ops that land on the ANE run at its reduced internal precision. Scored
+// against the fp32 CPU-provider result:
 //
 //	fp32 / coreml ALL              137.4 dB
 //	fp32 / coreml CPUAndGPU        137.4 dB
@@ -135,13 +135,7 @@ var variant = &lightadjustment.Variant{
 // and qkv rewrites described above it was 207, and at that point CoreML was slower than the CPU provider (2506ms
 // against 2311ms) - which would make every row of these tables a measurement of partition handoff rather than of
 // compute units.
-func profileFor(precision types.Precision) utils.EPProfile {
-	if precision == types.PrecisionFp16 {
-		return utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU}
-	}
-
-	return utils.EPProfile{}
-}
+var profile = utils.Fp16Only(utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU})
 
 // New loads the lyon session for the given operation.
 func New(

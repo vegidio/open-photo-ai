@@ -30,31 +30,23 @@ type Variant struct {
 	Profile func(precision types.Precision) utils.EPProfile
 }
 
-// Canvas is how a variant's graph wants the image framed. It is per-variant data rather than a constant in process.go
-// because the two graphs this family ships want opposite things.
+// Canvas is the fixed square a variant's graph is exported at. It is per-variant data rather than a constant in
+// process.go so that a variant can be re-exported at a different size without touching the shared geometry.
 //
-// Paris takes any shape and only needs its sides aligned. Lyon is a window-attention transformer exported at a fixed
-// shape, and it is fixed for a reason that is not negotiable: with dynamic axes, every reshape and slice in a
-// window-attention graph has an unbounded dimension, CoreML's MLProgram runtime refuses all of them, and the graph
-// falls apart into hundreds of partitions that then fail at run time. A dynamic export of that architecture is
-// numerically correct - measured, pixel-identical to PyTorch at every resolution - and still unusable here.
+// Both graphs this family ships are fixed-shape, and for the same reason rather than by coincidence: with dynamic
+// axes, every reshape and slice in a window-attention graph has an unbounded dimension, CoreML's MLProgram runtime
+// refuses all of them, and the graph falls apart into hundreds of partitions that then fail at run time. A dynamic
+// export of that architecture is numerically correct - measured, pixel-identical to PyTorch at every resolution -
+// and still unusable here.
+//
+// Two consequences follow from the fixed square, and both are its cost rather than oversights. Every run resizes, so
+// every run pays buildResult's full-resolution passes. And a 400x300 thumbnail costs the same inference time as a
+// 6000x4000 photo, because the canvas is the same either way.
 type Canvas struct {
-	// MaxSize caps the longest side handed to the graph. With Square set it is not a cap but the exact size: the
-	// image is always resized so its longest side is MaxSize.
-	MaxSize int
-
-	// Align is the multiple both sides of the graph input must be. It is met by reflection padding, never by a
-	// resize - see the note in process.go on why. Ignored when Square is set, since the square is already aligned.
-	Align int
-
-	// Square makes the graph input a fixed MaxSize x MaxSize regardless of the image's aspect ratio: the image is
-	// fitted so its longest side is MaxSize and the short side is reflection-padded out to fill the canvas.
-	//
-	// Two consequences follow from it, and both are the cost of the fixed shape rather than oversights. Every run
-	// resizes, so every run pays buildResult's full-resolution passes - the cost the comment in Process celebrates
-	// having removed from the images Paris leaves alone. And a 400x300 thumbnail costs the same inference time as a
-	// 6000x4000 photo, because the canvas is the same either way.
-	Square bool
+	// Size is the exact width and height the graph accepts. The image is fitted so its longest side lands on Size
+	// and the short side is reflection-padded out to fill the square - padded, never stretched, so the pixels the
+	// model sees are the ones the photo has.
+	Size int
 }
 
 // Op builds this variant's operation at the given per-run intensity.
@@ -78,8 +70,9 @@ func (v *Variant) New(
 		return nil, errors.Errorf("expected a light adjustment operation, got %T", operation)
 	}
 
-	// utils.LoadSingleSession is not usable here: it hardcodes an empty EPProfile, and lyon needs its measured
-	// provider tuning. op.Id() is byte-identical to the model id that loader composes, so this is the same lookup.
+	// The spec is built here rather than through utils.LoadSingleSession, which is how detection, face recovery and
+	// the diffusion upscalers all do it: op.Id() is already the model id, so composing it a second time from a prefix
+	// and a codename would only add a way for the two to disagree.
 	specs := []utils.SessionSpec{utils.ModelSpec(op.Id())}
 
 	sessions, err := utils.LoadSessions(ctx, specs, ep, utils.ResolveProfile(v.Profile, op.precision), onProgress)
