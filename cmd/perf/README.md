@@ -206,7 +206,7 @@ marked `INTERRUPTED` rather than `FAILED`, so a cancelled run is never mistaken 
 |-----------------|-------|---------|-------------------------------------------------------------------------------------------|
 | `--runs`        | `-n`  | 5       | Timed runs per model (min 1)                                                              |
 | `--warmup`      | `-w`  | 1       | Untimed warm-up runs; also what downloads a missing model                                 |
-| `--provider`    | `-p`  | `auto`  | `auto`, `cpu`, `cuda`, `tensorrt`, `directml`, `openvino` or `coreml`                     |
+| `--provider`    | `-p`  | `auto`  | `auto`, `cpu`, `cuda`, `tensorrt`, `openvino` or `coreml`                                 |
 | `--precision`   |       | `fp32`  | `fp32` or `fp16`                                                                          |
 | `--scale`       | `-s`  | 4       | Upscale factor, 1–8. Ignored by non-upscale models                                        |
 | `--intensity`   | `-i`  | 1       | Blend intensity, -1–1, for the denoise/sharpen/light/colour models. Ignored by the others |
@@ -223,9 +223,8 @@ marked `INTERRUPTED` rather than `FAILED`, so a cancelled run is never mistaken 
   cache key but barely the timing, so a flat curve across intensities is expected, not a bug.
 - **`--scale` only applies to upscale models**, and `--intensity` only to denoise/sharpen/light/colour models. The
   other models ignore them.
-- **DirectML and OpenVINO have no capability probe**, so the header reports only CUDA, TensorRT and CoreML. Their
-  absence from the probe line says nothing about whether they work — the probes are informational and never block a
-  run.
+- **OpenVINO has no capability probe**, so the header reports only CUDA, TensorRT and CoreML. Its absence from the
+  probe line says nothing about whether it works — the probes are informational and never block a run.
 - **`--cache` churns the shared cache.** The benchmark uses the same config directory as the GUI, so a cached sweep
   evicts whatever the GUI had stored (500 entries / 1 GB). With the cache off, the default, nothing is written.
 

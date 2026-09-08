@@ -31,7 +31,6 @@ var providers = map[string]types.ExecutionProvider{
 	"cpu":      types.ExecutionProviderCPU,
 	"cuda":     types.ExecutionProviderCUDA,
 	"tensorrt": types.ExecutionProviderTensorRT,
-	"directml": types.ExecutionProviderDirectML,
 	"openvino": types.ExecutionProviderOpenVINO,
 	"coreml":   types.ExecutionProviderCoreML,
 }
@@ -97,7 +96,7 @@ func flags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name: "provider", Aliases: []string{"p"}, Value: "auto", Local: true,
-			Usage:            "execution provider: auto, cpu, cuda, tensorrt, directml, openvino or coreml",
+			Usage:            "execution provider: auto, cpu, cuda, tensorrt, openvino or coreml",
 			Validator:        oneOf(providers),
 			ValidateDefaults: true,
 		},

@@ -34,7 +34,7 @@ func main() {
 func run(ctx context.Context) error {
 	in := flag.String("in", "", "path to the input image (required)")
 	out := flag.String("out", ".", "directory to write the results into")
-	eps := flag.String("ep", "cpu", "comma-separated execution providers: auto, cpu, coreml, cuda, tensorrt, directml, openvino")
+	eps := flag.String("ep", "cpu", "comma-separated execution providers: auto, cpu, coreml, cuda, tensorrt, openvino")
 	precisions := flag.String("precision", "fp32,fp16", "comma-separated precisions: fp32, fp16, int8")
 	quality := flag.Int("quality", 90, "JPEG quality of the written images")
 

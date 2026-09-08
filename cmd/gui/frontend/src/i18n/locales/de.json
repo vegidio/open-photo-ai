@@ -48,7 +48,6 @@
                 "description_auto": "Wählen Sie den KI-Prozessor, der die Modelle steuert. „Automatisch“ versucht, den besten Prozessor für Ihr System zu ermitteln.",
                 "description_tensorrt": "Wählen Sie den KI-Prozessor, der die Modelle steuert. TensorRT ist sehr schnell, muss beim ersten Durchlauf jedoch den Modellgraphen erstellen, was etwas dauert; danach läuft es deutlich schneller.",
                 "description_cuda": "Wählen Sie den KI-Prozessor, der die Modelle steuert. CUDA bietet starke Leistung und Flexibilität und ist eine gute Standardwahl, wenn TensorRT nicht verfügbar ist.",
-                "description_directml": "Wählen Sie den KI-Prozessor, der die Modelle steuert. DirectML ist eine gute Option, wenn Sie keine dedizierte GPU haben.",
                 "description_coreml": "Wählen Sie den KI-Prozessor, der die Modelle steuert. CoreML ist meist deutlich schneller als die CPU, unterstützt aber nicht alle Modelle.",
                 "description_cpu": "Wählen Sie den KI-Prozessor, der die Modelle steuert. Die CPU ist die langsamste Option, unterstützt aber alle Modelle."
             }

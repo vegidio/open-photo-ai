@@ -48,7 +48,6 @@
                 "description_auto": "Sélectionnez le processeur IA qui orchestrera les modèles. « Auto » tentera de détecter le meilleur processeur pour votre système.",
                 "description_tensorrt": "Sélectionnez le processeur IA qui orchestrera les modèles. TensorRT est très rapide, mais lors de la première exécution il doit créer le graphe du modèle, ce qui prend un certain temps ; les exécutions suivantes seront bien plus rapides.",
                 "description_cuda": "Sélectionnez le processeur IA qui orchestrera les modèles. CUDA offre de bonnes performances et une grande souplesse : un choix par défaut solide si TensorRT n'est pas disponible.",
-                "description_directml": "Sélectionnez le processeur IA qui orchestrera les modèles. DirectML est une bonne option lorsque vous n'avez pas de GPU dédié.",
                 "description_coreml": "Sélectionnez le processeur IA qui orchestrera les modèles. CoreML est généralement bien plus rapide que le CPU, mais il ne prend pas en charge tous les modèles.",
                 "description_cpu": "Sélectionnez le processeur IA qui orchestrera les modèles. Le CPU est l'option la plus lente, mais il prend en charge tous les modèles."
             }

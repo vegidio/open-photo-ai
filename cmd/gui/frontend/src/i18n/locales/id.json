@@ -48,7 +48,6 @@
                 "description_auto": "Pilih prosesor AI yang akan menjalankan model. \"Otomatis\" akan mencoba mendeteksi prosesor terbaik untuk sistem Anda.",
                 "description_tensorrt": "Pilih prosesor AI yang akan menjalankan model. TensorRT sangat cepat, tetapi pada proses pertama diperlukan waktu untuk membuat grafik model; proses berikutnya akan jauh lebih cepat.",
                 "description_cuda": "Pilih prosesor AI yang akan menjalankan model. CUDA memiliki performa dan fleksibilitas yang kuat, pilihan bawaan yang baik jika TensorRT tidak tersedia.",
-                "description_directml": "Pilih prosesor AI yang akan menjalankan model. DirectML adalah opsi yang baik jika Anda tidak memiliki GPU khusus.",
                 "description_coreml": "Pilih prosesor AI yang akan menjalankan model. CoreML biasanya jauh lebih cepat daripada CPU, tetapi tidak mendukung semua model.",
                 "description_cpu": "Pilih prosesor AI yang akan menjalankan model. CPU adalah opsi paling lambat, tetapi mendukung semua model."
             }

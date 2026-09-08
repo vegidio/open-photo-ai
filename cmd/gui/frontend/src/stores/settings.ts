@@ -4,7 +4,6 @@ import { create } from 'zustand/react';
 import type { SupportedEPs } from '@/bindings/gui/services';
 import { ExecutionProvider } from '@/bindings/github.com/vegidio/open-photo-ai/types';
 import { DEFAULT_LANGUAGE, detectLanguage, isSupportedLanguage, type SupportedLanguage } from '@/i18n/languages';
-import { os } from '@/utils/constants';
 import { DEFAULT_MODELS, type EnhancementType, type ModelChoices, normalizeModels } from '@/utils/enhancement';
 import {
     clampQuality,
@@ -16,7 +15,6 @@ import {
 
 const {
     ExecutionProviderCUDA,
-    ExecutionProviderDirectML,
     ExecutionProviderTensorRT,
     ExecutionProviderCoreML,
     ExecutionProviderAuto,
@@ -96,7 +94,6 @@ export const useSettingsStore = create(
                     if (supportedEps.TensorRT) options.push(ExecutionProviderTensorRT);
                     if (supportedEps.CUDA) options.push(ExecutionProviderCUDA);
                     if (supportedEps.CoreML) options.push(ExecutionProviderCoreML);
-                    if (os === 'windows') options.push(ExecutionProviderDirectML);
 
                     options.push(ExecutionProviderCPU);
 

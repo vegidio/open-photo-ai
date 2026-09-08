@@ -26,9 +26,6 @@ const (
 	// budget counts.
 	deviceBudgetFraction = 70
 
-	// unknownVramBudget is used when VRAM can't be queried, which is real: go-sak deliberately reports 0 on the
-	// Windows CIM path because AdapterRAM is unreliable on modern cards, so AMD and Intel DirectML setups land here.
-	// Falling back to the host rule would be worse than a guess - it would charge device memory against system RAM.
 	unknownVramBudget = 4 * gibibyte
 
 	minDeviceBudget = 1 * gibibyte
@@ -79,7 +76,7 @@ const (
 // when it doesn't, since Auto then resolves to the CPU.
 func PoolOf(ep types.ExecutionProvider) types.MemoryPool {
 	switch ep {
-	case types.ExecutionProviderCUDA, types.ExecutionProviderTensorRT, types.ExecutionProviderDirectML:
+	case types.ExecutionProviderCUDA, types.ExecutionProviderTensorRT:
 		return types.MemoryPoolDevice
 
 	case types.ExecutionProviderAuto:

@@ -377,7 +377,6 @@ type providerAppender func(paths cachePaths, options *ort.SessionOptions, p EPPr
 var providerAppenders = map[types.ExecutionProvider]providerAppender{
 	types.ExecutionProviderTensorRT: appendTensorRT,
 	types.ExecutionProviderCUDA:     appendCuda,
-	types.ExecutionProviderDirectML: appendDirectML,
 	types.ExecutionProviderCoreML:   appendCoreML,
 	types.ExecutionProviderOpenVINO: appendOpenVINO,
 }
@@ -391,7 +390,6 @@ var autoChain = map[string][]types.ExecutionProvider{
 	"windows": {
 		types.ExecutionProviderTensorRT,
 		types.ExecutionProviderCUDA,
-		types.ExecutionProviderDirectML,
 		types.ExecutionProviderOpenVINO,
 	},
 	"linux": {
@@ -684,10 +682,6 @@ func appendCuda(_ cachePaths, options *ort.SessionOptions, p EPProfile) error {
 	}
 
 	return options.AppendExecutionProviderCUDA(cudaOpts)
-}
-
-func appendDirectML(_ cachePaths, options *ort.SessionOptions, _ EPProfile) error {
-	return options.AppendExecutionProviderDirectML(0)
 }
 
 func appendCoreML(paths cachePaths, options *ort.SessionOptions, p EPProfile) error {

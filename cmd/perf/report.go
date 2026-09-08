@@ -129,9 +129,9 @@ func poolBudget(pool types.PoolMemory) string {
 	return fmt.Sprintf("%.1f GiB", float64(pool.Budget)/(1<<30))
 }
 
-// probeSummary reports what the library can tell us about the machine. DirectML and OpenVINO have no probe, so they
-// are simply absent rather than reported as unsupported. These are informational: a run is never blocked on them,
-// because Auto and the CPU fallback already handle reality.
+// probeSummary reports what the library can tell us about the machine. OpenVINO has no probe, so it is simply absent
+// rather than reported as unsupported. These are informational: a run is never blocked on them, because Auto and the
+// CPU fallback already handle reality.
 func probeSummary() string {
 	yesNo := func(ok bool) string {
 		if ok {

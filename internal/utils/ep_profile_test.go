@@ -246,7 +246,6 @@ func TestResolveProviders(t *testing.T) {
 	trt := types.ExecutionProviderTensorRT
 	cuda := types.ExecutionProviderCUDA
 	coreml := types.ExecutionProviderCoreML
-	directml := types.ExecutionProviderDirectML
 
 	tests := []struct {
 		name    string
@@ -281,11 +280,6 @@ func TestResolveProviders(t *testing.T) {
 		{
 			name: "a provider the platform lacks is an error",
 			goos: "linux", ep: coreml,
-			wantErr: true,
-		},
-		{
-			name: "DirectML is Windows-only",
-			goos: "linux", ep: directml,
 			wantErr: true,
 		},
 		{

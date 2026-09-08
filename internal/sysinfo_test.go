@@ -97,7 +97,6 @@ func TestLargestVRAMBytes(t *testing.T) {
 			wantOk: true,
 		},
 		{
-			// go-sak deliberately reports 0 on the Windows CIM path, so this is the real AMD/Intel DirectML case.
 			name:   "a card that reports nothing is not ok",
 			gpus:   []sysinfo.GPUInfo{{Name: "Radeon", Memory: 0}},
 			want:   0,

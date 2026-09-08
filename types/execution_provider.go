@@ -27,10 +27,6 @@ const (
 	// Requires CUDA to be installed and available on the system.
 	ExecutionProviderCUDA ExecutionProvider = "CUDA"
 
-	// ExecutionProviderDirectML uses DirectML for hardware-accelerated inference on Windows.
-	// Works with a wide range of DirectX 12 compatible GPUs on Windows 10 and later.
-	ExecutionProviderDirectML ExecutionProvider = "DirectML"
-
 	// ExecutionProviderOpenVINO uses Intel OpenVINO for optimized inference on Intel hardware.
 	// Supports Intel CPUs, integrated GPUs, and specialized AI accelerators.
 	ExecutionProviderOpenVINO ExecutionProvider = "OpenVINO"
@@ -41,7 +37,7 @@ const (
 )
 
 // AllExecutionProviders lists every published provider, in the order a user is most likely to reach for one. It is the
-// single source for anything that has to enumerate them - a CLI flag's help text, a parser - so an eighth constant is
+// single source for anything that has to enumerate them - a CLI flag's help text, a parser - so a seventh constant is
 // reachable everywhere by declaring it here.
 func AllExecutionProviders() []ExecutionProvider {
 	return []ExecutionProvider{
@@ -50,7 +46,6 @@ func AllExecutionProviders() []ExecutionProvider {
 		ExecutionProviderCoreML,
 		ExecutionProviderCUDA,
 		ExecutionProviderTensorRT,
-		ExecutionProviderDirectML,
 		ExecutionProviderOpenVINO,
 	}
 }

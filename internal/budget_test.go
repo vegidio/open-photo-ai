@@ -105,7 +105,6 @@ func TestPoolOf(t *testing.T) {
 	}{
 		{types.ExecutionProviderCUDA, types.MemoryPoolDevice},
 		{types.ExecutionProviderTensorRT, types.MemoryPoolDevice},
-		{types.ExecutionProviderDirectML, types.MemoryPoolDevice},
 		{types.ExecutionProviderCPU, types.MemoryPoolHost},
 		{types.ExecutionProviderOpenVINO, types.MemoryPoolHost},
 

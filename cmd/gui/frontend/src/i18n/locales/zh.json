@@ -48,7 +48,6 @@
                 "description_auto": "选择用于调度模型的 AI 处理器。“自动”会尝试为你的系统检测最合适的处理器。",
                 "description_tensorrt": "选择用于调度模型的 AI 处理器。TensorRT 非常快，但首次运行时需要一些时间来生成模型图；之后的运行会快得多。",
                 "description_cuda": "选择用于调度模型的 AI 处理器。CUDA 性能强劲且灵活，在无法使用 TensorRT 时是不错的默认选择。",
-                "description_directml": "选择用于调度模型的 AI 处理器。如果你没有独立显卡，DirectML 是一个不错的选择。",
                 "description_coreml": "选择用于调度模型的 AI 处理器。CoreML 通常比 CPU 快得多，但并不支持所有模型。",
                 "description_cpu": "选择用于调度模型的 AI 处理器。CPU 是最慢的选项，但支持所有模型。"
             }

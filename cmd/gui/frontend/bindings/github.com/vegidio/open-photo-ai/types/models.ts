@@ -39,12 +39,6 @@ export enum ExecutionProvider {
     ExecutionProviderCUDA = "CUDA",
 
     /**
-     * ExecutionProviderDirectML uses DirectML for hardware-accelerated inference on Windows.
-     * Works with a wide range of DirectX 12 compatible GPUs on Windows 10 and later.
-     */
-    ExecutionProviderDirectML = "DirectML",
-
-    /**
      * ExecutionProviderOpenVINO uses Intel OpenVINO for optimized inference on Intel hardware.
      * Supports Intel CPUs, integrated GPUs, and specialized AI accelerators.
      */
@@ -125,7 +119,7 @@ export enum MemoryPool {
     $zero = 0,
 
     /**
-     * MemoryPoolDevice is memory on a discrete accelerator: CUDA, TensorRT and DirectML keep model weights in VRAM.
+     * MemoryPoolDevice is memory on a discrete accelerator: CUDA and TensorRT keep model weights in VRAM.
      */
     MemoryPoolDevice = 0,
 

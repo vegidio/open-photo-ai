@@ -48,7 +48,6 @@
                 "description_auto": "Välj den AI-processor som ska orkestrera modellerna. \"Auto\" försöker hitta den bästa processorn för ditt system.",
                 "description_tensorrt": "Välj den AI-processor som ska orkestrera modellerna. TensorRT är mycket snabbt, men vid första körningen tar det en stund att bygga modellgrafen; efterföljande körningar går betydligt snabbare.",
                 "description_cuda": "Välj den AI-processor som ska orkestrera modellerna. CUDA har hög prestanda och flexibilitet, ett bra standardval om TensorRT inte är tillgängligt.",
-                "description_directml": "Välj den AI-processor som ska orkestrera modellerna. DirectML är ett bra alternativ när du inte har ett dedikerat grafikkort.",
                 "description_coreml": "Välj den AI-processor som ska orkestrera modellerna. CoreML är oftast mycket snabbare än CPU, men stöder inte alla modeller.",
                 "description_cpu": "Välj den AI-processor som ska orkestrera modellerna. CPU är det långsammaste alternativet, men det stöder alla modeller."
             }

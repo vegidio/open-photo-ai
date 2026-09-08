@@ -8,7 +8,7 @@ package types
 type MemoryPool int
 
 const (
-	// MemoryPoolDevice is memory on a discrete accelerator: CUDA, TensorRT and DirectML keep model weights in VRAM.
+	// MemoryPoolDevice is memory on a discrete accelerator: CUDA and TensorRT keep model weights in VRAM.
 	MemoryPoolDevice MemoryPool = iota
 
 	// MemoryPoolHost is system RAM, where CPU inference keeps its weights. CoreML is charged here too: Apple Silicon
