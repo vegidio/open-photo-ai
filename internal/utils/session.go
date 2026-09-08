@@ -114,6 +114,16 @@ type SessionSpec struct {
 	ModelId string
 	Inputs  []string
 	Outputs []string
+
+	// Profile overrides the set-wide profile for this graph alone. Nil - the usual case - means the graph takes
+	// whatever LoadSessions was given, which is what every single-graph family wants.
+	//
+	// It exists because for a multi-stage model the right provider settings are a property of the GRAPH rather than
+	// of the model, and the two can disagree inside one set. Osaka is where that showed up: prefer_nhwc is worth
+	// -8.0% on its VAE encoder and -9.4% on its decoder, both convolutional, and costs its diffusion transformer -
+	// which has no convolution in it at all - 2.3%. One profile for the set has to pick a side; this is how a set
+	// stops having to. See EPProfile.CudaPreferNHWC.
+	Profile *EPProfile
 }
 
 // ModelSpec is the spec for a conventionally-exported graph - one tensor in named "input", one out named "output" -
@@ -131,6 +141,9 @@ func ModelSpec(modelId string) SessionSpec {
 // nothing can reach.
 //
 // The returned sessions are in the same order as specs, which is what lets a caller needing named roles bind them.
+//
+// The profile applies to every spec that does not carry one of its own; see SessionSpec.Profile for the case that is
+// for.
 //
 // The specs are installed one at a time. Within a single model the files already download concurrently - a graph and
 // its external-data blob are one dependency with two sources, which is where the several gigabytes actually are - but
@@ -159,7 +172,12 @@ func LoadSessions(
 
 		internal.Log().Debug("loading model session", "model_id", spec.ModelId)
 
-		session, err := CreateSession(spec.ModelId+".onnx", spec.Inputs, spec.Outputs, ep, profile)
+		p := profile
+		if spec.Profile != nil {
+			p = *spec.Profile
+		}
+
+		session, err := CreateSession(spec.ModelId+".onnx", spec.Inputs, spec.Outputs, ep, p)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create the %s session", spec.ModelId)
 		}

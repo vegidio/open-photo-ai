@@ -125,3 +125,52 @@ func TestOnlyTheDiTFollowsTheOperationPrecision(t *testing.T) {
 func contains(eps []types.ExecutionProvider, want types.ExecutionProvider) bool {
 	return slices.Contains(eps, want)
 }
+
+// The execution mode is the largest single setting in this profile on the CUDA provider - -13.5% at fp16 and -10.1%
+// at int8 on one region - and it is the easiest to lose, because dropping it changes nothing a test would otherwise
+// notice: the session still builds and the output is identical.
+func TestProfileOptsOutOfTheInterOpPool(t *testing.T) {
+	for _, precision := range []types.Precision{types.PrecisionFp16, types.PrecisionInt8} {
+		if got := profileFor(precision).ExecutionMode; got != utils.ExecutionModeSequential {
+			t.Errorf("%s: ExecutionMode = %v, want sequential: the DiT is 12,940 nodes and pays an inter-op "+
+				"handoff at every one of them", precision, got)
+		}
+	}
+}
+
+// prefer_nhwc splits by graph rather than by precision here: it is a win on the two convolutional VAE halves and a
+// small loss on a diffusion transformer that contains no convolution at all. Both halves of that are pinned, since an
+// override that silently stopped applying would look exactly like one that was never there.
+func TestPreferNHWCIsHeldOffTheDiT(t *testing.T) {
+	for _, precision := range []types.Precision{types.PrecisionFp16, types.PrecisionInt8} {
+		if !profileFor(precision).CudaPreferNHWC {
+			t.Errorf("%s: the VAE halves want prefer_nhwc - -8%% on the encoder and -9%% on the decoder", precision)
+		}
+
+		dit := ditProfile(precision)
+
+		if dit.CudaPreferNHWC {
+			t.Errorf("%s: the DiT has no Conv node to make NHWC worth its layout transform", precision)
+		}
+
+		// The override is the variant's profile with one field changed, not a profile written from scratch. A DiT
+		// that quietly lost the execution mode or the broken-optimizer list would fail to build a session at all.
+		if dit.ExecutionMode != utils.ExecutionModeSequential {
+			t.Errorf("%s: the DiT override dropped the execution mode", precision)
+		}
+		if !slices.Equal(dit.DisableOptimizers, brokenOptimizers) {
+			t.Errorf("%s: the DiT override dropped the disabled optimizers, which is what lets it load at all",
+				precision)
+		}
+	}
+}
+
+// The override has to be attached to the DiT's GraphSpec to have any effect, and to no other graph. Setting it on a
+// VAE half would apply the transformer's tuning to the two graphs it was measured against.
+func TestOnlyTheDiTOverridesTheProfile(t *testing.T) {
+	for _, g := range graphs {
+		if (g.Role == roleDiT) != (g.Profile != nil) {
+			t.Errorf("%s: per-graph profile set = %v, want %v", g.Role, g.Profile != nil, g.Role == roleDiT)
+		}
+	}
+}

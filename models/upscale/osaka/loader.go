@@ -23,7 +23,8 @@ import (
 // held the whole timestep embedding out of constant folding: 128 of the graph's 129 Sin/Cos pairs fold away once it
 // is fixed, and what is left of that subgraph is what kept CoreML from taking the model in one piece.
 var graphs = []upscale.GraphSpec{
-	{Role: roleDiT, Suffix: "", Inputs: []string{"vid_input"}, Outputs: []string{"denoised_latent"}},
+	{Role: roleDiT, Suffix: "", Profile: ditProfile,
+		Inputs: []string{"vid_input"}, Outputs: []string{"denoised_latent"}},
 
 	{Role: roleEncoder, Suffix: "_vae_encoder", Precision: types.PrecisionFp16,
 		Inputs: []string{"pixel_image"}, Outputs: []string{"latent"}},
@@ -42,7 +43,57 @@ var graphs = []upscale.GraphSpec{
 //
 // DisableMemPattern stays on, but not for the reason it used to give. The shapes never vary, so the planner's
 // assumption holds fine; it is simply a loss on activations this large - measured +22% on the VAE encoder with the
-// planner enabled, on an M2 Max.
+// planner enabled, on an M2 Max. On the CUDA provider it is a tie on its own (442.4ms against 441.3ms), but it turns
+// bimodal once the execution mode below is sequential: half the passes land on the same 381ms as with the planner
+// off and half on 498-508ms, with individual runs as bad as 963ms on the decoder. A setting that is free on average
+// and occasionally costs 2.5x is not free.
+//
+// ExecutionMode is sequential, and on the CUDA provider it is the largest setting in this profile - larger than
+// anything the provider itself offers. The DiT is 12,940 nodes, nearly five times tokyo's 2,682, and the inter-op
+// thread pool is charged a handoff at every one of them while a graph this linear has no branch wide enough to use
+// it. Measured on an RTX 5090 (driver 610.88, ONNX Runtime 1.26) through the CUDA provider, one 960x960 region,
+// median of 20 across four passes run alternately forwards and backwards:
+//
+//	                   encoder      DiT         decoder     region
+//	fp16 parallel        81.7ms      226.8ms     133.1ms     441.4ms
+//	fp16 sequential      70.2ms      201.6ms     109.5ms     381.7ms
+//	int8 parallel        81.6ms      338.9ms     133.7ms     553.1ms
+//	int8 sequential      70.0ms      317.4ms     109.6ms     497.3ms
+//
+// That is -13.5% and -10.1% on the region, on all three graphs rather than one, with output identical to the
+// parallel run. Being a session setting it reaches every provider, and on TensorRT it is a tie - 141.0ms against
+// 141.7ms - because that provider fuses each graph into one node and leaves the inter-op pool nothing to schedule.
+//
+// End to end, the two settings together are worth -15.4% at fp16 and -11.4% at int8 through the CUDA provider - a 4x
+// upscale of perftest's 640x640 sample goes 4.549s to 3.850s and 5.541s to 4.907s. The gap between that and the
+// -17.1% on the region is the pipeline around the model: the Lanczos resample, the wavelet colour fix and the canvas
+// blend are CPU work that no provider setting touches.
+//
+// CudaPreferNHWC is set here for the two VAE halves and taken back off for the DiT; see ditProfile below for that
+// half of it. The halves are 27 and 38 convolutions in fp16, which is the shape cuDNN has tensor-core kernels for in
+// NHWC and which otherwise pays for a transpose on either side of every convolution. On top of sequential it is
+// worth -8.0% on the encoder (70.2ms to 64.6ms) and -9.4% on the decoder (109.5ms to 99.2ms), which takes the region
+// to 365.7ms - -17.1% against the profile before either setting, and -12.9% at int8, where the same fp16 VAE files
+// are shared. The output is unchanged at cosine 1.00000 on all three graphs.
+//
+// There is no CudaOptions overlay, and that is a result rather than an omission: the CUDA provider's own options were
+// swept and every one of them is already at its best value in the shared defaults. Measured the same way, against
+// that 441-444ms baseline, with the warm-up that the first attempt at this lacked:
+//
+//   - cudnn_conv_algo_search stays EXHAUSTIVE. DEFAULT costs +50.2% (664.2ms), taking the encoder to 167.3ms and the
+//     decoder to 268.2ms; HEURISTIC is an exact tie, and buys nothing on a fixed-shape graph that searches once and
+//     then keeps the answer for the life of the session.
+//   - use_tf32 stays on, and it matters more than everything else here put together. Turning it off takes the
+//     decoder from 132.9ms to 23.565s and the encoder from 81.5ms to 933.6ms - the VAE's convolutions lose the
+//     tensor-core path entirely and fall back to true fp32 accumulation.
+//   - sdpa_kernel does nothing at either setting: flash attention +0.3%, memory-efficient +0.8%. ONNX Runtime only
+//     reaches those kernels through its fused Attention and MultiHeadAttention contrib ops, and this DiT's attention
+//     is exported as 400 loose Softmax nodes that nothing in the 1.26 fusion pipeline puts back together. A re-export
+//     that fused them is the only way this option becomes reachable.
+//   - arena_extend_strategy=kSameAsRequested (+0.2%), do_copy_in_default_stream=0 (+0.4%),
+//     cudnn_conv_use_max_workspace=0 (+0.2%) and session.use_device_allocator_for_initializers=1 (+0.2%) are all
+//     ties, inside the ~1% spread that is this model's noise floor on CUDA. The last two are worth naming because
+//     they are the ones a reader reaches for on a 7 GB model, expecting the size to make them matter.
 //
 // CoreMLComputeUnits is the single largest provider knob here. The default ALL lets CoreML dispatch to the Neural
 // Engine, which these graphs are consistently worse on: measured against CPUAndGPU on an M2 Max, ALL costs 4.2x on
@@ -99,9 +150,33 @@ func profileFor(types.Precision) utils.EPProfile {
 	return utils.EPProfile{
 		DisableMemPattern:  true,
 		DisableOptimizers:  brokenOptimizers,
+		ExecutionMode:      utils.ExecutionModeSequential,
+		CudaPreferNHWC:     true,
 		CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
 		TrtOptions:         trtOptions,
 	}
+}
+
+// ditProfile is the variant's profile with prefer_nhwc taken back off for the diffusion transformer alone.
+//
+// The DiT contains no convolution whatsoever - 12,940 nodes of MatMul, Transpose and Softmax and not one Conv - so
+// there is nothing for an NHWC convolution kernel to be faster at, and what is left is the layout transform's own
+// cost. It is small but it is not noise: measured on an RTX 5090 (driver 610.88, ONNX Runtime 1.26), fp16, one
+// 960x960 region, median of 20 across four alternating passes, the DiT is 201.6ms with NHWC off and 206.3ms with it
+// on, with every individual pass on the same side of the line. On the int8 export the same comparison is 317.4ms
+// against 318.8ms, which is noise - so this override neither helps nor hurts there, and it is set unconditionally
+// rather than for fp16 alone so that the two builds keep the same provider configuration.
+//
+// This is the only per-graph override in the codebase, and it is worth being clear that it buys 1.3% of the region:
+// prefer_nhwc everywhere is 370.4ms against the 365.7ms this gets. The reason to spend an override on that rather
+// than round it off is that the other side of the trade is not small - the same flag is worth -8.0% on the VAE
+// encoder and -9.4% on the decoder - so the choice is between two real numbers rather than between a real one and a
+// rounding error.
+func ditProfile(precision types.Precision) utils.EPProfile {
+	p := profileFor(precision)
+	p.CudaPreferNHWC = false
+
+	return p
 }
 
 // trtOptions is the one TensorRT setting this model wants that the shared defaults do not already give it.

@@ -29,13 +29,16 @@ import (
 // The zero value reproduces the behaviour that shipped before profiles existed, which is what lets every existing
 // call site keep passing no profile at all.
 //
-// Not every field is driven by a model yet: today Osaka sets DisableMemPattern, DisableOptimizers, TrtOptions and
-// CoreMLComputeUnits, Athens sets CoreMLComputeUnits and ExecutionMode and - for its fp16 export only - CudaPreferNHWC,
-// Santorini sets CoreMLSpecialization and ExecutionMode, Tokyo sets CoreMLComputeUnits and ExecutionMode, New York
-// sets CudaPreferNHWC and ExecutionMode, Paris sets CoreMLComputeUnits and ExecutionMode for its fp16 export, and
-// Kyoto, Saitama and Lyon each set CoreMLComputeUnits for their fp16 export alone. ExcludeEPs has no setter at all
-// any more - Osaka was its last caller, and the TensorRT exclusion it used to hold is now a measured 2.5x end-to-end
-// win instead. The rest are
+// Not every field is driven by a model yet: today Osaka sets DisableMemPattern, DisableOptimizers, ExecutionMode,
+// CudaPreferNHWC, TrtOptions and CoreMLComputeUnits, Athens sets CoreMLComputeUnits and ExecutionMode and - for its
+// fp16 export only - CudaPreferNHWC, Santorini sets CoreMLSpecialization and ExecutionMode, Tokyo sets
+// CoreMLComputeUnits and ExecutionMode, New York sets CudaPreferNHWC and ExecutionMode, Paris sets CoreMLComputeUnits
+// and ExecutionMode for its fp16 export, and Kyoto, Saitama and Lyon each set CoreMLComputeUnits for their fp16 export
+// alone. ExcludeEPs has no setter at all any more - Osaka was its last caller, and the TensorRT exclusion it used to
+// hold is now a measured 2.5x end-to-end win instead. CudaOptions has none either: it was added alongside a sweep of
+// the CUDA provider's options against Osaka, which found every one of them already at its best value in the defaults
+// below - the escape hatch is there so the next graph that disagrees does not have to add a typed field for one
+// setting. The rest are
 // reserved for per-model TensorRT and precision tuning that is already planned - they are deliberately kept rather
 // than trimmed to what has a caller today, so treat "no setter" here as "not wired up yet", not as dead code.
 type EPProfile struct {
@@ -93,6 +96,16 @@ type EPProfile struct {
 	// mismatch rather than at session build. That is the strongest reason this is opt-in per model: turning it on
 	// globally would break models nobody re-measured.
 	CudaPreferNHWC bool
+
+	// CudaOptions overlays raw CUDA provider options onto the defaults in cudaOptions, for the settings that have no
+	// typed field here. It is the CUDA counterpart of TrtOptions and exists for the same reason: the provider has
+	// around twenty options, and most of them only one graph in this codebase would ever want.
+	//
+	// It is applied last, so it can also override a default. The same warning as TrtOptions applies and is worth
+	// repeating, because on CUDA it is easier to trip over: an unrecognised key makes ONNX Runtime reject the whole
+	// option update, the provider declines to attach, and the graph runs on the CPU instead - a 10x regression that
+	// reports itself only as one Warn line. Check that line after changing anything here.
+	CudaOptions map[string]string
 
 	// CoreMLComputeUnits selects which of the Mac's engines CoreML may dispatch this model to. The zero value is
 	// ALL, which is what every model used before profiles existed.
@@ -553,7 +566,7 @@ func cudaOptions(p EPProfile) map[string]string {
 		preferNHWC = "1"
 	}
 
-	return map[string]string{
+	options := map[string]string{
 		"cudnn_conv_algo_search":       "EXHAUSTIVE",
 		"cudnn_conv_use_max_workspace": "1",
 		"device_id":                    "0",
@@ -562,6 +575,10 @@ func cudaOptions(p EPProfile) map[string]string {
 		"gpu_mem_limit":                "0",
 		"prefer_nhwc":                  preferNHWC,
 	}
+
+	maps.Copy(options, p.CudaOptions)
+
+	return options
 }
 
 func coreMLOptions(cachePath string, p EPProfile) map[string]string {

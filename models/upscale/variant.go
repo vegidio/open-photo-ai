@@ -61,6 +61,19 @@ type GraphSpec struct {
 	// both builds. Without this the int8 build would resolve them to `_int8` names that do not exist.
 	Precision types.Precision
 
+	// Profile overrides DiffusionSpec.Profile for this graph alone. Nil - the usual case - means the graph takes the
+	// variant's.
+	//
+	// It is here for the same reason GraphSpec.Precision is: a multi-stage model is not one thing throughout. Osaka's
+	// two VAE halves are convolutional and its diffusion transformer has no convolution in it at all, so a setting
+	// like prefer_nhwc that is a clear win on the first is a small loss on the second, and one profile for the set
+	// has to pick a side. Measured on an RTX 5090, fp16, one 960x960 region: sequential everywhere plus prefer_nhwc
+	// everywhere is 370.4ms, and holding prefer_nhwc off the DiT alone is 365.7ms.
+	//
+	// Use it sparingly. The set-wide profile is the one to reach for first, because a per-graph override is a setting
+	// that no longer shows up when someone reads the variant's profile - which is where they will look.
+	Profile func(precision types.Precision) utils.EPProfile
+
 	Inputs  []string
 	Outputs []string
 }
@@ -85,7 +98,8 @@ type DiffusionSpec struct {
 	// Graphs is the fixed set of stages loaded together for one pass.
 	Graphs []GraphSpec
 
-	// Profile is the provider tuning every graph of this variant needs.
+	// Profile is the provider tuning every graph of this variant needs, except where a GraphSpec overrides it with
+	// one of its own.
 	Profile func(precision types.Precision) utils.EPProfile
 
 	// Run is the variant's own pipeline, given the loaded model and the per-run scale.
@@ -146,6 +160,35 @@ func (v *Variant) New(
 	}, nil
 }
 
+// diffusionSpecs turns this variant's graphs into the specs that load them, in the same order.
+//
+// It is a method rather than a loop inside newDiffusion for the reason GraphSpec.modelId is: it is where the
+// per-graph profile override is resolved, and the only alternative way to check that a graph declaring none still
+// takes the variant's is to open a multi-gigabyte session.
+func (v *Variant) diffusionSpecs(precision types.Precision) []utils.SessionSpec {
+	specs := make([]utils.SessionSpec, 0, len(v.Diffusion.Graphs))
+
+	for _, g := range v.Diffusion.Graphs {
+		spec := utils.SessionSpec{
+			ModelId: g.modelId(v.Codename, precision),
+			Inputs:  g.Inputs,
+			Outputs: g.Outputs,
+		}
+
+		// Left nil rather than resolved when the graph declares no profile of its own, so it keeps taking the
+		// variant's: ResolveProfile would hand back the zero value for a nil func, which the loader cannot tell
+		// apart from a graph that deliberately asked for the provider defaults.
+		if g.Profile != nil {
+			profile := utils.ResolveProfile(g.Profile, precision)
+			spec.Profile = &profile
+		}
+
+		specs = append(specs, spec)
+	}
+
+	return specs
+}
+
 // newDiffusion loads the fixed set of graphs a diffusion variant runs as one pass and binds each to its role.
 func (v *Variant) newDiffusion(
 	ctx context.Context,
@@ -153,14 +196,7 @@ func (v *Variant) newDiffusion(
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
 ) (*Model, error) {
-	specs := make([]utils.SessionSpec, 0, len(v.Diffusion.Graphs))
-	for _, g := range v.Diffusion.Graphs {
-		specs = append(specs, utils.SessionSpec{
-			ModelId: g.modelId(v.Codename, op.precision),
-			Inputs:  g.Inputs,
-			Outputs: g.Outputs,
-		})
-	}
+	specs := v.diffusionSpecs(op.precision)
 
 	// The shared loader destroys a partially-opened set for us, so a failure here leaks nothing - which matters most
 	// for this kind of model, whose first graph alone can be nearly 7 GB.

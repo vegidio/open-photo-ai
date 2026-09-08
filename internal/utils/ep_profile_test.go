@@ -149,6 +149,38 @@ func TestCudaOptionsFollowTheProfile(t *testing.T) {
 	}
 }
 
+// CudaOptions is applied last, so a model can override a default rather than only add to it. Both halves are checked,
+// as they are for the TensorRT overlay: overriding a default, and a key with no default surviving.
+func TestCudaOptionsOverlayOverridesTheDefaults(t *testing.T) {
+	options := cudaOptions(EPProfile{
+		CudaPreferNHWC: true,
+		CudaOptions: map[string]string{
+			"cudnn_conv_algo_search": "HEURISTIC",
+			"arena_extend_strategy":  "kSameAsRequested",
+			"prefer_nhwc":            "0",
+		},
+	})
+
+	if options["cudnn_conv_algo_search"] != "HEURISTIC" {
+		t.Fatalf("overlay did not override the default: %q", options["cudnn_conv_algo_search"])
+	}
+	if options["arena_extend_strategy"] != "kSameAsRequested" {
+		t.Fatalf("overlay key not merged: %q", options["arena_extend_strategy"])
+	}
+
+	// The overlay is applied after the typed field, so it wins. That ordering is what makes it an escape hatch rather
+	// than a second way to say the same thing.
+	if options["prefer_nhwc"] != "0" {
+		t.Fatalf("overlay lost to the typed field: %q", options["prefer_nhwc"])
+	}
+
+	// A graph capture must not become reachable through the overlay by accident - it is off for the reasons in the
+	// comment above tensorRTOptions, and nothing here should have disturbed it.
+	if options["enable_cuda_graph"] != "0" {
+		t.Fatalf("overlay disturbed the graph capture default: %q", options["enable_cuda_graph"])
+	}
+}
+
 // A profile that ignores the precision it was handed would silently apply one export's tuning to the other, which is
 // exactly what CudaPreferNHWC must not do.
 // The execution mode is applied by applyProfile rather than by a provider appender, so nothing else in this file
