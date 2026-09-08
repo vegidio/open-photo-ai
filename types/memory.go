@@ -33,11 +33,14 @@ type PoolMemory struct {
 	// Pool is which memory this describes.
 	Pool MemoryPool
 
-	// Resident is the total size of the model files currently loaded into this pool.
+	// Resident is what the models currently loaded into this pool are charged: the size of their files, plus - on the
+	// device pool - an allowance for the memory a GPU session needs beyond its weights.
 	//
-	// It is a proxy, not a measurement: real footprint is larger, because arenas, cuDNN workspaces and the CoreML
-	// MLProgram all sit on top of the weights and none of them is queryable through the ONNX bindings. The budgets are
-	// set conservatively for exactly this reason.
+	// It is an estimate, not a measurement. Arenas, cuDNN workspaces and the CoreML MLProgram all sit on top of the
+	// weights and none of them is queryable through the ONNX bindings, so the allowance stands in for them and is
+	// deliberately generous; see deviceOverheadPercent. Reading this as a file total will understate what a report
+	// shows against a card's capacity - that is the point, since the file total is what let the registry admit more
+	// than the card could hold.
 	Resident int64
 
 	// Budget is the ceiling Resident is kept under, or 0 when the pool is unbounded.

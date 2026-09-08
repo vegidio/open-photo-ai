@@ -14,6 +14,10 @@ import (
 // unbounded, which is the behaviour the app had before budgets existed.
 const BudgetEnvVar = "OPAI_MODEL_BUDGET"
 
+// OverheadEnvVar overrides deviceOverheadPercent, for the same triage reasons and because that constant is an
+// estimate. Setting it to 0 charges device models their file bytes alone, which is what the app did before.
+const OverheadEnvVar = "OPAI_MODEL_OVERHEAD_PERCENT"
+
 const (
 	gibibyte = int64(1) << 30
 
@@ -38,6 +42,25 @@ const (
 	// fallbackHostRAM stands in for a machine whose RAM can't be queried. Small on purpose: guessing low costs a few
 	// rebuilds, guessing high costs a swap storm.
 	fallbackHostRAM = 8 * gibibyte
+
+	// deviceOverheadPercent is what a resident GPU session costs *on top of* its weights, as a percentage of them.
+	//
+	// The budget counts model-file bytes, and for a device session that is an undercount rather than an
+	// approximation: the weights are joined on the card by ONNX Runtime's CUDA arena for activations, the cuDNN
+	// workspace that cudaOptions deliberately maximises (cudnn_conv_use_max_workspace=1 with an EXHAUSTIVE algo
+	// search), and a TensorRT execution context's own device memory. None of that appears in a file size.
+	//
+	// Undercounting it is not a tidy accounting flaw, because of how the GPU fails. On Windows, WDDM does not refuse
+	// an allocation that no longer fits in VRAM - the driver silently pages device memory to host RAM over PCIe, so
+	// the app keeps returning correct images with no error anywhere and runs 10-60x slower. A budget that admits more
+	// than the card holds produces exactly that, and produces it invisibly.
+	//
+	// 50% is a deliberately round, conservative estimate and NOT a measurement - nobody has profiled the real
+	// per-session device footprint of these graphs. It is set where it is because the failure modes are asymmetric:
+	// charging too much costs an occasional rebuild, and charging too little costs a silent 10-60x. Anyone tightening
+	// it should measure resident VRAM (nvidia-smi, or NVML) across the model set at a realistic input size rather
+	// than reasoning about it, and OPAI_MODEL_OVERHEAD_PERCENT overrides it in the meantime.
+	deviceOverheadPercent = 50
 
 	// defaultResidentBytes is what a model that doesn't implement types.Measurable is charged.
 	//
@@ -170,4 +193,39 @@ func deviceBudgetFor(vramBytes int64) int64 {
 	}
 
 	return max(vramBytes*deviceBudgetFraction/100, minDeviceBudget)
+}
+
+// chargedBytes is what an entry costs its pool: its model-file bytes, plus - on the device pool - an allowance for the
+// per-session memory those files do not describe. See deviceOverheadPercent for what that allowance stands for and why
+// it errs high.
+//
+// ep is the provider the model was actually built on, which is what says whether this is really a GPU session.
+// Charging on the pool alone would be wrong for the CPU fallback: a model that failed on CUDA and rebuilt on the CPU
+// must not carry a device allowance.
+//
+// A zero size means "unknown", not "free" - EstimateModelBytes returns 0 for anything the manifest can't name - and
+// stays 0 here so that an unknown model is not charged an allowance on a size nobody has.
+func chargedBytes(pool types.MemoryPool, ep types.ExecutionProvider, bytes int64) int64 {
+	if bytes <= 0 || pool != types.MemoryPoolDevice || ep == types.ExecutionProviderCPU {
+		return bytes
+	}
+
+	return bytes + bytes*overheadPercent()/100
+}
+
+// overheadPercent reads OverheadEnvVar, falling back to deviceOverheadPercent. An unparseable or negative value is
+// ignored with a warning rather than failing startup, matching budgetOverride.
+func overheadPercent() int64 {
+	raw, ok := os.LookupEnv(OverheadEnvVar)
+	if !ok {
+		return deviceOverheadPercent
+	}
+
+	percent, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || percent < 0 {
+		Log().Warn("ignoring invalid model overhead override", "env", OverheadEnvVar, "value", raw, "err", err)
+		return deviceOverheadPercent
+	}
+
+	return percent
 }

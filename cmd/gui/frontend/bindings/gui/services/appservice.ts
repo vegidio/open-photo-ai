@@ -63,17 +63,22 @@ export function ModelMemory(): $CancellablePromise<types$0.ModelMemory> {
 /**
  * SetExecutionProvider tells the library the user picked a different AI processor.
  * 
- * It does not unload anything. The model registry is keyed by operation *and* provider, so the next enhancement simply
- * misses the cache and builds on the newly chosen one; whatever was loaded for the old provider ages out on its own
- * once nothing is using it. That makes switching safe in the middle of an export - the running job keeps the models it
- * already holds, and the next one picks up the new choice.
+ * It unloads the models that were not built on the new choice. The registry is keyed by operation *and* provider, so
+ * the switch itself is an ordinary cache miss and needs no help; what needs help is the memory. Models built for the
+ * old processor stay resident for their full idle TTL - minutes - and on a GPU they hold VRAM the whole time the new
+ * ones are allocating beside them. Past the card's capacity Windows does not fail the allocation, it pages device
+ * memory to host RAM over PCIe, so the app keeps returning correct images an order of magnitude slower with nothing
+ * in the log to explain it.
  * 
- * What it does reset is the two pieces of state that mean "this provider is bad": the library's latch, so the new
+ * Nothing in use is waited on, so this is still safe in the middle of an export: the running job keeps the models it
+ * already holds and they are freed when it releases them; only the next job pays a rebuild.
+ * 
+ * What it also resets is the two pieces of state that mean "this provider is bad": the library's latch, so the new
  * choice actually gets tried instead of being short-circuited to the CPU, and the one-shot warning, so a downgrade on
  * the new provider is news again.
  */
-export function SetExecutionProvider(): $CancellablePromise<void> {
-    return $Call.ByID(2521312780);
+export function SetExecutionProvider(ep: types$0.ExecutionProvider): $CancellablePromise<void> {
+    return $Call.ByID(2521312780, ep);
 }
 
 /**

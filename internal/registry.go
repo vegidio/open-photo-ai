@@ -54,9 +54,9 @@ type entry struct {
 	key   string
 	id    string                  // operation id, for logging
 	ep    types.ExecutionProvider // provider the model was actually built on
-	pool  types.MemoryPool        // which budget this entry is charged to, derived from ep at install
-	model any
-	bytes int64 // measured resident model-file bytes
+	pool     types.MemoryPool // which budget this entry is charged to, derived from ep at install
+	model    any
+	bytes    int64 // bytes charged to the pool: model-file bytes plus any device allowance (see chargedBytes)
 
 	// buildCost is how long create took, which is what rebuilding this model would cost the user. It is what buys an
 	// expensive model a longer idle TTL, and what breaks the tie when two equally idle models compete for the same
@@ -537,6 +537,47 @@ func (r *ModelRegistry) DrainAll() []*entry {
 	victims := make([]*entry, 0, len(r.entries))
 
 	for _, e := range r.entries {
+		if evicted := r.lockedEvict(e); evicted != nil {
+			victims = append(victims, evicted)
+		}
+	}
+
+	return victims
+}
+
+// DrainOtherProviders evicts every resident model that was not built on ep, and returns the victims for the caller to
+// destroy after unlocking. It is what an explicit processor change calls.
+//
+// The registry is keyed by operation and provider, so switching processors is already an ordinary cache miss and
+// nothing here is needed for *correctness*. What it is needed for is memory. The models built on the old processor
+// stay resident for their full idle TTL - five minutes, longer for an expensive build - and on the device pool that is
+// five minutes of holding VRAM that the models being built on the new processor also want. Two 7 GB diffusion sessions
+// that never run at the same time still sat on the card at the same time, and on Windows that does not fail: WDDM
+// pages the excess to host RAM over PCIe and everything silently runs an order of magnitude slower.
+//
+// Entries in use are marked evicted and left to their last Release, exactly as in DrainAll, so a switch mid-export
+// never frees a session out from under the running job - that job keeps the models it already holds, and only the
+// next one pays a rebuild.
+//
+// This is deliberately driven by an explicit user action rather than inferred from the providers coming through
+// AcquireModel. Two are legitimately live at once in normal use: SuggestEnhancements runs face detection on Auto
+// because autopilot has no user selection to read, while the enhancement that follows runs on whatever the user
+// picked. Evicting on every change of provider would make those two evict each other on every single image.
+//
+// It compares the provider a model was *built* on, which after a CPU fallback is the CPU. Those entries are evicted by
+// a switch too, which is what the caller wants: it resets the fallback latch at the same time, so the newly chosen
+// provider gets a real attempt rather than inheriting a downgrade.
+func (r *ModelRegistry) DrainOtherProviders(ep types.ExecutionProvider) []*entry {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	victims := make([]*entry, 0, len(r.entries))
+
+	for _, e := range r.entries {
+		if e.ep == ep {
+			continue
+		}
+
 		if evicted := r.lockedEvict(e); evicted != nil {
 			victims = append(victims, evicted)
 		}

@@ -48,10 +48,11 @@ export const Settings = ({ open, onClose }: SettingsProps) => {
         // different operation ID, so they miss the model cache on their own.
         if (executionProvider === initialEp.current) return;
 
-        // Nothing is unloaded here. The backend keys loaded models by operation *and* processor, so the next
-        // enhancement simply builds on the new one and whatever the old processor held ages out by itself. That means
-        // this is safe mid-export: the running job keeps its models, and the next one picks up the change.
-        void SetExecutionProvider();
+        // The backend unloads whatever the new processor would not build. It keys loaded models by operation *and*
+        // processor, so the switch itself is just a cache miss - but the old processor's models would otherwise hold
+        // their memory for minutes, and on a GPU that is VRAM the new ones need. This is still safe mid-export: the
+        // running job keeps its models and the next one picks up the change.
+        void SetExecutionProvider(executionProvider);
     };
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: N/A

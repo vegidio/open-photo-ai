@@ -121,7 +121,7 @@ func buildAndInstall(
 	// anything it can't name, which must be read as "unknown" - the real size is charged once the model exists, and
 	// install trims then if this was too optimistic.
 	pool := PoolOf(ep)
-	estimate := EstimateModelBytes(id)
+	estimate := chargedBytes(pool, ep, EstimateModelBytes(id))
 	DestroyEntries(Registry.makeRoom(pool, estimate))
 
 	// create calls into cgo, so a panic below is not hypothetical. Unwinding without resolving the pending build parks
@@ -202,7 +202,8 @@ func buildAndInstall(
 	// After a fallback this is not buildKey: the model is filed under the CPU. Waiters re-resolve the provider when
 	// they wake, see the latch, and look up that same CPU key - so the move needs no hand-off.
 	lease, dup, trim := Registry.install(
-		registryKey(id, ep), id, ep, landed, model, residentBytes(model), estimate, buildCost)
+		registryKey(id, ep), id, ep, landed, model,
+		chargedBytes(landed, ep, residentBytes(model)), estimate, buildCost)
 
 	// install consumed whatever was still reserved, whether or not it filed the model.
 	reserved = 0

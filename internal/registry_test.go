@@ -45,6 +45,11 @@ var (
 func withRegistry(t *testing.T) {
 	t.Helper()
 
+	// The device allowance off, so these tests can assert exact byte accounting. What a GPU session costs beyond its
+	// weights is chargedBytes' business and is tested there; every test here is about the registry's bookkeeping, and
+	// a hidden multiplier on half of them would only obscure it.
+	t.Setenv(OverheadEnvVar, "0")
+
 	original := Registry
 	Registry = newModelRegistry()
 	t.Cleanup(func() { Registry = original })
