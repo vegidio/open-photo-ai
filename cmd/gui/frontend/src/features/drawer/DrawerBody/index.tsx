@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { DrawerItem } from '@/features/drawer/DrawerItem';
+import { useResizeObserver } from '@/hooks';
 import { useFileStore } from '@/stores';
 
 type FileListBodyProps = {
@@ -33,25 +34,10 @@ export const DrawerBody = ({ drawerHeight }: FileListBodyProps) => {
     // spacers, so an error shifts how far the strip scrolls, never how the thumbnails are spaced or padded.
     const [itemSize, setItemSize] = useState(() => Math.max(0, drawerHeight - 2 * PADDING_Y));
 
-    useEffect(() => {
-        const el = scrollRef.current;
-        if (!el) return;
-
-        const measure = () => {
-            // Same number means no state change, so a resize that changes nothing does not re-render.
-            const next = Math.max(0, el.clientHeight - 2 * PADDING_Y);
-            setItemSize((current) => (current === next ? current : next));
-        };
-
-        measure();
-
-        if (typeof ResizeObserver === 'undefined') return;
-
-        const observer = new ResizeObserver(measure);
-        observer.observe(el);
-
-        return () => observer.disconnect();
-    }, []);
+    useResizeObserver(
+        useCallback(() => scrollRef.current, []),
+        useCallback((el: Element) => setItemSize(Math.max(0, el.clientHeight - 2 * PADDING_Y)), []),
+    );
 
     // Windowed rather than rendering every file. Each DrawerItem mounts a Checkbox, an IconButton, a Typography and a
     // Menu, so a 500-file drop - the size the stores and useThumbnail were explicitly tuned for - put roughly 2,500 MUI
@@ -95,6 +81,9 @@ export const DrawerBody = ({ drawerHeight }: FileListBodyProps) => {
 
             {virtualItems.map((virtualItem) => {
                 const file = files[virtualItem.index];
+
+                // Unreachable - the virtualizer's count is files.length - but noUncheckedIndexedAccess types an index
+                // read as possibly undefined, and narrowing it here is cheaper than asserting it away.
                 if (!file) return null;
 
                 return (

@@ -116,6 +116,13 @@ func restore(
 		return nil, errors.Newf("cannot tile a %dx%d region", width, height)
 	}
 
+	// Resolved once for the whole run rather than per region: the roles are compile-time constants and m.graphs is
+	// built from the same static table at load time, so the lookup cannot start failing partway through a pass.
+	graphs, err := newRegionGraphs(m)
+	if err != nil {
+		return nil, err
+	}
+
 	canvas := newCanvas(width, height)
 	scratch := &regionScratch{}
 
@@ -124,10 +131,10 @@ func restore(
 			return nil, errors.Wrap(err, "context cancelled")
 		}
 
-		scratch.region = cropCHWInto(scratch.region, pixels, width, height,
+		scratch.region = cropCHW(scratch.region, pixels, width, height,
 			rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), 3)
 
-		out, err := restoreRegion(ctx, m, scratch, rect.Dx(), rect.Dy(), rect.Min.X, rect.Min.Y)
+		out, err := restoreRegion(ctx, graphs, scratch, rect.Dx(), rect.Dy(), rect.Min.X, rect.Min.Y)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to restore tile %d of %d", i+1, len(tiles))
 		}
@@ -148,7 +155,7 @@ func restore(
 // multiple, and every tile geometry is itself a multiple of 16, so no tile can be misaligned.
 func restoreRegion(
 	ctx context.Context,
-	m *upscale.Model,
+	graphs regionGraphs,
 	scratch *regionScratch,
 	width, height, originX, originY int,
 ) ([]float32, error) {
@@ -166,12 +173,9 @@ func restoreRegion(
 	latentW, latentH := width/vaeStride, height/vaeStride
 	latentPlane := latentW * latentH
 
-	encoder, err := m.Graph(roleEncoder)
-	if err != nil {
-		return nil, err
-	}
+	var err error
 
-	scratch.cond, err = utils.RunUnaryInto(encoder,
+	scratch.cond, err = utils.RunUnaryInto(graphs.encoder,
 		scratch.region,
 		ort.NewShape(1, 3, int64(height), int64(width)),
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)),
@@ -180,16 +184,11 @@ func restoreRegion(
 		return nil, errors.Wrap(err, "failed to encode the region")
 	}
 
-	scratch.noise = gaussianNoiseInto(scratch.noise, latentChannels*latentPlane, originX, originY, noiseSeed)
-	scratch.vidInput = packVidInputInto(scratch.vidInput, scratch.cond, scratch.noise, latentPlane)
+	scratch.noise = gaussianNoise(scratch.noise, latentChannels*latentPlane, originX, originY, noiseSeed)
+	scratch.vidInput = packVidInput(scratch.vidInput, scratch.cond, scratch.noise, latentPlane)
 
 	// One input, not two: the timestep is a constant inside the graph now - see graphs in loader.go.
-	dit, err := m.Graph(roleDiT)
-	if err != nil {
-		return nil, err
-	}
-
-	scratch.prediction, err = utils.RunUnaryInto(dit,
+	scratch.prediction, err = utils.RunUnaryInto(graphs.dit,
 		scratch.vidInput,
 		ort.NewShape(1, ditChannels, int64(latentH), int64(latentW)),
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)),
@@ -198,14 +197,9 @@ func restoreRegion(
 		return nil, errors.Wrap(err, "failed to run the diffusion step")
 	}
 
-	scratch.denoised = schedulerStepInto(scratch.denoised, scratch.prediction, scratch.noise)
+	scratch.denoised = schedulerStep(scratch.denoised, scratch.prediction, scratch.noise)
 
-	decoder, err := m.Graph(roleDecoder)
-	if err != nil {
-		return nil, err
-	}
-
-	scratch.out, err = utils.RunUnaryInto(decoder,
+	scratch.out, err = utils.RunUnaryInto(graphs.decoder,
 		scratch.denoised,
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)),
 		ort.NewShape(1, 3, int64(height), int64(width)),
@@ -215,6 +209,36 @@ func restoreRegion(
 	}
 
 	return scratch.out, nil
+}
+
+// regionGraphs are the three sessions one restore pass runs, resolved up front.
+//
+// They are looked up once per run rather than once per region: Model.Graph is fallible because a variant could in
+// principle not declare a role, but that is decided when the model is loaded, so re-asking - and re-handling the
+// error - inside the tile loop is boilerplate that can never fire.
+type regionGraphs struct {
+	encoder *utils.Session
+	dit     *utils.Session
+	decoder *utils.Session
+}
+
+func newRegionGraphs(m *upscale.Model) (regionGraphs, error) {
+	var g regionGraphs
+	var err error
+
+	if g.encoder, err = m.Graph(roleEncoder); err != nil {
+		return g, err
+	}
+
+	if g.dit, err = m.Graph(roleDiT); err != nil {
+		return g, err
+	}
+
+	if g.decoder, err = m.Graph(roleDecoder); err != nil {
+		return g, err
+	}
+
+	return g, nil
 }
 
 // regionScratch is the per-run working set for the region loop.
@@ -246,12 +270,9 @@ type regionScratch struct {
 //
 // Skipping it is not a subtle error: the decoded result is the image buried under the velocity field, which scores
 // worse than the input it was given.
-func schedulerStep(prediction, noise []float32) []float32 {
-	return schedulerStepInto(nil, prediction, noise)
-}
-
-// schedulerStepInto is schedulerStep reusing dst. See regionScratch.
-func schedulerStepInto(dst, prediction, noise []float32) []float32 {
+//
+// dst is reused across regions rather than allocated per call - see regionScratch.
+func schedulerStep(dst, prediction, noise []float32) []float32 {
 	out := utils.Grow(dst, len(prediction))
 	for i := range prediction {
 		out[i] = noise[i] - prediction[i]

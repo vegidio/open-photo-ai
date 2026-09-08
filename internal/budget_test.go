@@ -87,9 +87,9 @@ func TestBudgetOverride(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(BudgetEnvVar, tt.value)
 
-			got, ok := budgetOverride()
+			got, ok := envInt64(BudgetEnvVar)
 			if ok != tt.ok || got != tt.want {
-				t.Errorf("budgetOverride() = (%d, %t), want (%d, %t)", got, ok, tt.want, tt.ok)
+				t.Errorf("envInt64(BudgetEnvVar) = (%d, %t), want (%d, %t)", got, ok, tt.want, tt.ok)
 			}
 		})
 	}

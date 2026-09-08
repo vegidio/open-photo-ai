@@ -149,10 +149,7 @@ func Process(
 	//
 	// The new hash is the same composition the image cache keys on, so a chained pair of calls and a single call with
 	// the operations concatenated agree on it.
-	outHash := input.Hash
-	if len(operations) > 0 {
-		outHash = internal.ImageHashAfter(input.Hash, operations)
-	}
+	outHash := internal.ImageHashAfter(input.Hash, operations)
 
 	return &types.ImageData{
 		FilePath: input.FilePath,

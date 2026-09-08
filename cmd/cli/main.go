@@ -124,36 +124,17 @@ func run(ctx context.Context) error {
 	return nil
 }
 
-// parseProviders resolves the -ep list. The names are matched case-insensitively against the published constants,
-// whose own spelling ("CoreML", "TensorRT") is not what anyone types on a command line.
+// parseProviders resolves the -ep list through the same validation the library uses everywhere else.
 func parseProviders(list string) ([]types.ExecutionProvider, error) {
-	known := []types.ExecutionProvider{
-		types.ExecutionProviderAuto,
-		types.ExecutionProviderCPU,
-		types.ExecutionProviderCoreML,
-		types.ExecutionProviderCUDA,
-		types.ExecutionProviderTensorRT,
-		types.ExecutionProviderDirectML,
-		types.ExecutionProviderOpenVINO,
-	}
-
 	var out []types.ExecutionProvider
 
 	for _, name := range splitList(list) {
-		matched := false
-
-		for _, ep := range known {
-			if strings.EqualFold(name, string(ep)) {
-				out = append(out, ep)
-				matched = true
-
-				break
-			}
+		ep, err := types.ParseExecutionProvider(name)
+		if err != nil {
+			return nil, err
 		}
 
-		if !matched {
-			return nil, fmt.Errorf("unknown execution provider %q", name)
-		}
+		out = append(out, ep)
 	}
 
 	if len(out) == 0 {

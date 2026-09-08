@@ -16,10 +16,9 @@ import { resolveQualityFormat } from '@/utils/export.ts';
 export type ExportSettingsProps = TailwindProps & {
     enhancements: Map<File, Operation[]>;
     onClose: () => void;
-    onBusyChange?: (busy: boolean) => void;
 };
 
-export const ExportSettings = ({ enhancements, onClose, onBusyChange, className }: ExportSettingsProps) => {
+export const ExportSettings = ({ enhancements, onClose, className }: ExportSettingsProps) => {
     const { t } = useTranslation();
     const format = useExportStore((state) => state.format);
 
@@ -64,12 +63,7 @@ export const ExportSettings = ({ enhancements, onClose, onBusyChange, className 
                 )}
             </div>
 
-            <ExportSettingsButtons
-                enhancements={enhancements}
-                quality={quality}
-                onClose={onClose}
-                onBusyChange={onBusyChange}
-            />
+            <ExportSettingsButtons enhancements={enhancements} quality={quality} onClose={onClose} />
         </div>
     );
 };

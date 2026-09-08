@@ -113,7 +113,7 @@ func hasDiscreteGPU() bool {
 // an Initialize cancelled before this point no longer pays seconds for numbers nobody will read - but a probe already
 // in flight runs to completion. Cancelling yields the same ceilings an unqueryable machine gets.
 func DefaultBudgets(ctx context.Context) (device, host int64) {
-	if override, ok := budgetOverride(); ok {
+	if override, ok := envInt64(BudgetEnvVar); ok {
 		Log().Info("model memory budget overridden", "env", BudgetEnvVar, "bytes", override)
 		return override, override
 	}
@@ -136,11 +136,6 @@ func DefaultBudgets(ctx context.Context) (device, host int64) {
 	Log().Info("model memory budgets", "device", device, "host", host)
 
 	return device, host
-}
-
-// budgetOverride reads BudgetEnvVar.
-func budgetOverride() (int64, bool) {
-	return envInt64(BudgetEnvVar)
 }
 
 // envInt64 reads a non-negative int64 from the named environment variable, reporting false when it is unset.

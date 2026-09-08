@@ -80,8 +80,10 @@ func alignFace(img image.Image, landmarks [5]detection.PointF, tileSize int) (im
 	return aligned, transform
 }
 
-// createCircularMask creates a soft circular mask with feathered edges
-// If blurSigma > 0, applies Gaussian blur with the specified sigma
+// createCircularMask builds a feathered elliptical mask, optionally Gaussian-blurred.
+//
+// The radii below are fractions of the half-extent, not pixels, so the mask is inscribed in width x height rather
+// than being a true circle on a non-square canvas.
 func createCircularMask(width, height int, blurSigma float64) image.Image {
 	const (
 		innerRadius  = 0.7 // Full opacity within this radius
@@ -116,7 +118,6 @@ func createCircularMask(width, height int, blurSigma float64) image.Image {
 				alpha = 0.0
 			}
 
-			// Direct pixel buffer access for better performance
 			offset := (y-mask.Rect.Min.Y)*mask.Stride + (x-mask.Rect.Min.X)*4
 			mask.Pix[offset] = 255                  // R
 			mask.Pix[offset+1] = 255                // G
@@ -150,7 +151,6 @@ func blendFaceInto(dst *image.NRGBA, restored, mask image.Image, transform Affin
 	maxX := min(origBounds.Max.X, int(bbox.Max.X+margin))
 	maxY := min(origBounds.Max.Y, int(bbox.Max.Y+margin))
 
-	// Precompute transform coefficients for better performance
 	a00, a01, a02 := transform[0][0], transform[0][1], transform[0][2]
 	a10, a11, a12 := transform[1][0], transform[1][1], transform[1][2]
 
@@ -163,7 +163,6 @@ func blendFaceInto(dst *image.NRGBA, restored, mask image.Image, transform Affin
 	restoredSrc := newSampler(restored)
 	originalSrc := newSampler(dst)
 
-	// Get direct access to pixel buffer for faster writes
 	stride := dst.Stride
 	pixels := dst.Pix
 
@@ -171,14 +170,12 @@ func blendFaceInto(dst *image.NRGBA, restored, mask image.Image, transform Affin
 	// (tileSize x tileSize) space, which is exactly where the forward transform maps each destination pixel — so we
 	// sample it directly instead of pre-warping it across the whole image.
 	for y := minY; y < maxY; y++ {
-		// Precompute y-dependent transform components
 		transformXBase := a01*float32(y) + a02
 		transformYBase := a11*float32(y) + a12
 
 		rowOffset := y * stride
 
 		for x := minX; x < maxX; x++ {
-			// Apply forward transform: original coords -> aligned coords
 			alignedX := a00*float32(x) + transformXBase
 			alignedY := a10*float32(x) + transformYBase
 
@@ -231,7 +228,6 @@ func calculateSimilarityTransform(src, dst []detection.PointF) AffineMatrix {
 	dstMeanX /= float32(numPoints)
 	dstMeanY /= float32(numPoints)
 
-	// Compute the covariance matrix components
 	var sXX, sXY, sYY float32
 	var dXsX, dXsY, dYsX, dYsY float32
 
@@ -265,7 +261,6 @@ func calculateSimilarityTransform(src, dst []detection.PointF) AffineMatrix {
 		}
 	}
 
-	// Compute rotation and scale components
 	a := (dXsX + dYsY) / srcNorm // cos(θ) * scale
 	b := (dYsX - dXsY) / srcNorm // sin(θ) * scale
 

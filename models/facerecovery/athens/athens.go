@@ -25,91 +25,49 @@ var variant = &facerecovery.Variant{
 //
 // # CoreML
 //
-// Measured through this code path on an M2 Max (macOS 26.6, ONNX Runtime 1.26), one 512x512 face, median of 7 runs
-// against the fp32 result:
-//
-//	                       fp16                 fp32
-//	MLComputeUnits=ALL     146.7ms              104.7ms
-//	CPUAndGPU              93.5ms (1.57x)       104.7ms (unchanged)
-//	CPUAndNeuralEngine     1.313s (14x slower)  1.017s (10x slower)
-//
-// The fp32 graph is unaffected because the Neural Engine is fp16-only, so CoreML never had work to put there. The
-// fp16 graph is a different matter: ALL makes most of the graph eligible, CoreML takes it, and the transitions cost
-// more than the Neural Engine saves. CodeFormer is why - 72 GroupNorms, 19 LayerNorms held at fp32 for precision,
-// and several hundred reshapes and transposes through the transformer, which is close to the worst case for a unit
-// built for dense convolution. The CPUAndNeuralEngine row is the tell: an order of magnitude is not a slower engine,
-// it is an engine rejecting most of the graph and thrashing on what is left.
+// The fp32 graph is unaffected by the compute units because the Neural Engine is fp16-only, so CoreML never had work
+// to put there. The fp16 graph is a different matter: ALL makes most of the graph eligible, CoreML takes it, and the
+// transitions cost more than the Neural Engine saves - CPUAndGPU is worth 1.57x on an M2 Max. CodeFormer is why - 72
+// GroupNorms, 19 LayerNorms held at fp32 for precision, and several hundred reshapes and transposes through the
+// transformer, which is close to the worst case for a unit built for dense convolution. CPUAndNeuralEngine is the
+// tell: 10-14x slower is not a slower engine, it is an engine rejecting most of the graph and thrashing on what is
+// left.
 //
 // Both precisions are set, though only fp16 moves. It documents the intent, and it means a future export that shifts
 // what the Neural Engine will accept cannot silently re-enable it.
 //
+// The cause is the graph's op mix, which is the same everywhere, and the Neural Engine is close to uniform across
+// Apple Silicon while the GPU is not - so the direction should hold on any Mac, and on Intel there is no Neural
+// Engine and the setting is a no-op. The 1.57x is this machine's number, though; a smaller GPU narrows the gap.
+//
 // # Execution mode
 //
-// Athens runs sequentially, like every other tuned model in the catalogue. CUDA is where that is worth something;
-// CoreML leans 0.2% the other way, which is not enough to be worth diverging over.
+// Athens runs sequentially, like every other tuned model in the catalogue, and CUDA is where that is worth something:
+// -20.6% at fp32 and -13.2% at fp16 on the graph alone, diluted to -8.5% and -4.6% end to end because most of what
+// perftest measures here is the align and blend around each face rather than the graph. It is free - outputs are
+// bit-identical, not merely close, because the mode changes only who schedules the nodes. On TensorRT it is a tie, as
+// it is for newyork, since that provider schedules its own engine.
 //
-// On CUDA it is the largest single win this model has, larger than the layout below, and it is free - the outputs
-// are bit-identical, not merely close, because the mode changes only who schedules the nodes. Same machine as the
-// CUDA section below, isolating Run over 24 blocks of 10 runs across three interleaved rounds, each precision
-// measured against the layout it actually ships:
-//
-//	                              parallel      sequential
-//	fp32 (ships NCHW)             46.728ms      37.080ms (-20.6%)
-//	fp16 (ships NHWC)             27.976ms      24.271ms (-13.2%)
-//
-// End to end the win is diluted by roughly half, because most of what perftest measures here is not the graph: the
-// align and blend around each of the two faces is CPU work that this does not touch. On the CUDA provider, mean of
-// 40 runs averaged over two alternating rounds, fp32 goes 124.8ms to 114.2ms (-8.5%) and fp16 88.6ms to 84.5ms
-// (-4.6%). On TensorRT it is a tie either way (-0.7% at both precisions), as it is for newyork - that provider
-// schedules its own engine, so there is nothing for the inter-op pool to have been doing.
-//
-// On CoreML it does not pay, and that is measured too, out of tree. This model was swept in BOTH build orders,
-// which the other three do not need - they already ship sequential on the strength of what it is worth on CUDA, so
-// their CoreML sweeps only have to show it costs nothing, whereas here CoreML is the side that leans the other way:
-//
-//	                    parallel first        sequential first
-//	fp32 parallel       106.280ms             106.657ms
-//	fp32 sequential     106.404ms             106.975ms
-//	fp16 parallel        94.379ms              94.550ms
-//	fp16 sequential      94.662ms              94.737ms
-//
-// Parallel is ahead in all four, including in the rows where it is the session that runs second, so the sign is real
-// rather than an artifact of the order - but it is 0.1-0.3%, which is a tie in any sense that matters. What makes it
-// worth recording is that athens is the only fp16 graph in the catalogue that does NOT prefer sequential on CoreML,
-// where tokyo, santorini and newyork gain 3.5-6.5%.
+// On CoreML it leans 0.1-0.3% the OTHER way, and that is measured rather than assumed - athens was swept in both
+// build orders, and parallel is ahead in all four rows including the ones where it runs second, so the sign is real.
+// What makes it worth recording is that athens is the only fp16 graph in the catalogue that does not prefer
+// sequential on CoreML, where tokyo, santorini and newyork gain 3.5-6.5%.
 //
 // ExecutionMode is not per-provider, so this has to be one answer, and 0.1-0.3% is not a reason to make athens the
-// one model that runs a different mode from the rest. Sequential everywhere: it is worth 5-9% end to end on a CUDA
-// machine, 13-21% of the graph itself, and on a Mac it is inside the noise.
-//
-// Do not read the CoreML table as an argument for switching back. The number to beat is on the CUDA side, and it is
-// two orders of magnitude larger.
-//
-// How far this carries to other Macs: the cause is the graph's op mix, which is the same everywhere, and the Neural
-// Engine is close to uniform across Apple Silicon while the GPU is not - so the direction should hold on any Mac,
-// and on Intel there is no Neural Engine and the setting is a no-op. The 1.57x is this machine's number, though. A
-// smaller GPU narrows the gap, so expect less there. It has not been measured on another chip or another macOS.
+// one model that runs a different mode from the rest. Do not read the CoreML result as an argument for switching
+// back: the number to beat is on the CUDA side, and it is two orders of magnitude larger.
 //
 // # CUDA
 //
-// NHWC is set for fp16 only, and the fp32 row is why it is not set for both. Measured on an RTX 5090 (driver 610.88,
-// ONNX Runtime 1.26, CUDA EP) - the graph alone is one 512x512 face, median of 20 runs; end to end is perftest's
-// median over 20 runs of the two faces in its sample, which also carries the align and blend work:
-//
-//	                  graph alone            end to end
-//	fp16 NCHW         29.3ms                 91.6ms
-//	fp16 NHWC         27.1ms (-7.7%)         87.9ms (-4.0%)
-//	fp32 NCHW         45.6ms                 124.1ms
-//	fp32 NHWC         48.3ms (+5.9%)         133.9ms (+7.9%)
-//
-// The split is the tensor cores: cuDNN's fp16 kernels are written for NHWC, so in fp16 the flag removes a transpose
-// pair around every convolution and reaches those kernels, while in fp32 there are no such kernels to reach and the
-// layout conversion is pure cost. CodeFormer is convolution-heavy enough for that to be worth measuring even though
-// its transformer stack is not.
+// NHWC is set for fp16 only, and fp32 is why it is not set for both: on an RTX 5090 it is worth -7.7% at fp16 and
+// costs +5.9% at fp32. The split is the tensor cores - cuDNN's fp16 kernels are written for NHWC, so in fp16 the flag
+// removes a transpose pair around every convolution and reaches those kernels, while in fp32 there are no such
+// kernels to reach and the layout conversion is pure cost. CodeFormer is convolution-heavy enough for that to be
+// worth measuring even though its transformer stack is not.
 //
 // Output quality is unaffected. Through the real pipeline - detection, align, restore, blend - NHWC lands 67.1 dB
 // PSNR from the NCHW result, while both sit 56.6 dB from the fp32 model: the layout moves the answer by well under
-// what choosing fp16 at all already moves it, and the two restored faces are indistinguishable at 3x zoom.
+// what choosing fp16 at all already moves it.
 //
 // The rest of the CUDA knobs were measured on this graph and left alone: cudnn_conv_algo_search=HEURISTIC is inside
 // the noise of EXHAUSTIVE (and DEFAULT is 70% slower), do_copy_in_default_stream, arena_extend_strategy,

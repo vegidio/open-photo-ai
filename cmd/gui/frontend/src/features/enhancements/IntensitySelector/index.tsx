@@ -34,7 +34,8 @@ export const IntensitySelector = ({
     const onTextChange = (e: ChangeEvent<HTMLInputElement>) => {
         const inputValue = e.target.value.trim();
 
-        // Don't allow empty values
+        // Passed through unparsed rather than rejected: both are intermediate states while typing, and '-' has to
+        // survive a keystroke for a negative intensity to be typeable at all.
         if (inputValue === '' || inputValue === '-') {
             onChange?.(inputValue);
             return;
@@ -42,7 +43,6 @@ export const IntensitySelector = ({
 
         const numValue = parseInt(inputValue, 10);
 
-        // Validate: must be a number within the [min, max] range
         if (!Number.isNaN(numValue)) {
             const clampedValue = Math.max(min, Math.min(max, numValue));
             onChange?.(clampedValue.toString());

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
-	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/deps"
 )
@@ -23,9 +22,9 @@ import (
 // The wipe goes through deps.EmptyDir, which is the same "remove the entries, keep the directory" the installer uses
 // when it replaces an exclusive dependency - and keeps the LD_LIBRARY_PATH reason for that in one place.
 func CleanEPCache(version string) (bool, error) {
-	cacheDir, err := fs.MkUserConfigDir(internal.AppName(), internal.EngineCacheDir)
+	cacheDir, err := internal.ConfigDir(internal.EngineCacheDir)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to resolve the %s directory", internal.EngineCacheDir)
+		return false, err
 	}
 
 	versionPath := filepath.Join(cacheDir, ".version")

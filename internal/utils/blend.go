@@ -153,18 +153,25 @@ func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlapX, over
 	rampX := min(overlapX, maxX/2)
 	rampY := min(overlapY, maxY/2)
 
-	srcPix, srcStride, srcFast := RgbPixBuffer(src)
+	// Tabulated once per tile rather than evaluated per pixel: the horizontal weight depends only on the column, so
+	// the loop below would otherwise recompute the same rampX cosines on every one of maxY rows. The vertical weight
+	// is already a per-row value, so it stays a direct call.
+	ramp := make([]float64, rampX)
+	for i := range ramp {
+		ramp[i] = RampWeight(i, rampX)
+	}
+
+	srcPix, srcStride, _ := RgbPixBuffer(src)
 	_, srcIsNRGBA := src.(*image.NRGBA)
 
 	// The bulk path reproduces the per-pixel one only for a premultiplied buffer: an NRGBA tile with a non-opaque
 	// pixel needs the premultiply below, which a straight copy would skip.
-	bulk := srcFast && !srcIsNRGBA
+	bulk := srcPix != nil && !srcIsNRGBA
 
 	for dy := range maxY {
 		dstY := y + dy
-		srcY := srcBounds.Min.Y + dy
 
-		topAlpha := rampWeight(dy, rampY)
+		topAlpha := RampWeight(dy, rampY)
 
 		// The horizontal ramp only affects the leftmost rampX columns; everything to their right shares this row's
 		// weight - 1, or topAlpha while the row is still inside the top band.
@@ -183,38 +190,41 @@ func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlapX, over
 				dst.Pix[p] = 255
 			}
 
-			if rampX == 0 {
-				continue
-			}
-
-			blendRun(dst, srcPix, srcStride, src, srcBounds, dstRow, dy, srcY, 0, rampX, rampX, topAlpha,
-				srcFast, srcIsNRGBA)
+			// Only the left ramp is left to blend; a zero-width ramp makes this a no-op loop.
+			blendRun(dst, srcPix, srcStride, src, srcBounds, dstRow, dy, len(ramp), ramp, topAlpha, srcIsNRGBA)
 
 			continue
 		}
 
-		blendRun(dst, srcPix, srcStride, src, srcBounds, dstRow, dy, srcY, 0, maxX, rampX, topAlpha,
-			srcFast, srcIsNRGBA)
+		blendRun(dst, srcPix, srcStride, src, srcBounds, dstRow, dy, maxX, ramp, topAlpha, srcIsNRGBA)
 	}
 }
 
-// blendRun blends columns [from, to) of one row. It is the per-pixel path, shared by the rows the bulk copy cannot
-// take and by the left ramp of the rows it can.
+// blendRun blends columns [0, to) of one row. It is the per-pixel path, shared by the rows the bulk copy cannot take
+// and by the left ramp of the rows it can.
+//
+// ramp holds the horizontal weight of each of the leftmost len(ramp) columns; everything to their right is at this
+// row's own weight. The caller tabulates it because it depends only on the column - see blendTileWithOverlap.
 func blendRun(
 	dst *image.RGBA,
 	srcPix []uint8,
 	srcStride int,
 	src image.Image,
 	srcBounds image.Rectangle,
-	dstRow, dy, srcY, from, to, rampX int,
+	dstRow, dy, to int,
+	ramp []float64,
 	topAlpha float64,
-	srcFast, srcIsNRGBA bool,
+	srcIsNRGBA bool,
 ) {
-	for dx := from; dx < to; dx++ {
+	// RgbPixBuffer hands back a nil buffer for anything it cannot index directly, which is exactly when the At()
+	// fallback below is needed.
+	srcFast := srcPix != nil
+
+	for dx := range to {
 		// The two ramps multiply where they meet, so a corner covered by both is weighted by each.
 		alpha := topAlpha
-		if dx < rampX {
-			alpha *= rampWeight(dx, rampX)
+		if dx < len(ramp) {
+			alpha *= ramp[dx]
 		}
 
 		var sr, sg, sb uint32
@@ -233,7 +243,7 @@ func blendRun(
 				}
 			}
 		} else {
-			r, g, b, _ := src.At(srcBounds.Min.X+dx, srcY).RGBA()
+			r, g, b, _ := src.At(srcBounds.Min.X+dx, srcBounds.Min.Y+dy).RGBA()
 			// Match the 8-bit values the slow path historically used (RGBA() >> 8).
 			sr, sg, sb = r>>8, g>>8, b>>8
 		}
@@ -254,12 +264,15 @@ func blendRun(
 	}
 }
 
-// rampWeight is the incoming tile's weight at offset i into a ramp of the given width, and 1 once past it (a zero
+// RampWeight is the incoming tile's weight at offset i into a ramp of the given width, and 1 once past it (a zero
 // width being "no neighbour on this side").
 //
 // The half-pixel offset keeps the first weight strictly positive: at i = 0 a bare cosine would be exactly 0, throwing
 // away the incoming tile's outermost column entirely rather than mixing it.
-func rampWeight(i, width int) float64 {
+//
+// Exported because the diffusion upscaler's accumulator feathers its tiles with the same curve, and the two blenders
+// agreeing on it is load-bearing: a tuning change applied to only one of them would show up as a seam.
+func RampWeight(i, width int) float64 {
 	if width <= 0 || i >= width {
 		return 1
 	}

@@ -11,5 +11,6 @@ export * from './useModelItems.ts';
 export * from './useModelOptions.ts';
 export * from './useNotify.ts';
 export * from './useOptionEnhancement.ts';
+export * from './useResizeObserver.ts';
 export * from './useSyncFaces.ts';
 export * from './useThumbnail.ts';

@@ -3,6 +3,7 @@ package shared
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 
 	"github.com/vegidio/go-sak/o11y"
@@ -40,14 +41,8 @@ func ReportSystemInfo(otel *o11y.Telemetry) {
 
 	// Mirror the same CPU/memory/GPU info to the local log file. Reuse the map built above and emit
 	// with sorted keys so the field order is deterministic and grouped (cpu.*, gpu.N.*, memory).
-	keys := make([]string, 0, len(info))
-	for k := range info {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-
 	attrs := make([]any, 0, len(info)*2)
-	for _, k := range keys {
+	for _, k := range slices.Sorted(maps.Keys(info)) {
 		attrs = append(attrs, k, info[k])
 	}
 	slog.Info("system info", attrs...)

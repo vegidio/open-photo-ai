@@ -2,7 +2,8 @@ package osaka
 
 import (
 	"image"
-	"math"
+
+	"github.com/vegidio/open-photo-ai/internal/utils"
 )
 
 // canvas accumulates weighted tile contributions in planar CHW float32 and normalizes once at the end, so every
@@ -121,9 +122,10 @@ func edgeWeights(length, feather int, rampStart, rampEnd bool) []float32 {
 	}
 
 	for i := range feather {
-		// The half-pixel offset keeps the outermost weight strictly positive, so a pixel covered by exactly one
-		// feathered tile still normalizes back to its own value.
-		w := float32(0.5 - 0.5*math.Cos(math.Pi*(float64(i)+0.5)/float64(feather)))
+		// Shared with the tiled blender rather than spelled out again: the half-pixel offset keeps the outermost
+		// weight strictly positive, so a pixel covered by exactly one feathered tile still normalizes back to its own
+		// value, and the two blenders cannot drift apart on the curve.
+		w := float32(utils.RampWeight(i, feather))
 
 		// Both multiply. The clamp above keeps i and length-1-i from meeting, so an assignment here is currently
 		// equivalent - but only by that margin, and the asymmetry read as though one of the two was deliberate.

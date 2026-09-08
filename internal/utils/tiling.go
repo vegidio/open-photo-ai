@@ -295,7 +295,7 @@ func prepareTileForInference(img image.Image, scratch *tileScratch, tileX, tileY
 //
 // The tensors are safe to reuse because ort.NewTensor wraps the Go slice's memory rather than copying it, so writing
 // the next tile into input is what feeds the next Run. Every tile shares one fixed shape, which is what makes a single
-// pair sufficient for the whole image.
+// pair enough for the whole image.
 type tileScratch struct {
 	input        []float32
 	inputTensor  *ort.Tensor[float32]
@@ -466,7 +466,6 @@ func ReflectionPad(img image.Image, left, top, right, bottom int) image.Image {
 		return min(length-1, max(0, idx))
 	}
 
-	// Copy original image to center
 	draw.Draw(padded, image.Rect(left, top, left+width, top+height), img, bounds.Min, draw.Src)
 
 	// Everything below mirrors within padded rather than sampling img again. The centre already holds exactly the

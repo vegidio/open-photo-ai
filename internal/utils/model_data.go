@@ -11,7 +11,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
-	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
 )
 
@@ -119,18 +118,18 @@ func fetchModelData(ctx context.Context) ([]internal.RemoteModelData, error) {
 
 // saveModelData writes the manifest atomically, so a fallback never reads a half-written cache.
 func saveModelData(data []internal.RemoteModelData) error {
-	dir, err := fs.MkUserConfigDir(internal.AppName(), internal.ModelsDir)
+	dir, err := internal.ConfigDir(internal.ModelsDir)
 	if err != nil {
-		return errors.Wrap(err, "failed to resolve the models directory")
+		return err
 	}
 
 	return internal.WriteJSONAtomic(dir, modelDataFile, data)
 }
 
 func readModelData() ([]internal.RemoteModelData, error) {
-	dir, err := fs.MkUserConfigDir(internal.AppName(), internal.ModelsDir)
+	dir, err := internal.ConfigDir(internal.ModelsDir)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to resolve the models directory")
+		return nil, err
 	}
 
 	encoded, err := os.ReadFile(filepath.Join(dir, modelDataFile))

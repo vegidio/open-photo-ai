@@ -11,7 +11,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
-	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/memo"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -51,9 +50,9 @@ type Cache struct {
 func NewCache(maxEntries int64) (*Cache, error) {
 	// AppName, not a hardcoded name: Initialize promises the caller a config directory under the name it passed, and
 	// the model cache already honours that. Hardcoding here would split an embedder's two caches across two directories.
-	cachePath, err := fs.MkUserConfigDir(AppName(), "cache")
+	cachePath, err := ConfigDir("cache")
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create cache directory")
+		return nil, err
 	}
 
 	opts := memo.CacheOpts{MaxEntries: maxEntries, MaxCapacity: cacheCapacityBytes}
@@ -116,6 +115,12 @@ func (c *Cache) SetImage(ctx context.Context, img image.Image, hash string, oper
 // with the cache is the point - a result fed back into Process then looks up exactly the slot its pixels were stored
 // under.
 func ImageHashAfter(hash string, operations []types.Operation) string {
+	// Applying nothing leaves the pixels alone, so the identity is unchanged. Owned here rather than at each caller:
+	// it is a property of the derivation, not something every caller has to remember about it.
+	if len(operations) == 0 {
+		return hash
+	}
+
 	return cacheKey(hash, operations)
 }
 

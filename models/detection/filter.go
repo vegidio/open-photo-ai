@@ -14,7 +14,6 @@ func PostProcessDetections(
 	// Anchors are memoized for TargetSize and shared (read-only) across calls.
 	priors := anchors()
 
-	// Filter by confidence first, decoding boxes/landmarks only for the surviving anchors, then scale to target size.
 	filteredBoxes, filteredLandmarks, filteredScores := filterAndScaleDetections(
 		loc, landmarksRaw, priors, conf, threshold, float32(TargetSize))
 
@@ -44,9 +43,9 @@ func filterAndScaleDetections(
 ) ([]RectF, [][numLandmarks]PointF, []float32) {
 	numAnchors := len(conf) / 2
 
-	// First pass: count detections above the threshold
+	// Counted first so the three slices below allocate exactly once.
 	numFiltered := 0
-	for i := 0; i < numAnchors; i++ {
+	for i := range numAnchors {
 		if conf[i*2+1] > threshold {
 			numFiltered++
 		}
@@ -56,13 +55,11 @@ func filterAndScaleDetections(
 		return []RectF{}, [][numLandmarks]PointF{}, []float32{}
 	}
 
-	// Pre-allocate slices with the exact capacity needed
 	filteredBoxes := make([]RectF, 0, numFiltered)
 	filteredLandmarks := make([][numLandmarks]PointF, 0, numFiltered)
 	filteredScores := make([]float32, 0, numFiltered)
 
-	// Second pass: decode and scale only the anchors that passed the threshold
-	for i := 0; i < numAnchors; i++ {
+	for i := range numAnchors {
 		score := conf[i*2+1]
 		if score <= threshold {
 			continue
@@ -75,7 +72,7 @@ func filterAndScaleDetections(
 		box.Max.Y *= targetSize
 
 		lm := decodeLandmark(landmarksRaw, priors[i], i)
-		for j := 0; j < numLandmarks; j++ {
+		for j := range numLandmarks {
 			lm[j].X *= targetSize
 			lm[j].Y *= targetSize
 		}
@@ -88,7 +85,6 @@ func filterAndScaleDetections(
 	return filteredBoxes, filteredLandmarks, filteredScores
 }
 
-// nms applies non-maximum suppression
 func nms(boxes []RectF, scores []float32, threshold float32) []int {
 	type scoreIndex struct {
 		score float32
@@ -97,7 +93,6 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 
 	n := len(scores)
 
-	// Create and sort by score descending
 	scoreIndexes := make([]scoreIndex, n)
 	for i, s := range scores {
 		scoreIndexes[i] = scoreIndex{s, i}
@@ -118,7 +113,7 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 		areas[i] = (box.Max.X - box.Min.X + 1) * (box.Max.Y - box.Min.Y + 1)
 	}
 
-	for pos := 0; pos < len(scoreIndexes); pos++ {
+	for pos := range scoreIndexes {
 		i := scoreIndexes[pos].index
 		if suppressed[i] {
 			continue
@@ -143,7 +138,6 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 
 			box2 := boxes[j]
 
-			// Calculate intersection
 			xx1 := x1Min
 			if box2.Min.X > xx1 {
 				xx1 = box2.Min.X
@@ -164,7 +158,7 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 				yy2 = box2.Max.Y
 			}
 
-			// Early exit if no intersection (+1 matches the Pascal-VOC convention used for the areas above)
+			// The +1 matches the Pascal-VOC convention used for the areas above.
 			w := xx2 - xx1 + 1
 			h := yy2 - yy1 + 1
 			if w <= 0 || h <= 0 {
@@ -173,7 +167,6 @@ func nms(boxes []RectF, scores []float32, threshold float32) []int {
 
 			inter := w * h
 
-			// Calculate IoU
 			iou := inter / (area1 + areas[j] - inter)
 
 			if iou > threshold {
@@ -210,7 +203,7 @@ func scaleDetectionsToOriginal(
 		}
 
 		var landmarkPoints [numLandmarks]PointF
-		for j := 0; j < numLandmarks; j++ {
+		for j := range numLandmarks {
 			landmarkPoints[j] = PointF{
 				X: lm[j].X * scaleW,
 				Y: lm[j].Y * scaleH,

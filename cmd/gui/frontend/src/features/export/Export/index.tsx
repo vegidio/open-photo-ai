@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Dialog, Divider } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
@@ -6,6 +5,7 @@ import type { Operation } from '@/operations';
 import { ModalTitle } from '@/components/molecules/ModalTitle';
 import { ExportQueue } from '@/features/export/ExportQueue';
 import { ExportSettings } from '@/features/export/ExportSettings';
+import { useExportStore } from '@/stores';
 
 type ExportProps = {
     enhancements: Map<File, Operation[]>;
@@ -20,7 +20,10 @@ export const Export = ({ enhancements, open, onClose }: ExportProps) => {
     // unmount so nothing runs on, but silently discarding a half-finished export is not what pressing Escape should
     // mean - Abort is there to say that deliberately. So the two exits that were unconditional, Escape and the title
     // bar's X, are held shut while it runs; backdropClick was already blocked.
-    const [busy, setBusy] = useState(false);
+    //
+    // Read from the store rather than reported up through props: the buttons below drive the batch and already own
+    // this state, and mirroring it into a second boolean here is how the two drift apart.
+    const busy = useExportStore((state) => state.runState === 'processing');
 
     return (
         <Dialog
@@ -45,7 +48,7 @@ export const Export = ({ enhancements, open, onClose }: ExportProps) => {
 
                 <Divider orientation='vertical' flexItem className='border-surface-base my-0.5' />
 
-                <ExportSettings enhancements={enhancements} onClose={onClose} onBusyChange={setBusy} className='w-80' />
+                <ExportSettings enhancements={enhancements} onClose={onClose} className='w-80' />
             </div>
         </Dialog>
     );

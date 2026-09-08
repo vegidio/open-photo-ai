@@ -60,6 +60,14 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 			return nil, errors.Errorf("invalid operation ID: %q", opId)
 		}
 
+		// Parsed here rather than in each builder: the final segment is always the precision, so validating it once
+		// makes it structural. A builder cannot forget to check - it is handed a Precision, not a string to convert -
+		// and that matters because this segment reaches internal.EngineCacheFor, whose directory is emptied wholesale.
+		precision, err := types.ParsePrecision(values[len(values)-1])
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid operation ID %q", opId)
+		}
+
 		key := opai.ModelKey(opId)
 
 		build, known := operationBuilders[key]
@@ -67,7 +75,7 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 			return nil, errors.Errorf("unknown operation %q in ID %q", key, opId)
 		}
 
-		operation, err := build(values, params)
+		operation, err := build(values, precision, params)
 		if err != nil {
 			return nil, errors.Wrapf(err, "invalid operation ID %q", opId)
 		}
@@ -80,7 +88,8 @@ func IdsToOperations(opIds []string, params guitypes.InferenceParams) ([]types.O
 
 // operationBuilder turns the underscore-split segments of an operation ID into the operation it names. params carries
 // the pre-detected faces that only the face-recovery models consume.
-type operationBuilder func(values []string, params guitypes.InferenceParams) (types.Operation, error)
+type operationBuilder func(values []string, precision types.Precision,
+	params guitypes.InferenceParams) (types.Operation, error)
 
 // operationBuilders maps a model's "<type>_<codename>" to its constructor. A table rather than a switch so that adding
 // a model is one entry here, and so the shared "<name>_<amount>_<precision>" parsing is written once instead of per
@@ -133,24 +142,14 @@ var operationBuilders = map[string]operationBuilder{
 
 // faceRecoveryBuilder reads "_<name>_<precision>" and forwards the caller-supplied faces.
 func faceRecoveryBuilder[T types.Operation](op func(types.Precision, []detection.Face) T) operationBuilder {
-	return func(values []string, params guitypes.InferenceParams) (types.Operation, error) {
-		precision, err := types.ParsePrecision(values[2])
-		if err != nil {
-			return nil, err
-		}
-
+	return func(_ []string, precision types.Precision, params guitypes.InferenceParams) (types.Operation, error) {
 		return op(precision, params.Faces), nil
 	}
 }
 
 // precisionBuilder reads "_<name>_<precision>" for operations with no per-run inputs.
 func precisionBuilder[T types.Operation](op func(types.Precision) T) operationBuilder {
-	return func(values []string, _ guitypes.InferenceParams) (types.Operation, error) {
-		precision, err := types.ParsePrecision(values[2])
-		if err != nil {
-			return nil, err
-		}
-
+	return func(_ []string, precision types.Precision, _ guitypes.InferenceParams) (types.Operation, error) {
 		return op(precision), nil
 	}
 }
@@ -158,8 +157,8 @@ func precisionBuilder[T types.Operation](op func(types.Precision) T) operationBu
 // intensityBuilder reads "_<name>_<intensity>_<precision>", tolerating the older "_<name>_<precision>" form by
 // defaulting the intensity to 1.0.
 func intensityBuilder[T types.Operation](op func(float32, types.Precision) T) operationBuilder {
-	return func(values []string, _ guitypes.InferenceParams) (types.Operation, error) {
-		intensity, precision, err := parseIntensity(values)
+	return func(values []string, precision types.Precision, _ guitypes.InferenceParams) (types.Operation, error) {
+		intensity, err := parseIntensity(values)
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid intensity")
 		}
@@ -170,7 +169,7 @@ func intensityBuilder[T types.Operation](op func(float32, types.Precision) T) op
 
 // requiredIntensityBuilder reads "_<name>_<intensity>_<precision>", where the intensity segment is mandatory.
 func requiredIntensityBuilder[T types.Operation](op func(float32, types.Precision) T) operationBuilder {
-	return func(values []string, _ guitypes.InferenceParams) (types.Operation, error) {
+	return func(values []string, precision types.Precision, _ guitypes.InferenceParams) (types.Operation, error) {
 		if len(values) < 4 {
 			return nil, errors.New("missing intensity segment")
 		}
@@ -180,18 +179,13 @@ func requiredIntensityBuilder[T types.Operation](op func(float32, types.Precisio
 			return nil, errors.Wrap(err, "invalid intensity")
 		}
 
-		precision, err := types.ParsePrecision(values[3])
-		if err != nil {
-			return nil, err
-		}
-
 		return op(float32(intensity), precision), nil
 	}
 }
 
 // scaleBuilder reads "_<name>_<scale>x_<precision>".
 func scaleBuilder[T types.Operation](op func(float64, types.Precision) T) operationBuilder {
-	return func(values []string, _ guitypes.InferenceParams) (types.Operation, error) {
+	return func(values []string, precision types.Precision, _ guitypes.InferenceParams) (types.Operation, error) {
 		if len(values) < 4 {
 			return nil, errors.New("missing scale segment")
 		}
@@ -199,11 +193,6 @@ func scaleBuilder[T types.Operation](op func(float64, types.Precision) T) operat
 		scale, err := strconv.ParseFloat(strings.TrimSuffix(values[2], "x"), 64)
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid scale")
-		}
-
-		precision, err := types.ParsePrecision(values[3])
-		if err != nil {
-			return nil, err
 		}
 
 		return op(scale, precision), nil
@@ -243,24 +232,18 @@ func CropCacheKey(c guitypes.CropInfo) string {
 	return fmt.Sprintf("#c%v-%t%t-%d-%d-%d-%d", c.Rotation, c.FlipH, c.FlipV, c.Left, c.Top, c.Width, c.Height)
 }
 
-// parseIntensity extracts the denoise/sharpen intensity and precision from a split operation ID. It accepts both the
-// current "_<name>_<intensity>_<precision>" form and the older "_<name>_<precision>" form (which defaults the intensity
-// to 1.0).
-func parseIntensity(values []string) (float32, types.Precision, error) {
+// parseIntensity extracts the denoise/sharpen intensity from a split operation ID. It accepts both the current
+// "_<name>_<intensity>_<precision>" form and the older "_<name>_<precision>" form, where there is no intensity segment
+// to read and it defaults to 1.0.
+func parseIntensity(values []string) (float32, error) {
 	if len(values) < 4 {
-		precision, err := types.ParsePrecision(values[2])
-		return 1.0, precision, err
+		return 1.0, nil
 	}
 
 	intensity, err := strconv.ParseFloat(values[2], 32)
 	if err != nil {
-		return 0, "", err
+		return 0, err
 	}
 
-	precision, err := types.ParsePrecision(values[3])
-	if err != nil {
-		return 0, "", err
-	}
-
-	return float32(intensity), precision, nil
+	return float32(intensity), nil
 }

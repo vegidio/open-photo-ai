@@ -1,5 +1,12 @@
 package types
 
+import (
+	"slices"
+	"strings"
+
+	"github.com/cockroachdb/errors"
+)
+
 // ExecutionProvider defines the execution provider used by the ONNX runtime.
 type ExecutionProvider string
 
@@ -32,3 +39,40 @@ const (
 	// Available on macOS and iOS devices with Apple Silicon or Intel processors.
 	ExecutionProviderCoreML ExecutionProvider = "CoreML"
 )
+
+// AllExecutionProviders lists every published provider, in the order a user is most likely to reach for one. It is the
+// single source for anything that has to enumerate them - a CLI flag's help text, a parser - so an eighth constant is
+// reachable everywhere by declaring it here.
+func AllExecutionProviders() []ExecutionProvider {
+	return []ExecutionProvider{
+		ExecutionProviderAuto,
+		ExecutionProviderCPU,
+		ExecutionProviderCoreML,
+		ExecutionProviderCUDA,
+		ExecutionProviderTensorRT,
+		ExecutionProviderDirectML,
+		ExecutionProviderOpenVINO,
+	}
+}
+
+// Valid reports whether ep is one of the published providers.
+func (ep ExecutionProvider) Valid() bool {
+	return slices.Contains(AllExecutionProviders(), ep)
+}
+
+// ParseExecutionProvider converts an untrusted string into an ExecutionProvider, rejecting anything that is not a
+// published one. The match is case-insensitive: the constants' own spelling ("CoreML", "TensorRT") is not what anyone
+// types on a command line or stores in a settings file.
+//
+// Same reasoning as ParsePrecision - anything building one of these from input it did not produce itself parses it
+// here rather than converting it, so an unknown provider is refused at the boundary instead of reaching a session
+// build as a silent no-op.
+func ParseExecutionProvider(s string) (ExecutionProvider, error) {
+	for _, ep := range AllExecutionProviders() {
+		if strings.EqualFold(s, string(ep)) {
+			return ep, nil
+		}
+	}
+
+	return "", errors.Newf("unknown execution provider %q", s)
+}

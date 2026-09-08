@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type ReactZoomPanPinchRef, TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
 import type { ImageData } from '@/utils/image.ts';
+import { useResizeObserver } from '@/hooks';
 import { type ImageTransform, useImageStore } from '@/stores';
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_WHEEL_STEP } from '@/utils/constants.ts';
 
@@ -70,32 +71,24 @@ export const ZoomImage = ({ image, imageTransform }: ZoomImageProps) => {
     // Measured on every container resize, not only when the image changes. Everything downstream - the wheel anchor,
     // constrainPosition, and the viewport rect published to the sidebar - is derived from these numbers, so measuring
     // once left all three working off stale values after a window resize or a sidebar toggle.
-    useEffect(() => {
-        const container = tRef.current?.instance.wrapperComponent;
-        if (!container) return;
+    useResizeObserver(
+        useCallback(() => tRef.current?.instance.wrapperComponent, []),
+        useCallback(
+            (container: Element) => {
+                const rect = container.getBoundingClientRect();
+                const scale = Math.min(rect.width / image.width, rect.height / image.height);
 
-        const measure = () => {
-            const rect = container.getBoundingClientRect();
-            const scale = Math.min(rect.width / image.width, rect.height / image.height);
+                setDimensions((current) => {
+                    const width = image.width * scale;
+                    const height = image.height * scale;
 
-            setDimensions((current) => {
-                const width = image.width * scale;
-                const height = image.height * scale;
-
-                // Same numbers means the same object, so a resize that changes nothing does not re-render.
-                return current.width === width && current.height === height ? current : { width, height };
-            });
-        };
-
-        measure();
-
-        if (typeof ResizeObserver === 'undefined') return;
-
-        const observer = new ResizeObserver(measure);
-        observer.observe(container);
-
-        return () => observer.disconnect();
-    }, [image]);
+                    // Same numbers means the same object, so a resize that changes nothing does not re-render.
+                    return current.width === width && current.height === height ? current : { width, height };
+                });
+            },
+            [image],
+        ),
+    );
 
     // Zoom in/out with the mouse wheel, or a trackpad pinch which the webview delivers as a wheel
     // event, while hovering the preview. We write the clamped scale plus the image point under the

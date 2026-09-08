@@ -23,14 +23,14 @@ export const ExportQueueState = ({ state }: ExportQueueStateProps) => {
                 // No message for this state. A non-breaking space rather than a literal keeps the row's height and
                 // baseline while showing nothing - the placeholder that used to sit here was untranslated English,
                 // and it was hidden only for IDLE, so any state this switch did not know about rendered "<Invisible>"
-                // on screen.
+                // on screen. Nothing compares against it: it is already invisible, so it needs no matching class.
                 return ['\u00a0', ''];
         }
     }, [state, t]);
 
     return (
         <div className={`flex flex-row items-center gap-1 ${color}`}>
-            <span className={`${msg === '\u00a0' ? 'invisible' : ''}`}>{msg}</span>
+            <span>{msg}</span>
             {state.startsWith('ERROR') && (
                 <Tooltip
                     title={state === 'ERROR' ? t('export.queue.errorTooltip') : t('export.queue.errorDownloadTooltip')}

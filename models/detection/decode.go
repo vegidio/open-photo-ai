@@ -17,22 +17,18 @@ func decodeBox(loc []float32, prior Prior, i int) RectF {
 
 	locOffset := i * 4
 
-	// Cache variance * prior.sx/sy for reuse
 	var0Sx := variance0 * prior.sx
 	var0Sy := variance0 * prior.sy
 
-	// Decode center coordinates (x, y)
 	boxCx := prior.cx + loc[locOffset]*var0Sx
 	boxCy := prior.cy + loc[locOffset+1]*var0Sy
 
-	// Decode width and height using exp
 	boxW := prior.sx * float32(math.Exp(float64(loc[locOffset+2]*variance1)))
 	boxH := prior.sy * float32(math.Exp(float64(loc[locOffset+3]*variance1)))
 
 	halfW := boxW * 0.5
 	halfH := boxH * 0.5
 
-	// Convert to corner coordinates and store as RectF
 	return RectF{
 		Min: PointF{
 			X: boxCx - halfW,
@@ -60,7 +56,7 @@ func decodeLandmark(landmarksRaw []float32, prior Prior, i int) [numLandmarks]Po
 	var0Sy := variance * prior.sy
 
 	var landmarks [numLandmarks]PointF
-	for j := 0; j < numLandmarks; j++ {
+	for j := range numLandmarks {
 		landmarks[j] = PointF{
 			X: prior.cx + landmarksRaw[rawOffset+j*2]*var0Sx,
 			Y: prior.cy + landmarksRaw[rawOffset+j*2+1]*var0Sy,

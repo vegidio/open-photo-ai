@@ -132,7 +132,6 @@ export const useEnhancementStore = create(
         {
             name: 'enhancements-storage',
             partialize: (state) => ({
-                // Persist only the `autopilot` state
                 autopilot: state.autopilot,
             }),
         },

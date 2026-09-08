@@ -531,7 +531,7 @@ func (r *ModelRegistry) Close(timeout time.Duration) bool {
 // never frees a session out from under a running model. They are already unreachable: rule 4 means the next acquire
 // builds a fresh instance rather than finding one of these.
 func (r *ModelRegistry) DrainAll() []*entry {
-	return r.drainWhere(nil)
+	return r.drainWhere(func(*entry) bool { return true })
 }
 
 // DrainOtherProviders evicts every resident model that was not built on ep, and returns the victims for the caller to
@@ -561,7 +561,7 @@ func (r *ModelRegistry) DrainOtherProviders(ep types.ExecutionProvider) []*entry
 }
 
 // drainWhere evicts every resident entry that victim selects, and returns those the caller must destroy after
-// unlocking. A nil victim means every entry.
+// unlocking.
 //
 // It is the one body behind DrainAll and DrainOtherProviders, which differ only in what they select. The rule it owns
 // is the one that is easy to get subtly wrong twice: removal happens under the lock, entries still in use are marked
@@ -574,7 +574,7 @@ func (r *ModelRegistry) drainWhere(victim func(*entry) bool) []*entry {
 	victims := make([]*entry, 0, len(r.entries))
 
 	for _, e := range r.entries {
-		if victim != nil && !victim(e) {
+		if !victim(e) {
 			continue
 		}
 

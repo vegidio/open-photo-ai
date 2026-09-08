@@ -77,49 +77,63 @@ func Install(ctx context.Context, dep Dependency, onProgress types.DownloadProgr
 		return err
 	}
 
-	dir, err := configDir(dep.Destination)
+	dir, err := internal.ConfigDir(dep.Destination)
 	if err != nil {
 		return err
 	}
 
-	// The debug override: a model dropped in by hand has no manifest at all and must still be used as it is.
-	if dep.SkipVerify && sourcesPresent(dir, dep) {
-		internal.Log().Warn("model verification skipped; using the files on disk", "dep", dep.Name)
-		return refreshUnverified(dir, dep)
-	}
+	// The debug override: a model dropped in by hand has no manifest at all and must still be used as it is. It takes
+	// the same body as everything else - only its identity is different, and nothing is fetched or removed - so the
+	// rule that derived caches are invalidated when the installed identity moves has one owner rather than two.
+	unverified := dep.SkipVerify && sourcesPresent(dir, dep)
 
 	want := fingerprint(dep)
 
+	if unverified {
+		internal.Log().Warn("model verification skipped; using the files on disk", "dep", dep.Name)
+
+		// The files on disk are the identity here, since there is no expected hash to compare against. Stamping them
+		// rather than clearing unconditionally is what keeps the flag usable: clearing on every launch would rebuild a
+		// TensorRT engine each time, minutes at a stretch, on the workflow where weights change most often.
+		if want, err = unverifiedStamp(dir, dep); err != nil {
+			return err
+		}
+	}
+
+	// intact() is skipped for an unverified install: its file list is deliberately empty (see the record written
+	// below), so it would report "not installed" on every launch and re-clear the caches the stamp says are current.
 	old, hasOld := readManifest(dir, dep.manifestName())
-	if hasOld && old.Fingerprint == want && old.intact(dir) {
+	if hasOld && old.Fingerprint == want && (unverified || old.intact(dir)) {
 		internal.Log().Debug("dependency present", "dep", dep.Name, "dir", dep.Destination)
 		return nil
 	}
 
-	internal.Log().Info("installing dependency",
-		"dep", dep.Name, "version", dep.Version, "dir", dep.Destination, "sources", len(dep.Sources))
+	if !unverified {
+		internal.Log().Info("installing dependency",
+			"dep", dep.Name, "version", dep.Version, "dir", dep.Destination, "sources", len(dep.Sources))
 
-	// Only now that an install is certain: a `.old` file is the leftover of a previous one, so there is nothing to
-	// sweep on the steady-state path above, where this would have listed the whole shared models directory on every
-	// model acquisition.
-	sweepTransient(dir, dep.Sources)
+		// Only now that an install is certain: a `.old` file is the leftover of a previous one, so there is nothing to
+		// sweep on the steady-state path above, where this would have listed the whole shared models directory on
+		// every model acquisition.
+		sweepTransient(dir, dep.Sources)
 
-	if err = os.Remove(filepath.Join(dir, dep.manifestName())); err != nil && !os.IsNotExist(err) {
-		return errors.Wrap(err, "failed to drop the previous manifest")
-	}
-
-	switch {
-	case hasOld:
-		if err = old.remove(dir); err != nil {
-			return err
+		if err = os.Remove(filepath.Join(dir, dep.manifestName())); err != nil && !os.IsNotExist(err) {
+			return errors.Wrap(err, "failed to drop the previous manifest")
 		}
 
-	case dep.Exclusive:
-		// An exclusive directory with no manifest was populated by a version of the app that didn't keep one. Its
-		// contents can't be described, so extracting over them would silently merge two versions - the previous
-		// release's shared libraries would stay behind for the loader to find.
-		if err = EmptyDir(dir); err != nil {
-			return err
+		switch {
+		case hasOld:
+			if err = old.remove(dir); err != nil {
+				return err
+			}
+
+		case dep.Exclusive:
+			// An exclusive directory with no manifest was populated by a version of the app that didn't keep one. Its
+			// contents can't be described, so extracting over them would silently merge two versions - the previous
+			// release's shared libraries would stay behind for the loader to find.
+			if err = EmptyDir(dir); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -129,14 +143,20 @@ func Install(ctx context.Context, dep Dependency, onProgress types.DownloadProgr
 		return err
 	}
 
-	installed, err := fetch(ctx, dir, dep, onProgress)
-	if err != nil {
-		return err
-	}
+	// installed stays nil for an unverified install, and that is the point: Manifest.intact treats an empty list as
+	// "not installed", so a later run with the flag off reinstalls from the real sources rather than trusting files
+	// that were never verified. The record is useful only to the fingerprint comparison above.
+	var installed []File
 
-	if dep.Exclusive {
-		if installed, err = recordTree(dir, dep.manifestName()); err != nil {
+	if !unverified {
+		if installed, err = fetch(ctx, dir, dep, onProgress); err != nil {
 			return err
+		}
+
+		if dep.Exclusive {
+			if installed, err = recordTree(dir, dep.manifestName()); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -290,44 +310,6 @@ func EmptyDir(dir string) error {
 	return nil
 }
 
-// configDir resolves one of the slash-separated paths a Dependency names - Destination, or an entry in Derived - to an
-// OS path under the user's config directory, creating it if it isn't there.
-func configDir(rel string) (string, error) {
-	return internal.ConfigDir(rel)
-}
-
-// refreshUnverified is the SkipVerify path's stand-in for the derived-cache invalidation the verified path does before
-// it writes.
-//
-// It matters most here: hand-dropping a model is the workflow where the weights change most often, and an engine
-// compiled from the previous ones is at best wasted disk and at worst silently wrong. But clearing unconditionally on
-// every launch would rebuild a TensorRT engine each time - minutes - and make the flag unusable, so the files on disk
-// are stamped and the caches are cleared only when that stamp moves.
-func refreshUnverified(dir string, dep Dependency) error {
-	stamp, err := unverifiedStamp(dir, dep)
-	if err != nil {
-		return err
-	}
-
-	if old, hasOld := readManifest(dir, dep.manifestName()); hasOld && old.Fingerprint == stamp {
-		return nil
-	}
-
-	if err = removeDerived(dep); err != nil {
-		return err
-	}
-
-	// Recorded with no file list, so the record is useless to anything but this comparison: Manifest.intact treats an
-	// empty list as "not installed", which means a later run with the flag off reinstalls from the real sources rather
-	// than trusting files that were never verified.
-	return writeManifest(dir, dep.manifestName(), Manifest{
-		Schema:      manifestSchema,
-		Name:        dep.Name,
-		Version:     dep.Version,
-		Fingerprint: stamp,
-	})
-}
-
 // unverifiedStamp fingerprints the source files as they sit on disk, for the SkipVerify path where there is no expected
 // hash to compare against. Size and mtime are what an edit changes and what a stat already reports, so this costs one
 // lstat per source rather than re-reading gigabytes of weights on every launch.
@@ -352,7 +334,7 @@ func unverifiedStamp(dir string, dep Dependency) (string, error) {
 // providers, on the next session - so there is nothing to restore here.
 func removeDerived(dep Dependency) error {
 	for _, d := range dep.Derived {
-		dir, err := configDir(d)
+		dir, err := internal.ConfigDir(d)
 		if err != nil {
 			return err
 		}

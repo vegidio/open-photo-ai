@@ -31,18 +31,11 @@ import (
 // The zero value reproduces the behaviour that shipped before profiles existed, which is what lets every existing
 // call site keep passing no profile at all.
 //
-// Not every field is driven by a model yet: today Osaka sets DisableMemPattern, DisableOptimizers, ExecutionMode,
-// CudaPreferNHWC, TrtOptions and CoreMLComputeUnits, Athens sets CoreMLComputeUnits and ExecutionMode and - for its
-// fp16 export only - CudaPreferNHWC, Santorini sets CoreMLSpecialization and ExecutionMode, Tokyo sets
-// CoreMLComputeUnits and ExecutionMode, New York sets CudaPreferNHWC and ExecutionMode, Paris sets CoreMLComputeUnits
-// and ExecutionMode for its fp16 export, and Kyoto, Saitama and Lyon each set CoreMLComputeUnits for their fp16 export
-// alone. ExcludeEPs has no setter at all any more - Osaka was its last caller, and the TensorRT exclusion it used to
-// hold is now a measured 2.5x end-to-end win instead. CudaOptions has none either: it was added alongside a sweep of
-// the CUDA provider's options against Osaka, which found every one of them already at its best value in the defaults
-// below - the escape hatch is there so the next graph that disagrees does not have to add a typed field for one
-// setting. The rest are reserved for per-model TensorRT and precision tuning that is already planned - they are
-// deliberately kept rather than trimmed to what has a caller today, so treat "no setter" here as "not wired up yet",
-// not as dead code.
+// Several fields have no setter today. ExcludeEPs lost its last one when Osaka's TensorRT exclusion turned out to be
+// a measured 2.5x end-to-end win; CudaOptions never had one, because the sweep it was added alongside found every
+// CUDA option already at its best value in the defaults below - it is there so the next graph that disagrees does not
+// have to add a typed field for one setting. The rest are reserved for per-model TensorRT and precision tuning that
+// is already planned. Treat "no setter" here as "not wired up yet", not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -265,18 +258,10 @@ func (c CoreMLSpecialization) value() string {
 // It is a session setting rather than a per-provider one, so a model that sets it sets it everywhere, and the
 // question of whether that is safe has been settled by measurement on every provider this codebase ships. On
 // TensorRT it is a tie, because that provider fuses the graph into one node and leaves the inter-op pool nothing to
-// schedule. On CoreML it splits cleanly by precision - measured out of tree on an M2 Max (macOS 26.6, ONNX Runtime
-// 1.29), sequential against parallel:
-//
-//	              fp32        fp16
-//	tokyo         +0.2%       -3.5%
-//	santorini     +0.5%       -4.8%
-//	newyork       +0.5%       -6.5%
-//	athens        +0.3%       +0.2%
-//
-// Every fp16 graph but athens wins, every fp32 graph is a tie, nothing loses by more than half a percent, and the
-// output is bit-identical in all of them. So there is no provider for which this needs to be made conditional, and
-// the field stays a plain per-model setting.
+// schedule. On CoreML it splits cleanly by precision: across tokyo, santorini, newyork and athens, every fp16 graph
+// but athens wins 3.5-6.5%, every fp32 graph is a tie, nothing loses by more than half a percent, and the output is
+// bit-identical in all of them. So there is no provider for which this needs to be made conditional, and the field
+// stays a plain per-model setting.
 //
 // Two cautions for anyone re-measuring it on a Mac, because both can manufacture an effect the size of the one being
 // looked for, and both did before the harness was corrected.
@@ -351,27 +336,9 @@ func (p EPProfile) excludes(ep types.ExecutionProvider) bool {
 // See the comment at its use in createSessionInner.
 var trtBuildMu sync.Mutex
 
-// usesTensorRT reports whether a session built for this request could attach the TensorRT provider.
-//
-// It re-runs resolveProviders rather than reading what createOptions worked out, which is a duplicated lookup over a
-// table of at most four entries. Callers should evaluate it once and reuse the answer: resolveProviders logs when a
-// profile excludes the requested provider, so calling this repeatedly for one build would repeat that line.
-//
-// Note it answers "would TensorRT be resolved into the chain", not "did TensorRT attach" - a provider that declines
-// is only logged. That is deliberately the wider question, since a build that tried TensorRT is a build that may have
-// touched the shared timing cache.
-func usesTensorRT(goos string, ep types.ExecutionProvider, p EPProfile) bool {
-	providers, err := resolveProviders(goos, ep, p)
-	if err != nil {
-		return false
-	}
-
-	return slices.Contains(providers, types.ExecutionProviderTensorRT)
-}
-
 // dropTimingCache removes the shared TensorRT timing cache after a session build failed with TensorRT in the chain.
-// The caller decides whether TensorRT was involved - see usesTensorRT - so this unconditionally empties the directory
-// it is given.
+// The caller decides whether TensorRT was involved - createOptions reports it - so this unconditionally empties the
+// directory it is given.
 //
 // The wipe goes through deps.EmptyDir for the same reason CleanEPCache uses it on the engine directory this one sits
 // inside: one place owns what "empty a cache directory but keep the directory" means, including keeping the directory
@@ -481,30 +448,40 @@ func filterExcluded(chain []types.ExecutionProvider, p EPProfile) []types.Execut
 }
 
 // createOptions builds the session options for one model on one execution provider.
+//
+// The second return says whether TensorRT was resolved into the chain, which the caller needs in order to serialize
+// the build against the shared timing cache. It is reported from here rather than answered by a separate predicate
+// because resolving the chain is what decides it: asking twice would run the resolution twice and repeat the log line
+// it emits when a profile excludes the requested provider.
+//
+// Note it answers "would TensorRT be resolved into the chain", not "did TensorRT attach" - a provider that declines is
+// only logged. That is deliberately the wider question, since a build that tried TensorRT is a build that may have
+// touched the shared timing cache.
 func createOptions(
 	goos string,
 	paths cachePaths,
 	ep types.ExecutionProvider,
 	p EPProfile,
-) (*ort.SessionOptions, error) {
+) (*ort.SessionOptions, bool, error) {
 	if _, ok := autoChain[goos]; !ok {
-		return nil, errors.Errorf("unsupported platform: %s", goos)
+		return nil, false, errors.Errorf("unsupported platform: %s", goos)
 	}
 
 	options, err := ort.NewSessionOptions()
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create %s session options", goos)
+		return nil, false, errors.Wrapf(err, "failed to create %s session options", goos)
 	}
 
-	// The CPU provider is always present and takes no configuration, so there is nothing to append for it.
+	// The CPU provider is always present and takes no configuration, so there is nothing to append for it - and
+	// nothing that could reach TensorRT.
 	if ep == types.ExecutionProviderCPU {
-		return options, nil
+		return options, false, nil
 	}
 
 	providers, err := resolveProviders(goos, ep, p)
 	if err != nil {
 		options.Destroy()
-		return nil, err
+		return nil, false, err
 	}
 
 	// A provider that declines to attach is not fatal: the ones after it, and ultimately the CPU, still run the
@@ -530,7 +507,7 @@ func createOptions(
 		}
 	}
 
-	return options, nil
+	return options, slices.Contains(providers, types.ExecutionProviderTensorRT), nil
 }
 
 // applyProfile applies the session-level settings a profile carries, as opposed to the per-provider ones.
@@ -601,14 +578,9 @@ func tensorRTOptions(paths cachePaths, p EPProfile) map[string]string {
 
 	// trt_engine_hw_compatible is off, and it was the single largest TensorRT setting in this file while it was on.
 	// It builds an engine that runs on any Ampere-or-newer card, which means TensorRT may only pick kernels that
-	// exist on all of them - so the newer the card, the more it gives up. Measured on an RTX 5090 (sm_120, driver
-	// 610.88, ONNX Runtime 1.26), median of 5, hardware-compatible against architecture-specific:
-	//
-	//	athens      -23.6%      tokyo       -12.0%      saitama     -9.9%
-	//	kyoto        -7.2%      santorini    -5.9%      stockholm   -4.7%
-	//	osaka       -48.0%      newyork      too fast to resolve at 4ms
-	//
-	// Cold start improves with it, too - the compatible engine is the slower one to build as well as to run.
+	// exist on all of them - so the newer the card, the more it gives up. Turning it off is worth 4.7% to 48% across
+	// the catalogue on an RTX 5090, and it improves cold start too: the compatible engine is the slower one to build
+	// as well as to run.
 	//
 	// Nothing is lost by this, because the portability it buys has no consumer here: the engine cache is built on the
 	// user's own machine on first use, never shipped, and the cache file names carry the architecture they were built

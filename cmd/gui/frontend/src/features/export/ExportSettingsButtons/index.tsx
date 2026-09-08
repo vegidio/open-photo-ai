@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Button } from '@mui/material';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import { useTranslation } from 'react-i18next';
@@ -15,13 +15,9 @@ type ExportSettingsButtonsProps = {
     enhancements: Map<File, Operation[]>;
     quality: QualityChoices;
     onClose: () => void;
-
-    // Reports whether a batch is in flight, so the dialog above can refuse to close mid-export. It is reported up
-    // rather than held there because the batch is driven from here.
-    onBusyChange?: (busy: boolean) => void;
 };
 
-export const ExportSettingsButtons = ({ enhancements, quality, onClose, onBusyChange }: ExportSettingsButtonsProps) => {
+export const ExportSettingsButtons = ({ enhancements, quality, onClose }: ExportSettingsButtonsProps) => {
     const { t } = useTranslation();
     const format = useExportStore((state) => state.format);
     const prefix = useExportStore((state) => state.prefix);
@@ -29,11 +25,16 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose, onBusyCh
     const location = useExportStore((state) => state.location);
     const overwrite = useExportStore((state) => state.overwrite);
     const resetKey = useExportStore((state) => state.resetKey);
+
+    // In the store rather than local component state, because the dialog above reads it too - it refuses to close
+    // while a batch is in flight. One place holds it, so the button labels and the dialog's close policy cannot
+    // disagree about whether an export is running.
+    const state = useExportStore((current) => current.runState);
+    const setState = useExportStore((current) => current.setRunState);
     const ep = useSettingsStore((state) => state.executionProvider);
     const models = useSettingsStore((state) => state.models);
     const setQuality = useSettingsStore((state) => state.setQuality);
 
-    const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | undefined>(undefined);
     const exportRef = useRef<CancellablePromise<void> | undefined>(undefined);
 
@@ -42,21 +43,20 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose, onBusyCh
     // user believed they had stopped - emitting per-file events at listeners that no longer exist and finishing on a
     // setState against an unmounted component.
     //
+    // The run state is reset here as well, and has to be: it now outlives this component. A dialog closed mid-export
+    // would otherwise leave the store reading 'processing' forever, and since that is exactly what holds the dialog
+    // shut, it could never be opened and closed again.
+    //
     // Empty deps: this must run on unmount only. Cancelling a settled promise is a no-op, so there is nothing to
     // guard against a batch that already finished.
     useEffect(
         () => () => {
             suggestRef.current?.cancel();
             exportRef.current?.cancel();
+            useExportStore.getState().setRunState('idle');
         },
         [],
     );
-
-    // Kept in one place so the dialog's view of "busy" cannot drift from the button labels' view of it.
-    const enter = (next: 'idle' | 'processing' | 'completed') => {
-        setState(next);
-        onBusyChange?.(next === 'processing');
-    };
 
     const handleCancel = () => {
         switch (state) {
@@ -142,7 +142,7 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose, onBusyCh
         // persisted, clamping included.
         const committed = useSettingsStore.getState().quality;
 
-        enter('processing');
+        setState('processing');
 
         // `file_count`, not `count`: this is the number of files the batch will attempt, which is what the per-file
         // `export_completed` events should add up to. The old name sat next to a per-file `count` on other events and
@@ -168,7 +168,7 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose, onBusyCh
             duration_ms: Math.round(performance.now() - startedAt),
         });
 
-        enter(completed ? 'completed' : 'idle');
+        setState(completed ? 'completed' : 'idle');
     };
 
     return (

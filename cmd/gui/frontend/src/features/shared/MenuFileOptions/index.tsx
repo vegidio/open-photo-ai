@@ -1,9 +1,8 @@
 import { Divider, ListItemText, Menu, MenuItem, type PopoverOrigin } from '@mui/material';
-import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
-import { useFileManager } from '@/hooks';
+import { useFileManager, useNotify } from '@/hooks';
 import { useDrawerStore, useFileStore } from '@/stores';
 import { os } from '@/utils/constants.ts';
 
@@ -25,7 +24,7 @@ export const MenuFileOptions = ({
     onMenuClose,
 }: MenuFileOptionsProps) => {
     const { t } = useTranslation();
-    const { enqueueSnackbar } = useSnackbar();
+    const { enqueueSnackbar } = useNotify();
     const { removeFile, clearAll } = useFileManager();
     const setOpen = useDrawerStore((state) => state.setOpen);
 

@@ -21,7 +21,7 @@ func TestPackVidInputPlacesEachGroup(t *testing.T) {
 		}
 	}
 
-	got := packVidInput(cond, noise, plane)
+	got := packVidInput(nil, cond, noise, plane)
 	if len(got) != ditChannels*plane {
 		t.Fatalf("got %d values, want %d", len(got), ditChannels*plane)
 	}
@@ -68,7 +68,7 @@ func TestPackVidInputDoesNotRescaleTheCondition(t *testing.T) {
 		cond[i] = 2
 	}
 
-	got := packVidInput(cond, noise, plane)
+	got := packVidInput(nil, cond, noise, plane)
 	if v := got[latentChannels*plane]; v != 2 {
 		t.Fatalf("the condition latent was rescaled: %f", v)
 	}
@@ -77,8 +77,8 @@ func TestPackVidInputDoesNotRescaleTheCondition(t *testing.T) {
 // The noise must be reproducible for a given position, and different between positions - otherwise every tile would
 // receive an identical noise field, which correlates their artefacts.
 func TestGaussianNoiseIsDeterministicPerPosition(t *testing.T) {
-	a := gaussianNoise(4096, 0, 0, 7)
-	b := gaussianNoise(4096, 0, 0, 7)
+	a := gaussianNoise(nil, 4096, 0, 0, 7)
+	b := gaussianNoise(nil, 4096, 0, 0, 7)
 
 	for i := range a {
 		if a[i] != b[i] {
@@ -86,7 +86,7 @@ func TestGaussianNoiseIsDeterministicPerPosition(t *testing.T) {
 		}
 	}
 
-	c := gaussianNoise(4096, 128, 0, 7)
+	c := gaussianNoise(nil, 4096, 128, 0, 7)
 	same := 0
 
 	for i := range a {
@@ -104,7 +104,7 @@ func TestGaussianNoiseIsDeterministicPerPosition(t *testing.T) {
 func TestGaussianNoiseIsStandardNormal(t *testing.T) {
 	const n = 1 << 18
 
-	v := gaussianNoise(n, 3, 5, 11)
+	v := gaussianNoise(nil, n, 3, 5, 11)
 
 	var sum, sumSq float64
 	for _, x := range v {
@@ -123,7 +123,7 @@ func TestGaussianNoiseIsStandardNormal(t *testing.T) {
 	}
 
 	// An odd count must still be filled: the loop writes two samples per turn.
-	if odd := gaussianNoise(7, 0, 0, 1); odd[6] == 0 {
+	if odd := gaussianNoise(nil, 7, 0, 0, 1); odd[6] == 0 {
 		t.Fatal("the final sample of an odd-length buffer was not written")
 	}
 }
@@ -140,7 +140,7 @@ func TestCropCHW(t *testing.T) {
 		}
 	}
 
-	got := cropCHW(src, w, h, 2, 1, 4, 3, c)
+	got := cropCHW(nil, src, w, h, 2, 1, 4, 3, c)
 
 	for ch := range c {
 		for y := range 3 {

@@ -16,7 +16,6 @@ func invertAffine(transform AffineMatrix) AffineMatrix {
 
 	det := a*e - b*d
 
-	// Check for near-zero determinant to avoid numerical issues
 	if det == 0 || (det > -1e-10 && det < 1e-10) {
 		return AffineMatrix{{1, 0, 0}, {0, 1, 0}}
 	}
@@ -68,10 +67,8 @@ func (s *sampler) at(px, py int) (r, g, b, a uint32) {
 func warpAffine(img image.Image, transform AffineMatrix, width, height int) image.Image {
 	result := imaging.New(width, height, color.NRGBA{})
 
-	// Compute inverse transform to map from destination to source
 	invTransform := invertAffine(transform)
 
-	// Get direct access to pixel buffer for faster writes
 	pix := result.Pix
 	stride := result.Stride
 
@@ -79,7 +76,6 @@ func warpAffine(img image.Image, transform AffineMatrix, width, height int) imag
 	// concrete-type check only need to happen once.
 	src := newSampler(img)
 
-	// Cache matrix values to avoid repeated array lookups
 	m00, m01, m02 := invTransform[0][0], invTransform[0][1], invTransform[0][2]
 	m10, m11, m12 := invTransform[1][0], invTransform[1][1], invTransform[1][2]
 
@@ -91,7 +87,6 @@ func warpAffine(img image.Image, transform AffineMatrix, width, height int) imag
 			srcX := m00*float32(x) + m01*float32(y) + m02
 			srcY := m10*float32(x) + m11*float32(y) + m12
 
-			// Bilinear interpolation with reflection padding
 			nrgba := bilinearInterpolate(src, srcX, srcY, true)
 
 			i := y*stride + x*4
@@ -105,23 +100,21 @@ func warpAffine(img image.Image, transform AffineMatrix, width, height int) imag
 	return result
 }
 
-// bilinearInterpolate performs bilinear interpolation at floating point coordinates
+// bilinearInterpolate samples src at fractional coordinates. reflect selects reflection padding at the edges
+// rather than clamping.
 func bilinearInterpolate(src *sampler, x, y float32, reflect bool) color.NRGBA {
 	bounds := src.bounds
 
-	// Calculate integer coordinates of the four surrounding pixels
 	x0 := int(math.Floor(float64(x)))
 	y0 := int(math.Floor(float64(y)))
 	x1 := x0 + 1
 	y1 := y0 + 1
 
-	// Calculate interpolation weights and their complements
 	wx := x - float32(x0)
 	wy := y - float32(y0)
 	wx0 := 1.0 - wx
 	wy0 := 1.0 - wy
 
-	// Map the four sample coordinates into bounds with the requested padding mode
 	if reflect {
 		x0 = reflectCoord(x0, bounds.Min.X, bounds.Max.X)
 		x1 = reflectCoord(x1, bounds.Min.X, bounds.Max.X)
@@ -134,7 +127,7 @@ func bilinearInterpolate(src *sampler, x, y float32, reflect bool) color.NRGBA {
 		y1 = utils.ClampInt(y1, bounds.Min.Y, bounds.Max.Y-1)
 	}
 
-	// Extract RGBA components (returns 16-bit values 0-65535)
+	// 16-bit channel values, 0-65535.
 	r00, g00, b00, a00 := src.at(x0, y0)
 	r10, g10, b10, a10 := src.at(x1, y0)
 	r01, g01, b01, a01 := src.at(x0, y1)

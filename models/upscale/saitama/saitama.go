@@ -27,14 +27,8 @@ var variant = &upscale.Variant{
 // # Why only fp16
 //
 // CoreML's typed execution bars an fp32 MLProgram from the Neural Engine, so at fp32 there is nothing to choose:
-// MLComputeUnits=ALL already means CPU and GPU, and asking for the Neural Engine anyway drops the graph onto the CPU.
-// Measured on an M2 Max (macOS 26.6.2, ONNX Runtime 1.26) over one 256x256 tile, median of 12 blocks of 3 runs:
-//
-//	         ALL (default)   CPUAndGPU        CPUAndNeuralEngine
-//	fp32     86.0ms          87.1ms (tie)     1675.7ms (+1849%)
-//
-// So the fp32 pass gets no setting. Nothing else moves it either: the re-export below is a tie at fp32 (86.9ms), and
-// so is CPUAndGPU on that export (86.7ms). Four rows within 1.3% of each other is one row.
+// MLComputeUnits=ALL already means CPU and GPU, and asking for the Neural Engine anyway drops the graph onto the CPU
+// (+1849% on an M2 Max). Nothing else moves the fp32 pass either - the re-export below and CPUAndGPU are both ties.
 //
 // # The fp16 pass, and why the export comes first
 //
@@ -47,61 +41,35 @@ var variant = &upscale.Variant{
 // off whichever engine is running the fp16 around them. Counting partitions says the model is fine; only a timing
 // says it is not.
 //
-// Both exports, same machine and method, every row against the published export on its default ALL:
+// The two exports invert the answer. On the published export the Neural Engine is the worst choice on offer, 50%
+// behind doing nothing; on the re-export it is the best by a wide margin (-54%), and the GPU is unchanged at 76ms on
+// both - the GPU never cared about the fp32 islands, and the Neural Engine could not get past them. Tuning the
+// compute units against that export would have measured the conversion and shipped CPUAndGPU, which is a third of
+// what is actually available here.
 //
-//	                    ALL              CPUAndGPU        CPUAndNeuralEngine
-//	published export    116.1ms          76.3ms (-34%)    173.5ms (+50%)
-//	re-export           72.9ms (-37%)    76.5ms (-34%)    53.2ms (-54%)
+// ALL is not a substitute for naming the unit. It lands between the two, and its spread is the tell: 63.3ms fastest
+// against a 72.9ms median, where every named configuration holds within 3ms of its own median. CoreML re-decides the
+// placement, and the setting is what stops it.
 //
-// Read the two rows rather than the two best numbers. On the published export the Neural Engine is the worst choice
-// on offer, 50% behind doing nothing; on the re-export it is the best by a wide margin, and the GPU is unchanged at
-// 76ms in both - the GPU never cared about the fp32 islands, and the Neural Engine could not get past them. Tuning
-// the compute units against that export would have measured the conversion and shipped CPUAndGPU, which is a third
-// of what is actually available here.
-//
-// ALL is not a substitute for naming the unit. It lands at 72.9ms, between the two, and its spread is the tell:
-// 63.3ms fastest against a 72.9ms median, where every named configuration holds within 3ms of its own median. CoreML
-// re-decides the placement, and the setting is what stops it.
-//
-// End to end through perftest on the 640x640 sample at 4x, median of 9 runs, which carries the tiling, the
-// reflection padding and the overlap blend on top of the graph - the three rows run back to back in one sitting, so
-// the machine's state is common to all of them:
-//
-//	        published export   re-export    re-export + this profile
-//	fp32    838.1ms            826.5ms      836.7ms  (tie)
-//	fp16    1.067s             677.7ms      551.1ms  (1.94x)
-//
-// The export is the larger half at 1.57x and the profile the smaller at 1.23x, and neither is reachable without the
-// other: the profile applied to the published export is the +50% row above.
+// End to end on the 640x640 sample at 4x, fp16 goes 1.067s -> 677.7ms with the re-export -> 551.1ms with this
+// profile. The export is the larger half at 1.57x and the profile the smaller at 1.23x, and neither is reachable
+// without the other: the profile applied to the published export is the +50% row above. fp32 is a tie throughout.
 //
 // # Quality
 //
-// Better than what shipped, not merely acceptable. Against an fp32 CPU-provider reference, worst-pixel deviation and
-// PSNR over one tile:
-//
-//	fp16 published / coreml ALL           3.973/255   68.7 dB   <- what shipped
-//	fp16 re-export / coreml ALL           2.928/255   69.3 dB
-//	fp16 re-export / coreml CPUAndGPU     2.511/255   72.9 dB
-//	fp16 re-export / coreml CPUAndANE     2.790/255   69.1 dB   <- what ships
-//
-// The GPU is the more accurate of the two engines, as it is on kyoto, and 44% slower for it; the difference is not
-// visible. The fp32 re-export is bit-identical to the published fp32 on the CPU provider, so the fp32 half of this
-// costs nothing to take.
+// Better than what shipped, not merely acceptable: 2.790/255 worst-pixel and 69.1 dB against an fp32 CPU-provider
+// reference, where the published export on ALL was 3.973/255 and 68.7 dB. The GPU is the more accurate of the two
+// engines, as it is on kyoto, and 44% slower for it; the difference is not visible. The fp32 re-export is
+// bit-identical to the published fp32 on the CPU provider, so the fp32 half of this costs nothing to take.
 //
 // # ModelFormat=NeuralNetwork, which is the trap
 //
-// It is the one remaining CoreML option, and on the fp32 graph it measures -38.9%: 53.6ms against MLProgram's
-// 87.7ms, the largest single number anywhere in this comment. It is not set, because it is not a speedup.
-//
-//	                                   time       worst pixel   PSNR
-//	fp32 / MLProgram (ships)           87.7ms     0.001/255     135.3 dB
-//	fp32 / NeuralNetwork               53.6ms     2.681/255      69.1 dB
-//	fp16 / MLProgram, ANE (ships)      52.9ms     2.790/255      69.1 dB
-//
-// The bottom two rows are the same row. NeuralNetwork is the older format and has no typed execution, so CoreML is
-// free to put an fp32 graph on the Neural Engine and run it in half precision - which is exactly what it does, to
-// four significant figures in both time and accuracy. The 38.9% is not fp32 getting faster; it is fp32 quietly
-// becoming fp16, at twice the download and with the precision the user asked for silently discarded.
+// It is the one remaining CoreML option, and on the fp32 graph it measures -38.9%, the largest single number
+// anywhere in this comment. It is not set, because it is not a speedup: NeuralNetwork is the older format and has no
+// typed execution, so CoreML is free to put an fp32 graph on the Neural Engine and run it in half precision - which
+// is exactly what it does, matching the shipping fp16/ANE row to four significant figures in both time (53.6ms
+// against 52.9ms) and accuracy (69.1 dB both). The 38.9% is not fp32 getting faster; it is fp32 quietly becoming
+// fp16, at twice the download and with the precision the user asked for silently discarded.
 //
 // This is the reason coreMLOptions pins ModelFormat to MLProgram for every model rather than leaving it tunable. An
 // option that trades accuracy for speed without saying so is one a profile should not be able to reach by accident,
@@ -109,17 +77,8 @@ var variant = &upscale.Variant{
 //
 // # What else was measured and left alone
 //
-// That exhausts the CoreML provider's options; the rest are noise on this graph, measured on top of the compute
-// units above:
-//
-//	                                          fp32      fp16
-//	SpecializationStrategy=FastPrediction     -1.5%     -0.5%
-//	AllowLowPrecisionAccumulationOnGPU=1      -2.1%     -0.0%
-//	EnableOnSubgraphs=1                       -1.5%     +0.0%
-//	ExecutionMode sequential (CoreML)         +0.5%     +8.0%
-//	ExecutionMode sequential (CPU provider)   -2.5%     +2.4%
-//
-// Four rows within 2% of each other, output bit-identical in all of them, is four ways of writing the same row.
+// That exhausts the CoreML provider's options; SpecializationStrategy, AllowLowPrecisionAccumulationOnGPU,
+// EnableOnSubgraphs and the execution mode are all within 2% on this graph with bit-identical output.
 //
 // The execution mode is worth a note because tokyo sets it and saitama, like kyoto, deliberately does not. Under
 // CoreML the question cannot arise - the provider takes the whole graph as one partition, so the inter-op pool has

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/types"
@@ -269,9 +268,9 @@ func createSessionInner(
 	ep types.ExecutionProvider,
 	p EPProfile,
 ) (*Session, error) {
-	modelsPath, err := fs.MkUserConfigDir(internal.AppName(), internal.ModelsDir)
+	modelsPath, err := internal.ConfigDir(internal.ModelsDir)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to resolve the models directory")
+		return nil, err
 	}
 
 	// The execution providers compile what they cache - a TensorRT engine, a CoreML MLProgram - from this model's
@@ -284,19 +283,19 @@ func createSessionInner(
 	stem := strings.TrimSuffix(modelFile, filepath.Ext(modelFile))
 	enginePath, err := internal.ConfigDir(internal.EngineCacheFor(stem))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to resolve the engine cache directory")
+		return nil, err
 	}
 
 	// Shared by every model, unlike the engine directory above - see internal.TimingCacheDir for why that is the only
 	// placement worth having.
 	timingPath, err := internal.ConfigDir(internal.TimingCacheDir)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to resolve the timing cache directory")
+		return nil, err
 	}
 
 	paths := cachePaths{engine: enginePath, timing: timingPath}
 
-	options, err := createOptions(currentPlatform, paths, ep, p)
+	options, trt, err := createOptions(currentPlatform, paths, ep, p)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create session options")
 	}
@@ -318,7 +317,6 @@ func createSessionInner(
 	// not look like a cache problem: a half-written timing cache makes TensorRT's createTimingCache return null,
 	// which ONNX Runtime turns into a failed session build, so the provider declines and every model quietly runs
 	// somewhere slower until the file is replaced.
-	trt := usesTensorRT(currentPlatform, ep, p)
 	if trt {
 		trtBuildMu.Lock()
 		defer trtBuildMu.Unlock()

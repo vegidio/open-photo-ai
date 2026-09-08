@@ -7,7 +7,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
-	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/go-sak/os"
 	"github.com/vegidio/go-sak/sysinfo"
 	"github.com/vegidio/open-photo-ai/internal"
@@ -78,9 +77,11 @@ func InitializeNvidiaLib(ctx context.Context, libName string, onProgress types.D
 		return errors.Wrap(err, "failed to prepare NVIDIA library")
 	}
 
-	libPath, err := fs.MkUserConfigDir(internal.AppName(), "libs", libName)
+	// dep.Destination rather than a second copy of the same join: Install resolved that exact path, so the directory
+	// added to the loader's search path is by construction the one the files were written to.
+	libPath, err := internal.ConfigDir(dep.Destination)
 	if err != nil {
-		return errors.Wrap(err, "failed to create NVIDIA library directory")
+		return err
 	}
 
 	os.AppendEnvPath("PATH", libPath)

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/vegidio/go-sak/fs"
 	"github.com/vegidio/open-photo-ai/internal"
 	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/internal/utils"
@@ -232,9 +231,9 @@ func pruneLegacyLayout() {
 }
 
 func startRuntime() error {
-	configDir, err := fs.MkUserConfigDir(internal.AppName(), internal.RuntimeDir)
+	configDir, err := internal.ConfigDir(internal.RuntimeDir)
 	if err != nil {
-		return errors.Wrap(err, "failed to create config directory")
+		return err
 	}
 
 	pinned, found := internal.PinnedArchive("onnx")

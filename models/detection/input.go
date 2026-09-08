@@ -63,7 +63,7 @@ func createInputTensorData(resized image.Image, newWidth, newHeight, targetSize 
 
 	// Pre-fill every cell with the padding value (negative mean); the real image region is overwritten below. This
 	// keeps the padding logic in one place regardless of which pixel-access path is used.
-	for idx := 0; idx < channelSize; idx++ {
+	for idx := range channelSize {
 		inputData[bOffset+idx] = -meanB
 		inputData[gOffset+idx] = -meanG
 		inputData[rOffset+idx] = -meanR
@@ -73,11 +73,11 @@ func createInputTensorData(resized image.Image, newWidth, newHeight, targetSize 
 	// buffer directly (avoiding ~newWidth*newHeight color.Color allocations and 16-bit conversions from At().RGBA());
 	// the generic fallback covers any other image type. imaging.Resize returns *image.NRGBA, so the fast path is taken.
 	if nrgba, ok := resized.(*image.NRGBA); ok {
-		for y := 0; y < newHeight; y++ {
+		for y := range newHeight {
 			rowOffset := y * targetSize
 			pixRow := y * nrgba.Stride
 
-			for x := 0; x < newWidth; x++ {
+			for x := range newWidth {
 				p := pixRow + x*4
 				idx := rowOffset + x
 
@@ -88,14 +88,13 @@ func createInputTensorData(resized image.Image, newWidth, newHeight, targetSize 
 			}
 		}
 	} else {
-		for y := 0; y < newHeight; y++ {
+		for y := range newHeight {
 			rowOffset := y * targetSize
 
-			for x := 0; x < newWidth; x++ {
+			for x := range newWidth {
 				r, g, b, _ := resized.At(x, y).RGBA()
 				idx := rowOffset + x
 
-				// Convert from 16-bit to 8-bit and subtract mean
 				inputData[bOffset+idx] = float32(b>>8) - meanB
 				inputData[gOffset+idx] = float32(g>>8) - meanG
 				inputData[rOffset+idx] = float32(r>>8) - meanR

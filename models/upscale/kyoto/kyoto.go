@@ -22,33 +22,20 @@ var variant = &upscale.Variant{
 //
 // CoreML's typed execution bars an fp32 MLProgram from the Neural Engine altogether, so at fp32 there is nothing to
 // choose: MLComputeUnits=ALL already means CPU and GPU. Asking for the Neural Engine anyway does not get it, it
-// drops the graph onto the CPU. Measured on an M2 Max (macOS 26.6.2, ONNX Runtime 1.26) over one 256x256 tile:
-//
-//	              ALL (default)   CPUAndGPU        CPUAndNeuralEngine
-//	2x fp32       75.7ms          77.1ms (tie)     694.3ms (+817%)
-//	4x fp32       276.7ms         293.3ms (tie)    5542.3ms (+1903%)
-//
-// So the fp32 passes get no setting: there is no faster configuration to name, and the one that looks like it might
-// be is a 9x and a 20x regression.
+// drops the graph onto the CPU - a 9x regression at 2x and a 20x one at 4x on an M2 Max. So the fp32 passes get no
+// setting.
 //
 // # The fp16 passes
 //
 // This is an RRDBNet - 351 convolutions, 279 LeakyRelus and 276 concatenations, no attention anywhere - which is
-// exactly the dense-convolution mix the Neural Engine is built for. Measured out of tree: medians of 36 blocks of 5
-// runs across nine interleaved rounds, same machine:
-//
-//	              ALL (default)   CPUAndGPU        CPUAndNeuralEngine
-//	2x fp16       44.9ms          70.1ms (+56%)    44.9ms (tie)
-//	4x fp16       211.1ms         229.1ms (+8.5%)  168.9ms (-20%)
-//
-// At 2x, ALL already finds the Neural Engine and naming it changes nothing; at 4x, ALL splits the graph and loses
-// 25% to the transitions. Naming it is what makes the two passes behave the same way, which is the point: the
-// setting is not there for the 2x tie, it is there so the 4x pass stops being scheduled differently from its
-// sibling.
+// exactly the dense-convolution mix the Neural Engine is built for. At 2x, ALL already finds the Neural Engine and
+// naming it changes nothing; at 4x, ALL splits the graph and loses 25% to the transitions (211.1ms against 168.9ms).
+// Naming it is what makes the two passes behave the same way, which is the point: the setting is not there for the 2x
+// tie, it is there so the 4x pass stops being scheduled differently from its sibling.
 //
 // # This depends on the export, and that is the larger half of the story
 //
-// The same table against the PREVIOUS export says the opposite - 4x fp16 measured 288.8ms on the Neural Engine
+// The same comparison against the PREVIOUS export says the opposite - 4x fp16 measured 288.8ms on the Neural Engine
 // against 231.8ms on the GPU, and CPUAndGPU was the setting this profile originally carried.
 //
 // What changed is not the tuning but the graph. That export ran its two upsample Resize nodes in fp32, because
@@ -65,25 +52,14 @@ var variant = &upscale.Variant{
 // The lesson generalises past kyoto: on CoreML, measure an fp16 graph's compute units only after checking that the
 // float16 conversion did not leave fp32 islands in it. Tuning around one measures the conversion, not the model.
 //
-// End to end through perftest on the 640x640 sample at fp16, median of 5 runs, which carries the tiling, the
-// reflection padding and the overlap blend on top of the graph:
-//
-//	        published export, no profile   re-export + this profile
-//	2x      489.5ms                        434.0ms  (1.13x)
-//	4x      3.001s                         1.587s   (1.89x)
-//	8x      9.717s                         7.370s   (1.32x)
-//
-// 8x gains least because it is nine tiles through the 4x graph followed by 121 through the 2x one, and the 2x pass
-// was already reaching the Neural Engine on its own.
+// End to end on the 640x640 sample at fp16, the re-export plus this profile is worth 1.13x at 2x, 1.89x at 4x and
+// 1.32x at 8x. 8x gains least because it is nine tiles through the 4x graph followed by 121 through the 2x one, and
+// the 2x pass was already reaching the Neural Engine on its own.
 //
 // # What was measured and left alone
 //
-// Everything else is noise on this graph, so the profile names none of it:
-//
-//	SpecializationStrategy=FastPrediction     +1.2% fp32, +2.0% fp16
-//	AllowLowPrecisionAccumulationOnGPU=1      -3.1% fp32, +3.0% fp16, output bit-identical
-//	ExecutionMode sequential (CoreML)         +0.2% fp32, sign flips between sweeps
-//	ExecutionMode sequential (CPU provider)   +0.7% fp32, +1.0% fp16
+// SpecializationStrategy, AllowLowPrecisionAccumulationOnGPU and the execution mode are all within about 3% on this
+// graph with bit-identical output, so the profile names none of them.
 //
 // The execution mode is worth a note because tokyo sets it and kyoto deliberately does not. Under CoreML the
 // question cannot arise: the provider takes all 1024 nodes as a single partition, so the inter-op pool has one node
