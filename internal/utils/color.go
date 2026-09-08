@@ -212,7 +212,6 @@ func RgbToLabLBytes(r, g, b uint8) float32 {
 // linear matrix rows sum to 1.000003, 1.000004 and 0.999993 against the D65 white point - so the L scaling cancels and
 // all three channels collapse to one gamma encode. Going through Lab cost a math.Cbrt, two cubes and three math.Pow
 // per pixel to compute a value the luminance already had.
-
 func GrayFromRgbBytes(r, g, b uint8) float32 {
 	y := 0.212671*srgbLinearLUT[r] + 0.715160*srgbLinearLUT[g] + 0.072169*srgbLinearLUT[b]
 	return float32(linearToSrgb(y))

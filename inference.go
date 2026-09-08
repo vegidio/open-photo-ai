@@ -142,10 +142,22 @@ func Process(
 	internal.Log().Info("image processed",
 		"op_count", len(operations), "hash", input.Hash, "duration", time.Since(start))
 
+	// The returned pixels are not the input's, so they must not carry the input's hash. ImageData documents Hash as
+	// identifying Pixels, and the API invites chaining - the GUI already appends a crop key to a hash for exactly this
+	// reason. Handing back the input hash meant a second Process call over the result looked its operations up under
+	// the original image's identity and got the first call's output.
+	//
+	// The new hash is the same composition the image cache keys on, so a chained pair of calls and a single call with
+	// the operations concatenated agree on it.
+	outHash := input.Hash
+	if len(operations) > 0 {
+		outHash = internal.ImageHashAfter(input.Hash, operations)
+	}
+
 	return &types.ImageData{
 		FilePath: input.FilePath,
 		Pixels:   output,
-		Hash:     input.Hash,
+		Hash:     outHash,
 	}, nil
 }
 
@@ -450,7 +462,7 @@ func selectModel(
 	ep types.ExecutionProvider,
 	onProgress types.DownloadProgress,
 ) (*internal.Lease, error) {
-	return internal.AcquireModel(operation.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
+	return internal.AcquireModel(ctx, operation.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
 		return newModel(ctx, operation, ep, onProgress)
 	})
 }

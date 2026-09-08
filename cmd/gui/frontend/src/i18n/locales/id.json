@@ -322,6 +322,7 @@
         "faceDetectFailed": "Terjadi kesalahan. Gagal mendeteksi wajah.",
         "showLogsFailed": "Tidak dapat membuka file log. Anda bisa menemukannya di folder konfigurasi aplikasi.",
         "revealFailed": "Tidak dapat membuka pengelola berkas. Berkas tetap tersimpan di lokasi ekspornya.",
+        "revealFileFailed": "Tidak dapat membuka pengelola berkas.",
         "openUrlFailed": "Tidak dapat membuka peramban. Kunjungi halaman rilis di GitHub untuk mengunduh pembaruannya."
     }
 }

@@ -28,6 +28,8 @@ func AppName() string {
 	return *appName.Load()
 }
 
+// RemoteModelData is one model's entry in the published manifest: what the file is called, how big it should be, and
+// the hash its bytes must match. It is what makes a downloaded model verifiable.
 type RemoteModelData struct {
 	Name string
 	Size int64

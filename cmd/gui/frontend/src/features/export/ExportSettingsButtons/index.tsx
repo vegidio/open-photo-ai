@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@mui/material';
 import { CancelError, type CancellablePromise, Events } from '@wailsio/runtime';
 import { useTranslation } from 'react-i18next';
@@ -15,9 +15,13 @@ type ExportSettingsButtonsProps = {
     enhancements: Map<File, Operation[]>;
     quality: QualityChoices;
     onClose: () => void;
+
+    // Reports whether a batch is in flight, so the dialog above can refuse to close mid-export. It is reported up
+    // rather than held there because the batch is driven from here.
+    onBusyChange?: (busy: boolean) => void;
 };
 
-export const ExportSettingsButtons = ({ enhancements, quality, onClose }: ExportSettingsButtonsProps) => {
+export const ExportSettingsButtons = ({ enhancements, quality, onClose, onBusyChange }: ExportSettingsButtonsProps) => {
     const { t } = useTranslation();
     const format = useExportStore((state) => state.format);
     const prefix = useExportStore((state) => state.prefix);
@@ -32,6 +36,27 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose }: Export
     const [state, setState] = useState<'idle' | 'processing' | 'completed'>('idle');
     const suggestRef = useRef<CancellablePromise<Operation[]> | undefined>(undefined);
     const exportRef = useRef<CancellablePromise<void> | undefined>(undefined);
+
+    // Both refs are cancelled here as well as by Abort, because Abort is not the only way out of this component. The
+    // dialog closes on Escape and unmounts the whole subtree, and without this the batch carried on writing files the
+    // user believed they had stopped - emitting per-file events at listeners that no longer exist and finishing on a
+    // setState against an unmounted component.
+    //
+    // Empty deps: this must run on unmount only. Cancelling a settled promise is a no-op, so there is nothing to
+    // guard against a batch that already finished.
+    useEffect(
+        () => () => {
+            suggestRef.current?.cancel();
+            exportRef.current?.cancel();
+        },
+        [],
+    );
+
+    // Kept in one place so the dialog's view of "busy" cannot drift from the button labels' view of it.
+    const enter = (next: 'idle' | 'processing' | 'completed') => {
+        setState(next);
+        onBusyChange?.(next === 'processing');
+    };
 
     const handleCancel = () => {
         switch (state) {
@@ -117,7 +142,7 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose }: Export
         // persisted, clamping included.
         const committed = useSettingsStore.getState().quality;
 
-        setState('processing');
+        enter('processing');
 
         // `file_count`, not `count`: this is the number of files the batch will attempt, which is what the per-file
         // `export_completed` events should add up to. The old name sat next to a per-file `count` on other events and
@@ -143,7 +168,7 @@ export const ExportSettingsButtons = ({ enhancements, quality, onClose }: Export
             duration_ms: Math.round(performance.now() - startedAt),
         });
 
-        setState(completed ? 'completed' : 'idle');
+        enter(completed ? 'completed' : 'idle');
     };
 
     return (

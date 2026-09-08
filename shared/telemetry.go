@@ -3,13 +3,15 @@ package shared
 import (
 	"fmt"
 	"log/slog"
-	"sort"
+	"slices"
 
 	"github.com/vegidio/go-sak/o11y"
 	"github.com/vegidio/go-sak/sysinfo"
 	"github.com/vegidio/open-photo-ai/internal"
 )
 
+// ReportSystemInfo records the machine's CPU, memory and GPU details once per run, so a bug report carries the
+// hardware it happened on without the user having to describe it.
 func ReportSystemInfo(otel *o11y.Telemetry) {
 	info := make(map[string]any)
 
@@ -42,7 +44,7 @@ func ReportSystemInfo(otel *o11y.Telemetry) {
 	for k := range info {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	attrs := make([]any, 0, len(info)*2)
 	for _, k := range keys {

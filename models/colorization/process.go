@@ -150,10 +150,10 @@ func compose(img image.Image, aPlane, bPlane []float32, srcSize int) image.Image
 	for start := 0; start < height; start += band {
 		wg.Add(1)
 
-		go func(yStart int) {
+		go func() {
 			defer wg.Done()
-			rows(yStart, min(yStart+band, height))
-		}(start)
+			rows(start, min(start+band, height))
+		}()
 	}
 
 	wg.Wait()

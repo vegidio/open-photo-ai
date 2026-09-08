@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"math"
 	"math/rand/v2"
+
+	"github.com/vegidio/open-photo-ai/internal/utils"
 )
 
 // The DiT takes 33 channels, laid out as concat([noise, encoded_latent, ones_mask]) - noise first, then the latent of
@@ -32,7 +34,12 @@ const (
 // All three tensors are planar, so each group is a contiguous run of channel planes and packing is a set of copies
 // rather than an interleaving.
 func packVidInput(cond, noise []float32, plane int) []float32 {
-	out := make([]float32, ditChannels*plane)
+	return packVidInputInto(nil, cond, noise, plane)
+}
+
+// packVidInputInto is packVidInput reusing dst. See regionScratch for why the region loop needs it.
+func packVidInputInto(dst, cond, noise []float32, plane int) []float32 {
+	out := utils.Grow(dst, ditChannels*plane)
 	noiseAt, condAt, taskAt := 0, latentChannels, 2*latentChannels
 
 	for c := range latentChannels {
@@ -56,13 +63,19 @@ func packVidInput(cond, noise []float32, plane int) []float32 {
 // origin also means a tile's noise does not depend on how many tiles preceded it, so changing the tile size does not
 // reshuffle the noise of the tiles that kept their position.
 func gaussianNoise(n, originX, originY int, seed uint64) []float32 {
+	return gaussianNoiseInto(nil, n, originX, originY, seed)
+}
+
+// gaussianNoiseInto is gaussianNoise reusing dst. The seed still comes from the region's position, so reusing the
+// buffer changes nothing about which noise a region gets.
+func gaussianNoiseInto(dst []float32, n, originX, originY int, seed uint64) []float32 {
 	var key [32]byte
 	binary.LittleEndian.PutUint64(key[0:], seed)
 	binary.LittleEndian.PutUint64(key[8:], uint64(int64(originX)))
 	binary.LittleEndian.PutUint64(key[16:], uint64(int64(originY)))
 
 	r := rand.New(rand.NewChaCha8(key))
-	out := make([]float32, n)
+	out := utils.Grow(dst, n)
 
 	// Box-Muller, two samples at a time.
 	for i := 0; i < n; i += 2 {
@@ -85,7 +98,12 @@ func gaussianNoise(n, originX, originY int, seed uint64) []float32 {
 
 // cropCHW extracts a rectangular region from planar CHW data.
 func cropCHW(src []float32, width, height, x0, y0, w, h, channels int) []float32 {
-	out := make([]float32, channels*w*h)
+	return cropCHWInto(nil, src, width, height, x0, y0, w, h, channels)
+}
+
+// cropCHWInto is cropCHW reusing dst. See regionScratch.
+func cropCHWInto(dst, src []float32, width, height, x0, y0, w, h, channels int) []float32 {
+	out := utils.Grow(dst, channels*w*h)
 	srcPlane, dstPlane := width*height, w*h
 
 	for c := range channels {

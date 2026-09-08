@@ -107,46 +107,6 @@ func scanImage(img image.Image) imageStats {
 		return stats
 	}
 
-	accumulate := func(r, g, b uint32) {
-		// Convert from 16-bit to 8-bit
-		r8 := float64(r >> 8)
-		g8 := float64(g >> 8)
-		b8 := float64(b >> 8)
-
-		// Perceived luminance (Rec. 709)
-		luminance := 0.2126*r8 + 0.7152*g8 + 0.0722*b8
-		stats.sumLuminance += luminance
-
-		if luminance <= darkThreshold {
-			stats.darkPixels++
-		} else if luminance >= brightThreshold {
-			stats.brightPixels++
-		}
-
-		stats.sumR += r8
-		stats.sumG += g8
-		stats.sumB += b8
-
-		// Saturation alone first: the hue below is only read inside this branch, and computing it for every pixel of
-		// a 24 MP image to use it on the near-neutral ones is most of the cost of this scan.
-		s := utils.RgbSaturation(r8, g8, b8)
-
-		if s < neutralSatCutoff {
-			stats.neutralSumR += r8
-			stats.neutralSumG += g8
-			stats.neutralSumB += b8
-
-			h, _, _ := utils.RgbToHsv(r8, g8, b8)
-
-			bin := int(h / 360.0 * float64(hueBinCount))
-			if bin >= hueBinCount {
-				bin = hueBinCount - 1
-			}
-			stats.neutralHueHistogram[bin]++
-			stats.neutralPixels++
-		}
-	}
-
 	// Fast path: read the backing pixel buffer directly, skipping the per-pixel interface dispatch and color boxing.
 	if pix, stride, ok := utils.RgbPixBuffer(img); ok {
 		_, isNRGBA := img.(*image.NRGBA)
@@ -156,7 +116,7 @@ func scanImage(img image.Image) imageStats {
 
 			for x := range width {
 				r, g, b, _ := utils.Sample16(pix, row+x*4, isNRGBA)
-				accumulate(r, g, b)
+				stats.accumulate(r, g, b)
 			}
 		}
 
@@ -167,11 +127,56 @@ func scanImage(img image.Image) imageStats {
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			r, g, b, _ := img.At(x, y).RGBA()
-			accumulate(r, g, b)
+			stats.accumulate(r, g, b)
 		}
 	}
 
 	return stats
+}
+
+// accumulate folds one pixel into the running statistics.
+//
+// A method on the struct rather than the closure this used to be. It runs once per pixel - 24 million times on a
+// full-frame photo - and a closure capturing stats by reference forces the struct onto the heap and puts an indirection
+// on every one of those field updates.
+func (stats *imageStats) accumulate(r, g, b uint32) {
+	// Convert from 16-bit to 8-bit
+	r8 := float64(r >> 8)
+	g8 := float64(g >> 8)
+	b8 := float64(b >> 8)
+
+	// Perceived luminance (Rec. 709)
+	luminance := 0.2126*r8 + 0.7152*g8 + 0.0722*b8
+	stats.sumLuminance += luminance
+
+	if luminance <= darkThreshold {
+		stats.darkPixels++
+	} else if luminance >= brightThreshold {
+		stats.brightPixels++
+	}
+
+	stats.sumR += r8
+	stats.sumG += g8
+	stats.sumB += b8
+
+	// Saturation alone first: the hue below is only read inside this branch, and computing it for every pixel of
+	// a 24 MP image to use it on the near-neutral ones is most of the cost of this scan.
+	s := utils.RgbSaturation(r8, g8, b8)
+
+	if s < neutralSatCutoff {
+		stats.neutralSumR += r8
+		stats.neutralSumG += g8
+		stats.neutralSumB += b8
+
+		h, _, _ := utils.RgbToHsv(r8, g8, b8)
+
+		bin := int(h / 360.0 * float64(hueBinCount))
+		if bin >= hueBinCount {
+			bin = hueBinCount - 1
+		}
+		stats.neutralHueHistogram[bin]++
+		stats.neutralPixels++
+	}
 }
 
 func shouldLightAdjustment(stats imageStats) bool {

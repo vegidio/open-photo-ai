@@ -24,6 +24,7 @@ const (
 	progressAfterDecode = 1.0
 )
 
+// Run detects faces in img, returning one entry per face above the confidence threshold.
 func Run(
 	ctx context.Context,
 	session *utils.Session,

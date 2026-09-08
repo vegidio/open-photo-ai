@@ -19,6 +19,10 @@ import (
 	"github.com/vegidio/open-photo-ai/internal"
 )
 
+// maxTransferPasses bounds acquire's retry loop. Two: one transfer, plus one clean restart if what was resumed turned
+// out not to hash. A third would only be retrying the clean download that just failed.
+const maxTransferPasses = 2
+
 // stallTimeout is how long a transfer may deliver nothing before the attempt is abandoned and
 // retried.
 //
@@ -60,10 +64,10 @@ func acquire(ctx context.Context, dir string, src Source, skipVerify bool, agg *
 	part, state := partPaths(dir, name)
 	prog := &sourceProgress{agg: agg}
 
-	// Two passes at most. The second only happens when a resumed transfer failed verification, where
-	// the prefix on disk is the likeliest suspect and a clean run is the cheapest way to be sure -
-	// see the mismatch handling below.
-	for attempt := range 2 {
+	// The second pass only happens when a resumed transfer failed verification, where the prefix on
+	// disk is the likeliest suspect and a clean run is the cheapest way to be sure - see the mismatch
+	// handling below.
+	for attempt := range maxTransferPasses {
 		sum, size, resumed, err := fill(ctx, src, part, state, prog)
 		if err != nil {
 			return File{}, err
@@ -229,7 +233,26 @@ func transfer(
 	if err != nil {
 		return 0, 0, "", errors.Wrap(err, "failed to create the destination file")
 	}
-	defer file.Close()
+
+	// Flush and close are folded into the returned error rather than deferred and dropped. The digest is computed over
+	// the bytes as they stream past, never read back from disk, so an ENOSPC or EIO that only surfaces at flush would
+	// otherwise leave a file that does not hold the bytes that were verified - and acquire would rename it into place
+	// and record it as good. Manifest.intact only stats sizes afterwards, so nothing downstream would catch it either.
+	defer func() {
+		syncErr := file.Sync()
+		closeErr := file.Close()
+
+		if err != nil {
+			return
+		}
+
+		switch {
+		case syncErr != nil:
+			err = errors.Wrap(syncErr, "failed to flush the destination file")
+		case closeErr != nil:
+			err = errors.Wrap(closeErr, "failed to close the destination file")
+		}
+	}()
 
 	// Truncating to the resume point stands in for the O_TRUNC this used to open with: it drops any
 	// tail past where the server is about to continue from, so a shorter artifact overwriting a

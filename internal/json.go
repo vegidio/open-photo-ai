@@ -38,6 +38,16 @@ func WriteJSONAtomic(dir, name string, v any) error {
 		return errors.Wrapf(err, "failed to write %s", name)
 	}
 
+	// Rename is atomic with respect to a reader, but not with respect to a crash: without this the directory entry can
+	// reach disk while the bytes it points at are still in the page cache, leaving exactly the empty-or-truncated
+	// document this function promises never to produce.
+	if err = f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+
+		return errors.Wrapf(err, "failed to flush %s", name)
+	}
+
 	if err = f.Close(); err != nil {
 		os.Remove(tmp)
 		return errors.Wrapf(err, "failed to write %s", name)

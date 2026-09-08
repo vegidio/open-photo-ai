@@ -45,7 +45,7 @@ func GetDtModel(
 ) (types.Model[[]detection.Face], *internal.Lease, error) {
 	dtOp := newyork.Op(precision)
 
-	lease, err := internal.AcquireModel(dtOp.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
+	lease, err := internal.AcquireModel(ctx, dtOp.Id(), ep, func(ep types.ExecutionProvider) (any, error) {
 		return newyork.New(ctx, dtOp, ep, nil)
 	})
 

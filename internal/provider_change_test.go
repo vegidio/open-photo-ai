@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"testing"
 
 	"github.com/vegidio/open-photo-ai/types"
@@ -8,7 +9,7 @@ import (
 
 // acquireProvider acquires id on ep, so a test can build entries on different providers.
 func acquireProvider(id string, ep types.ExecutionProvider) (*Lease, error) {
-	return AcquireModel(id, ep, func(types.ExecutionProvider) (any, error) {
+	return AcquireModel(context.Background(), id, ep, func(types.ExecutionProvider) (any, error) {
 		return &fakeModel{bytes: 100}, nil
 	})
 }

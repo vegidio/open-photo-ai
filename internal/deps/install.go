@@ -2,6 +2,9 @@ package deps
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -82,7 +85,7 @@ func Install(ctx context.Context, dep Dependency, onProgress types.DownloadProgr
 	// The debug override: a model dropped in by hand has no manifest at all and must still be used as it is.
 	if dep.SkipVerify && sourcesPresent(dir, dep) {
 		internal.Log().Warn("model verification skipped; using the files on disk", "dep", dep.Name)
-		return nil
+		return refreshUnverified(dir, dep)
 	}
 
 	want := fingerprint(dep)
@@ -290,12 +293,59 @@ func EmptyDir(dir string) error {
 // configDir resolves one of the slash-separated paths a Dependency names - Destination, or an entry in Derived - to an
 // OS path under the user's config directory, creating it if it isn't there.
 func configDir(rel string) (string, error) {
-	dir, err := fs.MkUserConfigDir(internal.AppName(), strings.Split(rel, "/")...)
+	return internal.ConfigDir(rel)
+}
+
+// refreshUnverified is the SkipVerify path's stand-in for the derived-cache invalidation the verified path does before
+// it writes.
+//
+// It matters most here: hand-dropping a model is the workflow where the weights change most often, and an engine
+// compiled from the previous ones is at best wasted disk and at worst silently wrong. But clearing unconditionally on
+// every launch would rebuild a TensorRT engine each time - minutes - and make the flag unusable, so the files on disk
+// are stamped and the caches are cleared only when that stamp moves.
+func refreshUnverified(dir string, dep Dependency) error {
+	stamp, err := unverifiedStamp(dir, dep)
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to resolve the %s directory", rel)
+		return err
 	}
 
-	return dir, nil
+	if old, hasOld := readManifest(dir, dep.manifestName()); hasOld && old.Fingerprint == stamp {
+		return nil
+	}
+
+	if err = removeDerived(dep); err != nil {
+		return err
+	}
+
+	// Recorded with no file list, so the record is useless to anything but this comparison: Manifest.intact treats an
+	// empty list as "not installed", which means a later run with the flag off reinstalls from the real sources rather
+	// than trusting files that were never verified.
+	return writeManifest(dir, dep.manifestName(), Manifest{
+		Schema:      manifestSchema,
+		Name:        dep.Name,
+		Version:     dep.Version,
+		Fingerprint: stamp,
+	})
+}
+
+// unverifiedStamp fingerprints the source files as they sit on disk, for the SkipVerify path where there is no expected
+// hash to compare against. Size and mtime are what an edit changes and what a stat already reports, so this costs one
+// lstat per source rather than re-reading gigabytes of weights on every launch.
+func unverifiedStamp(dir string, dep Dependency) (string, error) {
+	h := sha256.New()
+
+	for _, src := range dep.Sources {
+		name := src.FileName()
+
+		info, err := os.Lstat(filepath.Join(dir, name))
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to stat %s", name)
+		}
+
+		fmt.Fprintf(h, "%s\x00%d\x00%d\x00", name, info.Size(), info.ModTime().UnixNano())
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // removeDerived drops the caches built from a dependency. They are rebuilt by whoever owns them - for the execution

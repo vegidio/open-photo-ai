@@ -21,6 +21,14 @@ export type ImageViewport = {
     height: number;
 };
 
+// The viewport is written from a pan handler, so it is compared before it is stored - see setViewport.
+const sameViewport = (a: ImageViewport | undefined, b: ImageViewport | undefined): boolean => {
+    if (a === b) return true;
+    if (!a || !b) return false;
+
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+};
+
 enableMapSet();
 
 type ImageStore = {
@@ -39,7 +47,7 @@ type ImageStore = {
 };
 
 export const useImageStore = create(
-    immer<ImageStore>((set, _) => ({
+    immer<ImageStore>((set, get) => ({
         originalImage: undefined,
         enhancedImage: undefined,
         imageTransform: new Map(),
@@ -63,7 +71,13 @@ export const useImageStore = create(
             });
         },
 
+        // Compared before storing, unlike the setters above. In "side" and "split" mode two ZoomImage panes share one
+        // transform key and both recompute this single slot on every animation frame of a pan, each writing a fresh
+        // object. Without the comparison every one of those frames re-rendered each viewport subscriber - SidebarImage
+        // draws from it - with numbers that were usually identical to the ones already there.
         setViewport: (viewport: ImageViewport | undefined) => {
+            if (sameViewport(get().viewport, viewport)) return;
+
             set((state) => {
                 state.viewport = viewport;
             });

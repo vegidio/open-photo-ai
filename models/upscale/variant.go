@@ -138,6 +138,14 @@ func (v *Variant) New(
 
 	scales := SelectScaleMatrix(op.scale, v.ScaleBuckets)
 
+	// SelectScaleMatrix returns nil when no bucket covers the scale. Unguarded, that builds zero sessions, RunPipeline
+	// then iterates zero passes, and the caller gets resizeToIntendedScale's plain Lanczos resize presented as a
+	// successful AI upscale - no error, no log line. ClampScale keeps this unreachable today; it is a guard against a
+	// future bucket table that leaves a gap, in the same spirit as the empty-tile check in utils.RunTiledInference.
+	if len(scales) == 0 {
+		return nil, errors.Errorf("no scale bucket covers %gx for %s", op.scale, v.Codename)
+	}
+
 	// One session per scale pass. The ids match what this variant's Op.Id() composes -
 	// `up_<variant>_<scale>x_<precision>` - so the sessions the registry caches are the ones the operation names.
 	specs := make([]utils.SessionSpec, 0, len(scales))
@@ -311,8 +319,17 @@ func (m *Model) Name() string {
 }
 
 // Graph returns the session bound to role, as named by the variant's GraphSpec.
-func (m *Model) Graph(role string) *utils.Session {
-	return m.graphs[role]
+//
+// The error is what makes role binding by name safer than binding by position, which is the reason GraphSpec.Role
+// exists at all: a role the variant never declared is a programming error in the pipeline, and returning the map's nil
+// for it only moved the failure to a nil dereference inside the ONNX session's Run.
+func (m *Model) Graph(role string) (*utils.Session, error) {
+	session, ok := m.graphs[role]
+	if !ok {
+		return nil, errors.Errorf("no graph is bound to the role %q on %s", role, m.name)
+	}
+
+	return session, nil
 }
 
 // EP is the execution provider the sessions were opened on, which a variant's pipeline may need in order to warn

@@ -1,4 +1,5 @@
 import { Divider, ListItemText, Menu, MenuItem, type PopoverOrigin } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
 import type { File } from '@/bindings/gui/types';
 import { RevealInFileManager } from '@/bindings/gui/services/osservice.ts';
@@ -24,6 +25,7 @@ export const MenuFileOptions = ({
     onMenuClose,
 }: MenuFileOptionsProps) => {
     const { t } = useTranslation();
+    const { enqueueSnackbar } = useSnackbar();
     const { removeFile, clearAll } = useFileManager();
     const setOpen = useDrawerStore((state) => state.setOpen);
 
@@ -42,9 +44,18 @@ export const MenuFileOptions = ({
         updateDrawer();
     };
 
-    const onReveal = () => {
-        RevealInFileManager(file.Path);
+    // Guarded rather than left floating, matching the export queue's reveal button and the log-file button in
+    // Settings: revealing can fail on a file that was moved or deleted since it was opened, and silently doing nothing
+    // reads as a broken menu item. The menu closes either way - the click was handled.
+    const onReveal = async () => {
         onMenuClose();
+
+        try {
+            await RevealInFileManager(file.Path);
+        } catch (e) {
+            console.error('Failed to reveal the file', e);
+            enqueueSnackbar(t('errors.revealFileFailed'), { variant: 'error' });
+        }
     };
 
     const options = [

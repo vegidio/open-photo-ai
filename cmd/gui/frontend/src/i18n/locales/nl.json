@@ -325,6 +325,7 @@
         "faceDetectFailed": "Er is iets misgegaan. Gezichten konden niet worden gedetecteerd.",
         "showLogsFailed": "Kan het logbestand niet openen. Je vindt het in de configuratiemap van de app.",
         "revealFailed": "Kon de bestandsbeheerder niet openen. Het bestand staat nog steeds op de exportlocatie.",
+        "revealFileFailed": "Kon de bestandsbeheerder niet openen.",
         "openUrlFailed": "Kon de browser niet openen. Ga naar de releasepagina op GitHub om de update te downloaden."
     }
 }

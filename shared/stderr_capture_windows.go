@@ -54,6 +54,10 @@ const (
 // startup. Left alone, os.Stderr would name a closed handle, and a closed handle on Windows is worse than a dead one:
 // the value is reused, and a later print could land in whatever object inherited it.
 func redirectStderr(w *os.File) (*os.File, func() error, error) {
+	if err := resolveUCRT(); err != nil {
+		return nil, nil, err
+	}
+
 	// A descriptor owns the handle it was opened on: _close(2), and the _dup2 below when it restores, would close
 	// this one. Go owns w, so the runtime gets a duplicate of its own to destroy.
 	proc := windows.CurrentProcess()
@@ -109,6 +113,35 @@ func redirectStderr(w *os.File) (*os.File, func() error, error) {
 	_ = windows.SetStdHandle(windows.STD_ERROR_HANDLE, windows.Handle(w.Fd()))
 
 	return saved, func() error { return restoreStderr(savedFd, prev, reopened) }, nil
+}
+
+// resolveUCRT binds every entry point this file uses, so a missing one is an error rather than a panic.
+//
+// LazyProc.Call panics when the DLL cannot be loaded or the symbol is not exported, and SetupLogging is written to
+// treat a failed capture as a warning it logs and carries on from - losing ORT's lines, not the launch. Without this,
+// a Windows image whose ucrtbase.dll lacks one of these would take the panic instead, at startup, before there is a
+// log to explain it.
+func resolveUCRT() error {
+	procs := []struct {
+		name string
+		proc *windows.LazyProc
+	}{
+		{"_open_osfhandle", procOpenOSFHandle},
+		{"_dup", procDup},
+		{"_dup2", procDup2},
+		{"_close", procClose},
+		{"_fileno", procFileNo},
+		{"freopen", procFreopen},
+		{"__acrt_iob_func", procIOB},
+	}
+
+	for _, p := range procs {
+		if err := p.proc.Find(); err != nil {
+			return errors.Wrapf(err, "ucrtbase.dll does not export %s", p.name)
+		}
+	}
+
+	return nil
 }
 
 // closeSaved drops a duplicate the caller never got to install. A GUI process has none to drop.
@@ -170,9 +203,12 @@ func redirectStderrStream(fd int) bool {
 
 // restoreStderr puts descriptor 2, the stderr stream and the standard error handle back the way they were.
 func restoreStderr(saved int, prev windows.Handle, reopened bool) error {
-	if prev != 0 {
-		_ = windows.SetStdHandle(windows.STD_ERROR_HANDLE, prev)
-	}
+	// Unconditionally, including the prev == 0 case. redirectStderr points this at the pipe whatever the process
+	// started with, and the pipe's handle is closed moments later when the capture drops it - so skipping the restore
+	// in a GUI-subsystem process, which is exactly the one that had no handle to save, left STD_ERROR_HANDLE naming a
+	// closed handle. That is the hazard this file's own doc calls out: the value gets reused, and a later write lands
+	// in whatever object inherited it. Putting back the 0 it had is the faithful restore of "no standard error".
+	_ = windows.SetStdHandle(windows.STD_ERROR_HANDLE, prev)
 
 	// A stream this package attached to the pipe goes back to the bit bucket rather than to a descriptor that is about
 	// to close - which is where its writes went before any of this, in a process with no stderr to speak of.

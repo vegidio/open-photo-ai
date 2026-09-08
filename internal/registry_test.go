@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -57,7 +58,7 @@ func withRegistry(t *testing.T) {
 
 // acquireFake acquires id, counting how many times the model actually had to be built.
 func acquireFake(id string, built *atomic.Int64, bytes int64) (*Lease, error) {
-	return AcquireModel(id, types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
+	return AcquireModel(context.Background(), id, types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
 		built.Add(1)
 		return &fakeModel{bytes: bytes}, nil
 	})
@@ -148,7 +149,7 @@ func TestSingleFlight(t *testing.T) {
 		done.Go(func() {
 			start.Wait()
 
-			lease, err := AcquireModel("op", types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
+			lease, err := AcquireModel(context.Background(), "op", types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
 				built.Add(1)
 				return &fakeModel{bytes: 10}, nil
 			})
@@ -195,7 +196,7 @@ func TestSingleFlightPropagatesError(t *testing.T) {
 
 		wg.Go(func() {
 
-			_, err := AcquireModel("op", types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
+			_, err := AcquireModel(context.Background(), "op", types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
 				attempts.Add(1)
 				return nil, wantErr
 			})
@@ -224,7 +225,7 @@ func TestSingleFlightPropagatesError(t *testing.T) {
 func TestFailedBuildDoesNotWedgeTheKey(t *testing.T) {
 	withRegistry(t)
 
-	_, err := AcquireModel("op", types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
+	_, err := AcquireModel(context.Background(), "op", types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
 		return nil, errors.New("transient")
 	})
 	if err == nil {
@@ -478,7 +479,7 @@ func acquireIn(pool types.MemoryPool, id string, bytes int64) (*Lease, error) {
 		ep = types.ExecutionProviderCUDA
 	}
 
-	return AcquireModel(id, ep, func(types.ExecutionProvider) (any, error) {
+	return AcquireModel(context.Background(), id, ep, func(types.ExecutionProvider) (any, error) {
 		return &fakeModel{bytes: bytes}, nil
 	})
 }
@@ -490,7 +491,7 @@ func acquireCostly(pool types.MemoryPool, id string, bytes int64, cost time.Dura
 		ep = types.ExecutionProviderCUDA
 	}
 
-	return AcquireModel(id, ep, func(types.ExecutionProvider) (any, error) {
+	return AcquireModel(context.Background(), id, ep, func(types.ExecutionProvider) (any, error) {
 		time.Sleep(cost)
 		return &fakeModel{bytes: bytes}, nil
 	})
@@ -594,7 +595,7 @@ func TestFallbackFilesTheModelUnderTheProviderItRanOn(t *testing.T) {
 		return &fakeModel{bytes: 100}, nil
 	}
 
-	lease, err := AcquireModel("op", types.ExecutionProviderCUDA, create)
+	lease, err := AcquireModel(context.Background(), "op", types.ExecutionProviderCUDA, create)
 	if err != nil {
 		t.Fatalf("acquire on CUDA: %v", err)
 	}
@@ -620,7 +621,7 @@ func TestFallbackFilesTheModelUnderTheProviderItRanOn(t *testing.T) {
 	}
 
 	// An explicit CPU request must now hit that entry rather than build another copy of it.
-	again, err := AcquireModel("op", types.ExecutionProviderCPU, create)
+	again, err := AcquireModel(context.Background(), "op", types.ExecutionProviderCPU, create)
 	if err != nil {
 		t.Fatalf("acquire on CPU: %v", err)
 	}
@@ -959,7 +960,7 @@ func TestResidentAccountingReturnsToZero(t *testing.T) {
 	}
 
 	// A failed build must give its reservation back too.
-	_, err := AcquireModel("boom", types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
+	_, err := AcquireModel(context.Background(), "boom", types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
 		return nil, errors.New("nope")
 	})
 	if err == nil {
@@ -1035,7 +1036,7 @@ func TestStressAcquireAgainstDrain(t *testing.T) {
 				// Deterministic key spread, so the test needs no randomness to have workers collide on the same model.
 				id := fmt.Sprintf("op-%d", (w+i)%keys)
 
-				lease, err := AcquireModel(id, types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
+				lease, err := AcquireModel(context.Background(), id, types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
 					built.Add(1)
 					return &fakeModel{bytes: 10}, nil
 				})
@@ -1148,4 +1149,62 @@ func TestInstallTrimsWhenTheModelOutgrewItsEstimate(t *testing.T) {
 
 	DestroyEntries(trim)
 	bigLease.Release()
+}
+
+// A waiter that cancels must not be pinned to the leader's build. The bug this covers was a bare `<-b.done`: a second
+// request for a model another goroutine was still downloading blocked until that download finished, however long it
+// ran, no matter what its own caller did.
+func TestAcquireWaiterHonoursCancellation(t *testing.T) {
+	withRegistry(t)
+
+	release := make(chan struct{})
+	leading := make(chan struct{})
+	leaderDone := make(chan struct{})
+
+	// The leader parks inside create, holding the pending build open, so the second caller below is guaranteed to
+	// arrive as a waiter rather than a leader.
+	//
+	// It is joined before the test returns, not left running: withRegistry restores the package-level Registry in a
+	// cleanup, and a leader still installing into the old one would be racing that restore.
+	go func() {
+		defer close(leaderDone)
+
+		lease, err := AcquireModel(context.Background(), "op", types.ExecutionProviderCPU,
+			func(types.ExecutionProvider) (any, error) {
+				close(leading)
+				<-release
+
+				return &fakeModel{bytes: 10}, nil
+			})
+		if err == nil {
+			lease.Release()
+		}
+	}()
+
+	<-leading
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := AcquireModel(ctx, "op", types.ExecutionProviderCPU, func(types.ExecutionProvider) (any, error) {
+			return &fakeModel{bytes: 10}, nil
+		})
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("waiter returned %v; want context.Canceled", err)
+		}
+
+	case <-time.After(5 * time.Second):
+		t.Fatal("a cancelled waiter is still blocked on the leader's build")
+	}
+
+	// Let the leader finish, so its model is destroyed by the registry rather than leaked past the test.
+	close(release)
+	<-leaderDone
 }

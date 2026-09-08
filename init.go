@@ -23,6 +23,11 @@ var (
 	destroyed   bool
 )
 
+// imageCacheEntries bounds how many processed images the disk cache keeps. The store is bounded by bytes as well, and
+// that is the limit that actually binds for full-resolution results; this one is what stops a long session of small
+// previews from accumulating entries indefinitely underneath that ceiling.
+const imageCacheEntries = 500
+
 // shutdownDrainTimeout bounds how long Destroy waits for in-flight inference to finish before giving up on a clean
 // ONNX teardown. A single large upscale can legitimately run for a while, so it is generous.
 const shutdownDrainTimeout = 30 * time.Second
@@ -58,7 +63,7 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 	internal.Log().Info("initializing OPAI",
 		"app_name", name, "onnx_tag", onnxTag, "os", runtime.GOOS, "arch", runtime.GOARCH)
 
-	cache, err := internal.NewCache(500)
+	cache, err := internal.NewCache(imageCacheEntries)
 	if err != nil {
 		return errors.Wrap(err, "failed to create image cache")
 	}
@@ -94,6 +99,11 @@ func Initialize(ctx context.Context, name string, onProgress types.DownloadProgr
 		defer preludeWg.Done()
 		device, host = internal.DefaultBudgets(ctx)
 	}()
+
+	// Several failures below return before the join at the bottom, and a goroutine still writing to modelData or device
+	// after Initialize has returned is a data race the moment a caller retries. The explicit Wait further down is what
+	// the happy path uses; this one only ever does anything on an error return.
+	defer preludeWg.Wait()
 
 	// Drop what the execution providers compiled against an older runtime; the models themselves are plain ONNX graphs
 	// and survive a runtime bump untouched.
@@ -233,9 +243,17 @@ func startRuntime() error {
 	}
 
 	runtimePath := filepath.Join(configDir, pinned.Lib)
-	ort.SetSharedLibraryPath(runtimePath)
-	if err = ort.InitializeEnvironment(); err != nil {
-		return errors.Wrap(err, "failed to initialize ONNX Runtime")
+
+	// Initialize may run more than once in a process, and a Destroy that timed out deliberately skips the teardown to
+	// avoid crashing on a live session - so the environment can still be up when we get here. The binding returns an
+	// error rather than a no-op in that case, which would fail every Initialize after the first, so the environment is
+	// only built when there isn't one. The library path is set inside the same guard because it is only read by
+	// InitializeEnvironment; re-pointing it at an already-loaded runtime would do nothing.
+	if !ort.IsInitialized() {
+		ort.SetSharedLibraryPath(runtimePath)
+		if err = ort.InitializeEnvironment(); err != nil {
+			return errors.Wrap(err, "failed to initialize ONNX Runtime")
+		}
 	}
 
 	// ONNX Runtime logs from C++ to the process's stderr, which shared.SetupLogging redirects into opai.log - so this

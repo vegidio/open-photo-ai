@@ -4,7 +4,13 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 )
+
+// opaqueAlpha is the weight at or above which a blend is indistinguishable from a straight write: the result is
+// rounded to 8 bits, so anything this close to 1 lands on the source byte anyway. Naming it keeps the threshold in the
+// two places that test it from drifting apart.
+const opaqueAlpha = 0.999
 
 // ParamIntensity is the map key used by operations to carry the per-run blend amount to Model.Run, decoupled from the
 // operation Id so the registry reuses a single session across all intensities.
@@ -115,108 +121,148 @@ func BlendWithIntensity(original, modelOutput image.Image, intensity float32) im
 	return result
 }
 
-// blendTileWithOverlap blends a tile into a destination image with soft blending in overlap regions.
+// blendTileWithOverlap blends a tile into a destination image, ramping the edges it shares with tiles already written.
+//
+// overlapX and overlapY are how many pixels this tile actually overlaps its left and top neighbours; zero means there
+// is no neighbour on that side and that edge is written straight. They are passed in rather than assumed because the
+// grid shifts a final tile back to sit flush with the image instead of shrinking it, so the last column and row
+// overlap by much more than the configured overlap - see TileGrid.OverlapsX.
+//
+// The ramp is a raised cosine rather than a straight line. Both are continuous, but a linear ramp's slope jumps at
+// each end of the band, and on smooth gradients that reads as a visible edge where the blend starts and stops. The
+// same curve is used by the diffusion upscaler's own accumulator, for the same reason.
 //
 // dst is always an *image.RGBA. When src is a concrete RGBA-family type, it is blended via direct Pix indexing instead
-// of the image.Image interface, and the fully opaque interior (past the overlap band, where alpha is always 1.0) is
-// copied in bulk rows. This is output-identical to the per-pixel path but avoids interface dispatch and redundant alpha
-// computation across the whole tile.
-func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlap int, blendLeft, blendTop bool) {
+// of the image.Image interface, and the fully opaque interior - past both ramps, where the weight is exactly 1 - is
+// copied a row at a time. This is output-identical to the per-pixel path but avoids interface dispatch and the float
+// blend across what is the overwhelming majority of every tile.
+func blendTileWithOverlap(dst *image.RGBA, src image.Image, x, y, overlapX, overlapY int) {
 	srcBounds := src.Bounds()
-	srcWidth := srcBounds.Dx()
-	srcHeight := srcBounds.Dy()
 
 	dstBounds := dst.Bounds()
 
 	// Pre-calculate actual rendering bounds to avoid repeated checks
-	maxX := min(dstBounds.Dx()-x, srcWidth)
-	maxY := min(dstBounds.Dy()-y, srcHeight)
+	maxX := min(dstBounds.Dx()-x, srcBounds.Dx())
+	maxY := min(dstBounds.Dy()-y, srcBounds.Dy())
 	if maxX <= 0 || maxY <= 0 {
 		return
 	}
 
-	overlapFloat := float64(overlap)
+	// A ramp wider than half the tile would have its two ends overlap each other; clamping matches what the diffusion
+	// upscaler's edgeWeights does and keeps each ramp monotonic.
+	rampX := min(overlapX, maxX/2)
+	rampY := min(overlapY, maxY/2)
 
 	srcPix, srcStride, srcFast := RgbPixBuffer(src)
 	_, srcIsNRGBA := src.(*image.NRGBA)
+
+	// The bulk path reproduces the per-pixel one only for a premultiplied buffer: an NRGBA tile with a non-opaque
+	// pixel needs the premultiply below, which a straight copy would skip.
+	bulk := srcFast && !srcIsNRGBA
 
 	for dy := range maxY {
 		dstY := y + dy
 		srcY := srcBounds.Min.Y + dy
 
-		topAlpha := 1.0
-		if blendTop && dy < overlap {
-			topAlpha = float64(dy) / overlapFloat
-		}
+		topAlpha := rampWeight(dy, rampY)
 
-		// The horizontal overlap band only affects the leftmost `overlap` columns; everything to its right shares this
-		// row's alpha (1.0, or topAlpha when in the top band).
-		rowBlendStart := 0
-		if blendLeft {
-			rowBlendStart = overlap
-		}
-
+		// The horizontal ramp only affects the leftmost rampX columns; everything to their right shares this row's
+		// weight - 1, or topAlpha while the row is still inside the top band.
 		dstRow := dst.PixOffset(x, dstY)
 
-		for dx := range maxX {
-			var alpha float64
-			if dx < rowBlendStart {
-				alpha = calculateBlendAlpha(dx, dy, overlap, overlapFloat, topAlpha, blendLeft, blendTop)
-			} else {
-				alpha = topAlpha
+		if bulk && topAlpha >= opaqueAlpha {
+			// Past both ramps the tile simply replaces what is underneath, so the run is a copy. The alpha byte is
+			// forced afterwards rather than taken from the source, matching what the per-pixel path writes.
+			from := dstRow + rampX*4
+			to := dstRow + maxX*4
+			si := dy*srcStride + rampX*4
+
+			copy(dst.Pix[from:to], srcPix[si:si+(maxX-rampX)*4])
+
+			for p := from + 3; p < to; p += 4 {
+				dst.Pix[p] = 255
 			}
 
-			var sr, sg, sb uint32
-			if srcFast {
-				// srcPix already starts at src.Bounds().Min, so this indexes from the tile's own origin. Adding
-				// srcBounds.Min back - as the At() fallback below correctly must - would apply it twice.
-				si := dy*srcStride + dx*4
-				sr, sg, sb = uint32(srcPix[si]), uint32(srcPix[si+1]), uint32(srcPix[si+2])
-				// RGBA buffers are already premultiplied 8-bit; only NRGBA with non-opaque alpha needs
-				// the premultiply that RGBA() would apply (matches the >>8 of the 16-bit result).
-				if srcIsNRGBA {
-					if a := uint32(srcPix[si+3]); a != 0xff {
-						sr = ((sr * 257) * a / 0xff) >> 8
-						sg = ((sg * 257) * a / 0xff) >> 8
-						sb = ((sb * 257) * a / 0xff) >> 8
-					}
+			if rampX == 0 {
+				continue
+			}
+
+			blendRun(dst, srcPix, srcStride, src, srcBounds, dstRow, dy, srcY, 0, rampX, rampX, topAlpha,
+				srcFast, srcIsNRGBA)
+
+			continue
+		}
+
+		blendRun(dst, srcPix, srcStride, src, srcBounds, dstRow, dy, srcY, 0, maxX, rampX, topAlpha,
+			srcFast, srcIsNRGBA)
+	}
+}
+
+// blendRun blends columns [from, to) of one row. It is the per-pixel path, shared by the rows the bulk copy cannot
+// take and by the left ramp of the rows it can.
+func blendRun(
+	dst *image.RGBA,
+	srcPix []uint8,
+	srcStride int,
+	src image.Image,
+	srcBounds image.Rectangle,
+	dstRow, dy, srcY, from, to, rampX int,
+	topAlpha float64,
+	srcFast, srcIsNRGBA bool,
+) {
+	for dx := from; dx < to; dx++ {
+		// The two ramps multiply where they meet, so a corner covered by both is weighted by each.
+		alpha := topAlpha
+		if dx < rampX {
+			alpha *= rampWeight(dx, rampX)
+		}
+
+		var sr, sg, sb uint32
+		if srcFast {
+			// srcPix already starts at src.Bounds().Min, so this indexes from the tile's own origin. Adding
+			// srcBounds.Min back - as the At() fallback below correctly must - would apply it twice.
+			si := dy*srcStride + dx*4
+			sr, sg, sb = uint32(srcPix[si]), uint32(srcPix[si+1]), uint32(srcPix[si+2])
+			// RGBA buffers are already premultiplied 8-bit; only NRGBA with non-opaque alpha needs
+			// the premultiply that RGBA() would apply (matches the >>8 of the 16-bit result).
+			if srcIsNRGBA {
+				if a := uint32(srcPix[si+3]); a != 0xff {
+					sr = ((sr * 257) * a / 0xff) >> 8
+					sg = ((sg * 257) * a / 0xff) >> 8
+					sb = ((sb * 257) * a / 0xff) >> 8
 				}
-			} else {
-				r, g, b, _ := src.At(srcBounds.Min.X+dx, srcY).RGBA()
-				// Match the 8-bit values the slow path historically used (RGBA() >> 8).
-				sr, sg, sb = r>>8, g>>8, b>>8
 			}
+		} else {
+			r, g, b, _ := src.At(srcBounds.Min.X+dx, srcY).RGBA()
+			// Match the 8-bit values the slow path historically used (RGBA() >> 8).
+			sr, sg, sb = r>>8, g>>8, b>>8
+		}
 
-			di := dstRow + dx*4
-			if alpha >= 0.999 {
-				dst.Pix[di] = uint8(sr)
-				dst.Pix[di+1] = uint8(sg)
-				dst.Pix[di+2] = uint8(sb)
-				dst.Pix[di+3] = 255
-			} else {
-				invAlpha := 1.0 - alpha
-				dst.Pix[di] = uint8(float64(sr)*alpha + float64(dst.Pix[di])*invAlpha)
-				dst.Pix[di+1] = uint8(float64(sg)*alpha + float64(dst.Pix[di+1])*invAlpha)
-				dst.Pix[di+2] = uint8(float64(sb)*alpha + float64(dst.Pix[di+2])*invAlpha)
-				dst.Pix[di+3] = 255
-			}
+		di := dstRow + dx*4
+		if alpha >= opaqueAlpha {
+			dst.Pix[di] = uint8(sr)
+			dst.Pix[di+1] = uint8(sg)
+			dst.Pix[di+2] = uint8(sb)
+			dst.Pix[di+3] = 255
+		} else {
+			invAlpha := 1.0 - alpha
+			dst.Pix[di] = uint8(float64(sr)*alpha + float64(dst.Pix[di])*invAlpha)
+			dst.Pix[di+1] = uint8(float64(sg)*alpha + float64(dst.Pix[di+1])*invAlpha)
+			dst.Pix[di+2] = uint8(float64(sb)*alpha + float64(dst.Pix[di+2])*invAlpha)
+			dst.Pix[di+3] = 255
 		}
 	}
 }
 
-func calculateBlendAlpha(dx, dy, overlap int, overlapFloat, topAlpha float64, blendLeft, blendTop bool) float64 {
-	alpha := 1.0
-
-	if blendLeft && dx < overlap {
-		alpha = float64(dx) / overlapFloat
-
-		// Corner region: multiply both weights
-		if blendTop && dy < overlap {
-			alpha *= topAlpha
-		}
-	} else if blendTop && dy < overlap {
-		alpha = topAlpha
+// rampWeight is the incoming tile's weight at offset i into a ramp of the given width, and 1 once past it (a zero
+// width being "no neighbour on this side").
+//
+// The half-pixel offset keeps the first weight strictly positive: at i = 0 a bare cosine would be exactly 0, throwing
+// away the incoming tile's outermost column entirely rather than mixing it.
+func rampWeight(i, width int) float64 {
+	if width <= 0 || i >= width {
+		return 1
 	}
 
-	return alpha
+	return 0.5 - 0.5*math.Cos(math.Pi*(float64(i)+0.5)/float64(width))
 }

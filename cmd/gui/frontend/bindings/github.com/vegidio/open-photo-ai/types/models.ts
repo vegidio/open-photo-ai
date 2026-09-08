@@ -172,6 +172,10 @@ export class ModelMemory {
     }
 }
 
+/**
+ * ModelType is the two-letter family prefix that opens every operation id - "dn_stockholm_fp32" is a denoise. It is
+ * what dispatch keys on, so the prefix and the model named after it cannot disagree.
+ */
 export enum ModelType {
     /**
      * The Go zero value for the underlying type of the enum.
@@ -266,6 +270,10 @@ export class PoolMemory {
     }
 }
 
+/**
+ * Precision is the numeric format a model's weights are published in. It is part of a model's identity: it appears in
+ * the operation id, in the downloaded file name, and in the engine cache directory compiled from it.
+ */
 export enum Precision {
     /**
      * The Go zero value for the underlying type of the enum.

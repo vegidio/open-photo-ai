@@ -33,6 +33,7 @@ func planCanvas(fullW, fullH int, c Canvas) plan {
 	}
 }
 
+// Process runs the colour-balance model over img and returns the corrected image.
 func Process(ctx context.Context, session *utils.Session, img image.Image, canvas Canvas) (image.Image, error) {
 	bounds := img.Bounds()
 	origW := bounds.Dx()

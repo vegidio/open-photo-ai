@@ -125,18 +125,31 @@ func CHWToImageInto(img *image.RGBA, data []float32, width, height int, standard
 	return img
 }
 
+// unit16 maps a 16-bit channel value onto [0, 1] and std16 onto [-1, 1]. Both are written as multiplications by a
+// constant because writeCHW runs three times per pixel across the whole image.
+const (
+	unit16 = 1.0 / 65535.0
+	std16  = 2.0 / 65535.0
+)
+
 // writeCHW writes one pixel's three channels into the CHW tensor using the 16-bit (0-65535) channel
 // values, matching the normalization used by both the fast and generic paths.
 func writeCHW(tensor []float32, idx, gBase, bBase int, r, g, b uint32, standardize bool) {
 	if standardize {
-		// Normalize to [-1, 1]
-		tensor[idx] = (float32(r/257)/255.0 - 0.5) / 0.5
-		tensor[gBase+idx] = (float32(g/257)/255.0 - 0.5) / 0.5
-		tensor[bBase+idx] = (float32(b/257)/255.0 - 0.5) / 0.5
+		// Normalize to [-1, 1] from the full 16-bit value.
+		//
+		// This used to read float32(r/257)/255 - an integer division, which discarded everything below 8 bits and
+		// truncated rather than rounded. On an 8-bit source it is exactly equivalent, since 257*255 is 65535 and r/257
+		// is lossless there, which is why it went unnoticed: every JPEG and PNG takes that path. On the 16-bit TIFF
+		// and RAW images LoadImage also decodes it quantized the input to 256 levels and biased all of them low, so
+		// the two normalizations disagreed despite the doc above saying they match.
+		tensor[idx] = float32(r)*std16 - 1
+		tensor[gBase+idx] = float32(g)*std16 - 1
+		tensor[bBase+idx] = float32(b)*std16 - 1
 	} else {
 		// Normalize to [0, 1]
-		tensor[idx] = float32(r) / 65535.0
-		tensor[gBase+idx] = float32(g) / 65535.0
-		tensor[bBase+idx] = float32(b) / 65535.0
+		tensor[idx] = float32(r) * unit16
+		tensor[gBase+idx] = float32(g) * unit16
+		tensor[bBase+idx] = float32(b) * unit16
 	}
 }

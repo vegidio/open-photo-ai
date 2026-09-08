@@ -82,10 +82,13 @@ func RunTiledInference(
 
 	columns := grid.Columns()
 
+	// Per-axis, because a tile's overlap with its neighbour depends on where the grid put it - see OverlapsX.
+	overlapsX, overlapsY := grid.OverlapsX(), grid.OverlapsY()
+
 	// Every tile is padded out to the same fixed shape, so the input buffer and both tensors are identical from one
 	// tile to the next. Built once here and reused: allocating them per tile meant ~800 KB of float32 plus two ORT
 	// values for each of what can be thousands of tiles, all immediately garbage.
-	scratch, err := newTileScratch(defaultTileSize, scale)
+	scratch, err := newTileScratch(defaultTileSize, scale, img)
 	if err != nil {
 		return nil, err
 	}
@@ -109,12 +112,10 @@ func RunTiledInference(
 			return nil, errors.Wrap(err, "failed to process tile")
 		}
 
-		// Ramp the edges that meet an already-written neighbour: every tile but the first of its row has one to the
-		// left, and every tile but the first row has one above.
-		blendLeft, blendTop := i%columns > 0, i >= columns
-
-		blendTileWithOverlap(result, processedTile, tileX*scale, tileY*scale, defaultTileOverlap*scale,
-			blendLeft, blendTop)
+		// Ramp the edges that meet an already-written neighbour, over the width they actually share. A zero overlap
+		// is the first column or the first row, which has nothing to blend against.
+		blendTileWithOverlap(result, processedTile, tileX*scale, tileY*scale,
+			overlapsX[i%columns]*scale, overlapsY[i/columns]*scale)
 
 		if onProgress != nil {
 			total += step
@@ -142,6 +143,35 @@ type TileGrid struct {
 // with the layout Tiles actually produces.
 func (g TileGrid) Columns() int {
 	return len(g.offsets(g.Width))
+}
+
+// OverlapsX and OverlapsY report, per column and per row, how many pixels that tile actually overlaps the one before
+// it. The first entry of each is 0 - nothing precedes it.
+//
+// These are not the configured Overlap. offsets shifts the last tile back so it ends flush with the image instead of
+// shrinking it, so the final column and row can overlap their predecessor by far more: at Size 256, Overlap 16 over a
+// 600px side the offsets are [0, 240, 344], and the last tile overlaps by 152, not 16. Blending that seam with a 16px
+// ramp is what left a hard edge down the last column and along the last row - everything past the ramp was overwritten
+// at full weight. The blend needs the real figure, and this is the only place that knows it.
+func (g TileGrid) OverlapsX() []int { return g.overlaps(g.Width) }
+
+// OverlapsY is the vertical counterpart of OverlapsX.
+func (g TileGrid) OverlapsY() []int { return g.overlaps(g.Height) }
+
+func (g TileGrid) overlaps(length int) []int {
+	offs := g.offsets(length)
+	if offs == nil {
+		return nil
+	}
+
+	extent := g.extent(length)
+	out := make([]int, len(offs))
+
+	for i := 1; i < len(offs); i++ {
+		out[i] = offs[i-1] + extent - offs[i]
+	}
+
+	return out
 }
 
 // Tiles returns the tile rectangles in row-major order.
@@ -278,10 +308,15 @@ type tileScratch struct {
 	output *image.RGBA
 
 	// tile is the extracted input tile, reused on the same terms - see prepareTileForInference.
-	tile *image.NRGBA
+	//
+	// Its concrete type mirrors the source image's. draw.Draw between two *image.RGBA is a row memmove, while
+	// RGBA -> NRGBA un-premultiplies every pixel - which ImageToCHWInto then premultiplies straight back, since it
+	// reads the buffer through Sample16 with isNRGBA set from this same type. Matching the source skips both halves of
+	// that round trip, and with it the precision it loses on any pixel with alpha below 255.
+	tile draw.Image
 }
 
-func newTileScratch(tileSize, scale int) (*tileScratch, error) {
+func newTileScratch(tileSize, scale int, src image.Image) (*tileScratch, error) {
 	input := make([]float32, 3*tileSize*tileSize)
 
 	inputTensor, err := ort.NewTensor(ort.NewShape(1, 3, int64(tileSize), int64(tileSize)), input)
@@ -304,8 +339,21 @@ func newTileScratch(tileSize, scale int) (*tileScratch, error) {
 		outW:         outW,
 		outH:         outH,
 		output:       image.NewRGBA(image.Rect(0, 0, outW, outH)),
-		tile:         image.NewNRGBA(image.Rect(0, 0, tileSize, tileSize)),
+		tile:         newTileBuffer(tileSize, src),
 	}, nil
+}
+
+// newTileBuffer allocates the tile scratch in the source's own pixel format, defaulting to NRGBA for any source that
+// is neither of the two fast types - draw.Draw has to convert into something, and NRGBA is what this used to be for
+// every source.
+func newTileBuffer(tileSize int, src image.Image) draw.Image {
+	rect := image.Rect(0, 0, tileSize, tileSize)
+
+	if _, ok := src.(*image.RGBA); ok {
+		return image.NewRGBA(rect)
+	}
+
+	return image.NewNRGBA(rect)
 }
 
 func (s *tileScratch) destroy() {

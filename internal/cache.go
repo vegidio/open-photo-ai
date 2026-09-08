@@ -30,10 +30,24 @@ func ImageCacheEnabled() bool {
 	return !imageCacheDisabled.Load()
 }
 
+const (
+	// cacheCapacityBytes bounds the store on disk. It is 1000 MiB rather than a round gigabyte of either kind - the
+	// figure has no significance beyond "about a gigabyte", which is what the comment here used to claim inaccurately.
+	cacheCapacityBytes = 1024 * 1024 * 1000
+
+	// cacheEntryTTL is how long a processed image stays worth keeping. A day covers a working session, which is the
+	// span over which someone re-runs the same enhancement on the same photo; past that the pixels are cheaper to
+	// recompute than to keep.
+	cacheEntryTTL = 24 * time.Hour
+)
+
+// Cache is the on-disk store of processed images, keyed by source pixels plus the operations applied to them. It is
+// what makes re-running a chain the user has already seen cost nothing.
 type Cache struct {
 	diskCache *memo.Memoizer
 }
 
+// NewCache opens the store under the config directory, bounded by maxEntries and by cacheCapacityBytes.
 func NewCache(maxEntries int64) (*Cache, error) {
 	// AppName, not a hardcoded name: Initialize promises the caller a config directory under the name it passed, and
 	// the model cache already honours that. Hardcoding here would split an embedder's two caches across two directories.
@@ -42,8 +56,7 @@ func NewCache(maxEntries int64) (*Cache, error) {
 		return nil, errors.Wrap(err, "failed to create cache directory")
 	}
 
-	const capacity = 1024 * 1024 * 1000 // 1 GB
-	opts := memo.CacheOpts{MaxEntries: maxEntries, MaxCapacity: capacity}
+	opts := memo.CacheOpts{MaxEntries: maxEntries, MaxCapacity: cacheCapacityBytes}
 	diskCache, err := memo.NewDiskOnly(cachePath, opts)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create disk cache")
@@ -54,6 +67,8 @@ func NewCache(maxEntries int64) (*Cache, error) {
 	}, nil
 }
 
+// GetImage returns the stored result of applying operations to the image identified by hash, or an error when there is
+// none. Every failure is reported as a miss - see the body for why a store error is not propagated.
 func (c *Cache) GetImage(ctx context.Context, hash string, operations ...types.Operation) (image.Image, error) {
 	key := cacheKey(hash, operations)
 
@@ -82,6 +97,7 @@ func (c *Cache) GetImage(ctx context.Context, hash string, operations ...types.O
 	return img, nil
 }
 
+// SetImage stores img as the result of applying operations to the image identified by hash.
 func (c *Cache) SetImage(ctx context.Context, img image.Image, hash string, operations ...types.Operation) error {
 	data, err := imageToData(img)
 	if err != nil {
@@ -89,9 +105,18 @@ func (c *Cache) SetImage(ctx context.Context, img image.Image, hash string, oper
 	}
 
 	key := cacheKey(hash, operations)
-	ttl := time.Hour * 24
 
-	return c.diskCache.Store.Set(ctx, key, data, ttl)
+	return c.diskCache.Store.Set(ctx, key, data, cacheEntryTTL)
+}
+
+// ImageHashAfter is the identity of the pixels produced by applying operations to the image identified by hash.
+//
+// It is the cache key, exported under a name that says what it means to a caller: ImageData.Hash identifies Pixels, so
+// anything that hands back transformed pixels has to hand back a hash that moved with them. Sharing one derivation
+// with the cache is the point - a result fed back into Process then looks up exactly the slot its pixels were stored
+// under.
+func ImageHashAfter(hash string, operations []types.Operation) string {
+	return cacheKey(hash, operations)
 }
 
 func cacheKey(hash string, operations []types.Operation) string {
@@ -110,6 +135,7 @@ func cacheKey(hash string, operations []types.Operation) string {
 	return memo.KeyFrom(hash, strings.Join(ops, "|"))
 }
 
+// Close flushes and releases the underlying store. The caller must not use the Cache afterwards.
 func (c *Cache) Close() error {
 	return c.diskCache.Close()
 }

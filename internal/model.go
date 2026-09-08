@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -35,14 +36,22 @@ const maxAcquireAttempts = 10
 // handler registered with SetFallbackHandler. Failures that aren't about the execution provider - a model that
 // couldn't be downloaded, for instance - would fail the same way on the CPU, so they aren't retried.
 //
+// Cancelling ctx abandons this caller's wait. It does not stop a build another goroutine is leading - that one is
+// shared, and the callers still waiting on it need it to finish.
+//
 // This is the single acquire path for every model, so the operations pipeline and the face detection behind
 // SuggestEnhancements can't drift apart on caching or fallback behaviour.
 func AcquireModel(
+	ctx context.Context,
 	id string,
 	requested types.ExecutionProvider,
 	create func(ep types.ExecutionProvider) (any, error),
 ) (*Lease, error) {
 	for range maxAcquireAttempts {
+		if err := ctx.Err(); err != nil {
+			return nil, errors.Wrap(err, "cancelled while acquiring a model")
+		}
+
 		// Resolve the provider before keying, so the entry is filed under the one the model will actually be built on.
 		// Keying by the requested provider instead would file a CPU model under "@CUDA" after a fallback, and an
 		// explicit switch to CPU would then build a second, identical copy of it.
@@ -66,7 +75,16 @@ func AcquireModel(
 			// Someone else is already building this model. Wait for them, then re-run the loop rather than inheriting
 			// their entry: by the time we wake up it may already have been removed again, and only a fresh lookup can
 			// tell. That also makes a leader that fell back to the CPU need no special handling here.
-			<-b.done
+			// Selecting on ctx rather than blocking outright: the build being waited on can be a multi-gigabyte
+			// download, and without this a cancelled request stays stuck here until an unrelated goroutine's transfer
+			// finishes. Giving up only abandons this caller's place in the queue - the leader keeps building, which is
+			// what everyone else waiting behind it needs.
+			select {
+			case <-b.done:
+			case <-ctx.Done():
+				return nil, errors.Wrap(ctx.Err(), "cancelled while waiting for a model build")
+			}
+
 			if b.err != nil {
 				// Debug, not Warn: the leader already reported this failure with its full context. This line exists
 				// only so a run where N operations all failed on one bad model does not look like N unrelated faults.

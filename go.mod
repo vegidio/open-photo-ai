@@ -3,7 +3,7 @@ module github.com/vegidio/open-photo-ai
 go 1.27.0
 
 require (
-	github.com/DeRuina/timberjack v1.4.6
+	github.com/DeRuina/timberjack v1.4.7
 	github.com/bodgit/sevenzip v1.6.5
 	github.com/cockroachdb/errors v1.14.0
 	github.com/disintegration/imaging v1.6.2
@@ -15,8 +15,8 @@ require (
 	github.com/vegidio/webp-go v0.0.0-20260614080129-a1efc50b59e1
 	github.com/yalue/onnxruntime_go v1.31.0
 	golang.org/x/image v0.45.0
-	golang.org/x/sync v0.22.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.41.0
 )
 

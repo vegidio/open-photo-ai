@@ -325,6 +325,7 @@
         "faceDetectFailed": "Algo ha ido mal. No se han podido detectar rostros.",
         "showLogsFailed": "No se pudo abrir el archivo de registro. Lo encontrarás en la carpeta de configuración de la app.",
         "revealFailed": "No se pudo abrir el gestor de archivos. El archivo sigue guardado en su ubicación de exportación.",
+        "revealFileFailed": "No se pudo abrir el gestor de archivos.",
         "openUrlFailed": "No se pudo abrir el navegador. Visita la página de versiones en GitHub para descargar la actualización."
     }
 }

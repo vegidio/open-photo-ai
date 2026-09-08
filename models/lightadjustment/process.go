@@ -35,6 +35,7 @@ func planCanvas(fullW, fullH int, c Canvas) plan {
 	}
 }
 
+// Process runs the light-adjustment model over img and returns the adjusted image.
 func Process(ctx context.Context, session *utils.Session, img image.Image, canvas Canvas) (image.Image, error) {
 	bounds := img.Bounds()
 	fullW := bounds.Dx()

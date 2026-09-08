@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/DeRuina/timberjack"
@@ -25,9 +26,20 @@ import (
 //
 // Logging is at INFO. The returned io.Closer must be closed on shutdown (defer c.Close()) to flush, stop the rotation
 // worker and put stderr back.
+//
+// It may only be called once per process. Calling it twice would dup fd 2 while it is already the first capture's
+// pipe, so the second capture would save the first pipe's write end as "the real stderr" and the two restores could no
+// longer unwind to the terminal in any order - on top of overwriting the two process globals it sets. The second call
+// returns an error rather than a no-op closer, because a caller that reached here believes it owns the logging setup
+// and silently handing it a working-looking Closer would let it tear down the first call's capture.
 func SetupLogging(appName string) (io.Closer, error) {
+	if !loggingConfigured.CompareAndSwap(false, true) {
+		return nil, errors.New("logging is already configured for this process")
+	}
+
 	logsDir, err := fs.MkUserConfigDir(appName, "logs")
 	if err != nil {
+		loggingConfigured.Store(false)
 		return nil, err
 	}
 
@@ -81,11 +93,20 @@ func SetupLogging(appName string) (io.Closer, error) {
 	return multiCloser(closers), nil
 }
 
+// loggingConfigured latches for the lifetime of the process, guarding the three globals SetupLogging writes:
+// opai.SetLogger, slog.SetDefault, and - inside startStderrCapture - os.Stderr. That last one is only safe because it
+// happens before the process has other goroutines running, a precondition a second call would break by definition.
+//
+// It is deliberately not cleared by Close. Close puts stderr back and stops the rotation worker; it does not undo
+// slog.SetDefault, and a process that tore its logging down is shutting down rather than about to build another.
+var loggingConfigured atomic.Bool
+
 // multiCloser lets SetupLogging keep its single-io.Closer signature while owning two things that have to be torn
 // down in order. Every closer runs even if an earlier one fails, so a broken stderr restore cannot leave the log
 // file unflushed.
 type multiCloser []io.Closer
 
+// Close runs every closer in order and joins their errors.
 func (m multiCloser) Close() error {
 	errs := make([]error, 0, len(m))
 

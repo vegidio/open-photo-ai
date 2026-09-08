@@ -34,6 +34,7 @@ func FacesCacheKey(faces []detection.Face) string {
 	return b.String()
 }
 
+// ExtractFaces crops and aligns each detected face into the fixed square the restoration graphs accept.
 func ExtractFaces(
 	ctx context.Context,
 	dtModel types.Model[[]detection.Face],

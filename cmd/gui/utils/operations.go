@@ -134,14 +134,24 @@ var operationBuilders = map[string]operationBuilder{
 // faceRecoveryBuilder reads "_<name>_<precision>" and forwards the caller-supplied faces.
 func faceRecoveryBuilder[T types.Operation](op func(types.Precision, []detection.Face) T) operationBuilder {
 	return func(values []string, params guitypes.InferenceParams) (types.Operation, error) {
-		return op(types.Precision(values[2]), params.Faces), nil
+		precision, err := types.ParsePrecision(values[2])
+		if err != nil {
+			return nil, err
+		}
+
+		return op(precision, params.Faces), nil
 	}
 }
 
 // precisionBuilder reads "_<name>_<precision>" for operations with no per-run inputs.
 func precisionBuilder[T types.Operation](op func(types.Precision) T) operationBuilder {
 	return func(values []string, _ guitypes.InferenceParams) (types.Operation, error) {
-		return op(types.Precision(values[2])), nil
+		precision, err := types.ParsePrecision(values[2])
+		if err != nil {
+			return nil, err
+		}
+
+		return op(precision), nil
 	}
 }
 
@@ -170,7 +180,12 @@ func requiredIntensityBuilder[T types.Operation](op func(float32, types.Precisio
 			return nil, errors.Wrap(err, "invalid intensity")
 		}
 
-		return op(float32(intensity), types.Precision(values[3])), nil
+		precision, err := types.ParsePrecision(values[3])
+		if err != nil {
+			return nil, err
+		}
+
+		return op(float32(intensity), precision), nil
 	}
 }
 
@@ -186,7 +201,12 @@ func scaleBuilder[T types.Operation](op func(float64, types.Precision) T) operat
 			return nil, errors.Wrap(err, "invalid scale")
 		}
 
-		return op(scale, types.Precision(values[3])), nil
+		precision, err := types.ParsePrecision(values[3])
+		if err != nil {
+			return nil, err
+		}
+
+		return op(scale, precision), nil
 	}
 }
 
@@ -228,7 +248,8 @@ func CropCacheKey(c guitypes.CropInfo) string {
 // to 1.0).
 func parseIntensity(values []string) (float32, types.Precision, error) {
 	if len(values) < 4 {
-		return 1.0, types.Precision(values[2]), nil
+		precision, err := types.ParsePrecision(values[2])
+		return 1.0, precision, err
 	}
 
 	intensity, err := strconv.ParseFloat(values[2], 32)
@@ -236,5 +257,10 @@ func parseIntensity(values []string) (float32, types.Precision, error) {
 		return 0, "", err
 	}
 
-	return float32(intensity), types.Precision(values[3]), nil
+	precision, err := types.ParsePrecision(values[3])
+	if err != nil {
+		return 0, "", err
+	}
+
+	return float32(intensity), precision, nil
 }

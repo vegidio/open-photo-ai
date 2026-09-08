@@ -282,14 +282,14 @@ func createSessionInner(
 	//
 	// The directory comes from EngineCacheFor, which is also what deps.Install clears when it replaces the weights.
 	stem := strings.TrimSuffix(modelFile, filepath.Ext(modelFile))
-	enginePath, err := fs.MkUserConfigDir(internal.AppName(), strings.Split(internal.EngineCacheFor(stem), "/")...)
+	enginePath, err := internal.ConfigDir(internal.EngineCacheFor(stem))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to resolve the engine cache directory")
 	}
 
 	// Shared by every model, unlike the engine directory above - see internal.TimingCacheDir for why that is the only
 	// placement worth having.
-	timingPath, err := fs.MkUserConfigDir(internal.AppName(), strings.Split(internal.TimingCacheDir, "/")...)
+	timingPath, err := internal.ConfigDir(internal.TimingCacheDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to resolve the timing cache directory")
 	}

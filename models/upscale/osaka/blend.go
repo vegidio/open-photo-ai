@@ -8,11 +8,12 @@ import (
 // canvas accumulates weighted tile contributions in planar CHW float32 and normalizes once at the end, so every
 // pixel is a proper weighted average of every tile that covered it.
 //
-// The shared blendTileWithOverlap is not reusable here for two reasons. It ramps only the left and top edges and
-// relies on later tiles overwriting earlier ones for the right and bottom, which - combined with the rule that shifts
-// an edge tile back in-bounds rather than shrinking it - leaves a hard discontinuity along the last row and column.
-// And its ramp is linear, which is continuous but not smooth: the slope jumps at both ends of the overlap, and with
-// per-tile stochastic content that reads as a visible band.
+// The shared blendTileWithOverlap is still not reusable here, though for narrower reasons than it once was. It now
+// ramps over each tile's real overlap with the same raised cosine used below, so the hard discontinuity along the last
+// row and column is gone from both. What it cannot do is average more than two tiles: it blends each tile against
+// whatever is already in the buffer, so where four tiles meet the result depends on the order they were written. With
+// per-tile stochastic content that corner is exactly where a seam would show, which is what the accumulator here
+// avoids by weighting every contribution before dividing once.
 //
 // Working in CHW rather than in an image also means the decoder's output is accumulated as it comes out, with no
 // per-tile conversion to and from 8-bit.
@@ -124,8 +125,10 @@ func edgeWeights(length, feather int, rampStart, rampEnd bool) []float32 {
 		// feathered tile still normalizes back to its own value.
 		w := float32(0.5 - 0.5*math.Cos(math.Pi*(float64(i)+0.5)/float64(feather)))
 
+		// Both multiply. The clamp above keeps i and length-1-i from meeting, so an assignment here is currently
+		// equivalent - but only by that margin, and the asymmetry read as though one of the two was deliberate.
 		if rampStart {
-			weights[i] = w
+			weights[i] *= w
 		}
 		if rampEnd {
 			weights[length-1-i] *= w

@@ -21,6 +21,7 @@ const maskBlurSigma = 15.0
 // have to agree or the bar either jumps or never reaches 1.
 const progressAfterDetect = 0.2
 
+// RestoreFaces runs the restoration model over each detected face and composites the results back into the image.
 func RestoreFaces(
 	ctx context.Context,
 	session *utils.Session,

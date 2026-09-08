@@ -1,9 +1,16 @@
 name: build
 
+# Tests run on every push to main and every pull request; the build and release jobs are gated on a tag below.
+#
+# Before, this workflow only ran on a tag - so the suite that gates a release was also the first time anything ran at
+# all, and a regression was found at the moment of publishing it rather than on the change that introduced it.
 on:
   push:
+    branches: [main]
     tags:
       - '*'
+  pull_request:
+    branches: [main]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -11,6 +18,7 @@ env:
 jobs:
   version:
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     outputs:
       VERSION: ${{ steps.vars.outputs.VERSION }}
     steps:
@@ -28,7 +36,7 @@ jobs:
 
   # Every build job below waits on these two. A tag is the point of no return - it is what publishes a release - so a
   # suite that only ran after the binaries were built would be telling us about a broken release rather than
-  # preventing one.
+  # preventing one. They are the only jobs that run for a branch push or a pull request.
 
   test-backend:
     runs-on: ubuntu-latest
@@ -106,6 +114,7 @@ jobs:
 
   build-linux-amd64:
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
@@ -157,6 +166,7 @@ jobs:
 
   build-linux-arm64:
     runs-on: ubuntu-24.04-arm
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
@@ -208,6 +218,7 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
@@ -254,6 +265,7 @@ jobs:
 
   build-windows-amd64:
     runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
@@ -304,6 +316,7 @@ jobs:
 
   build-windows-arm64:
     runs-on: windows-11-arm
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [version, test-backend, test-frontend]
     env:
       OTEL_ENDPOINT: ${{ secrets.OTEL_ENDPOINT }}
@@ -367,6 +380,7 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [build-linux-arm64, build-linux-amd64, build-macos, build-windows-amd64, build-windows-arm64]
     permissions:
       contents: write

@@ -1,5 +1,7 @@
 package types
 
+// ModelType is the two-letter family prefix that opens every operation id - "dn_stockholm_fp32" is a denoise. It is
+// what dispatch keys on, so the prefix and the model named after it cannot disagree.
 type ModelType string
 
 const (

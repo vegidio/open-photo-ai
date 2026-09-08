@@ -117,15 +117,17 @@ func restore(
 	}
 
 	canvas := newCanvas(width, height)
+	scratch := &regionScratch{}
 
 	for i, rect := range tiles {
 		if err := ctx.Err(); err != nil {
 			return nil, errors.Wrap(err, "context cancelled")
 		}
 
-		region := cropCHW(pixels, width, height, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), 3)
+		scratch.region = cropCHWInto(scratch.region, pixels, width, height,
+			rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), 3)
 
-		out, err := restoreRegion(ctx, m, region, rect.Dx(), rect.Dy(), rect.Min.X, rect.Min.Y)
+		out, err := restoreRegion(ctx, m, scratch, rect.Dx(), rect.Dy(), rect.Min.X, rect.Min.Y)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to restore tile %d of %d", i+1, len(tiles))
 		}
@@ -147,7 +149,7 @@ func restore(
 func restoreRegion(
 	ctx context.Context,
 	m *upscale.Model,
-	pixels []float32,
+	scratch *regionScratch,
 	width, height, originX, originY int,
 ) ([]float32, error) {
 	if err := ctx.Err(); err != nil {
@@ -164,37 +166,74 @@ func restoreRegion(
 	latentW, latentH := width/vaeStride, height/vaeStride
 	latentPlane := latentW * latentH
 
-	cond, err := utils.RunUnary(m.Graph(roleEncoder),
-		pixels,
+	encoder, err := m.Graph(roleEncoder)
+	if err != nil {
+		return nil, err
+	}
+
+	scratch.cond, err = utils.RunUnaryInto(encoder,
+		scratch.region,
 		ort.NewShape(1, 3, int64(height), int64(width)),
-		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)))
+		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)),
+		scratch.cond)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to encode the region")
 	}
 
-	noise := gaussianNoise(latentChannels*latentPlane, originX, originY, noiseSeed)
-	vidInput := packVidInput(cond, noise, latentPlane)
+	scratch.noise = gaussianNoiseInto(scratch.noise, latentChannels*latentPlane, originX, originY, noiseSeed)
+	scratch.vidInput = packVidInputInto(scratch.vidInput, scratch.cond, scratch.noise, latentPlane)
 
 	// One input, not two: the timestep is a constant inside the graph now - see graphs in loader.go.
-	prediction, err := utils.RunUnary(m.Graph(roleDiT),
-		vidInput,
+	dit, err := m.Graph(roleDiT)
+	if err != nil {
+		return nil, err
+	}
+
+	scratch.prediction, err = utils.RunUnaryInto(dit,
+		scratch.vidInput,
 		ort.NewShape(1, ditChannels, int64(latentH), int64(latentW)),
-		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)))
+		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)),
+		scratch.prediction)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to run the diffusion step")
 	}
 
-	denoised := schedulerStep(prediction, noise)
+	scratch.denoised = schedulerStepInto(scratch.denoised, scratch.prediction, scratch.noise)
 
-	out, err := utils.RunUnary(m.Graph(roleDecoder),
-		denoised,
+	decoder, err := m.Graph(roleDecoder)
+	if err != nil {
+		return nil, err
+	}
+
+	scratch.out, err = utils.RunUnaryInto(decoder,
+		scratch.denoised,
 		ort.NewShape(1, latentChannels, int64(latentH), int64(latentW)),
-		ort.NewShape(1, 3, int64(height), int64(width)))
+		ort.NewShape(1, 3, int64(height), int64(width)),
+		scratch.out)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode the region")
 	}
 
-	return out, nil
+	return scratch.out, nil
+}
+
+// regionScratch is the per-run working set for the region loop.
+//
+// Every region the grid produces is exactly ditRegionEdge square - TestEveryTileIsExactlyTheRegionSize holds it to
+// that - so every buffer here is the same length from one region to the next. Allocating them per region meant seven
+// identically-shaped slices of garbage per tile, hundreds of megabytes over a 4x pass, on a machine already holding a
+// 7 GB model. Same reasoning and the same shape as utils' tileScratch.
+//
+// Reuse is safe for the same reason it is there: each buffer is fully overwritten before it is read again, and out is
+// consumed synchronously by canvas.add before the next region overwrites it.
+type regionScratch struct {
+	region     []float32
+	cond       []float32
+	noise      []float32
+	vidInput   []float32
+	prediction []float32
+	denoised   []float32
+	out        []float32
 }
 
 // schedulerStep turns the transformer's prediction into the clean latent.
@@ -208,7 +247,12 @@ func restoreRegion(
 // Skipping it is not a subtle error: the decoded result is the image buried under the velocity field, which scores
 // worse than the input it was given.
 func schedulerStep(prediction, noise []float32) []float32 {
-	out := make([]float32, len(prediction))
+	return schedulerStepInto(nil, prediction, noise)
+}
+
+// schedulerStepInto is schedulerStep reusing dst. See regionScratch.
+func schedulerStepInto(dst, prediction, noise []float32) []float32 {
+	out := utils.Grow(dst, len(prediction))
 	for i := range prediction {
 		out[i] = noise[i] - prediction[i]
 	}

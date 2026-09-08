@@ -325,6 +325,7 @@
         "faceDetectFailed": "Etwas ist schiefgelaufen. Gesichter konnten nicht erkannt werden.",
         "showLogsFailed": "Die Protokolldatei konnte nicht geöffnet werden. Sie befindet sich im Konfigurationsordner der App.",
         "revealFailed": "Der Dateimanager konnte nicht geöffnet werden. Die Datei liegt weiterhin am Exportort.",
+        "revealFileFailed": "Der Dateimanager konnte nicht geöffnet werden.",
         "openUrlFailed": "Der Browser konnte nicht geöffnet werden. Besuchen Sie die Releases-Seite auf GitHub, um das Update zu laden."
     }
 }

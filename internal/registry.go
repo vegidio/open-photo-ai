@@ -734,12 +734,12 @@ func (r *ModelRegistry) sweepIdle() []*entry {
 
 	r.mu.Lock()
 
-	if r.idleTTL <= 0 {
-		r.mu.Unlock()
-		return nil
-	}
-
 	now := time.Now()
+
+	// A zero TTL disables eviction, not diagnostics. The leaked-lease scan below is the only signal for the bug class
+	// refcounting introduces, and an embedder that deliberately pinned every model resident is if anything more
+	// exposed to it - so it keeps running with the eviction half switched off.
+	evict := r.idleTTL > 0
 
 	for _, e := range r.entries {
 		elapsed := now.Sub(e.lastUsed)
@@ -749,6 +749,10 @@ func (r *ModelRegistry) sweepIdle() []*entry {
 				held = append(held, note{id: e.id, elapsed: elapsed, refs: e.refs})
 			}
 
+			continue
+		}
+
+		if !evict {
 			continue
 		}
 

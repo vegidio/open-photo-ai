@@ -2,6 +2,7 @@ package utils
 
 import "math"
 
+// ClampInt constrains val to the inclusive range [minVal, maxVal].
 func ClampInt(val, minVal, maxVal int) int {
 	if val < minVal {
 		return minVal
@@ -12,6 +13,7 @@ func ClampInt(val, minVal, maxVal int) int {
 	return val
 }
 
+// Clamp255 constrains val to the [0, 255] range an 8-bit channel can hold, before it is converted to a uint8.
 func Clamp255(val float32) float32 {
 	if val < 0 {
 		return 0
@@ -66,6 +68,7 @@ func FitWithinMaxSize(w, h, maxSize int) (int, int) {
 	return FitToMaxSize(w, h, maxSize)
 }
 
+// RoundUpTo16 rounds v up to the next multiple of 16, which several graphs require of their input dimensions.
 func RoundUpTo16(v int) int {
 	if v%16 == 0 {
 		return v
