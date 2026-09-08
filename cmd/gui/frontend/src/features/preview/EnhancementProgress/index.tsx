@@ -8,11 +8,11 @@ import { ENHANCEMENTS, getEnhancementType } from '@/utils/enhancement';
 type ProgressState = {
     operation: string;
     phase: Phase | '';
-    fraction: number;
+    percent: number;
     value: number;
 };
 
-const INITIAL: ProgressState = { operation: '', phase: '', fraction: 0, value: 0 };
+const INITIAL: ProgressState = { operation: '', phase: '', percent: 0, value: 0 };
 
 export const EnhancementProgress = () => {
     const { t } = useTranslation();
@@ -26,13 +26,22 @@ export const EnhancementProgress = () => {
         return Events.On('app:progress', (event) => {
             const { name, phase, progress, fraction } = event.data;
             const value = Math.round(progress * 100);
+            const percent = Math.round(fraction * 100);
 
             // This fires once per tile - thousands of times on a large upscale - but the bar only has 100 distinct
             // positions. Returning the previous object when nothing visible changed bails React out of the re-render.
+            //
+            // The download is the exception: its label spells out `percent`, which the bar's position does not track -
+            // a download owns a fifth of one operation's slice, so `value` only moves once `percent` has advanced by
+            // 5% times the number of operations. Comparing `value` alone froze the number in between and made it jump.
+            // Every other phase keeps the cheap check, since only the bar changes visibly there.
             setProgress((prev) =>
-                prev.value === value && prev.operation === name && prev.phase === phase
+                prev.value === value &&
+                prev.operation === name &&
+                prev.phase === phase &&
+                (phase !== Phase.PhaseDownload || prev.percent === percent)
                     ? prev
-                    : { operation: name, phase, fraction, value },
+                    : { operation: name, phase, percent, value },
             );
         });
     }, []);
@@ -41,14 +50,14 @@ export const EnhancementProgress = () => {
         // The download is the one phase whose own percentage is worth spelling out: the bar tracks the whole
         // pipeline, so a download barely moves it, and without the number it reads as if nothing is happening.
         if (progress.phase === Phase.PhaseDownload) {
-            return t('preview.progress.downloading', { percent: Math.round(progress.fraction * 100) });
+            return t('preview.progress.downloading', { percent: progress.percent });
         }
 
         const type = getEnhancementType(progress.operation);
         const enhancement = type && ENHANCEMENTS[type];
 
         return enhancement ? t(enhancement.shortNameKey) : t('preview.progress.enhancing');
-    }, [progress.phase, progress.fraction, progress.operation, t]);
+    }, [progress.phase, progress.percent, progress.operation, t]);
 
     return (
         <Paper
