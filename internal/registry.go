@@ -54,9 +54,9 @@ type entry struct {
 	key   string
 	id    string                  // operation id, for logging
 	ep    types.ExecutionProvider // provider the model was actually built on
-	pool     types.MemoryPool // which budget this entry is charged to, derived from ep at install
-	model    any
-	bytes    int64 // bytes charged to the pool: model-file bytes plus any device allowance (see chargedBytes)
+	pool  types.MemoryPool        // which budget this entry is charged to, derived from ep at install
+	model any
+	bytes int64 // bytes charged to the pool: model-file bytes plus any device allowance (see chargedBytes)
 
 	// buildCost is how long create took, which is what rebuilding this model would cost the user. It is what buys an
 	// expensive model a longer idle TTL, and what breaks the tie when two equally idle models compete for the same
@@ -531,18 +531,7 @@ func (r *ModelRegistry) Close(timeout time.Duration) bool {
 // never frees a session out from under a running model. They are already unreachable: rule 4 means the next acquire
 // builds a fresh instance rather than finding one of these.
 func (r *ModelRegistry) DrainAll() []*entry {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	victims := make([]*entry, 0, len(r.entries))
-
-	for _, e := range r.entries {
-		if evicted := r.lockedEvict(e); evicted != nil {
-			victims = append(victims, evicted)
-		}
-	}
-
-	return victims
+	return r.drainWhere(nil)
 }
 
 // DrainOtherProviders evicts every resident model that was not built on ep, and returns the victims for the caller to
@@ -568,13 +557,24 @@ func (r *ModelRegistry) DrainAll() []*entry {
 // a switch too, which is what the caller wants: it resets the fallback latch at the same time, so the newly chosen
 // provider gets a real attempt rather than inheriting a downgrade.
 func (r *ModelRegistry) DrainOtherProviders(ep types.ExecutionProvider) []*entry {
+	return r.drainWhere(func(e *entry) bool { return e.ep != ep })
+}
+
+// drainWhere evicts every resident entry that victim selects, and returns those the caller must destroy after
+// unlocking. A nil victim means every entry.
+//
+// It is the one body behind DrainAll and DrainOtherProviders, which differ only in what they select. The rule it owns
+// is the one that is easy to get subtly wrong twice: removal happens under the lock, entries still in use are marked
+// evicted and left to their last Release rather than destroyed here, and nothing is destroyed while the lock is held
+// (registry rule 2).
+func (r *ModelRegistry) drainWhere(victim func(*entry) bool) []*entry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	victims := make([]*entry, 0, len(r.entries))
 
 	for _, e := range r.entries {
-		if e.ep == ep {
+		if victim != nil && !victim(e) {
 			continue
 		}
 

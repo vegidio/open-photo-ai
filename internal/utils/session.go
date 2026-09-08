@@ -318,7 +318,8 @@ func createSessionInner(
 	// not look like a cache problem: a half-written timing cache makes TensorRT's createTimingCache return null,
 	// which ONNX Runtime turns into a failed session build, so the provider declines and every model quietly runs
 	// somewhere slower until the file is replaced.
-	if usesTensorRT(currentPlatform, ep, p) {
+	trt := usesTensorRT(currentPlatform, ep, p)
+	if trt {
 		trtBuildMu.Lock()
 		defer trtBuildMu.Unlock()
 	}
@@ -329,7 +330,9 @@ func createSessionInner(
 		// A corrupt shared timing cache would fail every TensorRT build from here on, not just this one, and the
 		// symptom - every model on a slower provider - points nowhere near a cache file. Dropping it costs one slow
 		// rebuild if this failure was actually about something else, which is the cheaper way to be wrong.
-		dropTimingCache(timingPath, currentPlatform, ep, p)
+		if trt {
+			dropTimingCache(timingPath)
+		}
 
 		return nil, errors.Wrap(err, "failed to create session")
 	}

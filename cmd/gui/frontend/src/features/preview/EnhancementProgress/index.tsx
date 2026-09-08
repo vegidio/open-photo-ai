@@ -29,17 +29,16 @@ export const EnhancementProgress = () => {
             const percent = Math.round(fraction * 100);
 
             // This fires once per tile - thousands of times on a large upscale - but the bar only has 100 distinct
-            // positions. Returning the previous object when nothing visible changed bails React out of the re-render.
+            // positions. Returning the previous object when every field the render reads is unchanged bails React out
+            // of the re-render.
             //
-            // The download is the exception: its label spells out `percent`, which the bar's position does not track -
-            // a download owns a fifth of one operation's slice, so `value` only moves once `percent` has advanced by
-            // 5% times the number of operations. Comparing `value` alone froze the number in between and made it jump.
-            // Every other phase keeps the cheap check, since only the bar changes visibly there.
+            // `percent` has to be one of those fields, not just `value`: the download label spells it out, and the
+            // bar's position does not track it - a download owns a fifth of one operation's slice, so `value` only
+            // moves once `percent` has advanced by 5% times the number of operations. Comparing `value` alone froze
+            // the number in between and made it jump. It costs nothing elsewhere, since `percent` is a rounded 0-100
+            // value rather than a per-tile one.
             setProgress((prev) =>
-                prev.value === value &&
-                prev.operation === name &&
-                prev.phase === phase &&
-                (phase !== Phase.PhaseDownload || prev.percent === percent)
+                prev.value === value && prev.operation === name && prev.phase === phase && prev.percent === percent
                     ? prev
                     : { operation: name, phase, percent, value },
             );

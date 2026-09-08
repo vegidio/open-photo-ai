@@ -3,8 +3,6 @@ package utils
 import (
 	"fmt"
 	"maps"
-	"os"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -12,6 +10,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
+	"github.com/vegidio/open-photo-ai/internal/deps"
 	"github.com/vegidio/open-photo-ai/types"
 	ort "github.com/yalue/onnxruntime_go"
 )
@@ -41,9 +40,9 @@ import (
 // hold is now a measured 2.5x end-to-end win instead. CudaOptions has none either: it was added alongside a sweep of
 // the CUDA provider's options against Osaka, which found every one of them already at its best value in the defaults
 // below - the escape hatch is there so the next graph that disagrees does not have to add a typed field for one
-// setting. The rest are
-// reserved for per-model TensorRT and precision tuning that is already planned - they are deliberately kept rather
-// than trimmed to what has a caller today, so treat "no setter" here as "not wired up yet", not as dead code.
+// setting. The rest are reserved for per-model TensorRT and precision tuning that is already planned - they are
+// deliberately kept rather than trimmed to what has a caller today, so treat "no setter" here as "not wired up yet",
+// not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -355,9 +354,12 @@ var trtBuildMu sync.Mutex
 // usesTensorRT reports whether a session built for this request could attach the TensorRT provider.
 //
 // It re-runs resolveProviders rather than reading what createOptions worked out, which is a duplicated lookup over a
-// table of at most four entries and no side effects. The alternative was to have createOptions report which providers
-// it attached, which would put a return value on it that only the lock cares about - and the lock has to be taken
-// before the session is built, not after the options are.
+// table of at most four entries. Callers should evaluate it once and reuse the answer: resolveProviders logs when a
+// profile excludes the requested provider, so calling this repeatedly for one build would repeat that line.
+//
+// Note it answers "would TensorRT be resolved into the chain", not "did TensorRT attach" - a provider that declines
+// is only logged. That is deliberately the wider question, since a build that tried TensorRT is a build that may have
+// touched the shared timing cache.
 func usesTensorRT(goos string, ep types.ExecutionProvider, p EPProfile) bool {
 	providers, err := resolveProviders(goos, ep, p)
 	if err != nil {
@@ -368,32 +370,22 @@ func usesTensorRT(goos string, ep types.ExecutionProvider, p EPProfile) bool {
 }
 
 // dropTimingCache removes the shared TensorRT timing cache after a session build failed with TensorRT in the chain.
+// The caller decides whether TensorRT was involved - see usesTensorRT - so this unconditionally empties the directory
+// it is given.
 //
-// Every failure here is logged and swallowed: this runs on a path that is already returning an error, and a cache
-// file that could not be removed is not worth replacing that error with.
-func dropTimingCache(timingPath, goos string, ep types.ExecutionProvider, p EPProfile) {
-	if !usesTensorRT(goos, ep, p) {
+// The wipe goes through deps.EmptyDir for the same reason CleanEPCache uses it on the engine directory this one sits
+// inside: one place owns what "empty a cache directory but keep the directory" means, including keeping the directory
+// itself alive for the LD_LIBRARY_PATH reason documented there.
+//
+// The failure is logged and swallowed: this runs on a path that is already returning an error, and a cache file that
+// could not be removed is not worth replacing that error with.
+func dropTimingCache(timingPath string) {
+	if err := deps.EmptyDir(timingPath); err != nil {
+		internal.Log().Warn("failed to drop the timing cache", "path", timingPath, "err", err)
 		return
 	}
 
-	entries, err := os.ReadDir(timingPath)
-	if err != nil {
-		internal.Log().Warn("failed to read the timing cache directory", "path", timingPath, "err", err)
-		return
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		if err = os.Remove(filepath.Join(timingPath, entry.Name())); err != nil {
-			internal.Log().Warn("failed to drop the timing cache", "file", entry.Name(), "err", err)
-			continue
-		}
-
-		internal.Log().Info("dropped the TensorRT timing cache after a failed session build", "file", entry.Name())
-	}
+	internal.Log().Info("dropped the TensorRT timing cache after a failed session build", "path", timingPath)
 }
 
 // cachePaths are the directories the execution providers are pointed at.
@@ -489,7 +481,12 @@ func filterExcluded(chain []types.ExecutionProvider, p EPProfile) []types.Execut
 }
 
 // createOptions builds the session options for one model on one execution provider.
-func createOptions(goos string, paths cachePaths, ep types.ExecutionProvider, p EPProfile) (*ort.SessionOptions, error) {
+func createOptions(
+	goos string,
+	paths cachePaths,
+	ep types.ExecutionProvider,
+	p EPProfile,
+) (*ort.SessionOptions, error) {
 	if _, ok := autoChain[goos]; !ok {
 		return nil, errors.Errorf("unsupported platform: %s", goos)
 	}

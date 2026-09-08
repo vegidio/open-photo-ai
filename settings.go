@@ -26,6 +26,10 @@ func ModelMemoryStats() types.ModelMemory {
 // every model in a run once a driver has proved broken. The latch should be cleared when the user does something that
 // means "try again" - picking a provider in the settings, typically after installing a driver - which is why it is an
 // explicit call rather than something tied to memory being freed.
+//
+// Nothing in this repository calls it any more: the GUI picks a provider through UnloadModelsForProviderChange, which
+// clears the latch itself along with the memory the old choice was holding, and CleanRegistry does the same. This
+// stays as the entry point for a consumer that wants only the latch cleared and nothing unloaded.
 func ResetProviderFallback() {
 	internal.ResetFallback()
 }

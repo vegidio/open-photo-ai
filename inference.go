@@ -232,9 +232,8 @@ func CleanRegistry() {
 //
 // Call it when the user picks a different processor. The registry is keyed by operation and provider, so a switch is
 // already an ordinary cache miss and nothing here is needed to get the new choice used - what it is needed for is the
-// memory
-// the old choice is still holding. An idle model stays resident for its full idle TTL, and on a GPU that means the
-// sessions built for the previous processor keep their VRAM for minutes while the new ones allocate alongside them.
+// memory the old choice is still holding. An idle model stays resident for its full idle TTL, and on a GPU that means
+// the sessions built for the previous processor keep their VRAM for minutes while the new ones allocate alongside them.
 // Windows does not report that as an error: past the card's capacity the driver pages device memory to host RAM over
 // PCIe, and the app keeps producing correct images 10-60x slower with nothing in the log to say why.
 //

@@ -8,26 +8,20 @@ import (
 
 // A device session costs more than its weights, and the budget has to know it: the allowance is what keeps the
 // registry from admitting more than the card holds, which on Windows does not fail but silently pages to host RAM.
+//
+// The host half is the CPU-fallback case too. Both callers derive the pool with PoolOf from the provider the model was
+// actually built on, and PoolOf(CPU) is the host pool - so a model that failed on CUDA and rebuilt on the CPU arrives
+// here already charged against the host and never sees the allowance.
 func TestChargedBytesAddsTheDeviceAllowance(t *testing.T) {
 	t.Setenv(OverheadEnvVar, "50")
 
-	if got := chargedBytes(types.MemoryPoolDevice, types.ExecutionProviderCUDA, 1000); got != 1500 {
+	if got := chargedBytes(types.MemoryPoolDevice, 1000); got != 1500 {
 		t.Errorf("device charge = %d, want 1500", got)
 	}
 
 	// The host pool sizes system RAM directly and gets no allowance.
-	if got := chargedBytes(types.MemoryPoolHost, types.ExecutionProviderCPU, 1000); got != 1000 {
+	if got := chargedBytes(types.MemoryPoolHost, 1000); got != 1000 {
 		t.Errorf("host charge = %d, want 1000", got)
-	}
-}
-
-// A model that fell back to the CPU must not be charged a GPU allowance even if it is somehow filed on the device
-// pool: the provider it was built on, not the pool, is what says whether a GPU is involved.
-func TestChargedBytesSkipsTheAllowanceOnTheCPU(t *testing.T) {
-	t.Setenv(OverheadEnvVar, "50")
-
-	if got := chargedBytes(types.MemoryPoolDevice, types.ExecutionProviderCPU, 1000); got != 1000 {
-		t.Errorf("CPU charge = %d, want 1000", got)
 	}
 }
 
@@ -36,14 +30,14 @@ func TestChargedBytesSkipsTheAllowanceOnTheCPU(t *testing.T) {
 func TestChargedBytesLeavesUnknownSizesAlone(t *testing.T) {
 	t.Setenv(OverheadEnvVar, "50")
 
-	if got := chargedBytes(types.MemoryPoolDevice, types.ExecutionProviderCUDA, 0); got != 0 {
+	if got := chargedBytes(types.MemoryPoolDevice, 0); got != 0 {
 		t.Errorf("unknown charge = %d, want 0", got)
 	}
 }
 
 func TestOverheadOverrideIsHonouredAndValidated(t *testing.T) {
 	t.Setenv(OverheadEnvVar, "0")
-	if got := chargedBytes(types.MemoryPoolDevice, types.ExecutionProviderCUDA, 1000); got != 1000 {
+	if got := chargedBytes(types.MemoryPoolDevice, 1000); got != 1000 {
 		t.Errorf("charge with the allowance disabled = %d, want 1000", got)
 	}
 

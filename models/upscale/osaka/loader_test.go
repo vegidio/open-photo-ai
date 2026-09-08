@@ -16,16 +16,17 @@ func TestProfileExcludesNoProvider(t *testing.T) {
 	// The three CoreML failures the exclusion used to carry - the VAE's "axis 4 is not in valid range" error, the
 	// DiT's MPSNDArray abort, and a silently wrong result - were all export defects, and all three are gone. Each
 	// graph is now a single CoreML partition matching the CPU at cosine 0.99999 or better, and CoreML is worth
-	// roughly 40x end to end here, so re-adding this exclusion would be a very expensive way to fix nothing.
-	if contains(p.ExcludeEPs, types.ExecutionProviderCoreML) {
-		t.Error("CoreML must not be excluded: the re-exported graphs run correctly on it and it is the whole win")
-	}
-
+	// roughly 40x end to end here, so re-adding that exclusion would be a very expensive way to fix nothing.
+	//
 	// TensorRT was excluded on the dynamic-shape export, where it had to rebuild an engine per tile size. The graphs
 	// are fixed-shape now and it is the fastest provider this model has: 1.797s against the CUDA provider's 4.494s
 	// end to end on an RTX 5090, and 140.3ms against 441.1ms on one region.
-	if contains(p.ExcludeEPs, types.ExecutionProviderTensorRT) {
-		t.Error("TensorRT must not be excluded: it is measured at 2.5x the CUDA provider end to end")
+	//
+	// Asserting the list is empty rather than naming the two says what the test name says, and catches a third
+	// exclusion arriving as well.
+	if len(p.ExcludeEPs) != 0 {
+		t.Errorf("no provider may be excluded, got %v: CoreML is worth ~40x here and TensorRT 2.5x the CUDA provider",
+			p.ExcludeEPs)
 	}
 }
 
@@ -39,6 +40,12 @@ func TestProfileLowersTheTensorRTBuilderLevel(t *testing.T) {
 		t.Errorf("trt_builder_optimization_level = %q, want 3: level 5 costs 87s of engine build for no runtime gain",
 			p.TrtOptions["trt_builder_optimization_level"])
 	}
+}
+
+// The two TensorRT precision flags are refused for the same reason as each other: both are the largest number a
+// provider sweep finds, and both buy it with precision the caller did not ask for.
+func TestProfileRefusesTensorRTPrecisionFlags(t *testing.T) {
+	p := profileFor(types.PrecisionFp32)
 
 	// Not a no-op on the int8 export: it takes the DiT from 220.3ms to 78.4ms, and the decoded region from cosine
 	// 0.9999 to 0.9954 against the same graph on CUDA. The fp16 export is faster than that AND accurate, so this
@@ -120,10 +127,6 @@ func TestOnlyTheDiTFollowsTheOperationPrecision(t *testing.T) {
 			t.Errorf("%s: Precision = %q, want %q", g.Role, g.Precision, want)
 		}
 	}
-}
-
-func contains(eps []types.ExecutionProvider, want types.ExecutionProvider) bool {
-	return slices.Contains(eps, want)
 }
 
 // The execution mode is the largest single setting in this profile on the CUDA provider - -13.5% at fp16 and -10.1%

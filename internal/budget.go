@@ -138,21 +138,28 @@ func DefaultBudgets(ctx context.Context) (device, host int64) {
 	return device, host
 }
 
-// budgetOverride reads BudgetEnvVar. An unparseable or negative value is ignored with a warning rather than failing
-// startup: this is a triage knob, and a typo in it should not stop the app from running.
+// budgetOverride reads BudgetEnvVar.
 func budgetOverride() (int64, bool) {
-	raw, ok := os.LookupEnv(BudgetEnvVar)
+	return envInt64(BudgetEnvVar)
+}
+
+// envInt64 reads a non-negative int64 from the named environment variable, reporting false when it is unset.
+//
+// An unparseable or negative value is ignored with a warning rather than failing startup: every caller is a triage
+// knob, and a typo in one should not stop the app from running.
+func envInt64(name string) (int64, bool) {
+	raw, ok := os.LookupEnv(name)
 	if !ok {
 		return 0, false
 	}
 
-	bytes, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || bytes < 0 {
-		Log().Warn("ignoring invalid model budget override", "env", BudgetEnvVar, "value", raw, "err", err)
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		Log().Warn("ignoring invalid environment override", "env", name, "value", raw, "err", err)
 		return 0, false
 	}
 
-	return bytes, true
+	return value, true
 }
 
 // defaultDeviceBudget takes a fraction of the largest GPU's VRAM.
@@ -199,33 +206,25 @@ func deviceBudgetFor(vramBytes int64) int64 {
 // per-session memory those files do not describe. See deviceOverheadPercent for what that allowance stands for and why
 // it errs high.
 //
-// ep is the provider the model was actually built on, which is what says whether this is really a GPU session.
-// Charging on the pool alone would be wrong for the CPU fallback: a model that failed on CUDA and rebuilt on the CPU
-// must not carry a device allowance.
+// The pool is what carries the distinction, and it is enough on its own. Both callers derive it with PoolOf from the
+// provider the model was actually built on, so the CPU fallback needs no separate guard: a model that failed on CUDA
+// and rebuilt on the CPU is charged against PoolOf(CPU), which is the host pool, and never reaches the allowance.
 //
 // A zero size means "unknown", not "free" - EstimateModelBytes returns 0 for anything the manifest can't name - and
 // stays 0 here so that an unknown model is not charged an allowance on a size nobody has.
-func chargedBytes(pool types.MemoryPool, ep types.ExecutionProvider, bytes int64) int64 {
-	if bytes <= 0 || pool != types.MemoryPoolDevice || ep == types.ExecutionProviderCPU {
+func chargedBytes(pool types.MemoryPool, bytes int64) int64 {
+	if bytes <= 0 || pool != types.MemoryPoolDevice {
 		return bytes
 	}
 
 	return bytes + bytes*overheadPercent()/100
 }
 
-// overheadPercent reads OverheadEnvVar, falling back to deviceOverheadPercent. An unparseable or negative value is
-// ignored with a warning rather than failing startup, matching budgetOverride.
+// overheadPercent reads OverheadEnvVar, falling back to deviceOverheadPercent.
 func overheadPercent() int64 {
-	raw, ok := os.LookupEnv(OverheadEnvVar)
-	if !ok {
-		return deviceOverheadPercent
+	if percent, ok := envInt64(OverheadEnvVar); ok {
+		return percent
 	}
 
-	percent, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || percent < 0 {
-		Log().Warn("ignoring invalid model overhead override", "env", OverheadEnvVar, "value", raw, "err", err)
-		return deviceOverheadPercent
-	}
-
-	return percent
+	return deviceOverheadPercent
 }

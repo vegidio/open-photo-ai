@@ -76,11 +76,10 @@ tasks:
       - "windows/icon.ico"
     cmds:
       # `generate icons` always writes both an .icns and an .ico, falling back to its default path for whichever
-      # output is not named, so each run has to send the file it is not producing to a throwaway directory.
-      - mkdir -p .icons-discard
-      - wails3 generate icons -input appicon-macos.png -macfilename darwin/icons.icns -windowsfilename .icons-discard/unused.ico
-      - wails3 generate icons -input appicon.png -macfilename .icons-discard/unused.icns -windowsfilename windows/icon.ico
-      - rm -rf .icons-discard
+      # output is not named, so each run has to send the file it is not producing somewhere harmless and delete it.
+      - wails3 generate icons -input appicon-macos.png -macfilename darwin/icons.icns -windowsfilename discard.ico
+      - wails3 generate icons -input appicon.png -macfilename discard.icns -windowsfilename windows/icon.ico
+      - rm -f discard.ico discard.icns
 
   dev:frontend:
     summary: Runs the frontend in development mode
