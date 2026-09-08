@@ -134,8 +134,15 @@ func Process(
 		// sitting in `output`. Failing here threw away finished work because the disk was full or read-only, which is
 		// the cache's problem, not the enhancement's. The cost of carrying on is a re-run next time, not a wrong image.
 		if err := cache.SetImage(ctx, output, input.Hash, applied...); err != nil {
-			internal.Log().Warn("failed to cache the processed image",
-				"op", op.Id(), "hash", input.Hash, "err", err)
+			// The memory fallback drops a write when its buffer is full or the store is closing, which costs a
+			// future cache hit and nothing else. Not worth a warning per operation per run - but worth being able
+			// to find, since a run dropping every write is caching nothing while looking like it is.
+			if errors.Is(err, internal.ErrNotAdmitted) {
+				internal.Log().Debug("the cache dropped the processed image", "op", op.Id())
+			} else {
+				internal.Log().Warn("failed to cache the processed image",
+					"op", op.Id(), "hash", input.Hash, "err", err)
+			}
 		}
 	}
 

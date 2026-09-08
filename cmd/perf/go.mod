@@ -8,7 +8,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/urfave/cli/v3 v3.11.0
-	github.com/vegidio/go-sak v0.0.0-20260830124425-6fcee93db7a2
+	github.com/vegidio/go-sak v0.0.0-20260908172349-d34247d2e1de
 )
 
 require (

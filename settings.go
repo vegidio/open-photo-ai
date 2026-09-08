@@ -61,6 +61,21 @@ func SetImageCacheEnabled(enabled bool) {
 	internal.SetImageCacheEnabled(enabled)
 }
 
+// ImageCacheMode reports what is backing the image cache after Initialize: disk normally, memory when the disk store
+// could not be opened, and none when neither could.
+//
+// It exists so an application can report a degradation that is deliberately not an error. Initialize no longer fails
+// when the cache does - losing it costs speed and nothing else - and the library only logs the fallback, into a file
+// that never leaves the machine. Without something like this, "some runs are silently uncached" is unknowable.
+func ImageCacheMode() types.CacheMode {
+	cache := internal.ImageCache()
+	if cache == nil {
+		return types.CacheModeNone
+	}
+
+	return cache.Mode()
+}
+
 // SetLogger activates structured logging for the OPAI library.
 //
 // By default, the library is completely silent — it logs nothing and creates no files. Pass a *slog.Logger to receive

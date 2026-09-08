@@ -42,7 +42,7 @@ require (
 	github.com/stangelandcl/ppmd v0.1.1 // indirect
 	github.com/ulikunitz/xz v0.5.16 // indirect
 	github.com/vegidio/avif-go v0.0.0-20260715095249-dbb32e4e0094 // indirect
-	github.com/vegidio/go-sak v0.0.0-20260830124425-6fcee93db7a2 // indirect
+	github.com/vegidio/go-sak v0.0.0-20260908172349-d34247d2e1de // indirect
 	github.com/vegidio/heif-go v0.0.0-20260612200113-7118489c8dd5 // indirect
 	github.com/vegidio/raw-go v0.0.0-20260619122347-1fd4b5c63e43 // indirect
 	github.com/vegidio/webp-go v0.0.0-20260614080129-a1efc50b59e1 // indirect

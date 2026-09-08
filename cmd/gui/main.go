@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/fs"
@@ -78,6 +79,11 @@ func run() int {
 
 	shared.ReportSystemInfo(otel)
 
+	// Declared before application.New because the single-instance callback closes over it, and filled in once the
+	// window exists. Atomic rather than a plain variable: the callback runs on Wails' listener goroutine while run()
+	// is still assigning here, which is a data race the -race build would correctly fail on.
+	var windowRef atomic.Pointer[application.WebviewWindow]
+
 	app := application.New(application.Options{
 		Name:        "Open Photo AI",
 		Description: "An open source photo AI editor",
@@ -87,6 +93,19 @@ func run() int {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
+		SingleInstance: singleInstanceOptions(func() {
+			win := windowRef.Load()
+			if win == nil {
+				return
+			}
+
+			// Show, then UnMinimise, then Focus: a hidden window cannot take focus, and UnMinimise does nothing
+			// unless the window really is minimised. Restore() is deliberately not used - it un-maximises a maximised
+			// window, so someone who simply launched the app a second time would find their window shrunk.
+			win.Show()
+			win.UnMinimise()
+			win.Focus()
+		}),
 		LogLevel: slog.LevelError,
 	})
 
@@ -105,6 +124,8 @@ func run() int {
 		URL:            "/",
 		EnableFileDrop: true,
 	})
+
+	windowRef.Store(win)
 
 	maximizeOnStart(win)
 	eventDragAndDrop(app, win)
@@ -125,6 +146,63 @@ func run() int {
 	}
 
 	return 0
+}
+
+// singleInstanceUniqueID identifies the app to the OS-level lock. A fixed reverse-DNS string rather than anything
+// derived at runtime: Wails builds a Windows mutex name, a macOS lock file and a D-Bus name out of it, so a value that
+// changed between releases would let two versions run side by side - which is the situation the lock exists to
+// prevent, since both would open the same cache directory.
+const singleInstanceUniqueID = "io.vinicius.opai"
+
+// singleInstanceOptions returns the single-instance configuration, or nil to leave the feature off.
+//
+// A second copy of the app is where the image cache's directory lock is genuinely contended: one directory, one lock,
+// two processes. The library degrades to an in-memory cache rather than failing when it loses that race, but the
+// better outcome is not to race at all - the app is single-window, so the second copy was never useful. Refusing it
+// and raising the window that already exists is both the fix and what someone launching the app again actually meant.
+//
+// ExitCode is 0 because a second launch is not a failure from the user's point of view; they double-clicked the icon.
+//
+// It returns nil when Linux has no reachable session bus, and that check is not optional. Wails takes the lock there
+// by claiming a D-Bus name, and application.New treats a connection failure as fatal: it calls os.Exit(1) from inside
+// the constructor, which skips every defer in run() - so the log file and the OTLP exporter are never flushed, which
+// is the exact failure run()'s own comment exists to prevent. Turning "starts fine" into "exits silently at launch"
+// on a headless or containerised session would be a worse bug than the one being fixed here.
+func singleInstanceOptions(onSecondInstance func()) *application.SingleInstanceOptions {
+	if runtime.GOOS == "linux" && !hasSessionBus() {
+		slog.Warn("no D-Bus session bus is reachable; running without the single-instance lock")
+		return nil
+	}
+
+	return &application.SingleInstanceOptions{
+		UniqueID: singleInstanceUniqueID,
+		OnSecondInstanceLaunch: func(_ application.SecondInstanceData) {
+			slog.Info("a second instance was launched; raising the existing window instead")
+			onSecondInstance()
+		},
+		ExitCode: 0,
+	}
+}
+
+// hasSessionBus mirrors the first two steps of godbus' own address resolution: the DBUS_SESSION_BUS_ADDRESS variable,
+// then the well-known sockets under /run/user/<uid>. Its third step is deliberately not mirrored - that one shells out
+// to `dbus-launch` and starts a private bus, which no other instance shares, so the name would always be free and the
+// lock would guard nothing while costing a process spawn at every launch.
+func hasSessionBus() bool {
+	// The literal "autolaunch:" is skipped for the same reason godbus skips it: it is a request to spawn a private
+	// bus, not the address of one that already exists.
+	if address := stdos.Getenv("DBUS_SESSION_BUS_ADDRESS"); address != "" && address != "autolaunch:" {
+		return true
+	}
+
+	runtimeDir := fmt.Sprintf("/run/user/%d", stdos.Getuid())
+	for _, name := range []string{"bus", "dbus-session"} {
+		if _, err := stdos.Stat(filepath.Join(runtimeDir, name)); err == nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 // setLibPathAndRestart re-executes the process with LD_LIBRARY_PATH pointing at the bundled NVIDIA libraries, because

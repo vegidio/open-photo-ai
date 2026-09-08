@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 
 	"github.com/cockroachdb/errors"
@@ -20,6 +21,20 @@ import (
 type AppService struct {
 	app  *application.App
 	otel *o11y.Telemetry
+
+	// initMu serializes Initialize, which the frontend can genuinely call twice: the mount effect and the download
+	// dialog's "Try Again" are separate call sites, and Wails runs each binding call on its own goroutine. The one
+	// that actually happens in production is the error boundary's Reload - window.location.reload() starts a fresh
+	// frontend that calls Initialize again while this process is still inside the previous call. Without the lock
+	// that means two ONNX Runtime downloads writing the same file, and two InitializeEnvironment calls racing the
+	// IsInitialized check that is supposed to make a repeat call safe.
+	initMu sync.Mutex
+
+	// initialized and supportedEPs hold the result of the first *successful* call, so a retry arriving after the app
+	// is already up answers from here instead of booting everything a second time. Only success is remembered: a
+	// failed attempt has to stay retryable, which is the whole point of the button that triggers it.
+	initialized  bool
+	supportedEPs SupportedEPs
 
 	// fallbackNotified keeps the "running on CPU" warning to one per set of loaded models, so a run that downgrades
 	// several models only tells the user once. CleanRegistry clears it, so picking a different processor that also
@@ -44,6 +59,14 @@ func NewAppService(app *application.App, otel *o11y.Telemetry) *AppService {
 // the ONNX Runtime on first run, emitting EventAppDownload as it goes, so the frontend can show progress before any
 // enhancement is possible. Callers must await it before invoking any inference service.
 func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
+	s.initMu.Lock()
+	defer s.initMu.Unlock()
+
+	if s.initialized {
+		slog.Info("app service is already initialized; returning the providers from the first call")
+		return s.supportedEPs, nil
+	}
+
 	supportedEPs := SupportedEPs{}
 
 	slog.Info("initializing app service")
@@ -93,6 +116,18 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 		supportedEPs.CoreML = true
 		slog.Info("CoreML supported")
 	}
+
+	// The library falls back rather than failing when its cache directory is locked, and logs that to the log file
+	// only - so unless it is reported here, a run with no cache is invisible from outside the machine. Deliberately
+	// LogWarn and not LogError: this is a slower run, not a failed one, and it must not go back into the error budget
+	// that the cache failing used to be a third of.
+	if mode := opai.ImageCacheMode(); mode != types.CacheModeDisk {
+		s.otel.LogWarn("Image cache degraded", map[string]any{"mode": string(mode)})
+		slog.Warn("running with a degraded image cache", "mode", mode)
+	}
+
+	s.initialized = true
+	s.supportedEPs = supportedEPs
 
 	slog.Info("app service initialized",
 		"cuda", supportedEPs.CUDA, "tensorrt", supportedEPs.TensorRT, "coreml", supportedEPs.CoreML)
@@ -164,6 +199,15 @@ func (s *AppService) GetLogsPath() (string, error) {
 // region - Private methods
 
 func (s *AppService) destroy() {
+	// Under the same lock that guards Initialize, and clearing the flag with it: the memoized result describes a
+	// runtime that is about to stop existing, so leaving it set would let a later Initialize report providers for an
+	// environment that has already been torn down.
+	s.initMu.Lock()
+	defer s.initMu.Unlock()
+
+	s.initialized = false
+	s.supportedEPs = SupportedEPs{}
+
 	opai.Destroy()
 }
 
