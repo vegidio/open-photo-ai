@@ -3,9 +3,12 @@ package utils
 import (
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/open-photo-ai/internal"
@@ -68,6 +71,17 @@ type EPProfile struct {
 	// An unrecognised key is not ignored: ONNX Runtime rejects the whole option update, the provider declines to
 	// attach, and the graph quietly runs on the next provider in the chain. So a typo here costs the GPU, not a
 	// setting - check the session-created log line names TensorRT after changing anything in it.
+	//
+	// Measuring what belongs here needs two precautions that a CUDA sweep does not, and both produce a clean table of
+	// wrong numbers rather than an obvious failure. The first is the engine cache: TensorRT's cache file name carries
+	// only the graph hash and the precision flags, so two configurations pointed at one cache directory hand each
+	// other the first one's engine and every option reads as a no-op. Give each configuration a directory of its own.
+	//
+	// The second is that the builder is not deterministic. Six sessions built from an identical configuration, one
+	// cache directory each, spread from -2.5% to +1.2% on tokyo's fp16 export and did not all produce the same output
+	// - so a single build per configuration samples the builder rather than measuring the option, and nothing below
+	// roughly +/-3% survives a second build. Tokyo's profile has the worked example, including the no-op setting that
+	// measured -1.6% in one precision and +6.2% in the other.
 	TrtOptions map[string]string
 
 	// DisableMemPattern turns off ONNX Runtime's static memory planner. The planner assumes shapes repeat between
@@ -334,8 +348,72 @@ func (p EPProfile) excludes(ep types.ExecutionProvider) bool {
 	return slices.Contains(p.ExcludeEPs, ep)
 }
 
+// trtBuildMu serializes session builds that may attach TensorRT, so the one shared timing cache has a single writer.
+// See the comment at its use in createSessionInner.
+var trtBuildMu sync.Mutex
+
+// usesTensorRT reports whether a session built for this request could attach the TensorRT provider.
+//
+// It re-runs resolveProviders rather than reading what createOptions worked out, which is a duplicated lookup over a
+// table of at most four entries and no side effects. The alternative was to have createOptions report which providers
+// it attached, which would put a return value on it that only the lock cares about - and the lock has to be taken
+// before the session is built, not after the options are.
+func usesTensorRT(goos string, ep types.ExecutionProvider, p EPProfile) bool {
+	providers, err := resolveProviders(goos, ep, p)
+	if err != nil {
+		return false
+	}
+
+	return slices.Contains(providers, types.ExecutionProviderTensorRT)
+}
+
+// dropTimingCache removes the shared TensorRT timing cache after a session build failed with TensorRT in the chain.
+//
+// Every failure here is logged and swallowed: this runs on a path that is already returning an error, and a cache
+// file that could not be removed is not worth replacing that error with.
+func dropTimingCache(timingPath, goos string, ep types.ExecutionProvider, p EPProfile) {
+	if !usesTensorRT(goos, ep, p) {
+		return
+	}
+
+	entries, err := os.ReadDir(timingPath)
+	if err != nil {
+		internal.Log().Warn("failed to read the timing cache directory", "path", timingPath, "err", err)
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if err = os.Remove(filepath.Join(timingPath, entry.Name())); err != nil {
+			internal.Log().Warn("failed to drop the timing cache", "file", entry.Name(), "err", err)
+			continue
+		}
+
+		internal.Log().Info("dropped the TensorRT timing cache after a failed session build", "file", entry.Name())
+	}
+}
+
+// cachePaths are the directories the execution providers are pointed at.
+//
+// It is a struct rather than two string parameters because only one of the two is per-model, and a pair of bare
+// strings at every call site is how they end up swapped: engine is this model's own directory, while timing is shared
+// by every model in the installation. Handing TensorRT the model directory as its timing cache would silently give
+// back the per-model behaviour that internal.TimingCacheDir exists to avoid, and nothing would report it - the builds
+// would simply stay slow.
+type cachePaths struct {
+	// engine is this model's own directory, holding what a provider compiled from it: a TensorRT engine, a CoreML
+	// MLProgram. See internal.EngineCacheFor.
+	engine string
+
+	// timing is the installation-wide TensorRT timing cache directory. See internal.TimingCacheDir.
+	timing string
+}
+
 // providerAppender configures one execution provider onto a set of session options.
-type providerAppender func(cachePath string, options *ort.SessionOptions, p EPProfile) error
+type providerAppender func(paths cachePaths, options *ort.SessionOptions, p EPProfile) error
 
 var providerAppenders = map[types.ExecutionProvider]providerAppender{
 	types.ExecutionProviderTensorRT: appendTensorRT,
@@ -411,7 +489,7 @@ func filterExcluded(chain []types.ExecutionProvider, p EPProfile) []types.Execut
 }
 
 // createOptions builds the session options for one model on one execution provider.
-func createOptions(goos, cachePath string, ep types.ExecutionProvider, p EPProfile) (*ort.SessionOptions, error) {
+func createOptions(goos string, paths cachePaths, ep types.ExecutionProvider, p EPProfile) (*ort.SessionOptions, error) {
 	if _, ok := autoChain[goos]; !ok {
 		return nil, errors.Errorf("unsupported platform: %s", goos)
 	}
@@ -449,7 +527,7 @@ func createOptions(goos, cachePath string, ep types.ExecutionProvider, p EPProfi
 			continue
 		}
 
-		if err = appender(cachePath, options, p); err != nil {
+		if err = appender(paths, options, p); err != nil {
 			internal.Log().Warn("execution provider declined to attach; the graph will run on the next provider "+
 				"in the chain", "ep", provider, "requested_ep", ep, "err", err)
 		}
@@ -513,7 +591,7 @@ func applyProfile(options *ort.SessionOptions, p EPProfile) error {
 // Anyone revisiting this needs one thing the earlier attempt lacked: verify the SECOND Run on the SAME session
 // against a CPU or graph-off result. A single-run comparison cannot see either failure.
 
-func tensorRTOptions(cachePath string, p EPProfile) map[string]string {
+func tensorRTOptions(paths cachePaths, p EPProfile) map[string]string {
 	workspace := int64(4) << 30
 	if p.TrtWorkspaceBytes > 0 {
 		workspace = p.TrtWorkspaceBytes
@@ -549,7 +627,9 @@ func tensorRTOptions(cachePath string, p EPProfile) map[string]string {
 		"trt_cuda_graph_enable":          "0",
 		"trt_builder_optimization_level": "5",
 		"trt_engine_cache_enable":        "1",
-		"trt_engine_cache_path":          cachePath,
+		"trt_engine_cache_path":          paths.engine,
+		"trt_timing_cache_enable":        "1",
+		"trt_timing_cache_path":          paths.timing,
 	}
 
 	maps.Copy(options, p.TrtShapes)
@@ -581,7 +661,7 @@ func cudaOptions(p EPProfile) map[string]string {
 	return options
 }
 
-func coreMLOptions(cachePath string, p EPProfile) map[string]string {
+func coreMLOptions(paths cachePaths, p EPProfile) map[string]string {
 	// CoreML compiles a fixed-shape MLProgram when it may assume static inputs. For a model whose spatial axes vary
 	// per run that assumption does not hold, and leaving it on makes CoreML decline the varying subgraphs silently.
 	staticShapes := "1"
@@ -598,7 +678,7 @@ func coreMLOptions(cachePath string, p EPProfile) map[string]string {
 	return map[string]string{
 		"EnableOnSubgraphs":        "0",
 		"MLComputeUnits":           p.CoreMLComputeUnits.value(),
-		"ModelCacheDirectory":      cachePath,
+		"ModelCacheDirectory":      paths.engine,
 		"ModelFormat":              "MLProgram",
 		"RequireStaticInputShapes": staticShapes,
 		"SpecializationStrategy":   p.CoreMLSpecialization.value(),
@@ -609,21 +689,21 @@ func coreMLOptions(cachePath string, p EPProfile) map[string]string {
 
 // region - Provider appenders
 
-func appendTensorRT(cachePath string, options *ort.SessionOptions, p EPProfile) error {
+func appendTensorRT(paths cachePaths, options *ort.SessionOptions, p EPProfile) error {
 	trtOptions, err := ort.NewTensorRTProviderOptions()
 	if err != nil {
 		return errors.Wrap(err, "failed to create TensorRT EP options")
 	}
 	defer trtOptions.Destroy()
 
-	if err = trtOptions.Update(tensorRTOptions(cachePath, p)); err != nil {
+	if err = trtOptions.Update(tensorRTOptions(paths, p)); err != nil {
 		return errors.Wrap(err, "failed to apply the TensorRT EP options")
 	}
 
 	return options.AppendExecutionProviderTensorRT(trtOptions)
 }
 
-func appendCuda(_ string, options *ort.SessionOptions, p EPProfile) error {
+func appendCuda(_ cachePaths, options *ort.SessionOptions, p EPProfile) error {
 	cudaOpts, err := ort.NewCUDAProviderOptions()
 	if err != nil {
 		return errors.Wrap(err, "failed to create CUDA EP options")
@@ -637,15 +717,15 @@ func appendCuda(_ string, options *ort.SessionOptions, p EPProfile) error {
 	return options.AppendExecutionProviderCUDA(cudaOpts)
 }
 
-func appendDirectML(_ string, options *ort.SessionOptions, _ EPProfile) error {
+func appendDirectML(_ cachePaths, options *ort.SessionOptions, _ EPProfile) error {
 	return options.AppendExecutionProviderDirectML(0)
 }
 
-func appendCoreML(cachePath string, options *ort.SessionOptions, p EPProfile) error {
-	return options.AppendExecutionProviderCoreMLV2(coreMLOptions(cachePath, p))
+func appendCoreML(paths cachePaths, options *ort.SessionOptions, p EPProfile) error {
+	return options.AppendExecutionProviderCoreMLV2(coreMLOptions(paths, p))
 }
 
-func appendOpenVINO(_ string, _ *ort.SessionOptions, _ EPProfile) error {
+func appendOpenVINO(_ cachePaths, _ *ort.SessionOptions, _ EPProfile) error {
 	// Reporting the no-op rather than returning nil. While this is stubbed out, returning nil told the caller the
 	// provider had attached, so a machine resolving to OpenVINO ran entirely on CPU kernels with nothing anywhere
 	// saying why. The error is not fatal - the caller logs it and moves down the chain, which is the correct

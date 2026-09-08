@@ -20,7 +20,7 @@ func TestCoreMLOptionsFollowTheProfile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := coreMLOptions("/cache", tt.profile)
+			got := coreMLOptions(testPaths, tt.profile)
 
 			if got["RequireStaticInputShapes"] != tt.want {
 				t.Fatalf("RequireStaticInputShapes = %q, want %q", got["RequireStaticInputShapes"], tt.want)
@@ -52,7 +52,7 @@ func TestCoreMLComputeUnitsFollowTheProfile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := coreMLOptions("/cache", tt.profile)["MLComputeUnits"]; got != tt.want {
+			if got := coreMLOptions(testPaths, tt.profile)["MLComputeUnits"]; got != tt.want {
 				t.Fatalf("MLComputeUnits = %q, want %q", got, tt.want)
 			}
 		})
@@ -72,15 +72,20 @@ func TestCoreMLSpecializationFollowsTheProfile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := coreMLOptions("/cache", tt.profile)["SpecializationStrategy"]; got != tt.want {
+			if got := coreMLOptions(testPaths, tt.profile)["SpecializationStrategy"]; got != tt.want {
 				t.Fatalf("SpecializationStrategy = %q, want %q", got, tt.want)
 			}
 		})
 	}
 }
 
+// testPaths stands in for the two directories createSessionInner resolves. They differ from one another on purpose:
+// the engine directory is per model and the timing one is shared, and a test that passed the same string for both
+// could not catch them being swapped.
+var testPaths = cachePaths{engine: "/cache", timing: "/timing"}
+
 func TestTensorRTOptionsFollowTheProfile(t *testing.T) {
-	zero := tensorRTOptions("/cache", EPProfile{})
+	zero := tensorRTOptions(testPaths, EPProfile{})
 
 	if zero["trt_max_workspace_size"] != "4294967296" {
 		t.Fatalf("default workspace = %q", zero["trt_max_workspace_size"])
@@ -89,7 +94,22 @@ func TestTensorRTOptionsFollowTheProfile(t *testing.T) {
 		t.Fatalf("fp16 must be opt-in, got %q", zero["trt_fp16_enable"])
 	}
 
-	tuned := tensorRTOptions("/cache", EPProfile{
+	// The timing cache has to point at the shared directory rather than this model's engine one. Pointed at the
+	// engine directory it would still work, and still be cleared by everything that clears the engine beside it -
+	// which is the whole of what internal.TimingCacheDir exists to avoid, and it fails silently as a slow build.
+	if zero["trt_timing_cache_enable"] != "1" {
+		t.Fatalf("timing cache must be on, got %q", zero["trt_timing_cache_enable"])
+	}
+	if zero["trt_timing_cache_path"] != testPaths.timing {
+		t.Fatalf("timing cache path = %q, want the shared directory %q",
+			zero["trt_timing_cache_path"], testPaths.timing)
+	}
+	if zero["trt_engine_cache_path"] != testPaths.engine {
+		t.Fatalf("engine cache path = %q, want the per-model directory %q",
+			zero["trt_engine_cache_path"], testPaths.engine)
+	}
+
+	tuned := tensorRTOptions(testPaths, EPProfile{
 		Fp16:              true,
 		TrtWorkspaceBytes: 1 << 30,
 		TrtShapes:         map[string]string{"trt_profile_min_shapes": "vid_input:1x33x32x32"},
@@ -109,7 +129,7 @@ func TestTensorRTOptionsFollowTheProfile(t *testing.T) {
 // TrtOptions is applied last so that a model can override a default, not merely add to it. Both halves are checked:
 // overriding trt_engine_hw_compatible is what osaka is there for, and a key with no default has to survive too.
 func TestTensorRTOptionsOverlayOverridesTheDefaults(t *testing.T) {
-	options := tensorRTOptions("/cache", EPProfile{
+	options := tensorRTOptions(testPaths, EPProfile{
 		TrtOptions: map[string]string{
 			"trt_engine_hw_compatible": "0",
 			"trt_auxiliary_streams":    "1",

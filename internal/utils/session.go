@@ -282,12 +282,21 @@ func createSessionInner(
 	//
 	// The directory comes from EngineCacheFor, which is also what deps.Install clears when it replaces the weights.
 	stem := strings.TrimSuffix(modelFile, filepath.Ext(modelFile))
-	cachePath, err := fs.MkUserConfigDir(internal.AppName(), strings.Split(internal.EngineCacheFor(stem), "/")...)
+	enginePath, err := fs.MkUserConfigDir(internal.AppName(), strings.Split(internal.EngineCacheFor(stem), "/")...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to resolve the engine cache directory")
 	}
 
-	options, err := createOptions(currentPlatform, cachePath, ep, p)
+	// Shared by every model, unlike the engine directory above - see internal.TimingCacheDir for why that is the only
+	// placement worth having.
+	timingPath, err := fs.MkUserConfigDir(internal.AppName(), strings.Split(internal.TimingCacheDir, "/")...)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to resolve the timing cache directory")
+	}
+
+	paths := cachePaths{engine: enginePath, timing: timingPath}
+
+	options, err := createOptions(currentPlatform, paths, ep, p)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create session options")
 	}
@@ -299,9 +308,29 @@ func createSessionInner(
 		return nil, err
 	}
 
+	// The build is serialized when TensorRT is in the chain, because the timing cache the previous block pointed it at
+	// is one file shared by every model, and ONNX Runtime reads it at the start of a build and rewrites it at the end
+	// with no locking of its own. Two models building at once - which the registry allows, since it single-flights per
+	// model id rather than globally - would interleave those writes.
+	//
+	// The cost is nothing in the common case, where the app builds one model at a time anyway, and two concurrent
+	// engine builds do not finish sooner for sharing one GPU. What it buys is the avoidance of a failure that would
+	// not look like a cache problem: a half-written timing cache makes TensorRT's createTimingCache return null,
+	// which ONNX Runtime turns into a failed session build, so the provider declines and every model quietly runs
+	// somewhere slower until the file is replaced.
+	if usesTensorRT(currentPlatform, ep, p) {
+		trtBuildMu.Lock()
+		defer trtBuildMu.Unlock()
+	}
+
 	modelPath := filepath.Join(modelsPath, modelFile)
 	session, err := ort.NewDynamicAdvancedSession(modelPath, inputs, outputs, options)
 	if err != nil {
+		// A corrupt shared timing cache would fail every TensorRT build from here on, not just this one, and the
+		// symptom - every model on a slower provider - points nowhere near a cache file. Dropping it costs one slow
+		// rebuild if this failure was actually about something else, which is the cheaper way to be wrong.
+		dropTimingCache(timingPath, currentPlatform, ep, p)
+
 		return nil, errors.Wrap(err, "failed to create session")
 	}
 

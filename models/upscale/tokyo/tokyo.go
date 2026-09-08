@@ -119,6 +119,73 @@ var variant = &upscale.Variant{
 // inter-op spinning, and pinning the intra-op pool to one thread are all ties. Nor is the parallel mode's cost the
 // CUDA stream fan-out it looks like: use_ep_level_unified_stream=1 *without* the sequential mode measures 576.8ms at
 // fp32 and 339.5ms at fp16, which is the parallel baseline unchanged. It is the scheduling, not the streams.
+//
+// # What the TensorRT provider options cannot do for it either
+//
+// TrtOptions is empty for the same reason CudaOptions is, and the answer here is even flatter: TensorRT swallows all
+// 2682 nodes into a single engine - the cached file ends `_0_0`, one subgraph - so there is no partitioning left to
+// tune and every remaining option is a builder setting that lands on the same fused engine.
+//
+// Measured on an RTX 5090 (driver 610.88, ONNX Runtime 1.26, TensorRT 10, sm_120), one 256x256 tile, sequential mode,
+// median of 18 runs over 6 interleaved rounds, each configuration given its own engine cache directory:
+//
+//	                                              fp32              fp16
+//	trt_max_workspace_size=1 GiB                  -0.6%             +0.1%
+//	trt_max_workspace_size=8 GiB                  +0.1%             +2.5%
+//	trt_max_workspace_size=16 GiB                 -0.3%             +2.5%
+//	trt_auxiliary_streams=0                       +0.2%             +6.2%
+//	trt_auxiliary_streams=1                       +0.1%             -0.0%
+//	trt_auxiliary_streams=4                       +1.0%             +0.0%
+//	trt_builder_optimization_level=3              +0.2%             +0.3%
+//	trt_builder_optimization_level=4              -0.1%             +1.3%
+//	trt_tactic_sources=+CUBLAS,+CUBLAS_LT         +0.2%             +0.9%
+//	trt_tactic_sources=-CUDNN                     +0.6%             +0.2%
+//	trt_sparsity_enable=1                         +0.2%             +1.5%
+//	trt_context_memory_sharing_enable=1           -1.0%             +1.9%
+//	trt_layer_norm_fp32_fallback=1                -1.6%             +6.2%
+//
+// Every row of that table is noise, including the two that look like findings, and the way to see it is the last row.
+// trt_layer_norm_fp32_fallback only does anything when TensorRT has been allowed to pick half precision, which
+// neither column does, and both of its engines came out bit-identical to their baseline - yet it measures -1.6% in
+// one column and +6.2% in the other. A setting with no effect cannot be worth 6%, so the spread belongs to something
+// other than the setting.
+//
+// It belongs to the builder. Six sessions built from the SAME configuration - no option changed, one engine cache
+// directory each - spread from -2.5% to +1.2% at fp16, and five of the six produced output differing from the first
+// by 6.3e-3, so TensorRT is not choosing the same tactics twice. That is the floor: one build per configuration
+// cannot resolve anything below about +/-3%, and a sweep that reports otherwise is reporting its own builds. Run
+// against it, trt_auxiliary_streams=0 - the largest non-precision number above - averages +1.4% over three
+// independent builds against a baseline that itself spans 1.3%, which is nothing.
+//
+// Two traps are worth writing down for whoever sweeps the next graph, because both silently produce a clean table of
+// wrong numbers. TensorRT's cache file name carries only the graph hash and the precision flags, so configurations
+// sharing one engine cache directory hand each other the first one's engine and every option reads as a no-op. And
+// the non-determinism above means a single build per configuration is a sample of the builder, not a measurement of
+// the option.
+//
+// # The one setting that does move it, and why it is not set
+//
+// trt_fp16_enable is worth 2.66x on the fp32 export, and it is exactly the fp16 export. Three builds each, fp32
+// export on the provider defaults as the reference:
+//
+//	                                    median       max|d|      mean|d|
+//	fp32 export, defaults               107.2ms      -            -
+//	fp32 export, trt_fp16_enable=1       40.3ms      6.6e-3       4.5e-4
+//	fp16 export, defaults                41.0ms      7.0e-3       4.4e-4
+//
+// The two half-precision rows agree on speed to 1.7% and on both deviation figures to two significant figures, which
+// is the point: turning the flag on for the fp32 export does not produce a faster fp32 model, it produces the fp16
+// model under the fp32 model's name. On TensorRT alone, since CUDA, CoreML and the CPU would keep running the graph
+// as exported - so the same operation would carry a different precision depending on which provider the machine
+// resolved to.
+//
+// So this is the TensorRT twin of the CoreML ModelFormat=NeuralNetwork trap described in coreMLOptions, and it is
+// declined for the same reason: it is the largest number a provider sweep will find, and shipping it would hand a
+// user who asked for fp32 a precision downgrade they never chose. The honest way to take the 2.66x is to select the
+// fp16 model, which is what EPProfile.Fp16 is opt-in for.
+//
+// trt_bf16_enable is the same trade taken badly and needs no such care: -55.2% on the fp32 export at max|d| 3.3e-2 -
+// slower than fp16 and five times the deviation - and +23.6% on the fp16 export, where it is a plain loss.
 func profileFor(types.Precision) utils.EPProfile {
 	return utils.EPProfile{
 		CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
