@@ -8,21 +8,50 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// TensorRT is still excluded and CoreML deliberately is not, so both halves are pinned here with the reason attached
+// This model excludes no provider at all now, and both former exclusions are pinned here with the reason attached
 // rather than left to the comment in loader.go alone.
-func TestProfileExcludesOnlyTensorRT(t *testing.T) {
+func TestProfileExcludesNoProvider(t *testing.T) {
 	p := profileFor(types.PrecisionFp32)
 
-	if !contains(p.ExcludeEPs, types.ExecutionProviderTensorRT) {
-		t.Error("TensorRT must stay excluded: nobody has measured the re-exported graphs on it")
-	}
-
-	// The three CoreML failures this exclusion used to carry - the VAE's "axis 4 is not in valid range" error, the
+	// The three CoreML failures the exclusion used to carry - the VAE's "axis 4 is not in valid range" error, the
 	// DiT's MPSNDArray abort, and a silently wrong result - were all export defects, and all three are gone. Each
 	// graph is now a single CoreML partition matching the CPU at cosine 0.99999 or better, and CoreML is worth
 	// roughly 40x end to end here, so re-adding this exclusion would be a very expensive way to fix nothing.
 	if contains(p.ExcludeEPs, types.ExecutionProviderCoreML) {
 		t.Error("CoreML must not be excluded: the re-exported graphs run correctly on it and it is the whole win")
+	}
+
+	// TensorRT was excluded on the dynamic-shape export, where it had to rebuild an engine per tile size. The graphs
+	// are fixed-shape now and it is the fastest provider this model has: 1.797s against the CUDA provider's 4.494s
+	// end to end on an RTX 5090, and 140.3ms against 441.1ms on one region.
+	if contains(p.ExcludeEPs, types.ExecutionProviderTensorRT) {
+		t.Error("TensorRT must not be excluded: it is measured at 2.5x the CUDA provider end to end")
+	}
+}
+
+// The builder optimization level is the one TensorRT option this model overrides, and it is worth pinning because
+// dropping it is invisible: the model still runs, at the same speed, and only the engine build gets 87 seconds
+// slower - which nobody attributes to a setting.
+func TestProfileLowersTheTensorRTBuilderLevel(t *testing.T) {
+	p := profileFor(types.PrecisionFp32)
+
+	if p.TrtOptions["trt_builder_optimization_level"] != "3" {
+		t.Errorf("trt_builder_optimization_level = %q, want 3: level 5 costs 87s of engine build for no runtime gain",
+			p.TrtOptions["trt_builder_optimization_level"])
+	}
+
+	// Not a no-op on the int8 export: it takes the DiT from 220.3ms to 78.4ms, and the decoded region from cosine
+	// 0.9999 to 0.9954 against the same graph on CUDA. The fp16 export is faster than that AND accurate, so this
+	// speed is only ever bought with quality the caller did not ask for.
+	if p.Fp16 {
+		t.Error("Fp16 must stay unset: it is a no-op on the fp16 export and a precision downgrade on the int8 one")
+	}
+
+	// Weight-only dequantization is not something TensorRT accelerates - the DiT measures 218.1ms against 220.3ms
+	// with it - and the flag reaches the two VAE halves too, where the encoder goes 21.4ms to 124.6ms and the decoder
+	// 45.5ms to 298.9ms.
+	if p.TrtOptions["trt_int8_enable"] == "1" {
+		t.Error("trt_int8_enable must stay off: it does nothing for the DiT and wrecks both VAE halves")
 	}
 }
 

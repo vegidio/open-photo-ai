@@ -106,6 +106,29 @@ func TestTensorRTOptionsFollowTheProfile(t *testing.T) {
 	}
 }
 
+// TrtOptions is applied last so that a model can override a default, not merely add to it. Both halves are checked:
+// overriding trt_engine_hw_compatible is what osaka is there for, and a key with no default has to survive too.
+func TestTensorRTOptionsOverlayOverridesTheDefaults(t *testing.T) {
+	options := tensorRTOptions("/cache", EPProfile{
+		TrtOptions: map[string]string{
+			"trt_engine_hw_compatible": "0",
+			"trt_auxiliary_streams":    "1",
+		},
+	})
+
+	if options["trt_engine_hw_compatible"] != "0" {
+		t.Fatalf("overlay did not override the default: %q", options["trt_engine_hw_compatible"])
+	}
+	if options["trt_auxiliary_streams"] != "1" {
+		t.Fatalf("overlay key not merged: %q", options["trt_auxiliary_streams"])
+	}
+
+	// The cache path is not the overlay's to lose: it is derived per model by the session loader.
+	if options["trt_engine_cache_path"] != "/cache" {
+		t.Fatalf("overlay clobbered the cache path: %q", options["trt_engine_cache_path"])
+	}
+}
+
 func TestCudaOptionsFollowTheProfile(t *testing.T) {
 	zero := cudaOptions(EPProfile{})
 

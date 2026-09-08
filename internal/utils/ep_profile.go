@@ -29,13 +29,15 @@ import (
 // The zero value reproduces the behaviour that shipped before profiles existed, which is what lets every existing
 // call site keep passing no profile at all.
 //
-// Not every field is driven by a model yet: today Osaka sets DisableMemPattern, DisableOptimizers, ExcludeEPs and
+// Not every field is driven by a model yet: today Osaka sets DisableMemPattern, DisableOptimizers, TrtOptions and
 // CoreMLComputeUnits, Athens sets CoreMLComputeUnits and ExecutionMode and - for its fp16 export only - CudaPreferNHWC,
 // Santorini sets CoreMLSpecialization and ExecutionMode, Tokyo sets CoreMLComputeUnits and ExecutionMode, New York
 // sets CudaPreferNHWC and ExecutionMode, Paris sets CoreMLComputeUnits and ExecutionMode for its fp16 export, and
-// Kyoto, Saitama and Lyon each set CoreMLComputeUnits for their fp16 export alone. The rest are reserved for
-// per-model TensorRT and precision tuning that is already planned - they are deliberately kept rather than trimmed
-// to what has a caller today, so treat "no setter" here as "not wired up yet", not as dead code.
+// Kyoto, Saitama and Lyon each set CoreMLComputeUnits for their fp16 export alone. ExcludeEPs has no setter at all
+// any more - Osaka was its last caller, and the TensorRT exclusion it used to hold is now a measured 2.5x end-to-end
+// win instead. The rest are
+// reserved for per-model TensorRT and precision tuning that is already planned - they are deliberately kept rather
+// than trimmed to what has a caller today, so treat "no setter" here as "not wired up yet", not as dead code.
 type EPProfile struct {
 	// DynamicShapes declares that the model's input shapes vary between runs, so providers must not be configured
 	// for a fixed shape.
@@ -51,6 +53,19 @@ type EPProfile struct {
 	// TrtShapes carries the trt_profile_{min,opt,max}_shapes strings for a dynamic-shape model. TensorRT needs
 	// explicit optimization profiles for those, and the right ranges are model-specific.
 	TrtShapes map[string]string
+
+	// TrtOptions overlays raw TensorRT provider options onto the defaults in tensorRTOptions, for the settings that
+	// have no typed field here. It is the TensorRT counterpart of Extra, and it exists for the same reason: the
+	// provider has around forty options, most of which only one graph in this codebase would ever want.
+	//
+	// It is applied last, so it can also override a default - which is the point. Osaka uses it to drop
+	// trt_builder_optimization_level from the 5 every other model gets to TensorRT's own default of 3, which on a
+	// 12,940-node graph is 87 seconds of engine build for no runtime difference.
+	//
+	// An unrecognised key is not ignored: ONNX Runtime rejects the whole option update, the provider declines to
+	// attach, and the graph quietly runs on the next provider in the chain. So a typo here costs the GPU, not a
+	// setting - check the session-created log line names TensorRT after changing anything in it.
+	TrtOptions map[string]string
 
 	// DisableMemPattern turns off ONNX Runtime's static memory planner. The planner assumes shapes repeat between
 	// runs; when they vary, it over-allocates and never returns what it reserved.
@@ -496,12 +511,28 @@ func tensorRTOptions(cachePath string, p EPProfile) map[string]string {
 		fp16 = "1"
 	}
 
+	// trt_engine_hw_compatible is off, and it was the single largest TensorRT setting in this file while it was on.
+	// It builds an engine that runs on any Ampere-or-newer card, which means TensorRT may only pick kernels that
+	// exist on all of them - so the newer the card, the more it gives up. Measured on an RTX 5090 (sm_120, driver
+	// 610.88, ONNX Runtime 1.26), median of 5, hardware-compatible against architecture-specific:
+	//
+	//	athens      -23.6%      tokyo       -12.0%      saitama     -9.9%
+	//	kyoto        -7.2%      santorini    -5.9%      stockholm   -4.7%
+	//	osaka       -48.0%      newyork      too fast to resolve at 4ms
+	//
+	// Cold start improves with it, too - the compatible engine is the slower one to build as well as to run.
+	//
+	// Nothing is lost by this, because the portability it buys has no consumer here: the engine cache is built on the
+	// user's own machine on first use, never shipped, and the cache file names carry the architecture they were built
+	// for (`..._sm80+.engine` against `..._sm120.engine`), so a machine that changes GPU asks for a name that is not
+	// there and rebuilds rather than loading something wrong. A model that measures a loss can set it back to "1"
+	// through EPProfile.TrtOptions.
 	options := map[string]string{
 		"device_id":                      "0",
 		"trt_max_workspace_size":         fmt.Sprintf("%d", workspace),
 		"trt_fp16_enable":                fp16,
 		"trt_int8_enable":                "0",
-		"trt_engine_hw_compatible":       "1",
+		"trt_engine_hw_compatible":       "0",
 		"trt_cuda_graph_enable":          "0",
 		"trt_builder_optimization_level": "5",
 		"trt_engine_cache_enable":        "1",
@@ -509,6 +540,8 @@ func tensorRTOptions(cachePath string, p EPProfile) map[string]string {
 	}
 
 	maps.Copy(options, p.TrtShapes)
+	maps.Copy(options, p.TrtOptions)
+
 	return options
 }
 

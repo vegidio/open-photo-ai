@@ -62,19 +62,61 @@ var graphs = []upscale.GraphSpec{
 // crashes announces itself, one that silently miscomputes does not. Anything that changes these graphs should be
 // re-checked against the CPU element by element, on the DiT and both VAE halves.
 //
-// TensorRT needs explicit optimization profiles for dynamic inputs, and without them it either rebuilds an engine for
-// every distinct tile size - minutes each - or grows an unbounded engine cache. The graphs are fixed-shape now, so
-// that objection has largely dissolved, but nobody has measured this model on TensorRT since - hence the exclusion
-// stays until someone does.
+// TensorRT is no longer excluded either. The exclusion was inherited from the dynamic-shape export, where TensorRT
+// had to rebuild an engine per distinct tile size; every graph is fixed-shape now, so there is one engine each and
+// the objection is gone. It is the fastest provider this model has by a wide margin - measured on an RTX 5090
+// (driver 610.88, ONNX Runtime 1.26), one 960x960 region, median of 5, against the CUDA provider:
+//
+//	              encoder      DiT         decoder     region
+//	CUDA           81.1ms      225.3ms      134.6ms     441.1ms
+//	TensorRT       21.5ms       73.8ms       45.1ms     140.3ms
+//
+// TensorRT takes the DiT as a single subgraph, all 12,940 nodes of it, which is why trt_min_subgraph_size and
+// trt_context_memory_sharing_enable do nothing here: there are no partition boundaries to tune.
+//
+// Fp16 is deliberately NOT set, and it is worth saying why for each export, because they fail the same test for
+// opposite reasons. The fp16 graph gains nothing - TensorRT already honours the fp16 typing baked into the export,
+// and the builder flag measures 277.1ms against 276.0ms without it. The int8 graph is fp32-typed apart from its
+// quantized weights, so there the flag is not a no-op at all: it takes the DiT from 220.3ms to 78.4ms. It is still
+// refused, because that speed is bought with precision the caller did not ask for - the DiT drifts to cosine 0.9827
+// against the same graph on CUDA, and the decoded region to 0.9954 with a max absolute error of 2.0 on an image in
+// [-1,1], where every other configuration here stays at 0.9999. The honest way to take that speed is to select the
+// fp16 model, which is faster still at 140.3ms and stays at cosine 0.9999.
+//
+// trt_int8_enable is refused for a second reason as well, and it is the one to remember when adding any option here:
+// a profile applies to all three graphs. The quantization is weight-only DequantizeLinear with no Q on the
+// activations, which TensorRT does not accelerate - the DiT measures 218.1ms against 220.3ms without it, noise - but
+// the flag reaches the two VAE halves too, and there it is a catastrophe: the encoder goes 21.4ms to 124.6ms and the
+// decoder 45.5ms to 298.9ms. An option that helps the graph it was chosen for can wreck the other two.
+//
+// Measured and rejected as ties, all within the 140.3-144.4ms spread that is this model's noise floor: a 24 GB
+// workspace against the default 4 GB, trt_auxiliary_streams at 1 and at 4, and trt_layer_norm_fp32_fallback - which
+// TensorRT itself suggests in a build warning, since the DiT exports its 255 layer norms as ReduceMean/Pow/Sqrt/Div
+// rather than the opset-17 LayerNormalization it would rather see. Taking that suggestion costs 1.3% and moves the
+// result further from CUDA rather than nearer, so it stays off; a re-export using LayerNormalization would let
+// TensorRT use INormalizationLayer and is the better way to answer that warning.
 func profileFor(types.Precision) utils.EPProfile {
 	return utils.EPProfile{
 		DisableMemPattern:  true,
 		DisableOptimizers:  brokenOptimizers,
 		CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
-		ExcludeEPs: []types.ExecutionProvider{
-			types.ExecutionProviderTensorRT,
-		},
+		TrtOptions:         trtOptions,
 	}
+}
+
+// trtOptions is the one TensorRT setting this model wants that the shared defaults do not already give it.
+//
+// The builder optimization level is a build-time knob here and nothing else. Runtime is flat across levels 1, 3 and 5
+// - 140.9ms, 140.3ms and 142.6ms, which is one spread of noise - while the engine build is 86s, 116s and 203s. So
+// the 5 every other model gets buys this graph nothing and costs a minute and a half of the first run a user ever
+// makes on a 7 GB model.
+//
+// It stops at 3, TensorRT's own default, rather than going to the 1 that measured the same, because level 0 is a
+// cliff rather than a gentle slope: it builds in 82s and then runs the region in 533.7ms, worse than CUDA, with the
+// VAE decoder alone going from 45.1ms to 296.4ms. Level 1 was fine on this card, but it is one step from that edge
+// and the sweep behind it is a single GPU.
+var trtOptions = map[string]string{
+	"trt_builder_optimization_level": "3",
 }
 
 // brokenOptimizers are the ONNX Runtime graph transformers that miscompile this DiT.
