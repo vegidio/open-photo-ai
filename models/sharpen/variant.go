@@ -23,6 +23,12 @@ type Variant struct {
 	// DivergenceThreshold, when greater than zero, enables the per-tile blow-up guard at that magnitude. Only the
 	// variants prone to diverging need it; leaving it zero runs the pipeline with no guard.
 	DivergenceThreshold float32
+
+	// Profile is the provider tuning this variant needs. A nil Profile means the provider defaults, which is what a
+	// variant nobody has measured should get: the right settings follow the graph's op mix, so carrying one
+	// variant's findings to another because both sharpen is how a profile ends up pessimising a model it was never
+	// measured against.
+	Profile func(precision types.Precision) utils.EPProfile
 }
 
 // Op builds this variant's operation at the given per-run intensity.
@@ -46,7 +52,8 @@ func (v *Variant) New(
 		return nil, errors.Errorf("expected a sharpen operation, got %T", operation)
 	}
 
-	session, err := utils.LoadSingleSession(ctx, "sh", v.Codename, op.precision, ep, onProgress)
+	session, err := utils.LoadSingleSession(ctx, "sh", v.Codename, op.precision, ep, onProgress,
+		utils.ResolveProfile(v.Profile, op.precision))
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}
