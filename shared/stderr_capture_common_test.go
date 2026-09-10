@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -24,7 +25,7 @@ func startCapture(t *testing.T) (*stderrCapture, *lockedBuffer) {
 	buf := &lockedBuffer{}
 	logger := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	capture, err := startStderrCapture(logger)
+	capture, err := startStderrCapture(logger, filepath.Join(t.TempDir(), "native.log"))
 	if err != nil {
 		t.Fatalf("failed to start the capture: %v", err)
 	}
@@ -39,7 +40,7 @@ func TestCaptureRoutesAnOrtLineToTheLogger(t *testing.T) {
 
 	writeStderr(t, ortWarning)
 
-	// Close is the drain barrier: it closes the write end and waits for the reader to reach EOF.
+	// Close is the barrier: it restores stderr, then has the tailer read the file to the end before returning.
 	if err := capture.Close(); err != nil {
 		t.Fatalf("failed to close the capture: %v", err)
 	}
@@ -80,9 +81,9 @@ func TestCaptureKeepsUnrecognizedOutput(t *testing.T) {
 	}
 }
 
-// TestCaptureHandlesAVeryLongLine is the deadlock regression test. A bufio.Scanner gives up on a token past its buffer
-// and then stops reading for good; the pipe fills, and the write below never returns. ORT's node-assignment warning
-// really does reach this size on a large model.
+// TestCaptureHandlesAVeryLongLine keeps one line one record, however long it runs. ORT's node-assignment warning
+// really does reach this size on a large model, and the cap that applies is truncate's, at formatting time - never a
+// split into several records, which would be unreadable exactly where the detail matters.
 func TestCaptureHandlesAVeryLongLine(t *testing.T) {
 	capture, buf := startCapture(t)
 
@@ -125,7 +126,8 @@ func TestCloseIsIdempotent(t *testing.T) {
 func TestPanicTraceSurvivesTheCapture(t *testing.T) {
 	if os.Getenv(panicChildEnv) == "1" {
 		// The logger deliberately goes nowhere: this child exists to crash, not to log.
-		capture, err := startStderrCapture(slog.New(slog.NewTextHandler(io.Discard, nil)))
+		capture, err := startStderrCapture(slog.New(slog.NewTextHandler(io.Discard, nil)),
+			filepath.Join(t.TempDir(), "native.log"))
 		if err != nil {
 			t.Fatalf("failed to start the capture: %v", err)
 		}
@@ -153,6 +155,110 @@ func TestPanicTraceSurvivesTheCapture(t *testing.T) {
 
 	if got := stderr.String(); !strings.Contains(got, "the trace for this must reach the terminal") {
 		t.Errorf("the panic trace was swallowed by the capture:\n%s", got)
+	}
+}
+
+// TestNativeOutputSurvivesAnUncleanExit is the regression test for issue #40, and the reason this capture writes to a
+// file rather than a pipe.
+//
+// The reporter's crash killed the process from inside a CUDA session. Whatever ORT wrote on its way down was still in
+// the pipe, unread, when every goroutine stopped - so the log they attached simply ended mid-session and the failure
+// was invisible. The child below reproduces the shape that matters: write to stderr, then leave without closing the
+// capture or draining anything. Only a real second process proves it; a Close in the same process would drain the
+// file and pass whether or not the bytes had ever reached disk.
+func TestNativeOutputSurvivesAnUncleanExit(t *testing.T) {
+	if path := os.Getenv(crashChildEnv); path != "" {
+		// The logger goes nowhere on purpose: this child exists to die, and the assertion is about the file.
+		if _, err := startStderrCapture(slog.New(slog.NewTextHandler(io.Discard, nil)), path); err != nil {
+			t.Fatalf("failed to start the capture: %v", err)
+		}
+
+		writeStderr(t, "libc++abi: terminating due to uncaught exception of type onnxruntime::OnnxRuntimeException\n")
+
+		// Straight out: no Close, no drain, nothing flushed - the shape of a native crash.
+		os.Exit(3)
+	}
+
+	// Not t.TempDir(): the child must outlive nothing here, but the path has to survive into its environment, and a
+	// directory the parent owns is removed only after the read below.
+	path := filepath.Join(t.TempDir(), "native.log")
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestNativeOutputSurvivesAnUncleanExit")
+	cmd.Env = append(os.Environ(), crashChildEnv+"="+path)
+
+	if err := cmd.Run(); err == nil {
+		t.Fatal("the child was supposed to exit non-zero")
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the capture file is gone after the child died, so nothing reached disk: %v", err)
+	}
+
+	if !strings.Contains(string(data), "uncaught exception") {
+		t.Errorf("the native line did not survive the unclean exit\ngot: %q", data)
+	}
+}
+
+// crashChildEnv carries the capture path into the re-executed child of TestNativeOutputSurvivesAnUncleanExit.
+const crashChildEnv = "OPAI_TEST_CRASH_CHILD"
+
+// TestFoldNativeLogReplaysAPreviousRun covers the other half: reaching disk is only useful if the next run picks it
+// up and puts it where a bug report will find it.
+func TestFoldNativeLogReplaysAPreviousRun(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "native.log")
+
+	if err := os.WriteFile(path, []byte(ortWarning+"libc++abi: terminating\n"), 0o600); err != nil {
+		t.Fatalf("failed to seed the native log: %v", err)
+	}
+
+	buf := &lockedBuffer{}
+	foldNativeLog(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})), path)
+
+	got := buf.String()
+	for _, want := range []string{
+		"did not exit cleanly",
+		"source=onnxruntime",
+		"Some nodes were not assigned",
+		"libc++abi: terminating",
+		"previous_run=true",
+		"end of the previous run",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the replayed log is missing %q\ngot: %s", want, got)
+		}
+	}
+
+	// Left in place it would be replayed again on every subsequent launch.
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("the native log was not removed after being replayed (err=%v)", err)
+	}
+}
+
+// TestFoldNativeLogIgnoresACleanStart pins the quiet path: no file, or an empty one, must say nothing at all. A
+// warning on every normal launch would train the reader to skip the one launch where it means something.
+func TestFoldNativeLogIgnoresACleanStart(t *testing.T) {
+	dir := t.TempDir()
+
+	for _, tt := range []struct{ name, file string }{
+		{"no file at all", "missing.log"},
+		{"an empty file", "empty.log"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(dir, tt.file)
+			if tt.file == "empty.log" {
+				if err := os.WriteFile(path, nil, 0o600); err != nil {
+					t.Fatalf("failed to seed the native log: %v", err)
+				}
+			}
+
+			buf := &lockedBuffer{}
+			foldNativeLog(slog.New(slog.NewTextHandler(buf, nil)), path)
+
+			if got := buf.String(); got != "" {
+				t.Errorf("a clean start logged something: %s", got)
+			}
+		})
 	}
 }
 

@@ -259,7 +259,7 @@ func setLibPathAndRestart() {
 
 	// On success ReExec never returns, because the process image has been replaced. An error therefore means the
 	// re-exec did not happen and startup carries on with whatever LD_LIBRARY_PATH was inherited, so the bundled NVIDIA
-	// libraries stay unfindable and the CUDA and TensorRT providers fail to attach much later, for reasons that look
+	// libraries stay unfindable, and the CUDA and TensorRT providers fail to attach much later, for reasons that look
 	// nothing like a failed exec at startup. It used to be discarded, which is exactly why that was hard to diagnose.
 	//
 	// log.Printf rather than slog for the same reason as addPath above: SetupLogging has not wired the file sink yet.

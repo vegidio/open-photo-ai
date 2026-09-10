@@ -36,7 +36,8 @@ var GPUInfo = sync.OnceValues(func() ([]sysinfo.GPUInfo, error) {
 // The warning is logged inside the memoized body for the same reason as GPUInfo: TotalRAMBytes collapses this to 0 and
 // the budget code then warns about the default it picked, without ever saying what the OS actually said.
 //
-// Prefer TotalRAMBytes over reading .Total from this directly - see the unit note there.
+// Prefer TotalRAMBytes over reading .Total from this directly: it collapses a failed probe to 0, which is the
+// answer the budget code is written against.
 // Stays a var for the same reason as GPUInfo: tests replace it.
 var MemoryInfo = sync.OnceValues(func() (sysinfo.MemoryInfo, error) {
 	info, err := sysinfo.GetMemoryInfo()
@@ -47,31 +48,28 @@ var MemoryInfo = sync.OnceValues(func() (sysinfo.MemoryInfo, error) {
 	return info, err
 })
 
-const (
-	// bytesPerReportedMB converts what sysinfo.MemoryInfo actually returns into bytes.
-	//
-	// Its field is documented as bytes, but every platform backend divides by 1,000,000 before returning - decimal
-	// megabytes, not bytes, and not mebibytes. Taking the doc comment at its word makes a 64 GB machine look like 68 KB
-	// of RAM. Verified against the darwin (`sysctl hw.memsize`), linux (`/proc/meminfo`) and windows (CIM) paths.
-	bytesPerReportedMB = int64(1_000_000)
-
-	// bytesPerReportedVramUnit converts what sysinfo.GPUInfo reports for GPU memory into bytes. It is mebibytes - a
-	// different unit from the one the same package uses for system RAM, which is the whole reason both conversions are
-	// pinned here rather than at each call site.
-	bytesPerReportedVramUnit = int64(1) << 20
-)
+// bytesPerReportedVramUnit converts what sysinfo.GPUInfo reports for GPU memory into bytes: mebibytes.
+//
+// It is pinned here rather than at each call site because sysinfo reports its two memory figures in two different
+// units - GPU memory in mebibytes, system RAM in bytes - and nothing in either field's name says so.
+const bytesPerReportedVramUnit = int64(1) << 20
 
 // TotalRAMBytes returns the machine's total physical RAM in bytes, or 0 when it can't be queried.
 //
-// This is the only place the decimal-megabytes quirk above is compensated for, so no consumer can read the raw field
-// and get the unit wrong.
+// sysinfo.MemoryInfo.Total is already bytes and needs no scaling. It has not always been: go-sak before 26.5.0
+// documented the field as bytes while every backend returned decimal megabytes, so this used to multiply by
+// 1,000,000 to compensate. The go-sak bump in 26.9.0 fixed the field and left the compensation behind, which is
+// worth spelling out because neither symptom points at this line. Telemetry reported a 59 GiB machine as 63 PB; and
+// hostBudgetFor clamps to maxHostBudget, so every machine whose probe succeeded - an 8 GB laptop included - silently
+// got the maximum host budget instead of one sized to its RAM. Do not reintroduce a scale factor here without first
+// checking what the go-sak backends actually return.
 func TotalRAMBytes() int64 {
 	info, err := MemoryInfo()
 	if err != nil {
 		return 0
 	}
 
-	return int64(info.Total) * bytesPerReportedMB
+	return int64(info.Total)
 }
 
 // LargestVRAMBytes returns the memory of the machine's largest GPU, in bytes, and whether any GPU reported a figure at

@@ -4,6 +4,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/vegidio/go-sak/sysinfo"
+
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -38,6 +40,31 @@ func TestHostBudgetFor(t *testing.T) {
 					float64(tt.totalBytes)/float64(gib), float64(got)/float64(gib), float64(tt.want)/float64(gib))
 			}
 		})
+	}
+}
+
+// TestDefaultHostBudgetScalesWithRAM covers the seam between the probe and the clamps, which is where the bug that
+// motivated it actually lived: TestTotalRAMBytes and TestHostBudgetFor were each self-consistent and both passed,
+// while TotalRAMBytes scaled its result by 1,000,000 and hostBudgetFor clamped the product back to maxHostBudget on
+// every machine. Asserting on hostBudgetFor's argument can never catch that; asserting that budgets still differ by
+// machine size can.
+func TestDefaultHostBudgetScalesWithRAM(t *testing.T) {
+	const gib = int64(1) << 30
+
+	stubMemoryInfo(t, sysinfo.MemoryInfo{Total: 8 * uint64(gib)}, nil)
+	small := defaultHostBudget()
+
+	stubMemoryInfo(t, sysinfo.MemoryInfo{Total: 64 * uint64(gib)}, nil)
+	large := defaultHostBudget()
+
+	if small >= large {
+		t.Errorf("an 8 GB machine budgeted %.3f GiB and a 64 GB machine %.3f GiB; the budget must grow with RAM",
+			float64(small)/float64(gib), float64(large)/float64(gib))
+	}
+
+	if small == maxHostBudget {
+		t.Errorf("an 8 GB machine got the maximum host budget (%.3f GiB); the RAM figure is being over-scaled",
+			float64(maxHostBudget)/float64(gib))
 	}
 }
 

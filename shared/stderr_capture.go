@@ -1,7 +1,7 @@
 package shared
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -16,26 +16,43 @@ import (
 )
 
 const (
-	// readerBufSize is the reader's starting buffer, not a limit - see drain for why there must not be one.
-	readerBufSize = 64 << 10
+	// pollInterval is how often the tailer looks for new bytes. Native output is occasional - a handful of provider
+	// warnings per session - so a poll costing one read(2) at the end of a file is cheaper than any of the ways to be
+	// notified of a write, and Close reads to the end regardless, so no line waits on this interval to be logged.
+	pollInterval = 150 * time.Millisecond
 
-	// drainTimeout bounds how long Close waits for the reader to reach EOF. Shutdown must not hang because some other
-	// part of the process kept a duplicate of the write end alive.
-	drainTimeout = 2 * time.Second
+	// readChunk is how much the tailer takes per read. A buffer size, not a limit: readAvailable loops until the file
+	// yields nothing.
+	readChunk = 64 << 10
 
-	// maxLoggedLine caps how much of a single stderr line makes it into a log record. ONNX Runtime's node-assignment
-	// warnings name every node that fell back to another provider and can run to hundreds of kilobytes; the cap is
-	// applied at formatting time, and never to the read itself - see drain for why that distinction matters.
+	// maxPendingLine bounds the partial line held across polls, so a native writer that emits megabytes without a
+	// newline cannot grow it without limit. It is mebibytes rather than kilobytes because ORT's node-assignment
+	// warning names every node that fell back to another provider and runs past 512 KiB on a large model - splitting
+	// that into arbitrary chunks would read worse than logging it whole and letting truncate cap the record.
+	maxPendingLine = 4 << 20
+
+	// maxLoggedLine caps how much of a single line makes it into a log record; see truncate.
 	maxLoggedLine = 16 << 10
 )
 
-// stderrCapture points the process's stderr at a pipe and turns everything written to it into log records.
+// stderrCapture points the process's stderr at a file and turns everything written to it into log records.
 //
 // It exists for ONNX Runtime. ORT logs from C++ through std::cerr - std::wcerr on Windows - and the Go binding creates
 // the environment with plain CreateEnv rather than CreateEnvWithCustomLogger, so there is no callback to install and no
 // sink to swap. Its log level can be changed; its destination cannot. Redirecting what the process calls stderr is the
 // only interception point there is, which is also why this catches the CoreML, CUDA and TensorRT providers, and
 // anything else in the process writing to stderr.
+//
+// A file rather than a pipe, and that choice is the whole point of this type. A pipe exists only in memory, and its
+// contents reach the log through a goroutine; when the process dies from a signal every goroutine stops at once, so
+// whatever had not been read yet is gone. That is not hypothetical - issue #40 is a native crash inside a CUDA
+// session, and both logs the reporter attached simply stop mid-session, because the C++ account of the failure was
+// sitting unread in the pipe at the moment of death. Bytes written to a file are already the kernel's before write(2)
+// returns, with no goroutine in the path, so they survive an abort. The runtime's own crash trace lands there too,
+// since it is written to descriptor 2 directly.
+//
+// The cost is that the last lines before a crash are on disk but not yet in opai.log, because the tailer never got to
+// them. foldNativeLog replays them on the next run.
 //
 // What "stderr" means is where the platforms part company, and redirectStderr owns that difference: a descriptor on
 // Unix, and on Windows a C runtime descriptor, the stream sitting on it and the Win32 handle behind both.
@@ -45,27 +62,44 @@ const (
 type stderrCapture struct {
 	logger *slog.Logger
 
-	read  *os.File
+	// write is what descriptor 2 now names; read is an independent handle the tailer walks forward over the same
+	// file. Two handles rather than one because the writer is C++ and owns its own offset.
 	write *os.File
+	read  *os.File
+	path  string
+
+	// pending holds the bytes since the last newline. A native writer can be caught mid-line by the poll interval,
+	// and half a line is not a record.
+	pending []byte
+	buf     []byte
 
 	restore func() error
 
+	stop chan struct{}
 	done chan struct{}
 
 	closeOnce sync.Once
 	closeErr  error
 }
 
-// startStderrCapture redirects stderr into logger, one record per line.
+// startStderrCapture redirects stderr into the file at path, logging each completed line through logger.
 //
 // The logger must not write to stderr: it would feed its own input. Go's own stderr is preserved - os.Stderr and the
 // runtime's crash output are pointed at a duplicate of the original, so prints and panic traces still reach the
 // terminal, and keep reaching it after the capture is closed. That reassignment of the package-level os.Stderr is a
 // process-wide write, safe only because SetupLogging runs at the top of main before any goroutine exists; do not move
 // the call later.
-func startStderrCapture(logger *slog.Logger) (*stderrCapture, error) {
-	read, write, err := os.Pipe()
+func startStderrCapture(logger *slog.Logger, path string) (*stderrCapture, error) {
+	// O_TRUNC because foldNativeLog has already replayed whatever a previous run left here. Starting empty is what
+	// lets a non-empty file at startup mean "the last run did not shut down cleanly" rather than "these may be old".
+	write, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
+		return nil, err
+	}
+
+	read, err := os.Open(path)
+	if err != nil {
+		_ = write.Close()
 		return nil, err
 	}
 
@@ -79,98 +113,200 @@ func startStderrCapture(logger *slog.Logger) (*stderrCapture, error) {
 
 	c := &stderrCapture{
 		logger:  logger,
-		read:    read,
 		write:   write,
+		read:    read,
+		path:    path,
+		buf:     make([]byte, readChunk),
 		restore: restore,
+		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 	}
 
 	if saved != nil {
 		os.Stderr = saved
 
-		// An unhandled panic or a runtime fatal error is written to descriptor 2 - now the pipe - with every other
-		// goroutine already frozen, so the reader will never drain it and the trace would vanish with the process.
-		// SetCrashOutput duplicates the descriptor internally, so saved's lifetime is not a concern here.
+		// The runtime writes an unhandled panic or a fatal error to descriptor 2, which now names the capture file,
+		// so the trace reaches disk on its own. This additionally keeps it on the terminal for anyone running the
+		// binary from one. SetCrashOutput duplicates the descriptor internally, so saved's lifetime is not a concern.
 		_ = debug.SetCrashOutput(saved, debug.CrashOptions{})
 	}
 
-	go c.drain()
+	go c.tail()
 
 	return c, nil
 }
 
-// Close restores stderr, drains what is left in the pipe and stops the reader. It is idempotent.
+// Close restores stderr, logs whatever is left in the file and stops the tailer. It is idempotent.
 func (c *stderrCapture) Close() error {
 	c.closeOnce.Do(func() {
-		// Stderr first: from here on native writes go back to the terminal rather than into a pipe whose reader is
-		// about to go away.
+		// Stderr first: from here on native writes go back to the terminal rather than to a file nobody is reading.
 		if err := c.restore(); err != nil {
 			c.closeErr = err
 		}
 
-		// Only now does dropping our own handle produce an EOF - before the restore, descriptor 2 was still a
-		// duplicate of the same write end, and closing this one would have changed nothing.
-		_ = c.write.Close()
-
-		select {
-		case <-c.done:
-		case <-time.After(drainTimeout):
-			// A stray duplicate of the write end is keeping the pipe open. Closing the read end below fails the
-			// pending read, which is what lets the goroutine exit.
-		}
+		// The tailer reads to the end once more before returning, so everything written up to the restore above is
+		// logged. Unlike a pipe this cannot block - a read at the end of a file returns immediately - so there is no
+		// drain timeout to get wrong, and no way for a stray duplicate of a write end to hang shutdown.
+		close(c.stop)
+		<-c.done
 
 		_ = c.read.Close()
+		_ = c.write.Close()
+
+		// A clean shutdown has just logged every line, so leaving the file behind would have the next run replay all
+		// of it. Removing it is also what gives a file present at startup its meaning.
+		if err := os.Remove(c.path); err != nil && !os.IsNotExist(err) {
+			c.logger.Warn("could not remove the native output file", "path", c.path, "err", err)
+		}
 
 		// os.Stderr keeps the saved duplicate rather than being put back: it names the same terminal the original did,
 		// it stays open for the life of the process, and on Windows the original it would be put back to is a handle
-		// that pointing descriptor 2 at the pipe has already closed.
+		// that pointing descriptor 2 at the file has already closed.
 	})
 
 	return c.closeErr
 }
 
-// drain reads the pipe a line at a time until the write end is gone.
+// foldNativeLog replays into logger whatever native output a previous run left behind, then removes it.
 //
-// It reads with bufio.Reader rather than bufio.Scanner deliberately. ORT's node-assignment warning names every node
-// that fell back to another execution provider and routinely runs past 64 KiB; a Scanner returns ErrTooLong on such a
-// token and then stops for good, leaving the pipe undrained. The pipe buffer would fill and the ORT thread would block
-// inside write(2) - a hang in native code with no Go stack to show for it. ReadString grows its own buffer instead,
-// and truncate applies the size cap once the record is formatted.
-func (c *stderrCapture) drain() {
-	defer close(c.done)
-
-	reader := bufio.NewReaderSize(c.read, readerBufSize)
-
-	for {
-		line, err := reader.ReadString('\n')
-
-		// A final line without a trailing newline still has to be logged, so the content is handled before the error.
-		if line != "" {
-			c.emit(line)
+// A file here means the last run never closed its capture - it crashed, or was killed - so these are lines that
+// reached disk but not opai.log. They are also the ones that matter most: a native crash writes its account of itself
+// immediately before the process dies, which is precisely the window that cannot be logged live. See stderrCapture.
+//
+// It must run before startStderrCapture, which truncates the file.
+func foldNativeLog(logger *slog.Logger, path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			logger.Warn("could not read the previous run's native output", "path", path, "err", err)
 		}
 
-		if err != nil {
+		return
+	}
+
+	if len(bytes.TrimSpace(data)) == 0 {
+		remove(logger, path)
+		return
+	}
+
+	logger.Warn("the previous run left native output behind, so it did not exit cleanly; the records below are "+
+		"from that run, not this one", "path", path, "bytes", len(data))
+
+	for _, line := range strings.Split(string(data), "\n") {
+		emitLine(logger, line, "previous_run", true)
+	}
+
+	logger.Warn("end of the previous run's native output")
+
+	remove(logger, path)
+}
+
+func remove(logger *slog.Logger, path string) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		logger.Warn("could not remove the previous run's native output", "path", path, "err", err)
+	}
+}
+
+// tail follows the capture file, logging each line as it is completed.
+func (c *stderrCapture) tail() {
+	defer close(c.done)
+
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			c.readAvailable()
+
+		case <-c.stop:
+			// One last pass, then flush a trailing line that never got its newline - the usual shape for a writer
+			// that was interrupted, and still worth a record.
+			c.readAvailable()
+			c.flushPending()
+
 			return
 		}
 	}
 }
 
+// readAvailable consumes everything the file holds beyond what has already been read.
+func (c *stderrCapture) readAvailable() {
+	for {
+		n, err := c.read.Read(c.buf)
+		if n > 0 {
+			c.pending = append(c.pending, c.buf[:n]...)
+			c.emitCompleteLines()
+		}
+
+		// io.EOF here means "nothing more for now" rather than "never again": the file grows under the reader, and
+		// the next poll resumes from exactly this offset.
+		if err != nil || n == 0 {
+			return
+		}
+	}
+}
+
+// emitCompleteLines logs every whole line in pending and keeps the remainder for the next read.
+func (c *stderrCapture) emitCompleteLines() {
+	for {
+		i := bytes.IndexByte(c.pending, '\n')
+		if i < 0 {
+			break
+		}
+
+		c.emit(string(c.pending[:i+1]))
+		c.pending = c.pending[i+1:]
+	}
+
+	// Dropping the slice lets the backing array go rather than sliding its base forward for the life of the process.
+	if len(c.pending) == 0 {
+		c.pending = nil
+		return
+	}
+
+	// A line this long means a native writer that has not emitted a newline in megabytes. Logging what there is beats
+	// growing until the process runs out of memory, and truncate caps the record itself anyway.
+	if len(c.pending) > maxPendingLine {
+		c.flushPending()
+	}
+}
+
+// flushPending logs a line that has no newline yet, and forgets it.
+func (c *stderrCapture) flushPending() {
+	if len(c.pending) == 0 {
+		return
+	}
+
+	c.emit(string(c.pending))
+	c.pending = nil
+}
+
 // emit turns one line into a log record.
 func (c *stderrCapture) emit(line string) {
+	emitLine(c.logger, line)
+}
+
+// emitLine turns one raw line of native output into a record on logger, with extra appended to whatever attributes
+// the line itself carries.
+//
+// A package function rather than a method so foldNativeLog can replay a previous run's file through exactly the same
+// parsing. A second copy of this would be a second place for ORT's log format to be understood.
+func emitLine(logger *slog.Logger, line string, extra ...any) {
 	line = normalizeLine(line)
 	if strings.TrimSpace(line) == "" {
 		return
 	}
 
 	if rec, ok := parseOrtLine(line); ok {
-		c.logger.Log(context.Background(), rec.level, truncate(rec.msg), rec.attrs...)
+		logger.Log(context.Background(), rec.level, truncate(rec.msg), append(rec.attrs, extra...)...)
 		return
 	}
 
 	// Not ORT's format: another library on the same descriptor, or a continuation line of a multi-line message. It is
 	// exactly the output that used to reach the terminal, so it is kept - but it carries no severity of its own, and
 	// INFO is the level that neither hides it nor overstates it.
-	c.logger.Log(context.Background(), slog.LevelInfo, truncate(line), "source", "stderr")
+	logger.Log(context.Background(), slog.LevelInfo, truncate(line), append([]any{"source", "stderr"}, extra...)...)
 }
 
 // region - Private functions

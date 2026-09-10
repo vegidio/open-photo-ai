@@ -47,11 +47,17 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Log file (opai.log)
+      label: Log files
       description: |
-        Please attach your `opai.log` file.
+        Please attach your log files.
 
-        You can find the logs by opening the app and going to **Settings > Logs**, then clicking the **"Show logs"** button — this opens the folder containing `opai.log`.
-      placeholder: Drag & drop the opai.log file here.
+        You can find them by opening the app and going to **Settings > Logs**, then clicking the **"Show logs"** button — this opens the folder that contains them.
+
+        - Always attach **`opai.log`**.
+        - If a **`native.log`** file is in the folder, please attach it too. It only appears when the app closed unexpectedly, and it usually holds the reason.
+        - Please **don't** attach the compressed `.gz` files unless the problem happened on an **earlier day**. Those are older sessions, and they describe a different run than the one you're reporting.
+
+        💡 **If the app crashed, reopen it once before collecting the logs.** On startup it recovers the crash details from the previous run and writes them into `opai.log`.
+      placeholder: Drag & drop your log files here.
     validations:
       required: true

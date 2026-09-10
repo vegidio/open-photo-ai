@@ -27,44 +27,52 @@ func stubGPUInfo(t *testing.T, gpus []sysinfo.GPUInfo, err error) {
 	t.Cleanup(func() { GPUInfo = original })
 }
 
-// TestTotalRAMBytes pins the unit conversion, which is the part with no visible symptom when it is wrong.
+// TestTotalRAMBytes pins the unit, which is the part with no visible symptom when it is wrong.
 //
-// sysinfo.MemoryInfo documents its field as bytes but every backend divides by 1,000,000 before returning it, so the
-// value is decimal megabytes. Reading it as bytes makes a 64 GB machine look like 68 KB of RAM and silently collapses
-// the host budget to its floor - models get rebuilt more than they should be and nothing else says so. The figures
-// below are what sysctl/proc/CIM report for machines of those sizes.
+// sysinfo.MemoryInfo.Total is bytes, and this must pass it through unscaled. The case worth guarding is the one that
+// already shipped: go-sak used to return decimal megabytes, TotalRAMBytes multiplied by 1,000,000 to compensate, and
+// when go-sak fixed the field the multiplication stayed. Nothing failed loudly - hostBudgetFor just clamped every
+// machine to the maximum host budget. An earlier version of this test stubbed megabytes, so it agreed with the bug
+// and passed throughout. The figures below are therefore what sysctl/proc/CIM actually report, in bytes.
 func TestTotalRAMBytes(t *testing.T) {
 	const gib = int64(1) << 30
 
 	tests := []struct {
-		name       string
-		reportedMB uint64
-		want       int64
+		name          string
+		reportedBytes uint64
+		want          int64
 	}{
-		{"16 GB machine", 17179, 16 * gib},
-		{"32 GB machine", 34359, 32 * gib},
-		{"64 GB machine", 68719, 64 * gib},
+		{"8 GB machine", 8 * uint64(gib), 8 * gib},
+		{"16 GB machine", 16 * uint64(gib), 16 * gib},
+		{"32 GB machine", 32 * uint64(gib), 32 * gib},
+		{"64 GB machine", 64 * uint64(gib), 64 * gib},
 	}
-
-	// The reported figures are truncated decimal megabytes, so they land a hair under the round GiB values rather than
-	// exactly on them. A tolerance keeps the test about the unit - the failure mode is off by a factor of a million,
-	// not by a few MiB.
-	const tolerance = 64 * (1 << 20)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stubMemoryInfo(t, sysinfo.MemoryInfo{Total: tt.reportedMB}, nil)
+			stubMemoryInfo(t, sysinfo.MemoryInfo{Total: tt.reportedBytes}, nil)
 
-			got := TotalRAMBytes()
-			if diff := got - tt.want; diff > tolerance || diff < -tolerance {
+			if got := TotalRAMBytes(); got != tt.want {
 				t.Errorf("TotalRAMBytes() = %.3f GiB, want %.3f GiB",
 					float64(got)/float64(gib), float64(tt.want)/float64(gib))
 			}
 		})
 	}
 
+	// A Linux MemTotal is kibibytes of usable RAM rather than the installed total, so it lands just under the round
+	// figure. It is here to keep the assertions above from being read as "must be a whole GiB".
+	t.Run("a figure that is not a round GiB passes through", func(t *testing.T) {
+		const reported = uint64(63576973312) // /proc/meminfo on the 64 GB machine from issue #40
+
+		stubMemoryInfo(t, sysinfo.MemoryInfo{Total: reported}, nil)
+
+		if got := TotalRAMBytes(); got != int64(reported) {
+			t.Errorf("TotalRAMBytes() = %d, want %d", got, reported)
+		}
+	})
+
 	t.Run("a failed probe reports zero", func(t *testing.T) {
-		stubMemoryInfo(t, sysinfo.MemoryInfo{Total: 17179}, errors.New("no"))
+		stubMemoryInfo(t, sysinfo.MemoryInfo{Total: 16 * uint64(gib)}, errors.New("no"))
 
 		if got := TotalRAMBytes(); got != 0 {
 			t.Errorf("TotalRAMBytes() = %d, want 0 when the probe failed", got)

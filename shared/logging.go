@@ -80,10 +80,15 @@ func SetupLogging(appName string) (io.Closer, error) {
 
 	closers := []io.Closer{writer}
 
+	// Before the capture, which truncates the file: anything still in it is from a run that died without closing,
+	// and those are the lines a native crash leaves behind. See stderrCapture for why they cannot be logged live.
+	nativePath := filepath.Join(logsDir, "native.log")
+	foldNativeLog(logger, nativePath)
+
 	// ONNX Runtime logs from C++ straight to the process's stderr and its Go binding exposes no custom-logger hook, so
 	// the descriptor is the only place its output can be intercepted. Failing to do so costs nothing but ORT's lines,
 	// which is not worth failing a launch over.
-	if capture, err := startStderrCapture(logger); err == nil {
+	if capture, err := startStderrCapture(logger, nativePath); err == nil {
 		// Ahead of the writer: the capture's reader logs through it, so it has to stop first.
 		closers = append([]io.Closer{capture}, closers...)
 	} else {
