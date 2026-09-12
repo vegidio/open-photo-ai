@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
-	"github.com/samber/lo"
 	"github.com/vegidio/go-sak/os"
 	"github.com/vegidio/go-sak/sysinfo"
 	"github.com/vegidio/open-photo-ai/internal"
@@ -14,43 +13,86 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// IsCudaSupported reports whether the machine has an NVIDIA GPU, which is only a rough proxy for CUDA being usable:
-// the driver may still be missing or too old, which shows up as a session-build failure later.
+// IsCudaSupported reports whether the machine has an NVIDIA GPU that the pinned CUDA toolkit can actually target.
+//
+// It remains a proxy for CUDA being usable - the driver may still be missing or too old, which shows up as a
+// session-build failure later - but it is no longer only a vendor check. The architecture the toolkit was built for is
+// knowable up front, and getting it wrong is expensive: a true answer here is what makes AppService.Initialize
+// download the CUDA and cuDNN trees, roughly a gigabyte, before the first session fails and everything falls back to
+// the CPU anyway.
 func IsCudaSupported() bool {
-	gpus, err := internal.GPUInfo()
-	if err != nil {
-		return false
-	}
-
-	_, found := lo.Find(gpus, func(gpu sysinfo.GPUInfo) bool {
-		vendor := strings.ToLower(gpu.Vendor)
-		product := strings.ToLower(gpu.Name)
-		return vendor == "nvidia" || strings.Contains(product, "nvidia")
-	})
-
-	return found
+	return hasGpuMeetingFloor("cuda")
 }
 
-// IsTensorRtSupported reports whether the machine has an RTX 20-series or newer card. Like IsCudaSupported, it is a
-// rough proxy - it says nothing about whether the TensorRT libraries themselves will load.
+// IsTensorRtSupported reports whether the machine has an NVIDIA GPU that the pinned TensorRT release can target.
+//
+// Like IsCudaSupported it says nothing about whether the libraries themselves will load, and it is the more expensive
+// of the two to get wrong: the TensorRT archives are around 1.4-2 GB, several times the CUDA tree.
+//
+// This used to match model names - "rtx 20" through "rtx 50" - which was wrong in both directions. It rejected every
+// Turing card NVIDIA did not brand RTX, so the GTX 1650 and 1660 were refused a release that supports them, and it
+// accepted "RTX 2000 Ada Generation" by way of the "rtx 20" prefix while refusing its Quadro and RTX A-series
+// siblings. The compute capability answers the question the names were standing in for, and needs no new entry each
+// time a product line is renamed.
+//
+// TensorRT's floor can never sit below CUDA's, because the TensorRT execution provider is built on the CUDA one - see
+// TestTensorRtFloorIsNotBelowCuda, which pins that rather than leaving it to be rediscovered.
 func IsTensorRtSupported() bool {
+	return hasGpuMeetingFloor("tensorrt")
+}
+
+// hasGpuMeetingFloor reports whether any NVIDIA GPU in the machine clears the compute capability floor pinned for dep.
+//
+// A dependency that declares no floor is unconstrained, which keeps this honest for anything published without one:
+// the question then collapses back to "is there an NVIDIA card".
+func hasGpuMeetingFloor(dep string) bool {
 	gpus, err := internal.GPUInfo()
 	if err != nil {
 		return false
 	}
 
-	_, found := lo.Find(gpus, func(gpu sysinfo.GPUInfo) bool {
-		vendor := strings.ToLower(gpu.Vendor)
-		product := strings.ToLower(gpu.Name)
+	floor, hasFloor := internal.MinComputeCapability(dep)
 
-		return vendor == "nvidia" &&
-			(strings.Contains(product, "rtx 50") ||
-				strings.Contains(product, "rtx 40") ||
-				strings.Contains(product, "rtx 30") ||
-				strings.Contains(product, "rtx 20"))
-	})
+	for _, gpu := range gpus {
+		if !isNvidia(gpu) {
+			continue
+		}
 
-	return found
+		if !hasFloor || canTarget(gpu.ComputeCapability, floor) {
+			return true
+		}
+
+		// Said out loud, because the alternative is an NVIDIA machine where a processor option simply is not there.
+		// The tag is in the line so the answer to "why not?" does not require knowing which version this build pins.
+		tag, _ := internal.ReleaseTag(dep)
+		internal.Log().Info("GPU is too old for the pinned release; not offering this processor",
+			"dependency", dep, "gpu", gpu.Name, "compute_capability", gpu.ComputeCapability.String(),
+			"minimum", floor.String(), "version", tag)
+	}
+
+	return false
+}
+
+// canTarget reports whether a card is new enough for a release with the given compute capability floor.
+//
+// A card whose capability could not be read is treated as usable. That is deliberate, and it is the only judgement
+// call in this file. Reading it the other way would take a processor away from a machine on the strength of a probe
+// that failed - nvidia-smi missing from PATH, or a driver predating the compute_cap field - and the symptom would be a
+// silently slower app on hardware that was fine. Guessing wrong in this direction costs a wasted download and a
+// fallback the user is already told about, which is exactly what happens today; guessing wrong in the other direction
+// is a regression nobody can see. The cards this is meant to catch all report their capability perfectly well.
+func canTarget(capability, floor sysinfo.ComputeCapability) bool {
+	if !capability.Known() {
+		return true
+	}
+
+	return capability.AtLeast(floor.Major, floor.Minor)
+}
+
+// isNvidia reports whether a GPU is an NVIDIA card, checking the product name as well as the vendor because the
+// Windows CIM fallback fills the vendor in from the driver's own description and does not always say "NVIDIA".
+func isNvidia(gpu sysinfo.GPUInfo) bool {
+	return strings.ToLower(gpu.Vendor) == "nvidia" || strings.Contains(strings.ToLower(gpu.Name), "nvidia")
 }
 
 // InitializeNvidiaLib downloads an NVIDIA library (libName being "cuda", "cudnn" or "tensorrt") into the user's config

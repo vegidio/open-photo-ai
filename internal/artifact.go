@@ -3,6 +3,8 @@ package internal
 import (
 	"fmt"
 	"runtime"
+
+	"github.com/vegidio/go-sak/sysinfo"
 )
 
 // Artifact is the pinned identity of one published archive.
@@ -29,6 +31,16 @@ type Release struct {
 	// Archives holds the pinned identity of each platform's archive, keyed "<goos>_<goarch>". A platform with no entry
 	// is one this dependency is not published for - there is no CUDA build for macOS, and none for Windows on ARM.
 	Archives map[string]Artifact
+
+	// MinComputeCapability is the oldest NVIDIA GPU architecture the archives in this release can target, and the zero
+	// value for a dependency with no such floor.
+	//
+	// It belongs beside the tag for the same reason Lib does: it is a property of the version pinned above, not of
+	// this build, and a bump that moved one without the other would install a toolkit for hardware it cannot run on.
+	// CUDA 13.0 is exactly that bump - it dropped sm_50 through sm_72, so a Pascal card that worked under CUDA 12
+	// fails under 13.3 with CUBLAS_STATUS_ARCH_MISMATCH at session build, having already downloaded the better part of
+	// a gigabyte of libraries it can never use.
+	MinComputeCapability sysinfo.ComputeCapability
 }
 
 // Pinned is everything needed to fetch and verify one dependency on the platform this binary was built for.
@@ -81,4 +93,18 @@ func ReleaseTag(prefix string) (string, bool) {
 	}
 
 	return release.Tag, true
+}
+
+// MinComputeCapability is the oldest GPU architecture a pinned dependency can target, reporting false when the
+// dependency is unknown or declares no floor.
+//
+// Callers must treat the false case as "no constraint" rather than as "nothing is supported": most dependencies have
+// no compute capability floor at all, and reading a zero value as a real one would disable them everywhere.
+func MinComputeCapability(prefix string) (sysinfo.ComputeCapability, bool) {
+	release, found := Releases[prefix]
+	if !found || !release.MinComputeCapability.Known() {
+		return sysinfo.ComputeCapability{}, false
+	}
+
+	return release.MinComputeCapability, true
 }

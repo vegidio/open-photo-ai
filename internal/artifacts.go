@@ -1,5 +1,7 @@
 package internal
 
+import "github.com/vegidio/go-sak/sysinfo"
+
 // Releases pins each dependency to one published release: the tag it comes from, and the SHA-256 and size of that
 // release's archive on every platform it is built for.
 //
@@ -34,6 +36,11 @@ var Releases = map[string]Release{
 
 	"cuda": {
 		Tag: "cuda/13.3.0",
+
+		// Turing. CUDA 13.0 removed offline compilation for sm_50 through sm_72, so this floor moves with the tag
+		// above: a bump back to a 12.x release would have to lower it to 5.0, and a later major may raise it again.
+		MinComputeCapability: sysinfo.ComputeCapability{Major: 7, Minor: 5},
+
 		Archives: map[string]Artifact{
 			"linux_amd64":   {Hash: "fb4eb6ef362973c6cdefeae43e09cea05270288acbdd47cc0fc4f50ca6bc47c0", Size: 587322552},
 			"linux_arm64":   {Hash: "ed5eb63005e30a098c270b2020b66eab87a5142d9936886fe820c19693487a24", Size: 697083065},
@@ -52,6 +59,12 @@ var Releases = map[string]Release{
 
 	"tensorrt": {
 		Tag: "tensorrt/10.14.1",
+
+		// Turing, and for a second reason than CUDA's: TensorRT 10.5 removed Volta, so 7.0 is out on this release's
+		// own terms as well as the toolkit's. It can never be lower than the CUDA floor above, since the TensorRT
+		// execution provider is built on the CUDA one.
+		MinComputeCapability: sysinfo.ComputeCapability{Major: 7, Minor: 5},
+
 		Archives: map[string]Artifact{
 			"linux_amd64":   {Hash: "d2a29e4fbc78445ae715ff7ff6fde6f59ba6425a8b0017753f3a776096c59376", Size: 1780420117},
 			"linux_arm64":   {Hash: "28a7699c9208d6d1a5f77f65bd2dad9547a6245599ae5192c8a1baf4ef1496a0", Size: 1993059105},
