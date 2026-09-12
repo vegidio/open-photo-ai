@@ -569,11 +569,6 @@ func tensorRTOptions(paths cachePaths, p EPProfile) map[string]string {
 		workspace = p.TrtWorkspaceBytes
 	}
 
-	fp16 := "0"
-	if p.Fp16 {
-		fp16 = "1"
-	}
-
 	// trt_engine_hw_compatible is off, and it was the single largest TensorRT setting in this file while it was on.
 	// It builds an engine that runs on any Ampere-or-newer card, which means TensorRT may only pick kernels that
 	// exist on all of them - so the newer the card, the more it gives up. Turning it off is worth 4.7% to 48% across
@@ -588,21 +583,51 @@ func tensorRTOptions(paths cachePaths, p EPProfile) map[string]string {
 	options := map[string]string{
 		"device_id":                      "0",
 		"trt_max_workspace_size":         fmt.Sprintf("%d", workspace),
-		"trt_fp16_enable":                fp16,
+		"trt_fp16_enable":                boolOption(p.Fp16),
 		"trt_int8_enable":                "0",
 		"trt_engine_hw_compatible":       "0",
 		"trt_cuda_graph_enable":          "0",
 		"trt_builder_optimization_level": "5",
-		"trt_engine_cache_enable":        "1",
-		"trt_engine_cache_path":          paths.engine,
-		"trt_timing_cache_enable":        "1",
-		"trt_timing_cache_path":          paths.timing,
 	}
+
+	applyTrtCachePaths(options, paths)
 
 	maps.Copy(options, p.TrtShapes)
 	maps.Copy(options, p.TrtOptions)
 
 	return options
+}
+
+// applyTrtCachePaths points TensorRT at its two caches, or turns off whichever one it cannot be pointed at.
+//
+// The paths go through ortCachePath because TensorRT reads them as narrow strings and a Windows profile directory
+// outside ASCII does not survive that - see the Windows build of ortCachePath for the whole story. Disabling the
+// cache is the fallback rather than passing the path anyway: an unusable path fails the session build, and losing
+// the cache only costs a rebuild.
+//
+// The two are resolved separately because they are separate directories and ORT reads them independently, so there is
+// no reason for one being unusable to cost the other.
+func applyTrtCachePaths(options map[string]string, paths cachePaths) {
+	engine, engineOK := ortCachePath(paths.engine)
+	options["trt_engine_cache_enable"] = boolOption(engineOK)
+	if engineOK {
+		options["trt_engine_cache_path"] = engine
+	}
+
+	timing, timingOK := ortCachePath(paths.timing)
+	options["trt_timing_cache_enable"] = boolOption(timingOK)
+	if timingOK {
+		options["trt_timing_cache_path"] = timing
+	}
+}
+
+// boolOption renders a Go bool the way ONNX Runtime's provider options want it.
+func boolOption(v bool) string {
+	if v {
+		return "1"
+	}
+
+	return "0"
 }
 
 func cudaOptions(p EPProfile) map[string]string {
