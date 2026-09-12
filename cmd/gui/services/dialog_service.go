@@ -40,6 +40,14 @@ func (s *DialogService) OpenFileDialog(title string, filterName string) ([]types
 
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {
+		// Dismissing the picker is a normal choice, not a fault, so it is reported as info and returns an empty
+		// selection - the frontend already treats that as "the user added nothing".
+		if isDialogCancelled(err) {
+			s.otel.LogInfo("File dialog cancelled", nil)
+			slog.Info("file dialog cancelled")
+			return []types.File{}, nil
+		}
+
 		s.otel.LogError("Error opening file dialog", nil, err)
 		slog.Warn("error opening file dialog", "err", err)
 		return nil, errors.Wrap(err, "failed to open file dialog")
@@ -61,6 +69,14 @@ func (s *DialogService) OpenDirDialog(title string) (string, error) {
 
 	path, err := dialog.PromptForSingleSelection()
 	if err != nil {
+		// See OpenFileDialog: cancelling returns the empty path, which leaves any destination already chosen alone
+		// instead of resetting it the way the error path does.
+		if isDialogCancelled(err) {
+			s.otel.LogInfo("Directory dialog cancelled", nil)
+			slog.Info("directory dialog cancelled")
+			return "", nil
+		}
+
 		s.otel.LogError("Error opening directory dialog", nil, err)
 		slog.Warn("error opening directory dialog", "err", err)
 		return "", errors.Wrap(err, "failed to open directory dialog")
@@ -68,6 +84,20 @@ func (s *DialogService) OpenDirDialog(title string) (string, error) {
 
 	slog.Info("directory selected", "path", path)
 	return path, nil
+}
+
+// isDialogCancelled reports whether err is the Windows file picker's way of saying the user dismissed the dialog.
+//
+// Wails returns cfd.ErrorCancelled here, but that sentinel lives under wails/v3/internal, so errors.Is has nothing to
+// compare against and the message is all there is to match on. macOS and Linux report a cancel as an empty selection
+// with no error, so this only ever fires on Windows.
+func isDialogCancelled(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "cancelled by user") || strings.Contains(msg, "canceled by user")
 }
 
 func (s *DialogService) destroy() {}
