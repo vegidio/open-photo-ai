@@ -15,9 +15,13 @@ import (
 // output detail.
 const inputSize = 512
 
-// deoldifySize is the fixed spatial size the DeOldify-based graphs are exported at: the reference stable colorizer's
-// default render_factor (35) times its render base (16). Like the DDColor pipeline, only chroma comes from the model,
-// so this does not cap output detail.
+// deoldifySize is the fixed spatial size the DeOldify-based graphs are exported at: the reference artistic
+// colorizer's default render_factor (35) times its render base (16). Like the DDColor pipeline, only chroma comes
+// from the model, so this does not cap output detail.
+//
+// The reference's stable and artistic colorizers happen to share that default, so this constant did not move when
+// jaipur was re-exported from the artistic generator - which is worth stating, because it is the one number a
+// backbone swap would otherwise be expected to change.
 const deoldifySize = 560
 
 // DDColor drives the DDColor-style graphs (delhi, mumbai): the graph takes a gray RGB rendering of the image's
@@ -33,9 +37,15 @@ var DDColor = Spec{
 
 // DeOldify drives the DeOldify-style graphs (jaipur): the graph takes the image's ITU-601 luma rendered as gray RGB
 // (CHW, [0,1], 560x560 — ImageNet normalization is baked into the exported graph) and returns a full RGB colorization
-// at the same size. The result keeps the original image's full-resolution luminance and takes only the model's chroma,
-// upsampled — the reference implementation does this transfer in YUV; here it is done in Lab to reuse the category's
-// tested conversion and composition helpers, which is perceptually equivalent.
+// at the same size, clamped to [0,1].
+//
+// The result keeps the original image's full-resolution luminance and takes only the model's chroma, upsampled — the
+// reference implementation does this transfer in YUV; here it is done in Lab to reuse the category's tested
+// conversion and composition helpers, which is perceptually equivalent.
+//
+// That contract is why this spec survived jaipur being re-exported from a different DeOldify generator: the backbone
+// changed from ResNet101 to ResNet34 and the graph lost two thirds of its weights, but the normalization and the
+// SigmoidRange denormalization stayed baked in at the same two ends, so nothing here had to move.
 var DeOldify = Spec{
 	Size: deoldifySize,
 	// The reference stretches to a square with bilinear resampling; Linear is imaging's equivalent.
