@@ -10,24 +10,25 @@ import (
 // The colorization graphs this package can drive. Each is a Spec - pure data - so adding a family is an entry here
 // plus its two adapters, not another copy of the pipeline in process.go.
 
-// inputSize is the fixed spatial size the DDColor graphs are exported at. The model only predicts the ab chroma
+// inputSize is the fixed spatial size the ab-output graphs are exported at. The model only predicts the ab chroma
 // planes at this resolution; the output keeps the original image's full-resolution luminance, so this is not a cap on
 // output detail.
 const inputSize = 512
 
-// deoldifySize is the fixed spatial size the DeOldify-based graphs are exported at: the reference artistic
-// colorizer's default render_factor (35) times its render base (16). Like the DDColor pipeline, only chroma comes
-// from the model, so this does not cap output detail.
+// rgbGraphSize is the fixed spatial size the RGB-output graphs are exported at. The value comes from the DeOldify
+// reference these graphs were exported from: its default render_factor (35) times its render base (16). As with the
+// ab-output graphs, only chroma comes from the model, so this does not cap output detail.
 //
-// The reference's stable and artistic colorizers happen to share that default, so this constant did not move when
+// That reference's stable and artistic colorizers happen to share the default, so this constant did not move when
 // jaipur was re-exported from the artistic generator - which is worth stating, because it is the one number a
 // backbone swap would otherwise be expected to change.
-const deoldifySize = 560
+const rgbGraphSize = 560
 
-// DDColor drives the DDColor-style graphs (delhi, mumbai): the graph takes a gray RGB rendering of the image's
-// luminance (CHW, [0,1], 512x512) and returns the predicted Lab ab planes at the same size. The result is composed
-// from the original-resolution L channel plus the upsampled ab planes, so luminance detail is preserved exactly.
-var DDColor = Spec{
+// AbGraph drives the graphs that return chroma directly (delhi, mumbai): the graph takes a gray RGB rendering of the
+// image's luminance (CHW, [0,1], 512x512) and returns the predicted Lab ab planes at the same size. The result is
+// composed from the original-resolution L channel plus the upsampled ab planes, so luminance detail is preserved
+// exactly.
+var AbGraph = Spec{
 	Size:        inputSize,
 	Filter:      imaging.Lanczos,
 	BuildInput:  grayLabInput,
@@ -35,19 +36,19 @@ var DDColor = Spec{
 	Chroma:      abPlanes,
 }
 
-// DeOldify drives the DeOldify-style graphs (jaipur): the graph takes the image's ITU-601 luma rendered as gray RGB
-// (CHW, [0,1], 560x560 — ImageNet normalization is baked into the exported graph) and returns a full RGB colorization
-// at the same size, clamped to [0,1].
+// RgbGraph drives the graphs that return a full colorization (jaipur): the graph takes the image's ITU-601 luma
+// rendered as gray RGB (CHW, [0,1], 560x560 — ImageNet normalization is baked into the exported graph) and returns
+// three RGB channels at the same size, clamped to [0,1].
 //
 // The result keeps the original image's full-resolution luminance and takes only the model's chroma, upsampled — the
-// reference implementation does this transfer in YUV; here it is done in Lab to reuse the category's tested
-// conversion and composition helpers, which is perceptually equivalent.
+// DeOldify reference these graphs come from does this transfer in YUV; here it is done in Lab to reuse the category's
+// tested conversion and composition helpers, which is perceptually equivalent.
 //
-// That contract is why this spec survived jaipur being re-exported from a different DeOldify generator: the backbone
-// changed from ResNet101 to ResNet34 and the graph lost two thirds of its weights, but the normalization and the
-// SigmoidRange denormalization stayed baked in at the same two ends, so nothing here had to move.
-var DeOldify = Spec{
-	Size: deoldifySize,
+// That contract is why this spec survived jaipur being re-exported from a different generator of that reference: the
+// backbone changed from ResNet101 to ResNet34 and the graph lost two thirds of its weights, but the normalization and
+// the SigmoidRange denormalization stayed baked in at the same two ends, so nothing here had to move.
+var RgbGraph = Spec{
+	Size: rgbGraphSize,
 	// The reference stretches to a square with bilinear resampling; Linear is imaging's equivalent.
 	Filter:      imaging.Linear,
 	BuildInput:  grayLumaInput,
@@ -56,7 +57,8 @@ var DeOldify = Spec{
 }
 
 // grayLabInput builds the model's CHW input tensor from the resized image: each pixel is reduced to its luminance
-// (Lab L with zero chroma) and rendered back to RGB, which is the gray image DDColor was trained on.
+// (Lab L with zero chroma) and rendered back to RGB, which is the gray image the ab-output graphs' reference
+// implementation, DDColor, was trained on.
 //
 // GrayFromRgbBytes is that reduction with the Lab round-trip collapsed out - at zero chroma it is the identity on the
 // luminance, so going through L cost a cube root and three math.Pow per pixel to arrive back where it started. See the
@@ -89,8 +91,9 @@ func abPlanes(data []float32, size int) (a, b []float32) {
 	return data[:plane], data[plane : 2*plane]
 }
 
-// grayLumaInput builds the model's CHW input tensor: each pixel reduced to its ITU-601 luma (the grayscale DeOldify
-// was trained on — PIL's 'LA' conversion), replicated across the three channels, in [0, 1].
+// grayLumaInput builds the model's CHW input tensor: each pixel reduced to its ITU-601 luma (the grayscale the
+// RGB-output graphs' reference implementation, DeOldify, was trained on — PIL's 'LA' conversion), replicated across
+// the three channels, in [0, 1].
 func grayLumaInput(img *image.NRGBA, size int) []float32 {
 	plane := size * size
 	data := make([]float32, 3*plane)

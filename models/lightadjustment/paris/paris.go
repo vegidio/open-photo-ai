@@ -71,23 +71,17 @@ var variant = &lightadjustment.Variant{
 
 // profile puts paris's fp16 graph on the GPU and leaves fp32 on the provider defaults.
 //
-// The fp16 row is why this function exists: on an M2 Max at the 1024x1024 canvas, MLComputeUnits=ALL costs twice what
-// the GPU alone does (18.3ms against 9.2ms), and CPUAndGPU is also what turns fp16 from slower than fp32 into a tie
-// with it. fp32 is left alone deliberately - CPUAndGPU reproduces the default to within 0.1%, and a setting that only
-// ever reproduces the default is one that will be carried somewhere it does not belong.
+// On an M2 Max at the 1024x1024 canvas, MLComputeUnits=ALL costs twice what the GPU alone does (18.3ms against
+// 9.2ms), and CPUAndGPU is also what turns fp16 from slower than fp32 into a tie with it. The Neural Engine loses in
+// both precisions and badly (+872% at fp32, +72% at fp16) - the same answer lyon gives on the same hardware for a
+// graph of a completely different shape, but the two were measured separately and neither is evidence for the other.
 //
-// The Neural Engine loses in both precisions, and badly (+872% at fp32, +72% at fp16). That is the same answer lyon
-// gives, on the same hardware, for a graph of a completely different shape - but the two were measured separately,
-// and neither is evidence for the other.
-//
-// The fp16 export also takes the sequential execution mode, which is a much smaller number and is here on the
-// strength of its consistency rather than its size: -2.3% and -2.9% on CoreML in the two build orders, -0.4% on the
-// CPU provider, and the lowest minimum of any row in all three. That is the same direction every other fp16 graph in
-// this codebase reports - see ExecutionMode in ep_profile.go. fp32 does not get it: there it measures +1.2% on CoreML
+// The fp16 export also takes the sequential execution mode, which is a much smaller number and is here on the strength
+// of its consistency rather than its size: -2.3% and -2.9% on CoreML in the two build orders, -0.4% on the CPU
+// provider, and the lowest minimum of any row in all three. fp32 does not get it: there it measures +1.2% on CoreML
 // against -2.7% on the CPU provider, which is a wash rather than a setting.
 //
-// Measured against, and not set: SpecializationStrategy=FastPrediction and AllowLowPrecisionAccumulationOnGPU, both
-// within 0.8% in both precisions and both build orders.
+// FastPrediction and AllowLowPrecisionAccumulationOnGPU measured within 0.8% in both precisions and are not set.
 var profile = utils.Fp16Only(utils.EPProfile{
 	CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
 	ExecutionMode:      utils.ExecutionModeSequential,

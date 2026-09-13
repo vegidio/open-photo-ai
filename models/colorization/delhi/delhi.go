@@ -12,7 +12,7 @@ import (
 var variant = &colorization.Variant{
 	Codename: "delhi",
 	Label:    "Delhi",
-	Spec:     colorization.DDColor,
+	Spec:     colorization.AbGraph,
 	Profile:  profile,
 }
 

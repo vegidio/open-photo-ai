@@ -27,7 +27,7 @@ type Spec struct {
 	// BuildInput renders the resized image into the graph's CHW input tensor.
 	BuildInput func(img *image.NRGBA, size int) []float32
 
-	// OutChannels is the channel count of the output tensor: DDColor emits ab, DeOldify emits RGB.
+	// OutChannels is the channel count of the output tensor: the ab-output graphs emit 2, the RGB-output graph 3.
 	OutChannels int
 
 	// Chroma pulls the Lab a/b planes, at model resolution, out of the raw output tensor.

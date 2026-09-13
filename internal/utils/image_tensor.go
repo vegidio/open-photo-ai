@@ -4,7 +4,6 @@ import (
 	"image"
 )
 
-// ImageToCHW is a common implementation for converting an image to a tensor
 // useOffset: if true, uses bounds.Min offset; if false, assumes (0,0) origin
 // standardize: if true, normalizes to [-1, 1]; if false, normalizes to [0, 1]
 //
@@ -75,7 +74,6 @@ func ImageToCHWInto(tensor []float32, img image.Image, useOffset, standardize bo
 	return tensor
 }
 
-// CHWToImage converts a tensor in CHW format back to an image
 // standardize: if true, denormalizes from [-1, 1]; if false, denormalizes from [0, 1]
 // Expects the format: [1, 3, H, W] in CHW format (RGB)
 func CHWToImage(data []float32, width, height int, standardize bool) image.Image {
@@ -147,7 +145,6 @@ func writeCHW(tensor []float32, idx, gBase, bBase int, r, g, b uint32, standardi
 		tensor[gBase+idx] = float32(g)*std16 - 1
 		tensor[bBase+idx] = float32(b)*std16 - 1
 	} else {
-		// Normalize to [0, 1]
 		tensor[idx] = float32(r) * unit16
 		tensor[gBase+idx] = float32(g) * unit16
 		tensor[bBase+idx] = float32(b) * unit16

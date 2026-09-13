@@ -212,7 +212,6 @@ func chargedBytes(pool types.MemoryPool, bytes int64) int64 {
 	return bytes + bytes*overheadPercent()/100
 }
 
-// overheadPercent reads OverheadEnvVar, falling back to deviceOverheadPercent.
 func overheadPercent() int64 {
 	if percent, ok := envInt64(OverheadEnvVar); ok {
 		return percent

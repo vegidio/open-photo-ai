@@ -144,12 +144,12 @@ func TestComposeLabPreservesGray(t *testing.T) {
 	}
 }
 
-// TestGrayLumaInputIsNeutral verifies the DeOldify input tensor holds the ITU-601 luma replicated across all three
-// channels, in [0, 1].
+// TestGrayLumaInputIsNeutral verifies the RGB-output graph's input tensor holds the ITU-601 luma replicated across
+// all three channels, in [0, 1].
 func TestGrayLumaInputIsNeutral(t *testing.T) {
-	resized := image.NewNRGBA(image.Rect(0, 0, deoldifySize, deoldifySize))
-	for y := range deoldifySize {
-		for x := range deoldifySize {
+	resized := image.NewNRGBA(image.Rect(0, 0, rgbGraphSize, rgbGraphSize))
+	for y := range rgbGraphSize {
+		for x := range rgbGraphSize {
 			i := y*resized.Stride + x*4
 			resized.Pix[i] = uint8(x % 256)
 			resized.Pix[i+1] = uint8(y % 256)
@@ -158,8 +158,8 @@ func TestGrayLumaInputIsNeutral(t *testing.T) {
 		}
 	}
 
-	data := grayLumaInput(resized, deoldifySize)
-	plane := deoldifySize * deoldifySize
+	data := grayLumaInput(resized, rgbGraphSize)
+	plane := rgbGraphSize * rgbGraphSize
 
 	for i := 0; i < plane; i += 997 {
 		r, g, b := data[i], data[plane+i], data[2*plane+i]

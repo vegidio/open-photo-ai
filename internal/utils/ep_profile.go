@@ -371,7 +371,6 @@ type cachePaths struct {
 	timing string
 }
 
-// providerAppender configures one execution provider onto a set of session options.
 type providerAppender func(paths cachePaths, options *ort.SessionOptions, p EPProfile) error
 
 var providerAppenders = map[types.ExecutionProvider]providerAppender{

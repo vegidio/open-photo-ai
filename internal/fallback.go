@@ -36,7 +36,6 @@ func ResetFallback() {
 	failedProvider.Store(nil)
 }
 
-// notifyFallback informs the registered handler, if any, that ep was downgraded to the CPU.
 func notifyFallback(ep types.ExecutionProvider, err error) {
 	if handler := fallbackHandler.Load(); handler != nil {
 		(*handler)(ep, err)

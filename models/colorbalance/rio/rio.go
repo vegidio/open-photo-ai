@@ -58,28 +58,23 @@ var variant = &colorbalance.Variant{
 // profile asks CoreML to specialise rio's fp16 graph for the one shape it accepts, and leaves fp32 on the provider
 // defaults.
 //
-// FastPrediction is the only setting that moves this graph (-3.0% at fp16 on an M2 Max), and it is the first model in
-// this codebase where it does. The reason is the precondition CoreMLSpecialization documents rather than luck: the
-// option trades compile time for prediction latency, which is only worth paying for on a fixed-shape graph that stays
-// resident, and rio only became one in the export above. The fp32 row looks like the same win and is not - both
-// configurations bottom out at 14.48ms, so what differs there is variance, not compute, and fp32 is left alone.
-//
-// Whoever re-measures this needs the spread between each row's median and its own minimum, because it is what says
-// the fp16 rows are separable at all: the shipping figures hold 0.2-0.4%, while a first pass on a warm machine put
-// 25% of drift on one row and manufactured a 22% "win" for the row that really gains 3%.
+// FastPrediction is the only setting that moves this graph (-3.0% at fp16 on an M2 Max), and it is the first model
+// here where it does. The reason is the precondition CoreMLSpecialization documents rather than luck: the option is
+// only worth paying for on a fixed-shape graph that stays resident, and rio only became one in the export above. The
+// fp32 row looks like the same win and is not - both configurations bottom out at 14.48ms, so what differs there is
+// variance, not compute.
 //
 // # Why rio wants the Neural Engine when paris and lyon refuse it
 //
-// Both of those variants pin CPUAndGPU for fp16 because ALL scatters their graphs across the Neural Engine and the
-// GPU and they pay for every transition. Rio is the opposite case: its graph is 52 convolutional nodes, which is what
-// the Neural Engine is built for, and it lands there whole rather than in pieces - so keeping it off the ANE nearly
-// doubles the time (+91% for CPUAndGPU against ALL). It costs nothing in accuracy either; ALL and CPUAndGPU are a
-// wash at 84.5 and 85.1 dB against fp32 on the CPU provider. Do not carry paris's or lyon's compute-unit answer here,
+// Both of those pin CPUAndGPU for fp16 because ALL scatters their graphs across the Neural Engine and the GPU and they
+// pay for every transition. Rio is the opposite case: its graph is 52 convolutional nodes, which is what the Neural
+// Engine is built for, and it lands there whole rather than in pieces - so keeping it off the ANE nearly doubles the
+// time (+91% for CPUAndGPU against ALL), at no accuracy gain. Do not carry paris's or lyon's compute-unit answer here,
 // or this one anywhere else.
 //
 // fp16 is worth having on this model in a way it is not on most: the graph's output is only ever sampled into the
-// polynomial fit, so half precision is averaged away rather than shown. Against fp32 on the CPU provider it measures
-// 86.5 dB median on the CPU and 84.5 dB on CoreML, with a largest DC shift of 0.058 levels.
+// polynomial fit in Process, so half precision is averaged away rather than shown - 84.5 dB against fp32 through
+// CoreML, with a largest DC shift of 0.058 levels.
 var profile = utils.Fp16Only(utils.EPProfile{
 	CoreMLSpecialization: utils.CoreMLSpecializationFastPrediction,
 })

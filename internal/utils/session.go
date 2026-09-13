@@ -301,8 +301,6 @@ func createSessionInner(
 	}
 	defer options.Destroy()
 
-	// The session-level settings - the graph optimization level, the execution mode, the memory planner - are all
-	// applied by applyProfile, since each of them is a per-model property.
 	if err = applyProfile(options, p); err != nil {
 		return nil, err
 	}

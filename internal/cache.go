@@ -30,8 +30,8 @@ func ImageCacheEnabled() bool {
 }
 
 const (
-	// cacheCapacityBytes bounds the store on disk. It is 1000 MiB rather than a round gigabyte of either kind - the
-	// figure has no significance beyond "about a gigabyte", which is what the comment here used to claim inaccurately.
+	// cacheCapacityBytes bounds the store on disk. It is 1000 MiB rather than a round gigabyte of either kind; the
+	// figure has no significance beyond "about a gigabyte".
 	cacheCapacityBytes = 1024 * 1024 * 1000
 
 	// memoryCacheCapacityBytes bounds the in-memory fallback, and is two orders of magnitude below the disk ceiling
@@ -114,7 +114,6 @@ func newMemoryCache(maxEntries, capacity int64) (*Cache, error) {
 	}, nil
 }
 
-// Mode reports which store is backing this cache.
 func (c *Cache) Mode() types.CacheMode {
 	return c.mode
 }
@@ -154,7 +153,6 @@ func (c *Cache) GetImage(ctx context.Context, hash string, operations ...types.O
 	return img, nil
 }
 
-// SetImage stores img as the result of applying operations to the image identified by hash.
 func (c *Cache) SetImage(ctx context.Context, img image.Image, hash string, operations ...types.Operation) error {
 	data, err := imageToData(img)
 	if err != nil {

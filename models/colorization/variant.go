@@ -20,16 +20,15 @@ type Variant struct {
 	// Label is the display name shown in the UI, before the precision suffix is appended.
 	Label string
 
-	// Spec is the graph contract this variant's model was exported to. DDColor variants (delhi, mumbai) predict the
-	// Lab ab planes; DeOldify (jaipur) returns full RGB. This is the only behavioural difference between the
+	// Spec is the graph contract this variant's model was exported to. AbGraph variants (delhi, mumbai) predict the
+	// Lab ab planes; RgbGraph (jaipur) returns full RGB. This is the only behavioural difference between the
 	// variants, so it is data on the variant rather than a forked Run method.
 	Spec Spec
 
 	// Profile is the provider tuning this variant needs. A nil Profile means the provider defaults, which is what a
 	// variant nobody has measured should get: the right settings follow the graph's op mix, so carrying one
 	// variant's findings to another because both colorize is how a profile ends up pessimising a model it was never
-	// measured against. Delhi and mumbai share the DDColor architecture and so could share an answer; jaipur is a
-	// DeOldify U-Net and would not.
+	// measured against. Delhi and mumbai share an architecture and so could share an answer; jaipur does not.
 	Profile func(precision types.Precision) utils.EPProfile
 }
 

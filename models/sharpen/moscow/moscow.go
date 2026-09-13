@@ -27,12 +27,7 @@ var variant = &sharpen.Variant{
 // re-export. On a single-partition build of this graph the same switch is worth -22% per tile rather than -45%; the
 // sign is the same, and the Neural Engine is the wrong place for this model either way.
 //
-// fp32 is left on the defaults by Fp16Only rather than by omission. An MLProgram at fp32 cannot reach the Neural
-// Engine at all, so CPUAndGPU there only restates the default - measured at +0.4%, which is noise.
-//
-// Two settings measured as no-ops on this graph and are absent rather than untried: SpecializationStrategy
-// FastPrediction (-0.4% fp32, +0.3% fp16) and ExecutionMode sequential (-0.1% fp32, 0.0% fp16). Both land inside the
-// run-to-run spread, so neither earns a line here.
+// FastPrediction and sequential both measured inside the run-to-run spread and are absent rather than untried.
 var profile = utils.Fp16Only(utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU})
 
 // New loads the moscow session for the given operation.
