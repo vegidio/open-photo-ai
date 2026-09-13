@@ -24,6 +24,13 @@ type Variant struct {
 	// Lab ab planes; DeOldify (jaipur) returns full RGB. This is the only behavioural difference between the
 	// variants, so it is data on the variant rather than a forked Run method.
 	Spec Spec
+
+	// Profile is the provider tuning this variant needs. A nil Profile means the provider defaults, which is what a
+	// variant nobody has measured should get: the right settings follow the graph's op mix, so carrying one
+	// variant's findings to another because both colorize is how a profile ends up pessimising a model it was never
+	// measured against. Delhi and mumbai share the DDColor architecture and so could share an answer; jaipur is a
+	// DeOldify U-Net and would not.
+	Profile func(precision types.Precision) utils.EPProfile
 }
 
 // Op builds this variant's operation at the given precision.
@@ -46,7 +53,8 @@ func (v *Variant) New(
 		return nil, errors.Errorf("expected a colorization operation, got %T", operation)
 	}
 
-	session, err := utils.LoadSingleSession(ctx, "cl", v.Codename, op.precision, ep, onProgress)
+	session, err := utils.LoadSingleSession(ctx, "cl", v.Codename, op.precision, ep, onProgress,
+		utils.ResolveProfile(v.Profile, op.precision))
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load the %s session", v.Codename)
 	}

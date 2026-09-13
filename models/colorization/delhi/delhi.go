@@ -3,6 +3,7 @@ package delhi
 import (
 	"context"
 
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/colorization"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -12,7 +13,10 @@ var variant = &colorization.Variant{
 	Codename: "delhi",
 	Label:    "Delhi",
 	Spec:     colorization.DDColor,
+	Profile:  profile,
 }
+
+var profile = utils.Fp16Only(utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU})
 
 // New loads the delhi session for the given operation.
 func New(
