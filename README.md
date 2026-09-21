@@ -125,6 +125,26 @@ All enhancements available here come from open-source AI models that were adapte
 
 *Verdict*: start with **Tokyo** if you have a powerful GPU, then try **Kyoto** if it's taking too long. Reach for **Osaka** only when the others leave the image looking soft, and you can afford the wait.
 
+## ⚡ Hardware Acceleration
+
+The app picks the fastest AI processor it can find on your machine, and you can override the choice in **Settings → AI Processor**:
+
+| Processor    | Hardware                                   | Notes                                                                                              |
+|--------------|--------------------------------------------|----------------------------------------------------------------------------------------------------|
+| **TensorRT** | NVIDIA (Turing or newer)                   | Fastest. Optimizes each model on first use, which takes a few minutes; downloads ~2 GB of libraries. |
+| **CUDA**     | NVIDIA (Turing or newer)                   | Downloads ~1 GB of libraries.                                                                      |
+| **CoreML**   | Apple Silicon                              | macOS only; nothing to download.                                                                   |
+| **WebGPU**   | Any GPU with a current driver – AMD, Intel, NVIDIA, Apple | Vulkan on Linux, Direct3D 12 on Windows, Metal on macOS. Downloads a ~10 MB plugin.   |
+| **CPU**      | Everything                                 | Slowest, always available.                                                                         |
+
+**WebGPU** is what makes the GPU in AMD and Intel machines usable, where the app previously ran on the CPU. It is offered on every machine with a GPU, but *Auto* only lands on it when neither TensorRT/CUDA nor CoreML attached, so NVIDIA and Apple users keep their vendor processor unless they pick WebGPU themselves. A few things to know:
+
+- It runs the **fp32 models only** (the *HD* quality tier). The fp16 models return visibly wrong images from the current plugin, so the *SD* tier falls back to the next processor – usually the CPU – until that is fixed upstream.
+- The colorization model *Jaipur* runs its two largest layers on the CPU, because they hang AMD GPUs on Linux (an [ONNX Runtime](https://github.com/microsoft/onnxruntime) WebGPU bug). It is still faster than CPU-only, just not by as much as the other models.
+- On Linux the Vulkan loader and your GPU's Vulkan driver must be installed – see [Troubleshooting](#-troubleshooting) below.
+
+Measured on a Radeon 680M (Ryzen 7 7735U laptop iGPU), fp32, against the CPU: denoise and sharpen run about **6–7× faster**, the upscalers **2.5–3×**.
+
 ## 🛣️ Roadmap
 
 These are the features I plan to implement in the future, in no particular order:
@@ -168,9 +188,20 @@ To run the GUI version of the app on Linux, you will need to install the followi
 - Arch Linux: `sudo pacman -S gtk4 webkitgtk-6.0`
 - openSUSE: `sudo zypper install libgtk-4-1 libwebkitgtk-6_0-4`
 
+### "WebGPU" is not offered, or the app runs on the CPU on my AMD/Intel machine (Linux only)
+
+The WebGPU processor reaches the GPU through Vulkan, so the Vulkan loader and your GPU's Vulkan driver must be installed. Check with `vulkaninfo --summary`; it should list your GPU (not only `llvmpipe`). If it doesn't:
+
+- Debian/Ubuntu: `sudo apt install libvulkan1 mesa-vulkan-drivers`
+- Fedora: `sudo dnf install vulkan-loader mesa-vulkan-drivers`
+- Arch Linux: `sudo pacman -S vulkan-icd-loader vulkan-radeon` (AMD) or `vulkan-intel` (Intel)
+- openSUSE: `sudo zypper install libvulkan1 Mesa-vulkan-drivers`
+
+If WebGPU is offered but an enhancement reports that it fell back to the CPU, the reason is in the log file (see [Error Reporting](#-error-reporting)); look for "declined to attach".
+
 ### The app is taking too long to download dependencies
 
-This app has some important dependencies that can't be bundled with the app itself because they are rather big, like ONNX Runtime, CUDA and TensorRT (if supported by your system). They are hosted on Github and the app will download them the first time it opens.
+This app has some important dependencies that can't be bundled with the app itself because they are rather big, like ONNX Runtime, CUDA and TensorRT (if supported by your system), and the WebGPU plugin. They are hosted on Github and the app will download them the first time it opens.
 
 Unfortunately, GitHub has a rate limit that will throttle the download speed if these files are downloaded too frequently. Since this is an open-source and free project I can't afford to pay for a hosted solution where we wouldn't have this problem.
 
