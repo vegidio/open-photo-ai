@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/vegidio/open-photo-ai/types"
@@ -92,11 +93,35 @@ func PoolOf(ep types.ExecutionProvider) types.MemoryPool {
 	}
 }
 
-// hasDiscreteGPU reports whether the machine has a GPU that reports its own VRAM. A card that reports none is either
-// integrated or unqueryable, and in both cases the host pool is the safer place to charge it.
+// hasDiscreteGPU reports whether the machine has a GPU that a device-pool provider could run on - which today means
+// an NVIDIA card, since CUDA and TensorRT are the only providers PoolOf charges to the device pool.
+//
+// It used to ask whether any GPU reported VRAM, and that is the wrong question on Linux: an AMD or Intel integrated
+// GPU reports the BIOS carve-out - 512 MiB to 2 GiB of system RAM set aside for it - as VRAM, and the driver reports
+// it whether or not anything can use it. The Radeon 680M in a Ryzen 7 7735U says 1 GiB. That made Auto on such a
+// machine charge every model to a 1 GiB "device" pool, with the 50% overhead surcharge on top, on a run that was
+// going to the CPU all along: the budget evicted models that would have fit comfortably in host memory, for a GPU
+// no provider in the chain could reach.
+//
+// The vendor check follows utils.isNvidia in matching the name as well, because the Windows CIM fallback fills the
+// vendor in from the driver's description and does not always say "NVIDIA".
 func hasDiscreteGPU() bool {
-	_, ok := LargestVRAMBytes()
-	return ok
+	gpus, err := GPUInfo()
+	if err != nil {
+		return false
+	}
+
+	for _, gpu := range gpus {
+		if gpu.Memory == 0 {
+			continue
+		}
+
+		if strings.EqualFold(gpu.Vendor, "nvidia") || strings.Contains(strings.ToLower(gpu.Name), "nvidia") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // DefaultBudgets derives the per-pool ceilings for this machine, honouring BudgetEnvVar when it is set.
