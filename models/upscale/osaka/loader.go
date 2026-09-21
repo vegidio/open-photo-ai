@@ -121,6 +121,14 @@ var graphs = []upscale.GraphSpec{
 // layer norms as ReduceMean/Pow/Sqrt/Div rather than the opset-17 LayerNormalization it would rather see. Taking that
 // suggestion costs 1.3% and moves the result further from CUDA rather than nearer, so it stays off; a re-export using
 // LayerNormalization would let TensorRT use INormalizationLayer and is the better way to answer that warning.
+//
+// WebGPU is excluded for all three graphs, and not for speed. The plugin uploads a graph's weights into GPU buffers,
+// and on the integrated GPUs it exists to serve those buffers are system RAM the driver pins outside any process's
+// accounting - so the DiT's 3.7 GB of int8 weights become 3.7 GB the kernel cannot reclaim, beside the copy ONNX
+// Runtime already holds, beside the two VAEs. On a 16 GB laptop that is not an out-of-memory error in the app but
+// the whole machine locking up, which is what it did. The other models are a few hundred megabytes at most and never
+// approach this; osaka is the only one that needs a budget the provider cannot yet be given, so it stays on the
+// providers that can hold it - or on the CPU.
 func profileFor(types.Precision) utils.EPProfile {
 	return utils.EPProfile{
 		DisableMemPattern:  true,
@@ -129,6 +137,7 @@ func profileFor(types.Precision) utils.EPProfile {
 		CudaPreferNHWC:     true,
 		CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
 		TrtOptions:         trtOptions,
+		ExcludeEPs:         []types.ExecutionProvider{types.ExecutionProviderWebGPU},
 	}
 }
 
