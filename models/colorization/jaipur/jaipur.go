@@ -36,7 +36,27 @@ var variant = &colorization.Variant{
 // one is not comparable. fastai's PixelShuffle_ICNR blurs with a ReplicationPad2d and MLProgram supports only
 // `constant` and `reflect` padding, so those five Pads have to be rewritten as a Slice+Concat of the border row and
 // column BEFORE tracing to get one CoreML partition. Same trap as mumbai.
-var profile = utils.Fp16Only(utils.EPProfile{CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU})
+// The two 3x3 convolutions at the top of the decoder - 303 channels in and out, at the full 560x560 - are the one
+// place in the published graphs where WebGPU's Vulkan path goes wrong: a second such convolution consuming the first
+// one's output hangs the GPU outright on AMD's Mesa driver (the kernel resets the ring, the session returns garbage or
+// blocks on the lost device). 303 is not a multiple of four, so the provider takes its unvectorised convolution
+// there; the same two layers at 304 channels are fine, as is either one alone. Until the plugin is fixed, or the
+// graph is re-exported with padded channels, they run on the CPU. That costs about half the graph's work - these two
+// layers are 55% of its multiply-adds - so jaipur gains far less from the GPU than the other families do, but it
+// gains rather than hangs.
+var webgpuOptions = map[string]string{
+	"forceCpuNodeNames": "/m/layers.10/layers.0/layers.0.0/Conv\n/m/layers.10/layers.1/layers.1.0/Conv",
+}
+
+func profile(precision types.Precision) utils.EPProfile {
+	p := utils.EPProfile{WebGPUOptions: webgpuOptions}
+
+	if precision == types.PrecisionFp16 {
+		p.CoreMLComputeUnits = utils.CoreMLComputeUnitsCPUAndGPU
+	}
+
+	return p
+}
 
 // New loads the jaipur session for the given operation.
 func New(

@@ -34,6 +34,24 @@ var Releases = map[string]Release{
 		},
 	},
 
+	// The WebGPU execution provider is a plugin library rather than part of the runtime archive above, and it comes
+	// from Microsoft directly: these are the official `onnxruntime-ep-webgpu` wheels from PyPI, repackaged unmodified
+	// into this table's archive layout by scripts/package_webgpu.py, which also prints the values below. The plugin
+	// is built against the ONNX Runtime plugin API and requires runtime 1.24.4 or later; a mismatch is reported when
+	// the library is registered, before any session is built.
+	//
+	// Nothing else is needed on the machine beyond the platform's GPU driver: Dawn, the WebGPU implementation, is
+	// linked in, and it talks Vulkan on Linux, Direct3D 12 on Windows and Metal on macOS.
+	"webgpu": {
+		Tag: "webgpu/0.3.0",
+		Archives: map[string]Artifact{
+			"darwin_arm64":  {Hash: "b21ab2d4412d6adb1379c67d577d5a1fdde59db6b3d2bda45c14b0046292f8e4", Size: 3363752, Lib: "libonnxruntime_providers_webgpu.dylib"},
+			"linux_amd64":   {Hash: "6bf63c9781e215be696c2107e41072c4ac65ae23615da328f7069b4f085bb482", Size: 4488808, Lib: "libonnxruntime_providers_webgpu.so"},
+			"windows_amd64": {Hash: "2a2dae0b2fbacc378dd3915bf4d3e2c70857c178d73048343143b1711489d6a7", Size: 2736304, Lib: "onnxruntime_providers_webgpu.dll"},
+			"windows_arm64": {Hash: "2e8c03a9ca226307560b576681462fc4699e6c303e8dedaa3613b10b2f254f4f", Size: 2833093, Lib: "onnxruntime_providers_webgpu.dll"},
+		},
+	},
+
 	"cuda": {
 		Tag: "cuda/13.3.0",
 

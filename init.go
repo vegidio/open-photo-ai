@@ -189,6 +189,10 @@ func Destroy() {
 	// exiting anyway, and the OS reclaims everything a moment later.
 	if internal.Registry.Close(shutdownDrainTimeout) {
 		ort.DestroyEnvironment()
+
+		// The plugin registration belonged to the environment that just went away; the next Initialize registers
+		// afresh with the next one.
+		utils.ResetWebGPU()
 		return
 	}
 

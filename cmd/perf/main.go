@@ -31,6 +31,7 @@ var providers = map[string]types.ExecutionProvider{
 	"cpu":      types.ExecutionProviderCPU,
 	"cuda":     types.ExecutionProviderCUDA,
 	"tensorrt": types.ExecutionProviderTensorRT,
+	"webgpu":   types.ExecutionProviderWebGPU,
 	"openvino": types.ExecutionProviderOpenVINO,
 	"coreml":   types.ExecutionProviderCoreML,
 }
@@ -96,7 +97,7 @@ func flags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name: "provider", Aliases: []string{"p"}, Value: "auto", Local: true,
-			Usage:            "execution provider: auto, cpu, cuda, tensorrt, openvino or coreml",
+			Usage:            "execution provider: auto, cpu, cuda, tensorrt, webgpu, openvino or coreml",
 			Validator:        oneOf(providers),
 			ValidateDefaults: true,
 		},
@@ -209,6 +210,16 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("failed to initialize the model runtime: %w", err)
 	}
 	defer opai.Destroy()
+
+	// The WebGPU plugin is a download of a few megabytes and needs no restart, so the tool installs it itself when
+	// the machine can use it and the run might reach it - unlike the NVIDIA libraries, which it expects the GUI to
+	// have set up. Installed for auto too, since that is the chain a user who never touched the setting is on.
+	if (cfg.provider == types.ExecutionProviderWebGPU || cfg.provider == types.ExecutionProviderAuto) &&
+		utils.IsWebGPUSupported() {
+		if err = utils.InitializeWebGPULib(ctx, printDownloadProgress); err != nil {
+			return fmt.Errorf("failed to prepare the WebGPU plugin: %w", err)
+		}
+	}
 
 	rec := &fallbackRecorder{}
 	opai.SetFallbackHandler(rec.record)

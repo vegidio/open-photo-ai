@@ -79,6 +79,12 @@ func PoolOf(ep types.ExecutionProvider) types.MemoryPool {
 	case types.ExecutionProviderCUDA, types.ExecutionProviderTensorRT:
 		return types.MemoryPoolDevice
 
+	// WebGPU's first users are integrated GPUs, whose "device" memory is a slice of the host's; and on a discrete
+	// card it is Dawn, not this registry, that decides what stays resident. The host pool's budget - derived from
+	// system RAM - is the one that actually bounds either.
+	case types.ExecutionProviderWebGPU:
+		return types.MemoryPoolHost
+
 	case types.ExecutionProviderAuto:
 		if runtime.GOOS != "darwin" && hasDiscreteGPU() {
 			return types.MemoryPoolDevice
