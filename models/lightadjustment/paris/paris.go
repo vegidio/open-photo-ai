@@ -82,10 +82,25 @@ var variant = &lightadjustment.Variant{
 // against -2.7% on the CPU provider, which is a wash rather than a setting.
 //
 // FastPrediction and AllowLowPrecisionAccumulationOnGPU measured within 0.8% in both precisions and are not set.
-var profile = utils.Fp16Only(utils.EPProfile{
-	CoreMLComputeUnits: utils.CoreMLComputeUnitsCPUAndGPU,
-	ExecutionMode:      utils.ExecutionModeSequential,
-})
+// The graph ends by raising the image to a per-image exponent the network predicted - a learned gamma, so the exponent
+// is a tensor rather than a constant, broadcast over the whole image. The WebGPU plugin fails to compile its shader
+// for that Pow ("Invalid ShaderModule"), and because that is a failure at run rather than at session build, nothing
+// downstream would catch it: the enhancement would simply fail. So the node runs on the CPU, which for one
+// elementwise op at the very end of the graph costs nothing measurable.
+var webgpuOptions = map[string]string{
+	"forceCpuNodeNames": "node_pow_1",
+}
+
+func profile(precision types.Precision) utils.EPProfile {
+	p := utils.EPProfile{WebGPUOptions: webgpuOptions}
+
+	if precision == types.PrecisionFp16 {
+		p.CoreMLComputeUnits = utils.CoreMLComputeUnitsCPUAndGPU
+		p.ExecutionMode = utils.ExecutionModeSequential
+	}
+
+	return p
+}
 
 // New loads the paris session for the given operation.
 func New(
