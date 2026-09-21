@@ -11,7 +11,7 @@ import * as types$0 from "../../github.com/vegidio/open-photo-ai/types/models.js
 
 /**
  * DownloadProgress is the payload of EventAppDownload. Emitted while a required runtime dependency
- * (ONNX Runtime, CUDA, cuDNN, TensorRT) is being fetched.
+ * (ONNX Runtime, CUDA, cuDNN, TensorRT, the WebGPU plugin) is being fetched.
  */
 export class DownloadProgress {
     "dependency": string;
@@ -159,6 +159,7 @@ export class SupportedEPs {
     "CUDA": boolean;
     "TensorRT": boolean;
     "CoreML": boolean;
+    "WebGPU": boolean;
 
     /** Creates a new SupportedEPs instance. */
     constructor($$source: Partial<SupportedEPs> = {}) {
@@ -170,6 +171,9 @@ export class SupportedEPs {
         }
         if (!("CoreML" in $$source)) {
             this["CoreML"] = false;
+        }
+        if (!("WebGPU" in $$source)) {
+            this["WebGPU"] = false;
         }
 
         Object.assign(this, $$source);

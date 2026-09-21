@@ -246,6 +246,7 @@ func TestResolveProviders(t *testing.T) {
 	trt := types.ExecutionProviderTensorRT
 	cuda := types.ExecutionProviderCUDA
 	coreml := types.ExecutionProviderCoreML
+	webgpu := types.ExecutionProviderWebGPU
 
 	tests := []struct {
 		name    string
@@ -263,19 +264,24 @@ func TestResolveProviders(t *testing.T) {
 		{
 			name: "auto walks the platform chain",
 			goos: "darwin", ep: types.ExecutionProviderAuto,
-			want: []types.ExecutionProvider{coreml, types.ExecutionProviderOpenVINO},
+			want: []types.ExecutionProvider{coreml, webgpu, types.ExecutionProviderOpenVINO},
 		},
 		{
 			name: "an excluded provider is dropped from auto",
 			goos: "linux", ep: types.ExecutionProviderAuto,
 			profile: EPProfile{ExcludeEPs: []types.ExecutionProvider{trt}},
-			want:    []types.ExecutionProvider{cuda, types.ExecutionProviderOpenVINO},
+			want:    []types.ExecutionProvider{cuda, webgpu, types.ExecutionProviderOpenVINO},
 		},
 		{
 			name: "an excluded explicit request falls to the rest of the chain, never to the CPU",
 			goos: "linux", ep: trt,
 			profile: EPProfile{ExcludeEPs: []types.ExecutionProvider{trt}},
-			want:    []types.ExecutionProvider{cuda, types.ExecutionProviderOpenVINO},
+			want:    []types.ExecutionProvider{cuda, webgpu, types.ExecutionProviderOpenVINO},
+		},
+		{
+			name: "an explicit WebGPU request yields just WebGPU, on every desktop platform",
+			goos: "darwin", ep: webgpu,
+			want: []types.ExecutionProvider{webgpu},
 		},
 		{
 			name: "a provider the platform lacks is an error",
