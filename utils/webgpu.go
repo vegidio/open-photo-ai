@@ -15,14 +15,23 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// IsWebGPUSupported reports whether the machine can plausibly drive the WebGPU provider: a GPU is present, and the
-// graphics API the plugin uses on this platform is there to reach it.
+// IsWebGPUSupported reports whether the machine can plausibly drive the WebGPU provider: the plugin is published for
+// this platform, a GPU is present, and the graphics API the plugin uses here is there to reach it.
 //
-// Like IsCudaSupported it is a proxy. The plugin enumerates adapters itself when it is registered, and a machine
-// that passes here may still publish no device - a Vulkan loader with no ICD behind it, say. That case is caught at
-// session build and falls to the next provider in the chain, having cost a download of a few megabytes rather than
-// the gigabyte the NVIDIA check guards against. So this errs towards yes.
+// Like IsCudaSupported it is a proxy for the rest. The plugin enumerates adapters itself when it is registered, and a
+// machine that passes here may still publish no device - a Vulkan loader with no ICD behind it, say. That case is
+// caught at session build and falls to the next provider in the chain, having cost a download of a few megabytes
+// rather than the gigabyte the NVIDIA check guards against. So the hardware half of this errs towards yes.
+//
+// The published-archive half does not, and it is the half that is not a heuristic: Microsoft builds the plugin for
+// four platforms and the app runs on six, so on Linux and Windows ARM there is nothing to install. Asking here rather
+// than letting InitializeWebGPULib fail is what keeps that from being an error the caller has to interpret - the GUI
+// would log a warning on every launch, and cmd/perf would refuse to benchmark at all.
 func IsWebGPUSupported() bool {
+	if _, published := internal.PinnedArchive("webgpu"); !published {
+		return false
+	}
+
 	gpus, err := internal.GPUInfo()
 	if err != nil || len(gpus) == 0 {
 		return false
@@ -92,9 +101,4 @@ func InitializeWebGPULib(ctx context.Context, onProgress types.DownloadProgress)
 	internal.Log().Info("WebGPU plugin ready", "lib", lib)
 
 	return nil
-}
-
-// IsWebGPUReady reports whether InitializeWebGPULib has run, i.e. whether the provider can be attached at all.
-func IsWebGPUReady() bool {
-	return utils.IsWebGPUReady()
 }

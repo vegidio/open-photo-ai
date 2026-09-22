@@ -217,7 +217,14 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	if (cfg.provider == types.ExecutionProviderWebGPU || cfg.provider == types.ExecutionProviderAuto) &&
 		utils.IsWebGPUSupported() {
 		if err = utils.InitializeWebGPULib(ctx, printDownloadProgress); err != nil {
-			return fmt.Errorf("failed to prepare the WebGPU plugin: %w", err)
+			// Fatal only when the run was asked for that provider. Under auto it is one processor out of several,
+			// and a failed download - an offline machine, a throttled release host - must not take a CPU benchmark
+			// down with it.
+			if cfg.provider == types.ExecutionProviderWebGPU {
+				return fmt.Errorf("failed to prepare the WebGPU plugin: %w", err)
+			}
+
+			fmt.Fprintf(os.Stderr, "warning: the WebGPU plugin could not be prepared, so auto will not reach it: %v\n", err)
 		}
 	}
 
