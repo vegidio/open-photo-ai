@@ -34,7 +34,8 @@ func main() {
 func run(ctx context.Context) error {
 	in := flag.String("in", "", "path to the input image (required)")
 	out := flag.String("out", ".", "directory to write the results into")
-	eps := flag.String("ep", "cpu", "comma-separated execution providers: auto, cpu, coreml, cuda, tensorrt, openvino")
+	eps := flag.String("ep", "cpu", "comma-separated execution providers: auto, cpu, coreml, cuda, tensorrt, webgpu, "+
+		"openvino")
 	precisions := flag.String("precision", "fp32,fp16", "comma-separated precisions: fp32, fp16, int8")
 	quality := flag.Int("quality", 90, "JPEG quality of the written images")
 
@@ -72,6 +73,16 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize the AI runtime: %w", err)
 	}
 	defer opai.Destroy()
+
+	// The WebGPU plugin is a few megabytes and needs no restart, so the CLI installs it itself rather than expecting
+	// the GUI to have done it - otherwise `-ep webgpu` would accept the flag and quietly produce CPU results, which
+	// is the one outcome a tool for comparing providers must not have. The NVIDIA libraries are deliberately not
+	// handled this way: they are gigabytes, and the GUI asks before fetching them.
+	if utils.IsWebGPUSupported() {
+		if err = utils.InitializeWebGPULib(ctx, nil); err != nil {
+			fmt.Printf("Failed to prepare the WebGPU plugin, continuing without it: %v\n", err)
+		}
+	}
 
 	inputData, err := utils.LoadImage(*in)
 	if err != nil {
