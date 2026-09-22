@@ -24,9 +24,10 @@ const webgpuRegistration = "webgpu"
 // it belongs to the ONNX environment that was up when the library was registered: the devices are owned by that
 // environment and die with it, which is why ResetWebGPU exists and is called from Destroy.
 var (
-	webgpuMu      sync.Mutex
-	webgpuLib     string
-	webgpuDevices []ort.EpDevice
+	webgpuMu         sync.Mutex
+	webgpuLib        string
+	webgpuRegistered bool
+	webgpuDevices    []ort.EpDevice
 )
 
 // webgpuRunMu serializes Run across every session the WebGPU provider is attached to. Two sessions running at once on
@@ -48,20 +49,13 @@ func SetWebGPULibrary(lib string) {
 	webgpuLib = lib
 }
 
-// IsWebGPUReady reports whether SetWebGPULibrary has run, i.e. whether the provider can be attached at all.
-func IsWebGPUReady() bool {
-	webgpuMu.Lock()
-	defer webgpuMu.Unlock()
-
-	return webgpuLib != ""
-}
-
 // ResetWebGPU forgets the plugin registration. It has to be called when the ONNX environment is torn down, because
 // the devices it holds were owned by that environment; the library path survives, since the files on disk do.
 func ResetWebGPU() {
 	webgpuMu.Lock()
 	defer webgpuMu.Unlock()
 
+	webgpuRegistered = false
 	webgpuDevices = nil
 }
 
@@ -78,7 +72,11 @@ func webgpuDevice() (ort.EpDevice, error) {
 		return ort.EpDevice{}, errors.Wrap(errProviderUnavailable, "the WebGPU plugin is not installed")
 	}
 
-	if webgpuDevices == nil {
+	// Tracked by its own flag rather than by the device slice being empty. A machine whose loader is present but
+	// whose driver Dawn cannot use registers successfully and publishes nothing, and keying off the slice would
+	// register the library again on the next model - which the runtime rejects as a duplicate, turning a quiet
+	// "no GPU here" into a registration error on every session build.
+	if !webgpuRegistered {
 		if err := ort.RegisterExecutionProviderLibrary(webgpuRegistration, webgpuLib); err != nil {
 			return ort.EpDevice{}, errors.Wrap(err, "failed to register the WebGPU plugin")
 		}
@@ -94,6 +92,7 @@ func webgpuDevice() (ort.EpDevice, error) {
 			}
 		}
 
+		webgpuRegistered = true
 		internal.Log().Info("WebGPU plugin registered", "lib", webgpuLib, "devices", len(webgpuDevices))
 	}
 

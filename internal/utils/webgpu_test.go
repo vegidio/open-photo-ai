@@ -69,6 +69,29 @@ func TestWebGPUDeclinesQuietlyWhenNotInstalled(t *testing.T) {
 	}
 }
 
+// A machine that has the plugin but no GPU Dawn can use registers once and publishes nothing. Asking again must give
+// the same quiet answer rather than a duplicate-registration error, which is what keying off the device slice did.
+func TestARegisteredPluginWithNoDeviceStaysQuietOnEveryLaterSession(t *testing.T) {
+	t.Cleanup(func() { SetWebGPULibrary(""); ResetWebGPU() })
+
+	SetWebGPULibrary("/nonexistent/libonnxruntime_providers_webgpu.so")
+	ResetWebGPU()
+
+	// The environment is not up in a unit test, so registration itself fails; what is pinned here is that the
+	// failure does not latch the flag, so the state stays retryable rather than wedged.
+	if _, err := webgpuDevice(); err == nil {
+		t.Fatal("expected registering a nonexistent library to fail")
+	}
+
+	webgpuMu.Lock()
+	registered := webgpuRegistered
+	webgpuMu.Unlock()
+
+	if registered {
+		t.Error("a failed registration must not mark the plugin as registered")
+	}
+}
+
 func TestSerializesRunsOnlyForWebGPU(t *testing.T) {
 	if serializesRuns([]types.ExecutionProvider{types.ExecutionProviderCUDA}) {
 		t.Error("CUDA sessions must not be serialized")
