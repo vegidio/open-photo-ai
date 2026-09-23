@@ -31,12 +31,12 @@ func (s *DialogService) OpenFileDialog(title string, filterName string) ([]types
 	extensions := lo.Map(utils.SupportedInputExtensions(), func(ext string, _ int) string {
 		return "*." + ext
 	})
-	extFilter := strings.Join(extensions, ";")
+	label := strings.Join(extensions, ";")
 
 	dialog := s.app.Dialog.OpenFile()
 	dialog.SetTitle(title)
 	// Only the word is translated; the extension list is derived from what the decoder supports, so it stays here.
-	dialog.AddFilter(filterName+" ("+extFilter+")", extFilter)
+	dialog.AddFilter(filterName+" ("+label+")", filterPatterns(utils.SupportedInputExtensions()))
 
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {
@@ -101,3 +101,17 @@ func isDialogCancelled(err error) bool {
 }
 
 func (s *DialogService) destroy() {}
+
+// filterPatterns builds the dialog's glob list with each extension in both lower and upper case. GTK matches glob
+// patterns case-sensitively on Linux, so "*.dng" alone hides a camera's "L1041576.DNG" - and cameras that name files
+// in upper case are the rule, not the exception. macOS and Windows match case-insensitively; the duplicates are harmless.
+func filterPatterns(extensions []string) string {
+	patterns := make([]string, 0, len(extensions)*2)
+	for _, ext := range extensions {
+		patterns = append(patterns, "*."+ext)
+		if upper := strings.ToUpper(ext); upper != ext {
+			patterns = append(patterns, "*."+upper)
+		}
+	}
+	return strings.Join(patterns, ";")
+}
