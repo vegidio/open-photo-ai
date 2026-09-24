@@ -2,6 +2,11 @@
 
 Usage: python package_webgpu.py <version>   (needs py7zr; run from an empty output dir)
 Prints the Size and SHA-256 of each archive, i.e. the values internal/artifacts.go pins.
+
+Every shared library the wheel ships beside the plugin is carried along with it. On Windows those are dxil.dll and
+dxcompiler.dll, the DirectX shader compiler Dawn's Direct3D 12 backend loads from the plugin's own directory; without
+them the plugin registers and lists its adapters but every device request fails ("DynamicLib.Open: dxil.dll"), so
+every model falls back to the CPU. The Linux and macOS wheels ship no companions, so their archives are unaffected.
 """
 import hashlib, io, json, sys, urllib.request, zipfile, py7zr
 
@@ -24,6 +29,9 @@ for u in meta["urls"]:
     out = f"webgpu_{platform}.7z"
     with py7zr.SevenZipFile(out, "w") as a:
         a.writestr(z.read(names[lib]), lib)
+        for name in sorted(names):
+            if name != lib and (name.endswith((".dll", ".so", ".dylib")) or ".so." in name):
+                a.writestr(z.read(names[name]), name)
         for extra in ("LICENSE", "LICENSE.txt", "README.md", "ThirdPartyNotices.txt"):
             if extra in names: a.writestr(z.read(names[extra]), extra)
     blob = open(out, "rb").read()

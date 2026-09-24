@@ -96,9 +96,36 @@ func InitializeWebGPULib(ctx context.Context, onProgress types.DownloadProgress)
 		return err
 	}
 
+	// Checked before the library is recorded: registration would succeed without these and publish its devices, and
+	// the failure would only surface at every session build as a CPU fallback. Reported here it is one clear error.
+	if missing := missingWebGPUCompanions(libDir, runtime.GOOS); len(missing) > 0 {
+		return errors.Newf("the WebGPU plugin is missing %s, which Direct3D 12 needs to compile its shaders",
+			strings.Join(missing, ", "))
+	}
+
 	lib := filepath.Join(libDir, pinned.Lib)
 	utils.SetWebGPULibrary(lib)
 	internal.Log().Info("WebGPU plugin ready", "lib", lib)
 
 	return nil
+}
+
+// webgpuCompanions are the libraries the plugin loads at run time from its own directory, per platform. On Windows
+// that is the DirectX shader compiler Dawn's Direct3D 12 backend needs to create a device at all; Vulkan and Metal
+// compile shaders in the driver, so Linux and macOS have none.
+var webgpuCompanions = map[string][]string{
+	"windows": {"dxil.dll", "dxcompiler.dll"},
+}
+
+// missingWebGPUCompanions lists the companion libraries for goos that are not in dir.
+func missingWebGPUCompanions(dir, goos string) []string {
+	var missing []string
+
+	for _, name := range webgpuCompanions[goos] {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			missing = append(missing, name)
+		}
+	}
+
+	return missing
 }
