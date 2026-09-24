@@ -7,6 +7,7 @@ require (
 	github.com/bodgit/sevenzip v1.6.5
 	github.com/cockroachdb/errors v1.14.0
 	github.com/disintegration/imaging v1.6.2
+	github.com/gen2brain/jpegxl v0.6.0
 	github.com/samber/lo v1.53.0
 	github.com/vegidio/avif-go v0.0.0-20260715095249-dbb32e4e0094
 	github.com/vegidio/go-sak v0.0.0-20260912200321-0e6aa179424f
@@ -32,6 +33,7 @@ require (
 	github.com/dgraph-io/badger/v4 v4.9.6 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.4.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/getsentry/sentry-go v0.46.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -51,6 +53,7 @@ require (
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/stangelandcl/ppmd v0.1.1 // indirect
+	github.com/tetratelabs/wazero v1.12.0 // indirect
 	github.com/ulikunitz/xz v0.5.16 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

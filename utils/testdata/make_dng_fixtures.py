@@ -3,11 +3,14 @@
   lossy_linear_raw.dng   64x48 LinearRaw, 3x8-bit, lossy JPEG tiles (compression 34892) of 32x32, like Adobe DNG
                          Converter's lossy DNGs and Lightroom Smart Previews. OpcodeList2 maps plane 0 with a linear
                          polynomial and plane 1 with a quadratic; plane 2 has none, so it takes LibRaw's sRGB fallback.
+  jxl_linear_raw.dng     64x48 LinearRaw, 3x16-bit, lossless JPEG XL tiles (compression 52546) of 32x32, tagged linear
+                         Rec.2100 like DxO PureRAW's: that colour encoding is what exposed a use-after-free in
+                         gen2brain/jpegxl's WebAssembly decoder, which a plain sRGB tile does not.
 
-IFD0 is an 8x8 RGB thumbnail and the main image lives in SubIFD 0, as in real files. Samples follow sample8(), and the
-bottom tile row is padded past the image edge.
+IFD0 is an 8x8 RGB thumbnail and the main image lives in SubIFD 0, as in real files. Samples follow sample8() and
+sample16(), and the bottom tile row is padded past the image edge.
 
-Usage: python3 make_dng_fixtures.py   (run in this directory; needs cjpeg from libjpeg-turbo)
+Usage: python3 make_dng_fixtures.py   (run in this directory; needs cjpeg from libjpeg-turbo and cjxl from libjxl)
 """
 import os
 import struct
@@ -21,6 +24,19 @@ SHORT, LONG, RATIONAL, SRATIONAL, ASCII, BYTE, UNDEFINED = 3, 4, 5, 10, 2, 1, 7
 def sample8(x, y):
     # Smooth gradients, so lossy JPEG stays within a few levels of the source.
     return x * 255 // (W - 1), y * 255 // (H - 1), (x + y) * 255 // (W + H - 2)
+
+
+def sample16(x, y):
+    return (x * 512 + y) & 0xFFFF, (40000 - x * 300 - y * 7) & 0xFFFF, (y * 1000 + x) & 0xFFFF
+
+
+def jxl_tile(tx, ty, td):
+    rows = [struct.pack(">3H", *sample16(min(x, W - 1), min(y, H - 1)))
+            for y in range(ty * T, ty * T + T) for x in range(tx * T, tx * T + T)]
+    open(f"{td}/t.ppm", "wb").write(f"P6\n{T} {T}\n65535\n".encode() + b"".join(rows))
+    subprocess.run(["cjxl", f"{td}/t.ppm", f"{td}/t.jxl", "-d", "0", "-e", "3", "-x", "color_space=RGB_D65_202_Rel_Lin",
+                    "--quiet"], check=True)
+    return open(f"{td}/t.jxl", "rb").read()
 
 
 def jpeg_tile(tx, ty, td):
@@ -60,7 +76,7 @@ def ifd_bytes(entries, base, next_ifd=0):
     return bytes(out + struct.pack("<I", next_ifd) + extra)
 
 
-def build(path, tiles, main_tags):
+def build(path, tiles, main_tags, dng_version=(1, 4, 0, 0)):
     data = bytearray(b"II*\0\0\0\0\0")
     thumb_off = len(data)
     data += bytes([128] * 8 * 8 * 3)
@@ -82,7 +98,7 @@ def build(path, tiles, main_tags):
         (254, LONG, [1]), (256, LONG, [8]), (257, LONG, [8]), (258, SHORT, [8, 8, 8]), (259, SHORT, [1]),
         (262, SHORT, [2]), (271, ASCII, "OPAI"), (272, ASCII, "DNG Fixture"), (273, LONG, [thumb_off]),
         (277, SHORT, [3]), (278, LONG, [8]), (279, LONG, [8 * 8 * 3]), (330, LONG, [sub_off]),
-        (50706, BYTE, [1, 4, 0, 0]), (50707, BYTE, [1, 4, 0, 0]), (50708, ASCII, "OPAI DNG Fixture"),
+        (50706, BYTE, list(dng_version)), (50707, BYTE, [1, 4, 0, 0]), (50708, ASCII, "OPAI DNG Fixture"),
         (50721, SRATIONAL, ident), (50778, SHORT, [21]), (50728, RATIONAL, [(1, 1)] * 3),
     ], ifd0_off)
     struct.pack_into("<I", data, 4, ifd0_off)
@@ -95,8 +111,12 @@ def build(path, tiles, main_tags):
 tiles_across, tiles_down = W // T, -(-H // T)
 with tempfile.TemporaryDirectory() as td:
     lossy = [jpeg_tile(tx, ty, td) for ty in range(tiles_down) for tx in range(tiles_across)]
+    jxl = [jxl_tile(tx, ty, td) for ty in range(tiles_down) for tx in range(tiles_across)]
 opcodes = map_polynomial(0, [0.0, 1.0]) + map_polynomial(1, [0.0, 0.0, 1.0])
 build("lossy_linear_raw.dng", lossy, [
     (258, SHORT, [8, 8, 8]), (259, SHORT, [34892]), (50717, SHORT, [255, 255, 255]),
     (51009, UNDEFINED, struct.pack(">I", 2) + opcodes),
 ])
+build("jxl_linear_raw.dng", jxl, [
+    (258, SHORT, [16, 16, 16]), (259, SHORT, [52546]), (50717, SHORT, [65535, 65535, 65535]),
+], dng_version=(1, 7, 0, 0))

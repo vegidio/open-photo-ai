@@ -2,17 +2,26 @@ package utils
 
 import (
 	"bytes"
+	"image"
 	"math"
 	"os"
 	"testing"
 )
 
 // The fixtures are built by testdata/make_dng_fixtures.py; see it for their layout.
-const lossyFixture = "testdata/lossy_linear_raw.dng"
+const (
+	lossyFixture = "testdata/lossy_linear_raw.dng"
+	jxlFixture   = "testdata/jxl_linear_raw.dng"
+)
 
 // Mirrors sample8 in make_dng_fixtures.py.
 func lossyFixtureSample(x, y int) [3]int {
 	return [3]int{x * 255 / 63, y * 255 / 47, (x + y) * 255 / 110}
+}
+
+// Mirrors sample16 in make_dng_fixtures.py.
+func jxlFixtureSample(x, y int) [3]uint16 {
+	return [3]uint16{uint16(x*512 + y), uint16(40000 - x*300 - y*7), uint16(y*1000 + x)}
 }
 
 // expandedMain expands path and returns the rewritten file with its main image's directory.
@@ -124,6 +133,34 @@ func TestExpandLossyDNGMapsSamplesThroughItsCurves(t *testing.T) {
 	})
 }
 
+// JPEG XL tiles are 16-bit and linear already, and lossless in the fixture, so every sample must come back exactly.
+func TestExpandJXLDNGDecompressesTilesExactly(t *testing.T) {
+	f, main := expandedMain(t, jxlFixture)
+
+	forEachPixel(t, f, main, func(x, y int, got [3]uint16) {
+		if want := jxlFixtureSample(x, y); got != want {
+			t.Fatalf("pixel (%d,%d) = %v, want %v", x, y, got, want)
+		}
+	})
+}
+
+func TestExpandJXLDNGRejectsLowBitDepthStreams(t *testing.T) {
+	original := decodeJXL
+	t.Cleanup(func() { decodeJXL = original })
+	decodeJXL = func([]byte) (image.Image, error) {
+		return image.NewNRGBA(image.Rect(0, 0, 32, 32)), nil
+	}
+
+	data, err := os.ReadFile(jxlFixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := expandCompressedDNG(data); err == nil {
+		t.Fatal("expected an 8-bit decode of a 16-bit JPEG XL DNG to be rejected")
+	}
+}
+
 func TestSRGBToLinearCurveMatchesTheSRGBTransfer(t *testing.T) {
 	curve := srgbToLinearCurve()
 
@@ -188,18 +225,22 @@ func TestExpandCompressedDNGRejectsAMismatchedBitDepth(t *testing.T) {
 	}
 }
 
-func TestLoadImageDecodesLossyDNG(t *testing.T) {
-	img, err := LoadImage(lossyFixture)
-	if err != nil {
-		t.Fatalf("LoadImage failed: %v", err)
-	}
+func TestLoadImageDecodesCompressedDNGs(t *testing.T) {
+	for _, path := range []string{lossyFixture, jxlFixture} {
+		t.Run(path, func(t *testing.T) {
+			img, err := LoadImage(path)
+			if err != nil {
+				t.Fatalf("LoadImage failed: %v", err)
+			}
 
-	if b := img.Pixels.Bounds(); b.Dx() != 64 || b.Dy() != 48 {
-		t.Fatalf("decoded %dx%d, want 64x48", b.Dx(), b.Dy())
-	}
+			if b := img.Pixels.Bounds(); b.Dx() != 64 || b.Dy() != 48 {
+				t.Fatalf("decoded %dx%d, want 64x48", b.Dx(), b.Dy())
+			}
 
-	// The fixture is a gradient, so a decode that came out flat - all black, say - is as wrong as an error.
-	if img.Pixels.At(0, 0) == img.Pixels.At(63, 47) {
-		t.Fatal("decoded image is flat")
+			// The fixtures are gradients, so a decode that came out flat - all black, say - is as wrong as an error.
+			if img.Pixels.At(0, 0) == img.Pixels.At(63, 47) {
+				t.Fatal("decoded image is flat")
+			}
+		})
 	}
 }

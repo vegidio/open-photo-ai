@@ -15,10 +15,11 @@ import (
 
 // Some DNGs store their main image in a compression the bundled LibRaw was not built to read. Lossy DNG (compression
 // 34892: Adobe DNG Converter's and Lightroom's "lossy compressed" DNGs, and Smart Previews) needs LibRaw compiled with
-// libjpeg, which raw-go's build is not, so LibRaw does not even recognise those files. Such a file is rewritten here,
-// in memory, with its tiles decompressed and every other tag left alone; LibRaw then reads it as the ordinary
-// uncompressed DNG it has always supported, and keeps doing the linearisation, colour matrices and white balance
-// itself.
+// libjpeg, which raw-go's build is not, so LibRaw does not even recognise those files. JPEG XL DNG (compression 52546,
+// DNG 1.7: DxO PureRAW's output, Lightroom's JPEG XL DNGs) needs LibRaw built with the Adobe DNG SDK, which it is not
+// either. Such a file is rewritten here, in memory, with its tiles decompressed and every other tag left alone; LibRaw
+// then reads it as the ordinary uncompressed DNG it has always supported, and keeps doing the linearisation, colour
+// matrices and white balance itself.
 //
 // Lossy DNG samples are 8-bit and not linear: the file maps them to linear values with a per-channel polynomial in
 // its OpcodeList2, which LibRaw applies only inside its lossy-DNG reader. So they are mapped here the same way, and
@@ -27,6 +28,7 @@ import (
 const (
 	tiffCompressionNone      = 1
 	tiffCompressionLossyJPEG = 34892
+	tiffCompressionJPEGXL    = 52546
 
 	tagNewSubfileType   = 254
 	tagImageWidth       = 256
@@ -79,6 +81,11 @@ var dngCodecs = map[uint32]segmentCodec{
 		decode: func(data []byte) (image.Image, error) {
 			return jpeg.Decode(bytes.NewReader(data))
 		},
+	},
+	tiffCompressionJPEGXL: {
+		name:   "JPEG XL",
+		depth:  16,
+		decode: func(data []byte) (image.Image, error) { return decodeJXL(data) },
 	},
 }
 
