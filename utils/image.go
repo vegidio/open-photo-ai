@@ -63,9 +63,17 @@ func LoadImage(path string) (*types.ImageData, error) {
 	// correctly — branch on the extension and decode them explicitly with raw-go.
 	var img image.Image
 	if IsRawExtension(path) {
-		rawMu.Lock()
-		img, err = raw.Decode(source)
-		rawMu.Unlock()
+		// raw.Decode reads the whole file into memory anyway, so reading it here first costs nothing extra.
+		var data []byte
+		data, err = io.ReadAll(source)
+		if err == nil && extensionOf(path) == "dng" {
+			data, err = expandCompressedDNG(data)
+		}
+		if err == nil {
+			rawMu.Lock()
+			img, err = raw.Decode(bytes.NewReader(data))
+			rawMu.Unlock()
+		}
 	} else {
 		img, _, err = image.Decode(source)
 	}
