@@ -32,3 +32,7 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+
+# Build output (see justfile)
+/build/
+CLAUDE.md

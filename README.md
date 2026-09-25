@@ -125,27 +125,6 @@ All enhancements available here come from open-source AI models that were adapte
 
 *Verdict*: start with **Tokyo** if you have a powerful GPU, then try **Kyoto** if it's taking too long. Reach for **Osaka** only when the others leave the image looking soft, and you can afford the wait.
 
-## 🛣️ Roadmap
-
-These are the features I plan to implement in the future, in no particular order:
-
-- [x] Model selection and enhancement customization.
-- [x] Support different preview layouts.
-- [x] Add a new model for light adjustment.
-- [x] Add app preferences so you don't have to configure them every time.
-- [x] Enable TensorRT acceleration when pre-warm-up is implemented.
-- [x] Simplify the app installation using packages and installers.
-- [x] Add a new model for color balance.
-- [x] Add new models for denoise, sharpening.
-- [x] Crop and rotate images in the GUI.
-- [x] Attempt to include diffusion-based models (this will be hard!)
-- [x] Internationalization to other languages.
-- [x] Add new models to colorize black and white photos.
-- [x] Rework the architecture of some models to improve performance.
-- [ ] Add a new model to fix imperfections and remove objects from photos.
-- [ ] CLI implementation.
-- [ ] Improve documentation for the library.
-
 ## 💣 Troubleshooting
 
 ### "App Is Damaged/Blocked..." (Windows & macOS only)
@@ -158,15 +137,6 @@ To bypass this, open the Terminal and run one of the commands below (depending o
 
 - Windows: `Unblock-File -Path <path-to-app>`
 - macOS: `xattr -d com.apple.quarantine <path-to-app>`
-
-### "Error loading libraries: libwebkitgtk-6.0.so..." (Linux only)
-
-To run the GUI version of the app on Linux, you will need to install the following dependencies: `libgtk` and `libwebkitgtk`. To do that, open your terminal and run the following command, depending on your distribution:
-
-- Debian/Ubuntu: `sudo apt install libgtk-4-1 libwebkitgtk-6.0-4`
-- Fedora 40+: `sudo dnf install gtk4 webkitgtk6.0`
-- Arch Linux: `sudo pacman -S gtk4 webkitgtk-6.0`
-- openSUSE: `sudo zypper install libgtk-4-1 libwebkitgtk-6_0-4`
 
 ### The app is taking too long to download dependencies
 
@@ -197,6 +167,7 @@ Errors reported by e-mail or other channels will not be tracked, so please make 
 To build this project, you will need the following dependencies installed in your computer:
 
 - [Rust](https://rust-lang.org/tools/install)
+- [Just](https://just.systems/man/en/installation.html)
 
 If you want to build the GUI you will also need:
 
@@ -208,18 +179,18 @@ If you want to build the GUI you will also need:
 With all the dependencies installed, in the project's root folder run the command:
 
 ```bash
-task <interface> arch=<architecture>
+just <interface> <architecture>
 ```
 
 Where:
 
 - `<interface>`: can be `cli` or `gui`.
-- `<architecture>`: can be `amd64` or `arm64`.
+- `<architecture>`: can be `amd64` or `arm64` (optional).
 
 For example, if I wanted to build a GUI version of the app, on architecture AMD64, I would run the command:
 
 ```bash
-task gui arch=amd64
+just gui amd64
 ```
 
 ## 📝 License

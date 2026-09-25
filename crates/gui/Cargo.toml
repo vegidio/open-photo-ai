@@ -14,6 +14,12 @@ description = "Tauri 2 front end for Open Photo AI."
 name = "gui_lib"
 crate-type = ["lib"]
 
+# Named explicitly so Cargo itself emits `OpenPhotoAI[.exe]`, the name the justfile ships, instead of relying on the
+# Tauri CLI to rename `gui`. Must match `mainBinaryName` in tauri.conf.json.
+[[bin]]
+name = "OpenPhotoAI"
+path = "src/main.rs"
+
 [lints]
 workspace = true
 
