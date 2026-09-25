@@ -1,0 +1,392 @@
+{
+    "common": {
+        "cancel": "Batal",
+        "save": "Simpan",
+        "close": "Tutup",
+        "apply": "Terapkan",
+        "reset": "Atur ulang",
+        "yes": "Ya",
+        "no": "Tidak",
+        "or": "ATAU",
+        "previewAlt": "Pratinjau"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "Pengaturan",
+        "pages": {
+            "general": {
+                "title": "Umum",
+                "description": "Bahasa, area pratinjau, dan diagnostik aplikasi."
+            },
+            "performance": {
+                "title": "Performa",
+                "description": "Pilih prosesor yang menjalankan model AI."
+            },
+            "enhancements": {
+                "title": "Peningkatan",
+                "description": "Model awal setiap peningkatan, dan apakah Autopilot boleh menyarankannya. Yang dimatikan tetap bisa ditambahkan secara manual."
+            },
+            "export": {
+                "title": "Ekspor",
+                "description": "Kualitas untuk format lossy. Nilai lebih rendah menghasilkan file lebih kecil; skalanya tidak sebanding antarformat."
+            }
+        },
+        "app": {
+            "language": {
+                "title": "Bahasa",
+                "description": "Diterapkan saat Anda mengeklik Simpan."
+            },
+            "background": {
+                "title": "Latar belakang pratinjau",
+                "description": "Ditampilkan di belakang gambar di area pratinjau.",
+                "particles": "Partikel",
+                "dotted": "Titik"
+            },
+            "logs": {
+                "title": "Log",
+                "description": "Berguna saat melaporkan masalah.",
+                "button": "Tampilkan log"
+            },
+            "analytics": {
+                "title": "Analitik",
+                "description": "Kirim data penggunaan anonim. Gambar atau data pribadi tidak pernah dikumpulkan."
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "Prosesor AI",
+                "auto": "Otomatis"
+            },
+            "processor": {
+                "auto": {
+                    "description": "Mendeteksi perangkat keras mesin ini dan menggunakan prosesor tercepat yang didukungnya."
+                },
+                "tensorrt": {
+                    "description": "Opsi tercepat pada GPU NVIDIA. Saat setiap model pertama kali dijalankan, mesin yang dioptimalkan dibuat, yang memakan waktu beberapa menit; proses berikutnya langsung dimulai."
+                },
+                "cuda": {
+                    "description": "Menjalankan model di GPU NVIDIA tanpa langkah build. Lebih lambat daripada TensorRT setelah mesinnya dibuat."
+                },
+                "coreml": {
+                    "description": "Menjalankan model di Apple Neural Engine dan GPU. Jauh lebih cepat daripada CPU, meski tidak semua model dapat menggunakannya."
+                },
+                "cpu": {
+                    "description": "Berfungsi di mesin apa pun tanpa GPU yang didukung. Peningkatan akan memakan waktu jauh lebih lama."
+                }
+            },
+            "recommended": "Disarankan"
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF"
+            },
+            "heic": {
+                "title": "HEIC"
+            },
+            "jpeg": {
+                "title": "JPEG"
+            },
+            "webp": {
+                "title": "WEBP"
+            },
+            "valueLabel": "Kualitas {{format}}"
+        },
+        "enhancements": {
+            "columns": {
+                "enhancement": "Peningkatan",
+                "model": "Model bawaan",
+                "autopilot": "Autopilot"
+            },
+            "autopilotLabel": "Autopilot: {{name}}"
+        },
+        "reset": "Kembalikan ke bawaan"
+    },
+    "navbar": {
+        "about": "Tentang",
+        "updateAvailable": "Pembaruan Tersedia",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Dimensi",
+            "original": "Asli",
+            "cropped": "Terpotong",
+            "output": "Keluaran"
+        },
+        "about_dialog": {
+            "iconAlt": "Ikon Aplikasi",
+            "version": "Versi {{version}}"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Autopilot",
+        "analysing": "Menganalisis gambar...",
+        "exportImage_other": "Ekspor gambar",
+        "noPreview": "Pratinjau tidak tersedia",
+        "zoomCropAlt": "Zoom & Potong"
+    },
+    "drawer": {
+        "addImages": "Tambah gambar",
+        "showImages": "Tampilkan gambar",
+        "hideImages": "Sembunyikan gambar",
+        "selectAll": "Pilih semua",
+        "unselectAll": "Batalkan semua pilihan",
+        "selectImage": "Pilih {{name}}",
+        "zoom": "Zoom",
+        "zoomOut": "Perkecil",
+        "zoomIn": "Perbesar",
+        "zoomScale": "{{scale}}x",
+        "preview": {
+            "full": "Penuh",
+            "sideBySide": "Berdampingan",
+            "split": "Terbagi"
+        }
+    },
+    "faces": {
+        "selectFaces": "Pilih wajah",
+        "toggleFace": "Alihkan wajah {{number}}",
+        "hint": "Klik kotak untuk menyertakan atau melewati wajah.",
+        "apply_other": "Terapkan ke {{enabled}} dari {{count}} wajah"
+    },
+    "crop": {
+        "title": "Potong/Putar",
+        "aspectRatio": "Rasio Aspek",
+        "zoomHint": "Anda dapat menggunakan roda mouse atau cubitan trackpad untuk memperbesar dan memperkecil gambar di sebelah kiri.",
+        "ratio": {
+            "free": "Bebas",
+            "square": "Persegi"
+        },
+        "width": "l",
+        "height": "t",
+        "open": "Pangkas/Putar",
+        "rotate": "Putar 90 derajat",
+        "flipHorizontal": "Balik horizontal",
+        "flipVertical": "Balik vertikal",
+        "swap": "Tukar lebar dan tinggi"
+    },
+    "export": {
+        "title": "Ekspor",
+        "settings": {
+            "title": "Pengaturan Ekspor",
+            "filename": {
+                "title": "Nama file",
+                "prefix": "Awalan",
+                "suffix": "Akhiran",
+                "allowOverwrite": "Izinkan menimpa?",
+                "sameLocationOverwrite": "Jika lokasi dan ekstensi sama, file asli Anda akan ditimpa. Ini tidak dapat dibatalkan.",
+                "sameLocationRename": "Jika lokasi dan ekstensi sama, file baru akan diberi nomor alih-alih menimpa file asli."
+            },
+            "format": {
+                "title": "Format",
+                "preserve": "Pertahankan"
+            },
+            "quality": {
+                "title": "Kualitas"
+            },
+            "location": {
+                "title": "Simpan ke",
+                "original": "Folder asli",
+                "browse": "Telusuri..."
+            },
+            "abort": "Hentikan",
+            "exportAgain": "Ekspor lagi"
+        },
+        "queue": {
+            "title": "Antrean ({{count}})",
+            "pipelineOrder": "dalam urutan pipeline",
+            "queued": "Dalam antrean",
+            "analysing": "Menganalisis",
+            "enhancing": "Menyempurnakan",
+            "writing": "Menulis",
+            "done": "Selesai",
+            "failed": "Gagal",
+            "writeFailed": "Tidak dapat menulis {{name}} ke {{folder}}.",
+            "enhanceFailed": "Tidak dapat menyempurnakan gambar ini.",
+            "unreadable": "Tidak dapat membaca gambar ini.",
+            "analysisFailed": "Autopilot tidak dapat menganalisis gambar ini.",
+            "copied": "Disalin ke papan klip"
+        },
+        "summary": {
+            "ready_other": "{{count}} file siap · belum ada yang ditulis",
+            "running_other": "{{written}} dari {{count}} ditulis · {{remaining}} tersisa",
+            "ended_other": "{{written}} dari {{count}} ditulis",
+            "endedFailed_other": "{{written}} dari {{count}} ditulis, {{failed}} gagal"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Pilih Gambar",
+            "selectDirectory": "Pilih Folder",
+            "imagesFilter": "Gambar"
+        },
+        "tensorRT": {
+            "title": "TensorRT Terdeteksi",
+            "logoAlt": "TensorRT",
+            "intro": "Kami mendeteksi GPU yang mendukung TensorRT. TensorRT adalah teknologi NVIDIA yang dapat menjalankan model AI jauh lebih cepat daripada CUDA.",
+            "optimization": "Saat TensorRT diaktifkan, ia harus terlebih dahulu mengoptimalkan grafik model ke format yang dipahaminya. <b>Langkah optimasi ini dapat memakan waktu beberapa menit saat pertama kali dijalankan</b>; proses berikutnya akan jauh lebih cepat.",
+            "question": "Apakah Anda ingin mengaktifkan TensorRT?",
+            "footer": "Apa pun pilihan Anda sekarang, Anda dapat mengubahnya kapan saja pada dialog <b>Pengaturan</b>, di bagian <u>Prosesor AI</u>."
+        }
+    },
+    "setup": {
+        "title": "Menyiapkan {{app}}",
+        "components": "Mengunduh komponen yang menjalankan model AI.",
+        "cached": "Ini hanya terjadi sekali — komponen disimpan untuk setiap peluncuran berikutnya.",
+        "installed_other": "{{installed}} dari {{count}} komponen terpasang",
+        "state": {
+            "installed": "Terpasang",
+            "downloading": "Mengunduh",
+            "extracting": "Mengekstrak",
+            "queued": "Menunggu"
+        },
+        "throttling": "Berkas-berkas ini dihosting di GitHub, yang membatasi kecepatan unduhan bila terlalu sering diambil — sehingga bisa lebih lambat daripada yang dimungkinkan koneksi Anda.",
+        "footer": "Aplikasi siap digunakan setelah unduhan selesai.",
+        "quit": "Keluar",
+        "error": {
+            "title": "Penyiapan tidak dapat diselesaikan",
+            "needs": "{{app}} memerlukan komponen ini sebelum dapat dijalankan.",
+            "summary": {
+                "only": "Ini berhenti di tengah jalan.",
+                "first": "Yang pertama berhenti di tengah jalan.",
+                "last": "{{finished}} dari {{total}} selesai; yang terakhir berhenti di tengah jalan.",
+                "rest": "{{finished}} dari {{total}} selesai; satu berhenti di tengah jalan dan sisanya belum sempat dimulai."
+            },
+            "state": {
+                "error": "Kesalahan"
+            },
+            "throttling": "Berkas-berkas ini dihosting di GitHub, yang membatasi kecepatan unduhan bila terlalu sering diambil. Mencoba lagi beberapa menit kemudian biasanya berhasil.",
+            "tryAgain": "Coba lagi",
+            "copied": "Tersalin!"
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_other": "{{count}} file tidak didukung: {{names}}"
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Reduksi Noise",
+            "models": {
+                "stockholm": "Gunakan model ini saat Anda membutuhkan reduksi noise sensor yang cepat dan berkualitas tinggi serta efisiensi komputasi menjadi pertimbangan. Pilihan yang baik ketika throughput dan keterbatasan sumber daya benar-benar menjadi kendala, karena waktu inferensinya tetap singkat tanpa mengorbankan kualitas.",
+                "gothenburg": "Gunakan model ini saat foto Anda mengandung noise sensor nyata, jenis yang muncul ketika memotret dalam cahaya redup atau pada ISO tinggi dengan ponsel atau DSLR. Model ini menangani pola noise kompleks yang dihasilkan kamera, sehingga menjadi pilihan tepat untuk fotografi.",
+                "malmo": "Gunakan model ini untuk menghilangkan garis-garis hujan pada gambar luar ruangan, baik yang diambil saat gerimis ringan maupun hujan deras. Model ini menangani hujan dengan berbagai ukuran, kerapatan, dan arah, serta memulihkan detail halus di balik garis hujan. Pilihan yang baik ketika artefak cuaca menutupi pemandangan."
+            }
+        },
+        "faceRecovery": {
+            "name": "Pemulihan Wajah",
+            "models": {
+                "athens": "Gunakan model ini saat kesetiaan pada identitas paling penting. Model ini mempertahankan struktur wajah sambil memulihkan detail, bahkan pada wajah yang rusak berat. Terbaik ketika Anda ingin memulihkan tanpa mengubah orangnya.",
+                "santorini": "Gunakan model ini saat Anda menginginkan peningkatan agresif dan cepat serta dapat menoleransi perubahan identitas. Model ini menghasilkan wajah yang tajam dan enak dipandang pada kerusakan sedang, tetapi dapat mengarang fitur dan mengubah identitas pada masukan berkualitas sangat rendah."
+            }
+        },
+        "colorization": {
+            "name": "Pewarnaan",
+            "models": {
+                "delhi": "Pilihan pertama terbaik untuk sebagian besar foto hitam-putih. Model ini mengamati seluruh adegan untuk menentukan seperti apa seharusnya warna setiap objek, menghasilkan warna yang kaya dan meyakinkan dengan tepian bersih — meski sesekali berani memilih warna yang sebenarnya tidak ada.",
+                "mumbai": "Gunakan saat warna Delhi terasa terlalu kuat atau terlalu modern untuk foto tersebut. Dilatih dengan sentuhan lebih kreatif, model ini condong ke warna yang lebih lembut dan sedikit bergaya, cocok untuk potret lawas dan film hasil pindaian, meski hasilnya lebih bervariasi dari satu foto ke foto lain.",
+                "jaipur": "Gunakan saat konsistensi paling penting. Warnanya lebih kalem daripada model lain, tetapi hampir tidak pernah menghasilkan bercak warna aneh atau tebakan yang keliru — pilihan yang andal untuk potret lama, pemandangan, dan pindaian yang sudah sangat rusak."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Penyesuaian Cahaya",
+            "models": {
+                "paris": "Gunakan model ini saat cahaya pada foto tidak merata — pemandangan malam, subjek backlit, atau wajah yang hilang dalam bayangan sementara bagian lain terlihat baik. Model ini memunculkan kembali apa yang disembunyikan gelap, menjaga warna tetap alami, dan sangat cepat.",
+                "lyon": "Gunakan model ini saat seluruh foto keluar terlalu terang atau terlalu gelap — langit yang pudar, atau subjek yang lenyap dalam bayangan. Model ini menyusun ulang kecerahan seluruh gambar dan menyelamatkan detail di kedua ujungnya sekaligus."
+            }
+        },
+        "colorBalance": {
+            "name": "Keseimbangan Warna",
+            "models": {
+                "rio": "Gunakan model ini saat seluruh foto condong ke satu arah — oranye di bawah lampu dalam ruangan, biru di tempat teduh atau saat berawan. Model ini merender ulang foto seolah kamera memilih white balance yang tepat, memperbaiki rona secara menyeluruh.",
+                "saopaulo": "Gunakan model ini saat dua sumber cahaya beradu dalam satu bingkai, misalnya lampu hangat di dalam ruangan melawan cahaya siang dari jendela. Model ini merender adegan dengan beberapa white balance lalu memadukannya piksel demi piksel, area demi area."
+            }
+        },
+        "sharpen": {
+            "name": "Penajaman",
+            "models": {
+                "moscow": "Gunakan model ini saat keburaman berasal dari kamera yang tidak fokus, bukan dari gerakan, misalnya potret dengan latar belakang atau latar depan yang buram, foto makro yang menjadi lembut, atau pemandangan apa pun ketika lensa gagal fokus pada bidang yang tepat.",
+                "petersburg": "Gunakan model ini saat Anda membutuhkan penghilangan blur gerakan yang cepat dan ringan, serta efisiensi lebih penting daripada mengejar kualitas terakhir. Cocok untuk rekaman aksi dan guncangan kamera saat dipegang, dan merupakan pilihan solid pada perangkat keras terbatas.",
+                "novgorod": "Gunakan model ini saat keburaman disebabkan oleh guncangan kamera atau subjek yang bergerak cepat, misalnya olahraga, foto genggam dalam cahaya redup, atau foto apa pun yang objeknya bergerak saat pencahayaan. Model ini mengutamakan kualitas pemulihan maksimal dibanding kecepatan; bagus ketika hasil adalah yang utama."
+            }
+        },
+        "upscale": {
+            "name": "Perbesaran",
+            "models": {
+                "tokyo": "Gunakan model ini saat Anda menginginkan perbesaran yang alami tanpa berlebihan. Model ini berfokus mempertahankan tampilan asli dan struktur halus alih-alih \"mengarang\" detail baru, sehingga ideal ketika realisme dan kesetiaan pada gambar asli lebih penting daripada ketajaman.",
+                "kyoto": "Gunakan model ini untuk foto dunia nyata (orang, lanskap, produk). Model ini unggul dalam memulihkan detail sekaligus menangani noise, blur, dan artefak kompresi. Ideal untuk penggunaan praktis dengan gambar yang tidak sempurna, ketika Anda menginginkan hasil yang enak dipandang dan andal secara cepat.",
+                "saitama": "Gunakan model ini untuk kartun, gambar tangan, line art, dan ilustrasi digital. Model ini mempertahankan garis yang bersih, warna datar, dan bayangan bergaya tanpa menambahkan tekstur seperti foto. Terbaik ketika tepi yang tajam dan konsistensi gaya lebih penting daripada realisme.",
+                "osaka": "Gunakan model ini saat Anda menginginkan kualitas perbesaran terbaik yang tersedia. Model ini membangun ulang detail alih-alih sekadar menajamkannya, dan hasilnya paling jauh pada foto yang lembut atau sangat terkompresi. Namun, model ini lambat dan membutuhkan GPU yang bertenaga agar berjalan dengan baik."
+            }
+        },
+        "add": "Tambah peningkatan",
+        "remove": "Hapus peningkatan",
+        "modelSelector": "Model AI",
+        "bias": "Bias",
+        "strength": "Kekuatan",
+        "scale": {
+            "title": "Skala",
+            "max": "Maks",
+            "custom": "Kustom",
+            "shortcut": "{{scale}}x"
+        },
+        "faces_other": "{{count}} Wajah",
+        "faces_partial_other": "{{enabled}}/{{count}} Wajah",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
+        "faceSelector": {
+            "title": "Wajah",
+            "help": "Anda dapat memilih wajah tertentu<br/>yang ingin ditingkatkan.",
+            "button": "Pilih wajah ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Seret dan lepas gambar<br/>untuk mulai mengeditnya",
+            "browse": "Telusuri gambar"
+        },
+        "divider": "Pembatas",
+        "pane": {
+            "original": "Asli",
+            "enhanced": "Ditingkatkan"
+        },
+        "progress": {
+            "downloading": "Mengunduh {{percent}}%",
+            "denoise": "Reduksi Noise",
+            "faceRecovery": "Wajah",
+            "colorization": "Pewarnaan",
+            "lightAdjustment": "Cahaya",
+            "colorBalance": "Warna",
+            "upscale": "Perbesaran",
+            "sharpen": "Penajaman",
+            "enhancing": "Meningkatkan"
+        }
+    },
+    "menu": {
+        "file": {
+            "options": "Opsi berkas untuk {{name}}",
+            "close": "Tutup gambar",
+            "closeAll": "Tutup semua gambar",
+            "showIn": "Tampilkan di Pengelola File",
+            "showIn_darwin": "Tampilkan di Finder",
+            "showIn_windows": "Tampilkan di Explorer"
+        }
+    },
+    "errors": {
+        "autopilotFailed": "Terjadi kesalahan. Gagal menjalankan autopilot.",
+        "enhanceFailed": "Terjadi kesalahan. Gagal meningkatkan gambar.",
+        "faceDetectFailed": "Terjadi kesalahan. Gagal mendeteksi wajah.",
+        "showLogsFailed": "Tidak dapat membuka file log. Anda bisa menemukannya di folder konfigurasi aplikasi.",
+        "revealFailed": "Tidak dapat membuka pengelola berkas. Berkas tetap tersimpan di lokasi ekspornya.",
+        "revealFileFailed": "Tidak dapat membuka pengelola berkas.",
+        "boundary": {
+            "title": "Terjadi kesalahan",
+            "message": "Open Photo AI mengalami kesalahan tak terduga dan tidak dapat melanjutkan. Memuat ulang biasanya memperbaikinya; pengaturan Anda tetap tersimpan, tetapi pekerjaan yang belum disimpan pada sesi saat ini akan hilang.",
+            "reload": "Muat ulang"
+        }
+    }
+}

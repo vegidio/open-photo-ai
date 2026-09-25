@@ -1,8 +1,0 @@
-go 1.27.0
-
-use (
-	.
-	./cmd/cli
-	./cmd/gui
-	./cmd/perf
-)

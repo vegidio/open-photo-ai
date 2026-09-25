@@ -1,0 +1,152 @@
+[package]
+name = "gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Tauri 2 front end for Open Photo AI."
+
+[lib]
+# `_lib` suffix avoids a name clash with the bin target (mainly a Windows issue). The split exists so
+# the crate's contents are reachable from `#[cfg(test)]`: a binary-only crate cannot host the
+# tauri.conf.json drift guard in src/lib.rs.
+name = "gui_lib"
+crate-type = ["lib"]
+
+[lints]
+workspace = true
+
+[build-dependencies]
+# What `build.rs` runs; a Tauri app does not compile without it.
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+# A second launch raises the window that is already open instead of starting a second application.
+# Pinned as `"2"` alongside the Tauri core it ships with, from the same `tauri-apps/plugins-workspace`
+# release train.
+#
+# NO FEATURES, and the `semver` one is off on purpose rather than by inertia: it appends a
+# version-compatibility string to the identifier, so 1.x and 2.x of the app would be treated as two
+# different applications and could run side by side. The configuration directory is resolved from the
+# application name and not the version, so both copies would open the same cache, the same model store
+# and the same log - which is exactly the situation the single-instance claim exists to prevent.
+tauri-plugin-single-instance = { version = "2", features = [] }
+
+# Which platform the process is running on, read by the frontend before first paint. The plugin is here rather than
+# a `#[tauri::command]` of our own for one reason: `init()` builds a `js_init_script` from `std::env::consts`, so
+# `platform()` is a synchronous property read on the frontend instead of a promise. The macOS navbar inset depends on
+# the answer, and a promise would render the navbar flush and then jump it 86px on the next tick.
+#
+# NO FEATURES, and its `os:default` permission set is deliberately not granted in capabilities/default.json: the
+# plugin's commands are `locale` and `hostname`, neither of which this application calls. `platform` is not a command,
+# so it needs no permission at all.
+tauri-plugin-os = { version = "2", features = [] }
+
+# Opening the platform's own file manager with an item selected, which is what the settings dialog's Logs button
+# does with what `log_path` answers. Pinned like the single-instance plugin above. Also the About dialog's two links,
+# which `src/links.rs` opens in the system browser through the same Rust API.
+#
+# A plugin here where `quit` refused one, and the two judgements do not conflict: `quit` is `app.exit(0)`, one line,
+# so `tauri-plugin-process` would have brought a dependency and a permission set for nothing. This is `open -R` on
+# macOS, `explorer.exe /select,` on Windows and a D-Bus call with an `xdg-open` fallback on Linux, each with its own
+# quoting rules — three platform branches the reference implementation carries in its `osservice` and there is no
+# reason to inherit.
+#
+# Only its RUST API is used. Its own `#[tauri::command]` is `async`, so Tauri runs it on a runtime worker, and all
+# three of its implementations break there. `src/reveal.rs` calls the library function from a command of this crate's
+# own and picks the thread; see the reasoning there.
+#
+# NO FEATURES, and NO permission granted in capabilities/default.json - not even the narrow
+# `opener:allow-reveal-item-in-dir`. The frontend never invokes the plugin, so there is nothing for a capability to
+# gate, and granting one would permit a call this application does not make.
+tauri-plugin-opener = { version = "2", features = [] }
+
+# The platform's own file picker, which is how a user names the images they want to open. Pinned like the
+# single-instance plugin above.
+#
+# Only its RUST API is used, and this crate's `open_images` command is what calls it: the command has work of its own
+# to do — it builds the filter from `opai::image::input_extensions` and hands back described records rather than bare
+# paths, neither of which the plugin's command could produce. The picker's threading rule is met there.
+#
+# Consequently there is NO `@tauri-apps/plugin-dialog` npm package and NO permission granted in
+# capabilities/default.json. The frontend never invokes the plugin, so there is nothing for a capability to gate, and
+# granting one would permit a call this application does not make.
+#
+# The DEFAULT features, which is the one entry here that keeps them, and not by inertia: the plugin's only feature
+# pair is `gtk3` (the default) and `xdg-portal`, and they choose `rfd`'s Linux backend. Switching them off would leave
+# Linux with no picker backend at all, and `xdg-portal` would put the dialog behind the desktop portal and pull in
+# rfd's wayland and tokio stack. GTK3 is what Tauri's own Linux runtime already links, so it is both the default and
+# the one that matches the window the dialog is parented to. macOS and Windows ignore the choice entirely.
+#
+# Registering it IS required, unlike the opener above: the picker is reached through `DialogExt::dialog()`, which
+# reads plugin state that only `init()` manages. That registration does add the plugin's own commands to the invoke
+# surface, and they are left ungranted in capabilities/default.json, which is what denies them.
+tauri-plugin-dialog = "2"
+
+# A `#[tauri::command]`'s return value crosses the IPC boundary as JSON. `tauri` re-exports serde but
+# not its derive macro, so it is declared here.
+serde = { version = "1", features = ["derive"] }
+
+# The project's error convention, matching `rust-sak` and the other first-party crates: a command's
+# error crosses the IPC boundary, where an opaque error is useless to the frontend.
+thiserror = "2"
+
+opai = { path = "../opai" }
+
+# `src/images/crop.rs` turns a photograph by an arbitrary angle and derives the identity of the pixels that
+# framing produces, and both of those are already written: `rust_sak::image::rotate` and
+# `rust_sak::crypto::xxh3_string`.
+#
+# `src/update.rs` asks whether a newer release is published, which is `rust_sak::github::is_outdated_release`.
+#
+# `src/analytics.rs` mirrors the window's Analytics choice into `opai`'s configuration directory, which is
+# `rust_sak::fs::user_config_dir` to find it and `mk_temp_file_in` for the file it is written through.
+#
+# EXACTLY four features. `image` is the rotation; `crypto` is the hash every derived identity in this project is
+# folded with; `fs` is the Analytics file. None of the three compiles anything new: features union across the graph
+# and `opai` already enables all three from the same git source and the same tag. `github` is the update check; it
+# rides on `fetch`, which `opai` already builds, and adds only `semver`, which the graph already holds.
+#
+# A crate outside the core library depending on `rust-sak` directly, with a narrow feature set, is what `perf`
+# also does with its single `fs`. This is one of THREE manifests pinning one git source, with `opai` and `perf`, and
+# ⚠️ ALL THREE TAGS MUST MOVE TOGETHER: two tags of one git source resolve to two entries in `Cargo.lock`, and
+# then `rust-sak`'s `image` module and `opai`'s are built against two copies of the `image` crate — making
+# `DynamicImage` two unrelated types, for an error message that names one type twice.
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.9.10", features = ["crypto", "fs", "github", "image"] }
+
+# `src/images/serve.rs` scales an opened photograph down to the size the window is drawing it at, which means naming
+# `DynamicImage` and a `FilterType`.
+#
+# `default-features = false`, so NO codec is compiled on this crate's account and none is reachable from it: every
+# encode and decode still goes through `opai::image`, which is where the RAW development and the 16-bit narrowing
+# live. Pinned to the version `opai` depends on, so `DynamicImage` is one type across the two crates rather than two
+# unrelated ones.
+image = { version = "0.25.10", default-features = false }
+
+# The Analytics choice's file, `{"enabled": true}`, read at launch and written when the window mirrors a change. Not a
+# new crate: `tauri` already depends on it, and it was this crate's dev-dependency for reading tauri.conf.json.
+serde_json = "1"
+
+# This crate emits records and opens spans; it does not configure where they go. `opai::logging::init` installs the
+# sink, and the two lines here - the D-Bus gate and the second-launch raise - are the only things the GUI has to say
+# before a window exists. The spans are one per command the window asks for (`src/command.rs`), which parent
+# `opai`'s units at the collector and put the request's `run` onto the file's records. No `tracing-subscriber`: a
+# front end that built its own subscriber would be deciding the format of a file `opai` owns.
+tracing = "0.1.44"
+
+[dev-dependencies]
+# Temporary directories for the fixtures `src/images/` builds rather than committing photographs, so no test writes
+# into the working tree.
+tempfile = "3.27"
+
+# `tauri::test::mock_builder` and `MockRuntime`, for the raise test in src/single_instance.rs. The
+# feature is enabled only here so it never reaches a shipped binary.
+tauri = { version = "2", features = ["test"] }
+
+# A throwaway subscriber for the tests in src/autopilot.rs and src/update.rs that read back what they logged. Tests
+# only, so the rule above (the sink's format is `opai`'s) still holds for every binary; the version and features are
+# `opai`'s own, so this compiles nothing new.
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "fmt"] }

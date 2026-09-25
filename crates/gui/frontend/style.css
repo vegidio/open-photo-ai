@@ -1,0 +1,355 @@
+@import "tailwindcss";
+
+/*
+ * The cropper widget's own stylesheet, put into Tailwind's `components` layer rather than imported
+ * plainly (design.md D2).
+ *
+ * Tailwind 4 emits into real `@layer` blocks, and unlayered CSS outranks every layered rule whatever
+ * its specificity - so a plain `@import` would stack this library's rules *above* every Tailwind
+ * utility. That is why the reference implementation has to write `bg-transparent!`, `p-1.5!`,
+ * `text-transparent!` and `opacity-100!` to say anything about the widget at all. Landing it in
+ * `components` puts it where Tailwind's own component layer sits, below utilities, so an ordinary
+ * class on the cropper wins and none of those four suffixes is needed here.
+ *
+ * If a rule of the widget's ever turns out to need the escape hatch anyway - one carrying its own
+ * `!important`, say - the fallback is the reference's: an `!` suffix on that one class. Copying the
+ * stylesheet into this repository to edit it is not the fallback; that would make a dependency's
+ * internals this project's to maintain.
+ */
+@import "react-advanced-cropper/dist/style.css" layer(components);
+
+/*
+ * Tailwind 4's built-in `dark:` variant keys off `prefers-color-scheme`. This application is dark
+ * and only dark - the palette below is the single palette, not the dark half of a pair - so on a
+ * machine set to light every `dark:` class shadcn's generated components carry would silently stop
+ * applying while the surfaces underneath stayed dark. Rebinding the variant to the `dark` class on
+ * `<html>` (see index.html) makes it unconditional, which is what "dark only" has to mean here.
+ */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * The palette, as shadcn's variable names rather than the role names the Wails app used
+ * (`--color-surface-raised`, `--color-content-primary`, ...). The reason is mechanical: shadcn's
+ * CLI writes `bg-card`, `text-muted-foreground`, `border-border` into every component it generates,
+ * so a renamed token set means hand-editing each generated file and re-editing it after every
+ * `shadcn add`. The names are the CLI's; only the values are ours.
+ *
+ * Values come from the design project's `shadcn-mapping.md` table, which is the authority for them.
+ * It is shadcn's zinc-dark scale with two deliberate departures: the app's blue is kept as
+ * `--primary`, and the status colours are the design's. Anything the table does not name (the
+ * `-foreground` pairs, `--accent`, `--ring`) is the zinc-dark default, which is what the table's
+ * own heading says to do.
+ */
+:root {
+    /*
+     * Dark is forced app-wide, but native UA controls - scrollbars, form widgets, the caret -
+     * follow the document's colour-scheme rather than any CSS variable. Pinning it keeps them dark
+     * across dev and release builds instead of tracking the OS setting.
+     */
+    color-scheme: dark;
+
+    /* 6px on controls (`rounded-md`), which is what the design draws. */
+    --radius: 0.5rem;
+
+    /* Surfaces, and the content that sits on them */
+    --background: #09090b;
+    --foreground: #fafafa;
+
+    /*
+     * One value where the Wails palette had three surface levels: the mapping table folds both
+     * `--color-surface` and `--color-surface-raised` onto `#18181b`. That flattening is the
+     * design's call, not an omission here.
+     */
+    --card: #18181b;
+    --card-foreground: #fafafa;
+    --popover: #18181b;
+    --popover-foreground: #fafafa;
+
+    /* The action colour, carried over from the Wails app unchanged, and its hover */
+    --primary: #009aff;
+    --primary-hover: #007eff;
+    --primary-foreground: #fafafa;
+
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
+
+    --destructive: #f87171;
+    --destructive-foreground: #fafafa;
+
+    --border: #27272a;
+    --input: #3f3f46;
+    --ring: #71717a;
+
+    /*
+     * Named by the mapping table but outside shadcn's vocabulary, because nothing shadcn generates
+     * refers to them: the dot of the empty-state canvas pattern, the faintest text tier, and the
+     * two status colours that are not `destructive` (autopilot's accent, the overwrite warning).
+     */
+    --surface-dot: #27272a;
+    /*
+     * What a thumbnail is drawn on: the surface the design puts behind every image in the drawer's
+     * strip, a tier below `--card` and off the zinc ramp the rest of the palette is on.
+     *
+     * It is load-bearing rather than decorative. The `<img>` over it is decorative and unlabelled, so
+     * a file whose pixels the protocol will not serve leaves this showing with the name bar and the
+     * checkbox intact - which is the whole of how a per-file failure appears.
+     */
+    --surface-thumbnail: #1f1f23;
+    /*
+     * The tier between `--muted-foreground` and `--foreground-faint`, which the mapping table does
+     * not name because the screens it was written from did not use it. The design project does: the
+     * setup dialog's published sizes, its queued rows and its footer line are all #71717a, a step
+     * above the faint tier and a step below muted. Substituting either neighbour is visible - the
+     * faint tier reads as almost unlit beside the same row's name.
+     *
+     * It is the same value as `--ring`, and deliberately a separate token rather than a reuse: one
+     * is a focus indicator and this is a text tier, and nothing should have to keep them equal.
+     */
+    --foreground-dim: #71717a;
+    --foreground-faint: #52525b;
+    --success: #22c55e;
+    /*
+     * The design paints the Autopilot label a step brighter than the switch track beneath it -
+     * #4ade80 against `--success`'s #22c55e - so the two are separate values rather than one with an
+     * opacity. Only the label uses it today; it is a token rather than a `text-green-400` at the call
+     * site because every other colour in this codebase is one, and it would have been the first.
+     */
+    --success-bright: #4ade80;
+    /*
+     * The second of the pair the design gives the Autopilot analysing row - `--success-bright` is
+     * the first - where the two appear together as the arcs of one spinner. Named for what they mean
+     * side by side, the application working or ready to, rather than for the hue (`--accent-cyan`
+     * would be the file's first colour named after what it looks like) or for `--info`, a status
+     * neither the spinner nor the drop-area shine claims.
+     *
+     * The order is reversed here: that spinner is not built - only its `sidebar.analysing` string is
+     * in the catalogue - so the drop-area shine defines the token and the spinner becomes its second
+     * consumer. The alternative is a second cyan meaning the same thing, chosen independently.
+     */
+    --activity: #22d3ee;
+    /*
+     * The same relationship `--success-bright` has to `--success`, one tier up from `--destructive`:
+     * the failure dialog draws the reason line at #fca5a5 against rows and a title already at
+     * #f87171, so the diagnostic reads as text rather than as another piece of the alert. It is a
+     * token rather than a `text-red-300` at the call site for the reason the comment above gives.
+     */
+    --destructive-bright: #fca5a5;
+    --warning: #facc15;
+    /*
+     * A link to a page outside the application, and its hover - the About dialog's two, the only ones
+     * the design draws. The design's own values, which are not `--primary` and so are not reused from it.
+     */
+    --link: #38bdf8;
+    --link-hover: #7dd3fc;
+}
+
+/*
+ * The type, as a plain `@theme` rather than the `inline` block below: Tailwind's preflight sets
+ * `html { font-family: var(--default-font-family) }` and its default theme defines that as
+ * `var(--font-sans)`, which only resolves if `--font-sans` is emitted as a real custom property.
+ * `inline` would substitute it into the utilities and leave nothing for preflight to read, so the
+ * placeholder - which carries no `font-sans` class - would still come up in the UA default.
+ *
+ * `--default-font-family` is then pointed at it explicitly. Tailwind's preflight emits
+ * `font-family: var(--default-font-family, <system stack>)` and, as of v4.3, defines no value for
+ * that variable - so leaving it unset means the fallback wins and the whole document renders in the
+ * system face while `font-sans` utilities correctly say Geist. The two would disagree, visibly,
+ * everywhere no class was applied.
+ *
+ * `Geist Variable` / `Geist Mono Variable` are the family names `@fontsource-variable` registers;
+ * the unsuffixed names would silently miss.
+ *
+ * The fallbacks are load-bearing rather than boilerplate. Geist ships latin, latin-ext, cyrillic,
+ * cyrillic-ext and vietnamese only, so four of the thirteen catalogues - Greek, Hindi, Japanese and
+ * Chinese - render from the tail of this stack on every platform. Each entry's `unicode-range`
+ * means the browser falls through per glyph, so a Greek string in an otherwise English screen picks
+ * up the system face for exactly those characters.
+ */
+@theme {
+    --font-sans:
+        "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+        "Segoe UI Symbol", "Noto Color Emoji";
+    --font-mono:
+        "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+        monospace;
+
+    --default-font-family: var(--font-sans);
+    --default-mono-font-family: var(--font-mono);
+}
+
+/*
+ * `@theme inline` rather than `@theme`: it re-exports the variables above as Tailwind's colour and
+ * radius scales (`bg-card`, `text-muted-foreground`, `rounded-lg`) without copying their values, so
+ * `:root` above stays the single place a colour is written down.
+ */
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-hover: var(--primary-hover);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-surface-dot: var(--surface-dot);
+    --color-surface-thumbnail: var(--surface-thumbnail);
+    --color-foreground-dim: var(--foreground-dim);
+    --color-foreground-faint: var(--foreground-faint);
+    --color-success: var(--success);
+    --color-success-bright: var(--success-bright);
+    --color-activity: var(--activity);
+    --color-destructive-bright: var(--destructive-bright);
+    --color-warning: var(--warning);
+    --color-link: var(--link);
+    --color-link-hover: var(--link-hover);
+
+    /* The scale shadcn's components address; `--radius` above is the one number that moves it. */
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+    /*
+     * The default border colour, and it is load-bearing rather than tidy-up.
+     *
+     * Tailwind 4's preflight emits `border: 0 solid` with no colour, and its `border` utility sets
+     * only a width - so `class="border"` inherits `currentColor` and draws a #fafafa line. Every
+     * component shadcn generates writes a bare `border`, because shadcn's own stylesheet ships this
+     * rule and its components rely on it; this sheet was written without it, so the first generated
+     * component to use one (the dialog) came up outlined in white.
+     *
+     * It belongs here rather than as a `border-border` at each call site for the same reason the
+     * token names are shadcn's: a correction applied by hand after every `shadcn add` is a
+     * correction that will be forgotten once.
+     */
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--border);
+    }
+
+    /*
+     * Tailwind's preflight leaves the page transparent, which in a webview means white behind
+     * everything the app has not painted. Setting it on `body` rather than relying on each screen's
+     * outermost div means a screen that does not fill the window still sits on the app background.
+     */
+    body {
+        background-color: var(--background);
+        color: var(--foreground);
+
+        /*
+         * The weight the design is drawn at. WebKit's default subpixel smoothing renders Geist
+         * noticeably heavier than the design project does, which at 12px and 13px is the difference
+         * between a label and a bold label - and heavier glyphs measure wider, so it also moved
+         * where the dialog's copy wrapped. The design file sets exactly this on its own `body`.
+         */
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /*
+     * This is a desktop app, not a web page: click-dragging across a model name or a settings row
+     * should do nothing, the way it does in any native window. Applied to `body` rather than to the
+     * React root because Radix portals every popover, dialog, menu and select straight into
+     * `document.body`, so a rule on the root div would miss exactly the popups this is here to fix.
+     *
+     * It lives in `base` so Tailwind's `select-text`, which lands in `utilities`, wins wherever a
+     * component opts back in - the error boundary's message and the About version, both of which
+     * get copied into bug reports.
+     *
+     * The `input`/`textarea` exception is mandatory, not a courtesy: `user-select` inherits, and
+     * WebKit refuses to select text inside a form control that inherits `none`.
+     */
+    body {
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    input,
+    textarea {
+        -webkit-user-select: text;
+        user-select: text;
+    }
+}
+
+/*
+ * The native dark-mode scrollbar thumb renders as a bright gray and varies between dev and release
+ * builds, so scrollable panels opt into this instead. The Wails app got the two declarations from
+ * the `tailwind-scrollbar` plugin and defined only the custom properties; the plugin is not a
+ * dependency here - it exists to generate variants this app never used - so the declarations are
+ * written out. The values are the Wails app's.
+ *
+ * An `@utility` rather than a bare class, so it is ordered with the rest of the utility layer and
+ * a component can override it the way it overrides any other Tailwind utility. `DrawerBody` measures
+ * the height this leaves behind rather than deriving it, so the rule being absent is not a visual
+ * detail there - it is the metric the strip sizes its thumbnails against.
+ */
+@utility scrollbar-thin {
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: #424242;
+
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+
+    &:hover {
+        --scrollbar-thumb: #555555;
+    }
+}
+
+/*
+ * One sweep of the shine, for `components/ui/shine-border.tsx`.
+ *
+ * The whole of what MagicUI's component animates, and the reason it needs no animation runtime: a
+ * gradient sized to 300% of its box, walked from one corner of that box to the other and back.
+ * There and back within the one cycle rather than wrapping from 100% to 0% - a wrap would jump,
+ * because the gradient at 100% is not the gradient at 0%.
+ *
+ * Unlike `border-beam` before it, this one *is* reached through an `--animate-*` entry, because
+ * everything a caller varies arrives as a custom property on the element rather than as a value
+ * baked into the rule.
+ */
+@theme inline {
+    /*
+     * `inline` is load-bearing, not a house style. A plain `@theme` emits this onto `:root` and
+     * generates `animation: var(--animate-shine)`; custom properties have their `var()`s
+     * substituted where they are declared, so `--duration` would be resolved against a `:root` that
+     * has none, the declaration would be invalid before it ever reached an element, and no shine
+     * would move however faithfully the component set `--duration` on itself. `inline` substitutes
+     * this into the utility instead, leaving `--duration` to be read from the element wearing it.
+     */
+    --animate-shine: shine var(--duration) infinite linear;
+}
+
+@keyframes shine {
+    0% {
+        background-position: 0% 0%;
+    }
+    50% {
+        background-position: 100% 100%;
+    }
+    to {
+        background-position: 0% 0%;
+    }
+}

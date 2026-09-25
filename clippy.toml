@@ -1,0 +1,9 @@
+# `ort::init_from` loads the ONNX Runtime through a process-global that `ort` marks completed even when the load
+# FAILED, after which every later call reports success having loaded nothing (see `tests/ort_load_semantics.rs`).
+# `runtime::start` is the one place allowed to call it, because it is the one place that records the first failure and
+# turns a retry into `InitError::RuntimeUnavailable` rather than undefined behaviour.
+#
+# Enforced here rather than only in prose: the sanctioned call site carries an `#[allow]` saying so.
+disallowed-methods = [
+    { path = "ort::init_from", reason = "only `runtime::start` may load the runtime; it owns the failed-load guard (design D9)" },
+]

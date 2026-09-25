@@ -1,0 +1,12 @@
+edition = "2024"
+max_width = 120
+# Per-construct sub-widths set to 80% of `max_width` (120 → 96). rustfmt's defaults
+# cap these at 60–70% (~72 chars), breaking chains/calls well before the 120 ceiling.
+array_width = 96
+attr_fn_like_width = 96
+chain_width = 96
+fn_call_width = 96
+single_line_if_else_max_width = 96
+single_line_let_else_max_width = 96
+struct_lit_width = 96
+struct_variant_width = 96

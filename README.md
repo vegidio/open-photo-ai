@@ -196,14 +196,12 @@ Errors reported by e-mail or other channels will not be tracked, so please make 
 
 To build this project, you will need the following dependencies installed in your computer:
 
--   [Golang](https://go.dev/doc/install)
--   [Task](https://taskfile.dev/installation/)
+- [Rust](https://rust-lang.org/tools/install)
 
 If you want to build the GUI you will also need:
 
--   [Node.js](https://nodejs.org/en/download/)
--   [PNPM](https://pnpm.io/installation)
--   [Wails 3+](https://v3alpha.wails.io/getting-started/installation)
+- [Node.js](https://nodejs.org/en/download/)
+- [PNPM](https://pnpm.io/installation)
 
 ### Compiling
 

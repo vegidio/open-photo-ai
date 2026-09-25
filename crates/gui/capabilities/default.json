@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window. `core:default`, plus the one window permission the navbar's drag region needs. Deliberately NOT the os plugin's `os:default`: `platform()` is a property on that plugin's init script rather than a command, so the frontend reads it without a permission, and granting the set would allow six reads this application never makes. Nothing is granted for the opener plugin either, and that is not an oversight: the frontend never invokes its commands - `crates/gui/src/logs.rs` calls its Rust API from a command of this application's own, because the plugin's own command runs the reveal on a thread none of its three platform implementations can be run from; and `crates/gui/src/links.rs` does the same for the About dialog's two links, so the window names which page to open and never holds an address. Commands this application registers itself need no capability entry.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging"
+  ]
+}

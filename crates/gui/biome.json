@@ -1,0 +1,73 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true,
+        "root": "../.."
+    },
+    "files": {
+        "includes": ["**", "!src", "!dist", "!icons", "!capabilities", "!gen", "!pnpm-lock.yaml"]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 120
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "recommended",
+            "complexity": {
+                "useArrowFunction": "error",
+                "noUselessUndefined": "error"
+            },
+            "style": {
+                "useConsistentTypeDefinitions": {
+                    "level": "error",
+                    "options": {
+                        "style": "type"
+                    }
+                }
+            },
+            "suspicious": {
+                "noEqualsToNull": "error",
+                "noImportCycles": "error"
+            }
+        }
+    },
+    "css": {
+        "parser": {
+            "tailwindDirectives": true
+        }
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "double",
+            "jsxQuoteStyle": "double",
+            "semicolons": "always",
+            "trailingCommas": "all",
+            "arrowParentheses": "always"
+        }
+    },
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "source": {
+                "organizeImports": {
+                    "level": "on",
+                    "options": {
+                        "sortBareImports": true,
+                        "groups": [
+                            ["react", "react/**", "react-dom", "react-dom/**"],
+                            ":NODE:",
+                            ":PACKAGE:",
+                            [":ALIAS:", ":PATH:"]
+                        ]
+                    }
+                }
+            }
+        }
+    }
+}

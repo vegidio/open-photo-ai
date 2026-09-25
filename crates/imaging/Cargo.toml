@@ -1,0 +1,26 @@
+[package]
+name = "imaging"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Pixel primitives for Open Photo AI: tiling, tensor conversion, padding and blending."
+# The crate boundary is what makes these primitives' independence from `opai` a compile error; it is not an API anyone
+# else consumes.
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+# The picture fixtures (`test_support`, `canvas::fixtures`), for `opai`'s tests. `cfg(test)` does not cross a crate
+# boundary, so a suite in another crate reaches them through this; `opai` enables it from `[dev-dependencies]` only.
+test-support = []
+
+[dependencies]
+# Pinned exactly as `opai` pins it, and for the same reason: two `image` crates would make `DynamicImage` two unrelated
+# types, and every function here takes or returns one. `default-features = false` because only the pixel buffers are
+# named here, never a codec.
+image = { version = "0.25.10", default-features = false }
+thiserror = "2.0.20"

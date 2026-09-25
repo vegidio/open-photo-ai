@@ -1,0 +1,14 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Terminal front end for Open Photo AI."
+
+[lints]
+workspace = true
+
+[dependencies]
+opai = { path = "../opai" }

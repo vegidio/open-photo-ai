@@ -1,0 +1,402 @@
+{
+    "common": {
+        "cancel": "Abbrechen",
+        "save": "Speichern",
+        "close": "Schließen",
+        "apply": "Anwenden",
+        "reset": "Zurücksetzen",
+        "yes": "Ja",
+        "no": "Nein",
+        "or": "ODER",
+        "previewAlt": "Vorschau"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "Einstellungen",
+        "pages": {
+            "general": {
+                "title": "Allgemein",
+                "description": "Sprache, Vorschaubereich und App-Diagnose."
+            },
+            "performance": {
+                "title": "Leistung",
+                "description": "Wählen Sie, welcher Prozessor die KI-Modelle ausführt."
+            },
+            "enhancements": {
+                "title": "Verbesserungen",
+                "description": "Das Modell, mit dem jede Verbesserung startet, und ob der Autopilot sie vorschlagen darf. Ausgeschaltetes kann weiterhin von Hand hinzugefügt werden."
+            },
+            "export": {
+                "title": "Export",
+                "description": "Qualität für die verlustbehafteten Formate. Niedrigere Werte ergeben kleinere Dateien; die Skalen sind zwischen den Formaten nicht vergleichbar."
+            }
+        },
+        "app": {
+            "language": {
+                "title": "Sprache",
+                "description": "Wird beim Klick auf Speichern übernommen."
+            },
+            "background": {
+                "title": "Vorschauhintergrund",
+                "description": "Wird im Vorschaubereich hinter Bildern angezeigt.",
+                "particles": "Partikel",
+                "dotted": "Punktraster"
+            },
+            "logs": {
+                "title": "Protokolle",
+                "description": "Hilfreich beim Melden eines Problems.",
+                "button": "Protokolle anzeigen"
+            },
+            "analytics": {
+                "title": "Analyse",
+                "description": "Anonyme Nutzungsdaten senden. Bilder oder persönliche Daten werden nie erfasst."
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "KI-Prozessor",
+                "auto": "Automatisch"
+            },
+            "processor": {
+                "auto": {
+                    "description": "Erkennt die Hardware dieses Rechners und nutzt den schnellsten Prozessor, den sie unterstützt."
+                },
+                "tensorrt": {
+                    "description": "Die schnellste Option auf NVIDIA-GPUs. Beim ersten Ausführen jedes Modells wird eine optimierte Engine erstellt, was einige Minuten dauert; spätere Läufe starten sofort."
+                },
+                "cuda": {
+                    "description": "Führt die Modelle ohne Build-Schritt auf der NVIDIA-GPU aus. Langsamer als TensorRT, sobald dessen Engines erstellt sind."
+                },
+                "coreml": {
+                    "description": "Führt die Modelle auf der Apple Neural Engine und der GPU aus. Viel schneller als die CPU, doch nicht jedes Modell kann sie nutzen."
+                },
+                "cpu": {
+                    "description": "Funktioniert auf jedem Rechner ohne unterstützte GPU. Verbesserungen dauern deutlich länger."
+                }
+            },
+            "recommended": "Empfohlen"
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF"
+            },
+            "heic": {
+                "title": "HEIC"
+            },
+            "jpeg": {
+                "title": "JPEG"
+            },
+            "webp": {
+                "title": "WEBP"
+            },
+            "valueLabel": "{{format}}-Qualität"
+        },
+        "enhancements": {
+            "columns": {
+                "enhancement": "Verbesserung",
+                "model": "Standardmodell",
+                "autopilot": "Autopilot"
+            },
+            "autopilotLabel": "Autopilot: {{name}}"
+        },
+        "reset": "Auf Standard zurücksetzen"
+    },
+    "navbar": {
+        "about": "Über",
+        "updateAvailable": "Update verfügbar",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Abmessungen",
+            "original": "Original",
+            "cropped": "Zugeschnitten",
+            "output": "Ausgabe"
+        },
+        "about_dialog": {
+            "iconAlt": "App-Symbol",
+            "version": "Version {{version}}"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Autopilot",
+        "analysing": "Bild wird analysiert...",
+        "exportImage_one": "Bild exportieren",
+        "exportImage_other": "Bilder exportieren",
+        "noPreview": "Keine Vorschau verfügbar",
+        "zoomCropAlt": "Zoomen & Zuschneiden"
+    },
+    "drawer": {
+        "addImages": "Bilder hinzufügen",
+        "showImages": "Bilder anzeigen",
+        "hideImages": "Bilder ausblenden",
+        "selectAll": "Alle auswählen",
+        "unselectAll": "Auswahl aufheben",
+        "selectImage": "{{name}} auswählen",
+        "zoom": "Zoom",
+        "zoomOut": "Verkleinern",
+        "zoomIn": "Vergrößern",
+        "zoomScale": "{{scale}}x",
+        "preview": {
+            "full": "Voll",
+            "sideBySide": "Nebeneinander",
+            "split": "Geteilt"
+        }
+    },
+    "faces": {
+        "selectFaces": "Gesichter auswählen",
+        "toggleFace": "Gesicht {{number}} umschalten",
+        "hint": "Klicken Sie auf einen Rahmen, um ein Gesicht ein- oder auszuschließen.",
+        "apply_one": "Auf {{enabled}} von {{count}} Gesicht anwenden",
+        "apply_other": "Auf {{enabled}} von {{count}} Gesichtern anwenden"
+    },
+    "crop": {
+        "title": "Zuschneiden/Drehen",
+        "aspectRatio": "Seitenverhältnis",
+        "zoomHint": "Sie können mit dem Mausrad oder der Trackpad-Geste das Bild links vergrößern und verkleinern.",
+        "ratio": {
+            "free": "Frei",
+            "square": "Quadrat"
+        },
+        "width": "B",
+        "height": "H",
+        "open": "Zuschneiden/Drehen",
+        "rotate": "Um 90 Grad drehen",
+        "flipHorizontal": "Horizontal spiegeln",
+        "flipVertical": "Vertikal spiegeln",
+        "swap": "Breite und Höhe tauschen"
+    },
+    "export": {
+        "title": "Exportieren",
+        "settings": {
+            "title": "Exporteinstellungen",
+            "filename": {
+                "title": "Dateiname",
+                "prefix": "Präfix",
+                "suffix": "Suffix",
+                "allowOverwrite": "Überschreiben zulassen?",
+                "sameLocationOverwrite": "Bei gleichem Ordner und gleicher Dateiendung wird Ihre Originaldatei überschrieben. Das lässt sich nicht rückgängig machen.",
+                "sameLocationRename": "Bei gleichem Ordner und gleicher Dateiendung bekommen neue Dateien eine Nummer, statt das Original zu überschreiben."
+            },
+            "format": {
+                "title": "Format",
+                "preserve": "Beibehalten"
+            },
+            "quality": {
+                "title": "Qualität"
+            },
+            "location": {
+                "title": "Speichern unter",
+                "original": "Originalordner",
+                "browse": "Durchsuchen..."
+            },
+            "abort": "Abbrechen",
+            "exportAgain": "Erneut exportieren"
+        },
+        "queue": {
+            "title": "Warteschlange ({{count}})",
+            "pipelineOrder": "in Pipeline-Reihenfolge",
+            "queued": "Wartend",
+            "analysing": "Analyse",
+            "enhancing": "Verbessern",
+            "writing": "Schreiben",
+            "done": "Fertig",
+            "failed": "Fehlgeschlagen",
+            "writeFailed": "{{name}} konnte nicht in {{folder}} geschrieben werden.",
+            "enhanceFailed": "Dieses Bild konnte nicht verbessert werden.",
+            "unreadable": "Dieses Bild konnte nicht gelesen werden.",
+            "analysisFailed": "Autopilot konnte dieses Bild nicht analysieren.",
+            "copied": "In die Zwischenablage kopiert"
+        },
+        "summary": {
+            "ready_one": "{{count}} Datei bereit · noch nichts geschrieben",
+            "ready_other": "{{count}} Dateien bereit · noch nichts geschrieben",
+            "running_one": "{{written}} von {{count}} geschrieben · {{remaining}} verbleibend",
+            "running_other": "{{written}} von {{count}} geschrieben · {{remaining}} verbleibend",
+            "ended_one": "{{written}} von {{count}} geschrieben",
+            "ended_other": "{{written}} von {{count}} geschrieben",
+            "endedFailed_one": "{{written}} von {{count}} geschrieben, {{failed}} fehlgeschlagen",
+            "endedFailed_other": "{{written}} von {{count}} geschrieben, {{failed}} fehlgeschlagen"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Bild auswählen",
+            "selectDirectory": "Ordner auswählen",
+            "imagesFilter": "Bilder"
+        },
+        "tensorRT": {
+            "title": "TensorRT erkannt",
+            "logoAlt": "TensorRT",
+            "intro": "Wir haben eine GPU erkannt, die TensorRT unterstützt. TensorRT ist eine NVIDIA-Technologie, die KI-Modelle deutlich schneller ausführen kann als CUDA.",
+            "optimization": "Wenn TensorRT aktiviert ist, muss es den Modellgraphen zunächst in ein eigenes Format optimieren. <b>Dieser Optimierungsschritt kann beim ersten Mal einige Minuten dauern</b>; nachfolgende Durchläufe sind deutlich schneller.",
+            "question": "Möchten Sie TensorRT aktivieren?",
+            "footer": "Unabhängig von Ihrer Wahl können Sie diese jederzeit im Dialog <b>Einstellungen</b> unter <u>KI-Prozessor</u> ändern."
+        }
+    },
+    "setup": {
+        "title": "{{app}} wird eingerichtet",
+        "components": "Die Komponenten, die die KI-Modelle ausführen, werden heruntergeladen.",
+        "cached": "Das passiert nur einmal — sie werden für jeden späteren Start zwischengespeichert.",
+        "installed_one": "{{installed}} von {{count}} Komponente installiert",
+        "installed_other": "{{installed}} von {{count}} Komponenten installiert",
+        "state": {
+            "installed": "Installiert",
+            "downloading": "Wird heruntergeladen",
+            "extracting": "Wird entpackt",
+            "queued": "In Warteschlange"
+        },
+        "throttling": "Diese Dateien liegen auf GitHub, das Downloads bei zu häufigem Abruf drosselt — deshalb kann es langsamer sein, als Ihre Verbindung erlaubt.",
+        "footer": "Die App ist einsatzbereit, sobald die Downloads abgeschlossen sind.",
+        "quit": "Beenden",
+        "error": {
+            "title": "Einrichtung konnte nicht abgeschlossen werden",
+            "needs": "{{app}} benötigt diese Komponenten, bevor die App starten kann.",
+            "summary": {
+                "only": "Sie wurde mittendrin abgebrochen.",
+                "first": "Die erste wurde mittendrin abgebrochen.",
+                "last": "{{finished}} von {{total}} abgeschlossen; die letzte wurde mittendrin abgebrochen.",
+                "rest": "{{finished}} von {{total}} abgeschlossen; eine wurde mittendrin abgebrochen, die übrigen wurden nicht erreicht."
+            },
+            "state": {
+                "error": "Fehler"
+            },
+            "throttling": "Diese Dateien liegen auf GitHub, das Downloads bei zu häufigem Abruf drosselt. Ein erneuter Versuch in ein paar Minuten hilft meistens.",
+            "tryAgain": "Erneut versuchen",
+            "copied": "Kopiert!"
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_one": "Die Datei „{{names}}“ wird nicht unterstützt.",
+        "unsupportedFiles_other": "{{count}} Dateien werden nicht unterstützt: {{names}}"
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Rauschreduzierung",
+            "models": {
+                "stockholm": "Verwenden Sie dieses Modell, wenn Sie echtes Sensorrauschen schnell und in hoher Qualität entfernen möchten und Recheneffizienz zählt. Eine gute Wahl, wenn Durchsatz und begrenzte Ressourcen ein echtes Thema sind: Es hält die Inferenzzeiten niedrig, ohne Qualität zu opfern.",
+                "gothenburg": "Verwenden Sie dieses Modell, wenn Ihre Fotos echtes Sensorrauschen enthalten, also das, was bei wenig Licht oder hohem ISO-Wert mit Smartphone oder DSLR entsteht. Es bewältigt die komplexen Rauschmuster echter Kameras und ist damit die richtige Wahl für Fotografie.",
+                "malmo": "Verwenden Sie dieses Modell, um Regenschlieren aus Außenaufnahmen zu entfernen, ob bei leichtem Nieselregen oder starkem Regenguss. Es kommt mit Regen unterschiedlicher Größe, Dichte und Richtung zurecht und stellt feine Details hinter den Schlieren wieder her. Eine gute Wahl, wenn Wettereinflüsse die Szene verdecken."
+            }
+        },
+        "faceRecovery": {
+            "name": "Gesichtswiederherstellung",
+            "models": {
+                "athens": "Verwenden Sie dieses Modell, wenn Identitätstreue am wichtigsten ist. Es bewahrt die Gesichtsstruktur, während Details wiederhergestellt werden, selbst bei stark beschädigten Gesichtern. Am besten geeignet, wenn Sie restaurieren möchten, ohne die Person zu verändern.",
+                "santorini": "Verwenden Sie dieses Modell, wenn Sie eine aggressive, schnelle Verbesserung wollen und eine Veränderung der Identität in Kauf nehmen. Es liefert scharfe, ansprechende Gesichter bei mäßiger Degradation, kann aber bei sehr schlechter Qualität Merkmale erfinden und die Identität verändern."
+            }
+        },
+        "colorization": {
+            "name": "Kolorierung",
+            "models": {
+                "delhi": "Die beste erste Wahl für die meisten Schwarz-Weiß-Fotos. Es betrachtet die gesamte Szene, um zu entscheiden, wie die Dinge aussehen sollten, und erzeugt satte, überzeugende Farben mit sauberen Kanten — gelegentlich entscheidet es sich jedoch mutig für eine Farbe, die nicht da war.",
+                "mumbai": "Verwenden Sie dieses Modell, wenn die Farben von Delhi zu intensiv oder zu modern wirken. Es ist auf eine kreativere Note trainiert und neigt zu weicheren, dezent stilisierten Tönen, die zu alten Porträts und Filmscans passen — die Ergebnisse fallen jedoch von Foto zu Foto unterschiedlicher aus.",
+                "jaipur": "Verwenden Sie dieses Modell, wenn Beständigkeit am wichtigsten ist. Die Farben sind gedämpfter als bei den anderen, aber es erzeugt fast nie seltsame Farbflecken oder Fehlgriffe — eine verlässliche Wahl für alte Porträts, Landschaften und stark beschädigte Scans."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Lichtanpassung",
+            "models": {
+                "paris": "Verwenden Sie dieses Modell, wenn das Licht im Foto ungleichmäßig ist – Nachtaufnahmen, Motive im Gegenlicht oder ein Gesicht im Schatten, während der Rest gut aussieht. Es holt zurück, was das Dunkel verbirgt, hält die Farben natürlich und ist sehr schnell.",
+                "lyon": "Verwenden Sie dieses Modell, wenn das ganze Foto zu hell oder zu dunkel geraten ist – ausgewaschener Himmel oder ein Motiv, das im Schatten verschwindet. Es baut die Helligkeit des gesamten Bildes neu auf und rettet Details an beiden Enden zugleich."
+            }
+        },
+        "colorBalance": {
+            "name": "Farbbalance",
+            "models": {
+                "rio": "Verwenden Sie dieses Modell, wenn das ganze Bild in eine Richtung kippt – orange unter Zimmerlampen, blau im Schatten oder bei bewölktem Himmel. Es rendert die Aufnahme so, als hätte die Kamera den richtigen Weißabgleich gewählt, und korrigiert den Farbstich global.",
+                "saopaulo": "Verwenden Sie dieses Modell, wenn zwei Lichtquellen im selben Bild konkurrieren, etwa eine warme Lampe im Raum gegen Tageslicht vom Fenster. Es rendert die Szene mit mehreren Weißabgleichen und mischt sie Pixel für Pixel, Bereich für Bereich."
+            }
+        },
+        "sharpen": {
+            "name": "Schärfen",
+            "models": {
+                "moscow": "Verwenden Sie dieses Modell, wenn die Unschärfe von einer falsch fokussierten Kamera stammt und nicht von Bewegung, etwa Porträts mit unscharfem Hinter- oder Vordergrund, weich geratene Makroaufnahmen oder jede Szene, in der das Objektiv auf die falsche Ebene scharfgestellt hat.",
+                "petersburg": "Verwenden Sie dieses Modell, wenn Sie eine schnelle, ressourcenschonende Bewegungsentschärfung brauchen und Effizienz wichtiger ist als das letzte Quäntchen Qualität. Es eignet sich gut für Actionaufnahmen und Verwacklungen aus der Hand und ist eine solide Wahl auf begrenzter Hardware.",
+                "novgorod": "Verwenden Sie dieses Modell, wenn die Unschärfe durch Verwackeln oder schnelle Motive entsteht, etwa bei Sport, Handaufnahmen bei wenig Licht oder jedem Foto, bei dem sich während der Belichtung etwas bewegt hat. Es stellt maximale Wiederherstellungsqualität über Geschwindigkeit; gut, wenn das Ergebnis zählt."
+            }
+        },
+        "upscale": {
+            "name": "Hochskalieren",
+            "models": {
+                "tokyo": "Verwenden Sie dieses Modell, wenn Sie eine natürliche Hochskalierung ohne Übertreibung wollen. Es bewahrt den ursprünglichen Look und feine Strukturen, statt neue Details zu „erfinden“, und ist damit ideal, wenn Realismus und Originaltreue wichtiger sind als Schärfe.",
+                "kyoto": "Verwenden Sie dieses Modell für reale Fotos (Menschen, Landschaften, Produkte). Es stellt Details hervorragend wieder her und bewältigt dabei Rauschen, Unschärfe und Kompressionsartefakte. Ideal für den Praxiseinsatz mit unperfekten Bildern, wenn Sie schnell ansprechende, robuste Ergebnisse wollen.",
+                "saitama": "Verwenden Sie dieses Modell für Cartoons, Zeichnungen, Strichgrafiken und digitale Illustrationen. Es bewahrt saubere Linien, flache Farben und stilisierte Schattierungen, ohne fotoähnliche Texturen einzuführen. Am besten geeignet, wenn scharfe Kanten und stilistische Konsistenz wichtiger sind als Realismus.",
+                "osaka": "Verwenden Sie dieses Modell, wenn Sie die bestmögliche Hochskalierungsqualität wollen. Es baut Details neu auf, statt sie nur nachzuschärfen, und geht bei weichen oder stark komprimierten Fotos am weitesten. Es ist allerdings langsam und braucht eine leistungsstarke GPU, um gut zu laufen."
+            }
+        },
+        "add": "Hinzufügen",
+        "remove": "Verbesserung entfernen",
+        "modelSelector": "KI-Modell",
+        "bias": "Tendenz",
+        "strength": "Stärke",
+        "scale": {
+            "title": "Skalierung",
+            "max": "Max",
+            "custom": "Benutzerdefiniert",
+            "shortcut": "{{scale}}x"
+        },
+        "faces_one": "{{count}} Gesicht",
+        "faces_other": "{{count}} Gesichter",
+        "faces_partial_one": "{{enabled}}/{{count}} Gesicht",
+        "faces_partial_other": "{{enabled}}/{{count}} Gesichter",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
+        "faceSelector": {
+            "title": "Gesichter",
+            "help": "Sie können einzelne Gesichter<br/>auswählen, die verbessert werden sollen.",
+            "button": "Gesichter auswählen ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Bilder hierher ziehen und ablegen,<br/>um sie zu bearbeiten",
+            "browse": "Bilder durchsuchen"
+        },
+        "divider": "Trennlinie",
+        "pane": {
+            "original": "Original",
+            "enhanced": "Verbessert"
+        },
+        "progress": {
+            "downloading": "Herunterladen {{percent}}%",
+            "denoise": "Entrauschen",
+            "faceRecovery": "Gesichter",
+            "colorization": "Kolorierung",
+            "lightAdjustment": "Lichtanpassung",
+            "colorBalance": "Farbbalance",
+            "upscale": "Hochskalieren",
+            "sharpen": "Schärfen",
+            "enhancing": "Wird verbessert"
+        }
+    },
+    "menu": {
+        "file": {
+            "options": "Dateioptionen für {{name}}",
+            "close": "Bild schließen",
+            "closeAll": "Alle Bilder schließen",
+            "showIn": "Im Dateimanager anzeigen",
+            "showIn_darwin": "Im Finder anzeigen",
+            "showIn_windows": "Im Explorer anzeigen"
+        }
+    },
+    "errors": {
+        "autopilotFailed": "Etwas ist schiefgelaufen. Der Autopilot konnte nicht ausgeführt werden.",
+        "enhanceFailed": "Etwas ist schiefgelaufen. Das Bild konnte nicht verbessert werden.",
+        "faceDetectFailed": "Etwas ist schiefgelaufen. Gesichter konnten nicht erkannt werden.",
+        "showLogsFailed": "Die Protokolldatei konnte nicht geöffnet werden. Sie befindet sich im Konfigurationsordner der App.",
+        "revealFailed": "Der Dateimanager konnte nicht geöffnet werden. Die Datei liegt weiterhin am Exportort.",
+        "revealFileFailed": "Der Dateimanager konnte nicht geöffnet werden.",
+        "boundary": {
+            "title": "Etwas ist schiefgelaufen",
+            "message": "Open Photo AI ist auf einen unerwarteten Fehler gestoßen und kann nicht fortfahren. Ein Neuladen behebt das meist; Ihre Einstellungen bleiben erhalten, nicht gespeicherte Arbeit aus der aktuellen Sitzung geht jedoch verloren.",
+            "reload": "Neu laden"
+        }
+    }
+}

@@ -1,0 +1,402 @@
+{
+    "common": {
+        "cancel": "Annuleren",
+        "save": "Opslaan",
+        "close": "Sluiten",
+        "apply": "Toepassen",
+        "reset": "Herstellen",
+        "yes": "Ja",
+        "no": "Nee",
+        "or": "OF",
+        "previewAlt": "Voorbeeld"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "Instellingen",
+        "pages": {
+            "general": {
+                "title": "Algemeen",
+                "description": "Taal, het voorbeeldgebied en app-diagnostiek."
+            },
+            "performance": {
+                "title": "Prestaties",
+                "description": "Kies welke processor de AI-modellen uitvoert."
+            },
+            "enhancements": {
+                "title": "Verbeteringen",
+                "description": "Het model waarmee elke verbetering begint, en of Autopilot deze mag voorstellen. Wat is uitgeschakeld, kan nog steeds handmatig worden toegevoegd."
+            },
+            "export": {
+                "title": "Exporteren",
+                "description": "Kwaliteit voor de lossy formaten. Lagere waarden geven kleinere bestanden; de schalen zijn niet vergelijkbaar tussen formaten."
+            }
+        },
+        "app": {
+            "language": {
+                "title": "Taal",
+                "description": "Wordt toegepast wanneer je op Opslaan klikt."
+            },
+            "background": {
+                "title": "Achtergrond van voorbeeld",
+                "description": "Wordt achter afbeeldingen in het voorbeeldgebied getoond.",
+                "particles": "Deeltjes",
+                "dotted": "Stippen"
+            },
+            "logs": {
+                "title": "Logboeken",
+                "description": "Handig bij het melden van een probleem.",
+                "button": "Logboeken tonen"
+            },
+            "analytics": {
+                "title": "Analyse",
+                "description": "Anonieme gebruiksgegevens verzenden. Er worden nooit afbeeldingen of persoonsgegevens verzameld."
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "AI-processor",
+                "auto": "Automatisch"
+            },
+            "processor": {
+                "auto": {
+                    "description": "Detecteert de hardware van deze computer en gebruikt de snelste processor die deze ondersteunt."
+                },
+                "tensorrt": {
+                    "description": "De snelste optie op NVIDIA-GPU's. De eerste keer dat elk model draait, wordt een geoptimaliseerde engine gebouwd, wat enkele minuten duurt; latere runs starten direct."
+                },
+                "cuda": {
+                    "description": "Voert de modellen uit op de NVIDIA-GPU zonder bouwstap. Langzamer dan TensorRT zodra diens engines zijn gebouwd."
+                },
+                "coreml": {
+                    "description": "Voert de modellen uit op de Apple Neural Engine en de GPU. Veel sneller dan de CPU, al kan niet elk model hem gebruiken."
+                },
+                "cpu": {
+                    "description": "Werkt op elke computer zonder ondersteunde GPU. Verbeteringen duren een stuk langer."
+                }
+            },
+            "recommended": "Aanbevolen"
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF"
+            },
+            "heic": {
+                "title": "HEIC"
+            },
+            "jpeg": {
+                "title": "JPEG"
+            },
+            "webp": {
+                "title": "WEBP"
+            },
+            "valueLabel": "{{format}}-kwaliteit"
+        },
+        "enhancements": {
+            "columns": {
+                "enhancement": "Verbetering",
+                "model": "Standaardmodel",
+                "autopilot": "Autopilot"
+            },
+            "autopilotLabel": "Autopilot: {{name}}"
+        },
+        "reset": "Standaardwaarden herstellen"
+    },
+    "navbar": {
+        "about": "Over",
+        "updateAvailable": "Update beschikbaar",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Afmetingen",
+            "original": "Origineel",
+            "cropped": "Bijgesneden",
+            "output": "Uitvoer"
+        },
+        "about_dialog": {
+            "iconAlt": "App-pictogram",
+            "version": "Versie {{version}}"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Autopilot",
+        "analysing": "Afbeelding analyseren...",
+        "exportImage_one": "Afbeelding exporteren",
+        "exportImage_other": "Afbeeldingen exporteren",
+        "noPreview": "Geen voorbeeld beschikbaar",
+        "zoomCropAlt": "Zoomen & bijsnijden"
+    },
+    "drawer": {
+        "addImages": "Afbeeldingen toevoegen",
+        "showImages": "Afbeeldingen tonen",
+        "hideImages": "Afbeeldingen verbergen",
+        "selectAll": "Alles selecteren",
+        "unselectAll": "Selectie opheffen",
+        "selectImage": "{{name}} selecteren",
+        "zoom": "Zoom",
+        "zoomOut": "Uitzoomen",
+        "zoomIn": "Inzoomen",
+        "zoomScale": "{{scale}}x",
+        "preview": {
+            "full": "Volledig",
+            "sideBySide": "Naast elkaar",
+            "split": "Gesplitst"
+        }
+    },
+    "faces": {
+        "selectFaces": "Gezichten selecteren",
+        "toggleFace": "Gezicht {{number}} aan/uit",
+        "hint": "Klik op een kader om een gezicht op te nemen of over te slaan.",
+        "apply_one": "Toepassen op {{enabled}} van {{count}} gezicht",
+        "apply_other": "Toepassen op {{enabled}} van {{count}} gezichten"
+    },
+    "crop": {
+        "title": "Bijsnijden/draaien",
+        "aspectRatio": "Beeldverhouding",
+        "zoomHint": "Je kunt met het muiswiel of de knijpbeweging op het trackpad in- en uitzoomen op de afbeelding links.",
+        "ratio": {
+            "free": "Vrij",
+            "square": "Vierkant"
+        },
+        "width": "b",
+        "height": "h",
+        "open": "Bijsnijden/Draaien",
+        "rotate": "90 graden draaien",
+        "flipHorizontal": "Horizontaal spiegelen",
+        "flipVertical": "Verticaal spiegelen",
+        "swap": "Breedte en hoogte wisselen"
+    },
+    "export": {
+        "title": "Exporteren",
+        "settings": {
+            "title": "Exportinstellingen",
+            "filename": {
+                "title": "Bestandsnaam",
+                "prefix": "Voorvoegsel",
+                "suffix": "Achtervoegsel",
+                "allowOverwrite": "Overschrijven toestaan?",
+                "sameLocationOverwrite": "Als locatie en extensie hetzelfde zijn, wordt je originele bestand overschreven. Dit kan niet ongedaan worden gemaakt.",
+                "sameLocationRename": "Als locatie en extensie hetzelfde zijn, krijgen nieuwe bestanden een nummer in plaats van het origineel te overschrijven."
+            },
+            "format": {
+                "title": "Formaat",
+                "preserve": "Behouden"
+            },
+            "quality": {
+                "title": "Kwaliteit"
+            },
+            "location": {
+                "title": "Opslaan in",
+                "original": "Oorspronkelijke map",
+                "browse": "Bladeren..."
+            },
+            "abort": "Afbreken",
+            "exportAgain": "Opnieuw exporteren"
+        },
+        "queue": {
+            "title": "Wachtrij ({{count}})",
+            "pipelineOrder": "in pijplijnvolgorde",
+            "queued": "In wachtrij",
+            "analysing": "Analyseren",
+            "enhancing": "Verbeteren",
+            "writing": "Schrijven",
+            "done": "Klaar",
+            "failed": "Mislukt",
+            "writeFailed": "Kan {{name}} niet naar {{folder}} schrijven.",
+            "enhanceFailed": "Kan deze afbeelding niet verbeteren.",
+            "unreadable": "Kan deze afbeelding niet lezen.",
+            "analysisFailed": "Autopilot kon deze afbeelding niet analyseren.",
+            "copied": "Gekopieerd naar het klembord"
+        },
+        "summary": {
+            "ready_one": "{{count}} bestand klaar · nog niets geschreven",
+            "ready_other": "{{count}} bestanden klaar · nog niets geschreven",
+            "running_one": "{{written}} van {{count}} geschreven · nog {{remaining}}",
+            "running_other": "{{written}} van {{count}} geschreven · nog {{remaining}}",
+            "ended_one": "{{written}} van {{count}} geschreven",
+            "ended_other": "{{written}} van {{count}} geschreven",
+            "endedFailed_one": "{{written}} van {{count}} geschreven, {{failed}} mislukt",
+            "endedFailed_other": "{{written}} van {{count}} geschreven, {{failed}} mislukt"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Afbeelding selecteren",
+            "selectDirectory": "Map selecteren",
+            "imagesFilter": "Afbeeldingen"
+        },
+        "tensorRT": {
+            "title": "TensorRT gedetecteerd",
+            "logoAlt": "TensorRT",
+            "intro": "We hebben een GPU gedetecteerd die TensorRT ondersteunt. TensorRT is een NVIDIA-technologie die AI-modellen aanzienlijk sneller kan uitvoeren dan CUDA.",
+            "optimization": "Wanneer TensorRT is ingeschakeld, moet het de modelgraaf eerst omzetten naar een eigen formaat. <b>Deze optimalisatiestap kan de eerste keer een paar minuten duren</b>; daaropvolgende runs zijn veel sneller.",
+            "question": "Wil je TensorRT inschakelen?",
+            "footer": "Wat je nu ook kiest, je kunt je keuze altijd aanpassen in het dialoogvenster <b>Instellingen</b>, onder <u>AI-processor</u>."
+        }
+    },
+    "setup": {
+        "title": "{{app}} wordt ingesteld",
+        "components": "De componenten die de AI-modellen uitvoeren worden gedownload.",
+        "cached": "Dit gebeurt maar één keer — ze worden bewaard voor elke volgende start.",
+        "installed_one": "{{installed}} van {{count}} component geïnstalleerd",
+        "installed_other": "{{installed}} van {{count}} componenten geïnstalleerd",
+        "state": {
+            "installed": "Geïnstalleerd",
+            "downloading": "Downloaden",
+            "extracting": "Uitpakken",
+            "queued": "In wachtrij"
+        },
+        "throttling": "Deze bestanden staan op GitHub, dat downloads afknijpt wanneer ze te vaak worden opgehaald — daardoor kan dit langzamer gaan dan je verbinding toelaat.",
+        "footer": "De app is klaar voor gebruik zodra de downloads voltooid zijn.",
+        "quit": "Afsluiten",
+        "error": {
+            "title": "Instellen kon niet worden voltooid",
+            "needs": "{{app}} heeft deze componenten nodig om te kunnen werken.",
+            "summary": {
+                "only": "Hij is halverwege gestopt.",
+                "first": "De eerste is halverwege gestopt.",
+                "last": "{{finished}} van {{total}} voltooid; de laatste is halverwege gestopt.",
+                "rest": "{{finished}} van {{total}} voltooid; één is halverwege gestopt en de rest is niet bereikt."
+            },
+            "state": {
+                "error": "Fout"
+            },
+            "throttling": "Deze bestanden staan op GitHub, dat downloads afknijpt wanneer ze te vaak worden opgehaald. Het over een paar minuten opnieuw proberen werkt meestal.",
+            "tryAgain": "Opnieuw proberen",
+            "copied": "Gekopieerd!"
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_one": "Het bestand \"{{names}}\" wordt niet ondersteund.",
+        "unsupportedFiles_other": "{{count}} bestanden worden niet ondersteund: {{names}}"
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Ruisonderdrukking",
+            "models": {
+                "stockholm": "Gebruik dit model wanneer je snelle, hoogwaardige onderdrukking van echte sensorruis nodig hebt en rekenefficiëntie telt. Een goede keuze wanneer doorvoer en beperkte middelen echt meespelen: het houdt de inferentietijden laag zonder in te leveren op kwaliteit.",
+                "gothenburg": "Gebruik dit model wanneer je foto's echte sensorruis bevatten, het soort dat ontstaat bij weinig licht of een hoge ISO-waarde met een smartphone of DSLR. Het gaat om met de complexe ruispatronen die camera's produceren en is daarmee de juiste keuze voor fotografie.",
+                "malmo": "Gebruik dit model om regenstrepen uit buitenfoto's te verwijderen, of het nu lichte motregen of een stevige stortbui was. Het gaat om met regen van uiteenlopende schaal, dichtheid en richting en herstelt fijne details achter de strepen. Een goede keuze wanneer weersartefacten het beeld verstoren."
+            }
+        },
+        "faceRecovery": {
+            "name": "Gezichtsherstel",
+            "models": {
+                "athens": "Gebruik dit model wanneer het behoud van de identiteit het belangrijkst is. Het bewaart de gezichtsstructuur terwijl details worden hersteld, zelfs bij zwaar aangetaste gezichten. Het beste wanneer je wilt restaureren zonder de persoon te veranderen.",
+                "santorini": "Gebruik dit model wanneer je een agressieve, snelle verbetering wilt en wat identiteitsverschuiving acceptabel is. Het levert scherpe, aantrekkelijke gezichten bij matige degradatie, maar kan bij invoer van zeer lage kwaliteit kenmerken verzinnen en de identiteit veranderen."
+            }
+        },
+        "colorization": {
+            "name": "Inkleuren",
+            "models": {
+                "delhi": "De beste eerste keuze voor de meeste zwart-witfoto's. Het bekijkt de hele scène om te bepalen hoe dingen eruit horen te zien en levert rijke, overtuigende kleuren met strakke randen — al kiest het soms gedurfd voor een kleur die er niet was.",
+                "mumbai": "Gebruik dit model wanneer de kleuren van Delhi te fel of te modern aanvoelen voor de foto. Het is getraind met een creatievere inslag en neigt naar zachtere, subtiel gestileerde tinten die passen bij oude portretten en gescande film — al verschillen de resultaten sterker per foto.",
+                "jaipur": "Gebruik dit model wanneer consistentie het belangrijkst is. De kleuren zijn ingetogener dan bij de andere modellen, maar het produceert vrijwel nooit vreemde kleurvlekken of rare keuzes — een betrouwbare optie voor oude portretten, landschappen en zwaar beschadigde scans."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Lichtaanpassing",
+            "models": {
+                "paris": "Gebruik dit model wanneer het licht in de foto ongelijkmatig is — nachtopnamen, onderwerpen in tegenlicht of een gezicht dat in de schaduw verdwijnt terwijl de rest er goed uitziet. Het haalt terug wat het donker verbergt, houdt de kleuren natuurlijk en is erg snel.",
+                "lyon": "Gebruik dit model wanneer de hele foto te licht of te donker is geworden — uitgewassen luchten of een onderwerp dat in de schaduw verdwijnt. Het bouwt de helderheid van het hele beeld opnieuw op en redt detail aan beide uiteinden tegelijk."
+            }
+        },
+        "colorBalance": {
+            "name": "Kleurbalans",
+            "models": {
+                "rio": "Gebruik dit model wanneer de hele foto dezelfde kant op helt — oranje onder lampen binnen, blauw in de schaduw of op een bewolkte dag. Het rendert de opname alsof de camera de juiste witbalans had gekozen en corrigeert de zweem in één keer.",
+                "saopaulo": "Gebruik dit model wanneer twee lichtbronnen in hetzelfde beeld botsen, zoals een warme lamp binnen tegenover daglicht door het raam. Het rendert de scène met meerdere witbalansen en mengt die pixel voor pixel, gebied voor gebied."
+            }
+        },
+        "sharpen": {
+            "name": "Verscherpen",
+            "models": {
+                "moscow": "Gebruik dit model wanneer de onscherpte komt doordat de camera niet scherpstelde en niet door beweging, bijvoorbeeld portretten met een wazige achter- of voorgrond, macrofoto's die zacht zijn geworden, of elke scène waarin de lens op het verkeerde vlak scherpstelde.",
+                "petersburg": "Gebruik dit model wanneer je snelle, lichte bewegingsontscherping nodig hebt en efficiëntie belangrijker is dan het laatste beetje kwaliteit. Het is geschikt voor actiebeelden en handmatige cameratrillingen en is een solide keuze op beperkte hardware.",
+                "novgorod": "Gebruik dit model wanneer de onscherpte komt door cameratrillingen of snel bewegende onderwerpen, bijvoorbeeld sport, handmatige opnamen bij weinig licht, of elke foto waarbij er iets bewoog tijdens de belichting. Het stelt maximale herstelkwaliteit boven snelheid; goed wanneer het resultaat telt."
+            }
+        },
+        "upscale": {
+            "name": "Opschalen",
+            "models": {
+                "tokyo": "Gebruik dit model wanneer je een natuurlijke opschaling zonder overdrijving wilt. Het richt zich op het behouden van de oorspronkelijke look en fijne structuren in plaats van nieuwe details te \"verzinnen\", ideaal wanneer realisme en trouw aan het origineel belangrijker zijn dan scherpte.",
+                "kyoto": "Gebruik dit model voor echte foto's (mensen, landschappen, producten). Het herstelt details uitstekend en gaat tegelijk om met ruis, onscherpte en compressieartefacten. Ideaal voor praktijksituaties waarin afbeeldingen niet perfect zijn en je snel aantrekkelijke, robuuste resultaten wilt.",
+                "saitama": "Gebruik dit model voor cartoons, tekeningen, lijntekeningen en digitale illustraties. Het behoudt schone lijnen, vlakke kleuren en gestileerde schaduwen zonder fotoachtige texturen toe te voegen. Het beste wanneer scherpe randen en stilistische consistentie belangrijker zijn dan realisme.",
+                "osaka": "Gebruik dit model wanneer je de best mogelijke opschaalkwaliteit wilt. Het bouwt detail opnieuw op in plaats van het alleen te verscherpen en gaat het verst bij zachte of sterk gecomprimeerde foto's. Het is wel traag en heeft een krachtige GPU nodig om goed te draaien."
+            }
+        },
+        "add": "Toevoegen",
+        "remove": "Verbetering verwijderen",
+        "modelSelector": "AI-model",
+        "bias": "Bias",
+        "strength": "Sterkte",
+        "scale": {
+            "title": "Schaal",
+            "max": "Max",
+            "custom": "Aangepast",
+            "shortcut": "{{scale}}x"
+        },
+        "faces_one": "{{count}} gezicht",
+        "faces_other": "{{count}} gezichten",
+        "faces_partial_one": "{{enabled}}/{{count}} gezicht",
+        "faces_partial_other": "{{enabled}}/{{count}} gezichten",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
+        "faceSelector": {
+            "title": "Gezichten",
+            "help": "Je kunt afzonderlijke gezichten<br/>selecteren die je wilt verbeteren.",
+            "button": "Gezichten selecteren ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Sleep afbeeldingen hierheen<br/>om ze te bewerken",
+            "browse": "Afbeeldingen zoeken"
+        },
+        "divider": "Scheidingslijn",
+        "pane": {
+            "original": "Origineel",
+            "enhanced": "Verbeterd"
+        },
+        "progress": {
+            "downloading": "Downloaden {{percent}}%",
+            "denoise": "Ruis",
+            "faceRecovery": "Gezichten",
+            "colorization": "Inkleuren",
+            "lightAdjustment": "Licht",
+            "colorBalance": "Kleur",
+            "upscale": "Opschalen",
+            "sharpen": "Verscherpen",
+            "enhancing": "Verbeteren"
+        }
+    },
+    "menu": {
+        "file": {
+            "options": "Bestandsopties voor {{name}}",
+            "close": "Afbeelding sluiten",
+            "closeAll": "Alle afbeeldingen sluiten",
+            "showIn": "Tonen in bestandsbeheer",
+            "showIn_darwin": "Tonen in Finder",
+            "showIn_windows": "Tonen in Verkenner"
+        }
+    },
+    "errors": {
+        "autopilotFailed": "Er is iets misgegaan. Autopilot kon niet worden uitgevoerd.",
+        "enhanceFailed": "Er is iets misgegaan. De afbeelding kon niet worden verbeterd.",
+        "faceDetectFailed": "Er is iets misgegaan. Gezichten konden niet worden gedetecteerd.",
+        "showLogsFailed": "Kan het logbestand niet openen. Je vindt het in de configuratiemap van de app.",
+        "revealFailed": "Kon de bestandsbeheerder niet openen. Het bestand staat nog steeds op de exportlocatie.",
+        "revealFileFailed": "Kon de bestandsbeheerder niet openen.",
+        "boundary": {
+            "title": "Er is iets misgegaan",
+            "message": "Open Photo AI liep tegen een onverwachte fout aan en kan niet verder. Opnieuw laden lost het meestal op; je instellingen blijven behouden, maar niet-opgeslagen werk in de huidige sessie gaat verloren.",
+            "reload": "Opnieuw laden"
+        }
+    }
+}

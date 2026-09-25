@@ -1,0 +1,232 @@
+[
+  {
+    "name": "cb_rio_fp16.onnx",
+    "size": 8743588,
+    "sha256": "5a13814be922b58259538850d9a5690a1ca74138c1dbaedbfed737cf242109e5"
+  },
+  {
+    "name": "cb_rio_fp32.onnx",
+    "size": 17475112,
+    "sha256": "a41d10c131e60a274c82bca0918a892ab07a7d2c2370c2b824f98530db670a7e"
+  },
+  {
+    "name": "cb_saopaulo_fp16.onnx",
+    "size": 16678334,
+    "sha256": "6befa0fa38630fee30639a8eefa1a26a9b17562fc3bb2e03998d4dd6598c6a57"
+  },
+  {
+    "name": "cb_saopaulo_fp32.onnx",
+    "size": 33182049,
+    "sha256": "8498d2b5594135613f7ad3f26b414042f46b4405bfea59c7750e02cf8f4bca6d"
+  },
+  {
+    "name": "cl_delhi_fp16.onnx",
+    "size": 456413637,
+    "sha256": "85b0eeb07437c9842b4572fa7ad5dbb33a640aad58d48c0d16a1efc320f3d38f"
+  },
+  {
+    "name": "cl_delhi_fp32.onnx",
+    "size": 912077382,
+    "sha256": "2c40cc73808dc406853bec39bf297b843d0b983698e3ca8fa0fd09e1c228c6fc"
+  },
+  {
+    "name": "cl_jaipur_fp16.onnx",
+    "size": 436496871,
+    "sha256": "a9ba2cf6d1f9788d262105ed2a6ba2d4d286ac69e629e8cebaf1a1f7ad9fe3af"
+  },
+  {
+    "name": "cl_jaipur_fp32.onnx",
+    "size": 872835111,
+    "sha256": "afb41efd90a21a2b52492703a85d778fba5de23a5c37a380fc9ab3d70b6ac368"
+  },
+  {
+    "name": "cl_mumbai_fp16.onnx",
+    "size": 456413637,
+    "sha256": "2eb53310f4b878ae83f6b1f153eaccc087272e9c42ec996e008cdf830cdca460"
+  },
+  {
+    "name": "cl_mumbai_fp32.onnx",
+    "size": 912077382,
+    "sha256": "04f2d5dde20a6f36d1c8c4df1af8eacc688db952fdc5fee447cf545488e60f38"
+  },
+  {
+    "name": "dn_gothenburg_fp16.onnx",
+    "size": 53039552,
+    "sha256": "5060d7a32966902d0a021d7b0c0e1a4bb026d378bdf8b1b9023eb6c5f1c99b53"
+  },
+  {
+    "name": "dn_gothenburg_fp32.onnx",
+    "size": 104999615,
+    "sha256": "5416b99ebad0de8cef47388ad6999fd71098ee75c6d6a913b0d350939c019895"
+  },
+  {
+    "name": "dn_malmo_fp16.onnx",
+    "size": 53805746,
+    "sha256": "e5921654bc1873ec0fbe42304070a79bfb0b578dbe9b398e55cd4ff50e3f5ea6"
+  },
+  {
+    "name": "dn_malmo_fp32.onnx",
+    "size": 105628429,
+    "sha256": "f7257fa1216d71f7c0dafe4d1ec1f265aaf72913cd59bc1eed2565171c463c50"
+  },
+  {
+    "name": "dn_stockholm_fp16.onnx",
+    "size": 232374896,
+    "sha256": "01d144e25c36eddb5e59bf41e8291e8b34e08e0a18dd735f26d7bb9dcf031f80"
+  },
+  {
+    "name": "dn_stockholm_fp32.onnx",
+    "size": 464230517,
+    "sha256": "8ca3da79f350d3fbf4879f37980df222e6ae70ef659f5c3035cc75a4a2a526f8"
+  },
+  {
+    "name": "dt_newyork_fp16.onnx",
+    "size": 44272782,
+    "sha256": "7ca71fd2038c5f392106653d3ad787b5f075c7b0404607eebc9b13433a888838"
+  },
+  {
+    "name": "dt_newyork_fp32.onnx",
+    "size": 88500296,
+    "sha256": "07430c90adbb2d90a9c98ef222500e7ba043bdfcc2643a9fc0e126d18d437d72"
+  },
+  {
+    "name": "fr_athens_fp16.onnx",
+    "size": 188543498,
+    "sha256": "6b1765994c152313045cc29ec5a618c2adcbff47bc6f36ec7e03ec2b1e08923a"
+  },
+  {
+    "name": "fr_athens_fp32.onnx",
+    "size": 376716366,
+    "sha256": "2c48e84213d5d989f2203c0e592776fbe5aeedcc8136a5510281f8d1c43a21c0"
+  },
+  {
+    "name": "fr_santorini_fp16.onnx",
+    "size": 168884305,
+    "sha256": "3f0b853500e610c16e5b0955bb0435d42375b1a594ef214e671cdabfac59f5f4"
+  },
+  {
+    "name": "fr_santorini_fp32.onnx",
+    "size": 337540861,
+    "sha256": "2d314a2241cde850f47b8ca914a8d0e09d5040b07b16090b5c20127da3f49aab"
+  },
+  {
+    "name": "la_lyon_fp16.onnx",
+    "size": 65109366,
+    "sha256": "4c63de8d5b0788f7ec654d94b1b708420d4ba10e4df28f41649e15364c795643"
+  },
+  {
+    "name": "la_lyon_fp32.onnx",
+    "size": 129475548,
+    "sha256": "15d86d80d97a48e1ae9444b30fff53d366d73dad82a4b1d936d2eef8818cb28f"
+  },
+  {
+    "name": "la_paris_fp16.onnx",
+    "size": 149433,
+    "sha256": "e6695f08f559b8aa1ffa65c7f081c60c29b104334964bf2d62916ddb296162f2"
+  },
+  {
+    "name": "la_paris_fp32.onnx",
+    "size": 286407,
+    "sha256": "a01ea6a86bb858f1bb257ec8ab8def64a2edb90795c9c1eafe5ba1ba0e6cf3e4"
+  },
+  {
+    "name": "sh_moscow_fp16.onnx",
+    "size": 53059124,
+    "sha256": "9d0e87dd632bac0c79d3f4f45e2382ad7aa356feb4c245a5338dac0898708857"
+  },
+  {
+    "name": "sh_moscow_fp32.onnx",
+    "size": 105317487,
+    "sha256": "e0e35b0d1443329f540f3d143eae89a0986d26afea919aef560089f477f06984"
+  },
+  {
+    "name": "sh_novgorod_fp16.onnx",
+    "size": 53185379,
+    "sha256": "a75d6288abb4f92ff035d75a5e07a97c67afc35ae19de6b0f999e46bf574273f"
+  },
+  {
+    "name": "sh_novgorod_fp32.onnx",
+    "size": 105438342,
+    "sha256": "4a1f0a561b55af66611f6aa51ffd5d6ab07fbee39b396591aa90840a4f7eee9b"
+  },
+  {
+    "name": "sh_petersburg_fp16.onnx",
+    "size": 135888071,
+    "sha256": "45c0663b0a6e75311e0784a60a45e3d443fb036719baaf543e6101a9888709b2"
+  },
+  {
+    "name": "sh_petersburg_fp32.onnx",
+    "size": 271595022,
+    "sha256": "3c7dbd8f87bd8d1267d0c3e9d934d620869adadc7117fbbb25a0e9e1fffaf05d"
+  },
+  {
+    "name": "up_kyoto_2x_fp16.onnx",
+    "size": 33712842,
+    "sha256": "9fcd3bc14d9068182b5c910b416dee2db96d6da1690e6b878a6e0a81027db1e4"
+  },
+  {
+    "name": "up_kyoto_2x_fp32.onnx",
+    "size": 67119422,
+    "sha256": "a6ed363c0796e7b863e49e6ee2ec40f2cbc02a14dff9b26f91e51b1a88ae5e4c"
+  },
+  {
+    "name": "up_kyoto_4x_fp16.onnx",
+    "size": 33701909,
+    "sha256": "070e6e9c94896625778094b372288881d0f893264c0c8a90fc81886dc571a06a"
+  },
+  {
+    "name": "up_kyoto_4x_fp32.onnx",
+    "size": 67098087,
+    "sha256": "f437f55390d9e3d001dc96572e562b233d1c4cd19b1e064446ddb6ca97c5e863"
+  },
+  {
+    "name": "up_osaka_fp16.onnx",
+    "size": 2589005,
+    "sha256": "6351c6464ad1849adc8c1d5c610550fe7b64c3e43765276fa32a23bb65dfc98b"
+  },
+  {
+    "name": "up_osaka_fp16.onnx.data",
+    "size": 7036572320,
+    "sha256": "a96bb4b65a1fc29e2d14a43a7e008d6b90fef1e1ec344a18bbacf38133b6b504"
+  },
+  {
+    "name": "up_osaka_int8.onnx",
+    "size": 2633983,
+    "sha256": "1744c06080a8156b9db80fd59ca70a2de28c3ba2f9d62283f0d9b0a000f7c66c"
+  },
+  {
+    "name": "up_osaka_int8.onnx.data",
+    "size": 3678853792,
+    "sha256": "a12436f16d734977c264f696f7731fa74c74c3e8dc3768d93429ef4a07af984c"
+  },
+  {
+    "name": "up_osaka_vae_decoder_fp16.onnx",
+    "size": 103866938,
+    "sha256": "149243b2e1fa33e7d90ed462b3e16a7da66f4390fce313b434bf557fdf4de7d1"
+  },
+  {
+    "name": "up_osaka_vae_encoder_fp16.onnx",
+    "size": 68583401,
+    "sha256": "0d001682412a705b8ebd71e990e279f389eebbe7ee26727908d91d05cd1387cf"
+  },
+  {
+    "name": "up_saitama_4x_fp16.onnx",
+    "size": 8984791,
+    "sha256": "e1fc6151ec0743982159340333a4132b97ae9ac888d7a2fe1cc98b83ae109c99"
+  },
+  {
+    "name": "up_saitama_4x_fp32.onnx",
+    "size": 17920169,
+    "sha256": "a5297a5a3e29aabaafee8188d46eea4713ceceaee86cb6e2cd850add23c63daa"
+  },
+  {
+    "name": "up_tokyo_4x_fp16.onnx",
+    "size": 68798101,
+    "sha256": "8978296b32cc826d2512216736680a84db07b22ec89c70fd491f903807bf18c6"
+  },
+  {
+    "name": "up_tokyo_4x_fp32.onnx",
+    "size": 136342058,
+    "sha256": "ea862ae842c494af6d394befe6aea2b7225e9d9a59599ea293b6bb5cd2cbcea8"
+  }
+]

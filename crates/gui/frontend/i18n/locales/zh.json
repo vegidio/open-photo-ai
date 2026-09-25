@@ -1,0 +1,392 @@
+{
+    "common": {
+        "cancel": "取消",
+        "save": "保存",
+        "close": "关闭",
+        "apply": "应用",
+        "reset": "重置",
+        "yes": "是",
+        "no": "否",
+        "or": "或",
+        "previewAlt": "预览"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "设置",
+        "pages": {
+            "general": {
+                "title": "常规",
+                "description": "语言、预览区域和应用诊断。"
+            },
+            "performance": {
+                "title": "性能",
+                "description": "选择运行 AI 模型的处理器。"
+            },
+            "enhancements": {
+                "title": "增强",
+                "description": "每项增强默认使用的模型，以及自动优化是否可以建议它。关闭的项目仍可手动添加。"
+            },
+            "export": {
+                "title": "导出",
+                "description": "有损格式的质量。数值越低文件越小；不同格式之间的刻度不可比较。"
+            }
+        },
+        "app": {
+            "language": {
+                "title": "语言",
+                "description": "点击保存后生效。"
+            },
+            "background": {
+                "title": "预览背景",
+                "description": "显示在预览区域中的图像后方。",
+                "particles": "粒子",
+                "dotted": "点阵"
+            },
+            "logs": {
+                "title": "日志",
+                "description": "报告问题时很有用。",
+                "button": "显示日志"
+            },
+            "analytics": {
+                "title": "使用分析",
+                "description": "发送匿名使用数据。绝不会收集图像或个人数据。"
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "AI 处理器",
+                "auto": "自动"
+            },
+            "processor": {
+                "auto": {
+                    "description": "检测本机硬件并使用其支持的最快处理器。"
+                },
+                "tensorrt": {
+                    "description": "NVIDIA GPU 上最快的选项。每个模型首次运行时会构建优化引擎，需要几分钟；之后的运行会立即开始。"
+                },
+                "cuda": {
+                    "description": "在 NVIDIA GPU 上运行模型，无需构建步骤。引擎构建完成后比 TensorRT 慢。"
+                },
+                "coreml": {
+                    "description": "在 Apple 神经网络引擎和 GPU 上运行模型。比 CPU 快得多，但并非所有模型都能使用。"
+                },
+                "cpu": {
+                    "description": "适用于任何没有受支持 GPU 的机器。增强所需时间会长得多。"
+                }
+            },
+            "recommended": "推荐"
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF"
+            },
+            "heic": {
+                "title": "HEIC"
+            },
+            "jpeg": {
+                "title": "JPEG"
+            },
+            "webp": {
+                "title": "WEBP"
+            },
+            "valueLabel": "{{format}} 质量"
+        },
+        "enhancements": {
+            "columns": {
+                "enhancement": "增强",
+                "model": "默认模型",
+                "autopilot": "自动优化"
+            },
+            "autopilotLabel": "自动优化：{{name}}"
+        },
+        "reset": "恢复默认设置"
+    },
+    "navbar": {
+        "about": "关于",
+        "updateAvailable": "有可用更新",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "尺寸",
+            "original": "原图",
+            "cropped": "裁剪后",
+            "output": "输出"
+        },
+        "about_dialog": {
+            "iconAlt": "应用图标",
+            "version": "版本 {{version}}"
+        }
+    },
+    "sidebar": {
+        "autopilot": "自动优化",
+        "analysing": "正在分析图片…",
+        "exportImage_other": "导出图像",
+        "noPreview": "没有可用的预览",
+        "zoomCropAlt": "缩放和裁剪"
+    },
+    "drawer": {
+        "addImages": "添加图片",
+        "showImages": "显示图片",
+        "hideImages": "隐藏图片",
+        "selectAll": "全选",
+        "unselectAll": "取消全选",
+        "selectImage": "选择 {{name}}",
+        "zoom": "缩放",
+        "zoomOut": "缩小",
+        "zoomIn": "放大",
+        "zoomScale": "{{scale}}倍",
+        "preview": {
+            "full": "整图",
+            "sideBySide": "并排",
+            "split": "分割"
+        }
+    },
+    "faces": {
+        "selectFaces": "选择人脸",
+        "toggleFace": "切换人脸 {{number}}",
+        "hint": "点击方框以包含或跳过某张人脸。",
+        "apply_other": "应用于 {{count}} 张人脸中的 {{enabled}} 张"
+    },
+    "crop": {
+        "title": "裁剪/旋转",
+        "aspectRatio": "宽高比",
+        "zoomHint": "你可以使用鼠标滚轮或触控板双指缩放来放大和缩小左侧的图片。",
+        "ratio": {
+            "free": "自由",
+            "square": "正方形"
+        },
+        "width": "宽",
+        "height": "高",
+        "open": "裁剪/旋转",
+        "rotate": "旋转 90 度",
+        "flipHorizontal": "水平翻转",
+        "flipVertical": "垂直翻转",
+        "swap": "交换宽度和高度"
+    },
+    "export": {
+        "title": "导出",
+        "settings": {
+            "title": "导出设置",
+            "filename": {
+                "title": "文件名",
+                "prefix": "前缀",
+                "suffix": "后缀",
+                "allowOverwrite": "允许覆盖？",
+                "sameLocationOverwrite": "位置和扩展名相同时，原始文件将被覆盖，此操作无法撤销。",
+                "sameLocationRename": "位置和扩展名相同时，新文件会追加编号，不会覆盖原始文件。"
+            },
+            "format": {
+                "title": "格式",
+                "preserve": "保持原格式"
+            },
+            "quality": {
+                "title": "质量"
+            },
+            "location": {
+                "title": "保存到",
+                "original": "原始目录",
+                "browse": "浏览…"
+            },
+            "abort": "中止",
+            "exportAgain": "重新导出"
+        },
+        "queue": {
+            "title": "队列（{{count}}）",
+            "pipelineOrder": "按处理顺序",
+            "queued": "排队中",
+            "analysing": "分析中",
+            "enhancing": "增强中",
+            "writing": "写入中",
+            "done": "完成",
+            "failed": "失败",
+            "writeFailed": "无法将 {{name}} 写入 {{folder}}。",
+            "enhanceFailed": "无法增强此图像。",
+            "unreadable": "无法读取此图像。",
+            "analysisFailed": "Autopilot 无法分析此图像。",
+            "copied": "已复制到剪贴板"
+        },
+        "summary": {
+            "ready_other": "{{count}} 个文件就绪 · 尚未写入任何文件",
+            "running_other": "已写入 {{written}}/{{count}} · 剩余 {{remaining}} 个",
+            "ended_other": "已写入 {{written}}/{{count}}",
+            "endedFailed_other": "已写入 {{written}}/{{count}}，{{failed}} 个失败"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "选择图片",
+            "selectDirectory": "选择目录",
+            "imagesFilter": "图片"
+        },
+        "tensorRT": {
+            "title": "检测到 TensorRT",
+            "logoAlt": "TensorRT",
+            "intro": "我们检测到一块支持 TensorRT 的显卡。TensorRT 是 NVIDIA 的一项技术，运行 AI 模型的速度可以远快于 CUDA。",
+            "optimization": "启用 TensorRT 后，它必须先把模型图优化成自身可识别的格式。<b>首次运行时，这一优化步骤可能需要几分钟</b>；之后的运行会快得多。",
+            "question": "要启用 TensorRT 吗？",
+            "footer": "无论现在如何选择，你都可以随时在<b>设置</b>对话框的 <u>AI 处理器</u>中修改。"
+        }
+    },
+    "setup": {
+        "title": "正在设置 {{app}}",
+        "components": "正在下载运行 AI 模型所需的组件。",
+        "cached": "这只会进行一次——组件会被缓存，供以后每次启动使用。",
+        "installed_other": "已安装 {{count}} 个组件中的 {{installed}} 个",
+        "state": {
+            "installed": "已安装",
+            "downloading": "下载中",
+            "extracting": "解压中",
+            "queued": "排队中"
+        },
+        "throttling": "这些文件托管在 GitHub 上，下载过于频繁时会被限速，因此速度可能低于你的网络所能达到的水平。",
+        "footer": "下载完成后即可使用应用。",
+        "quit": "退出",
+        "error": {
+            "title": "无法完成设置",
+            "needs": "{{app}} 需要这些组件才能运行。",
+            "summary": {
+                "only": "它中途停止了。",
+                "first": "第一个组件中途停止了。",
+                "last": "{{total}} 个中已完成 {{finished}} 个；最后一个中途停止了。",
+                "rest": "{{total}} 个中已完成 {{finished}} 个；一个中途停止，其余的尚未开始。"
+            },
+            "state": {
+                "error": "错误"
+            },
+            "throttling": "这些文件托管在 GitHub 上，下载过于频繁时会被限速。过几分钟再试通常就能成功。",
+            "tryAgain": "重试",
+            "copied": "已复制"
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_other": "有 {{count}} 个文件不受支持：{{names}}"
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "降噪",
+            "models": {
+                "stockholm": "当你需要快速、高质量地去除真实传感器噪点，并且在意计算效率时，可以使用此模型。当吞吐量和资源受限是实际考量时，它是不错的选择：在不牺牲质量的前提下保持较低的推理耗时。",
+                "gothenburg": "当你的照片包含真实的传感器噪点时使用此模型，也就是用手机或单反在弱光或高 ISO 下拍摄产生的那种噪点。它能处理相机产生的复杂噪点模式，是摄影场景的正确选择。",
+                "malmo": "使用此模型去除户外图片中的雨痕，无论是细雨还是暴雨。它能处理不同尺度、密度和方向的雨丝，并还原雨痕后面的细节。当天气造成的干扰遮挡了画面时，这是不错的选择。"
+            }
+        },
+        "faceRecovery": {
+            "name": "人脸修复",
+            "models": {
+                "athens": "当保持身份特征最为重要时使用此模型。它能在还原细节的同时保留面部结构，即使人脸严重受损也是如此。适合在不改变人物本身的前提下进行修复。",
+                "santorini": "当你想要激进而快速的增强，并且可以接受身份特征发生变化时，使用此模型。对于中等程度的画质损失，它能生成锐利、观感讨喜的人脸，但在画质极差的输入上可能会臆造五官并改变身份特征。"
+            }
+        },
+        "colorization": {
+            "name": "上色",
+            "models": {
+                "delhi": "大多数黑白照片的最佳首选。它会分析整个画面来判断各种物体应有的颜色，生成浓郁、自信且边缘干净的色彩——不过偶尔会大胆地选用一种原本不存在的颜色。",
+                "mumbai": "当 Delhi 的色彩对照片来说过于浓烈或过于现代时使用。它以更具创意的方向训练，偏向柔和、略带风格化的色调，适合老照片人像和扫描的胶片，但不同照片之间的效果差异会更大。",
+                "jaipur": "当稳定性最重要时使用。它的色彩比其他模型更含蓄，但几乎从不产生奇怪的色块或离谱的猜测——对于老人像、风景和严重受损的扫描件来说是稳妥之选。"
+            }
+        },
+        "lightAdjustment": {
+            "name": "光线调整",
+            "models": {
+                "paris": "当照片中的光线不均匀时使用此模型——夜景、逆光主体，或其余部分正常却隐没在阴影里的人脸。它能找回黑暗掩盖的细节，保持色彩自然，而且速度很快。",
+                "lyon": "当整张照片过亮或过暗时使用此模型——泛白的天空，或消失在阴影中的主体。它会重建整幅画面的明暗，同时挽救亮部和暗部的细节。"
+            }
+        },
+        "colorBalance": {
+            "name": "色彩平衡",
+            "models": {
+                "rio": "当整张照片整体偏向同一种色调时使用此模型，比如室内灯光下偏橙、阴影处或阴天偏蓝。它会像相机选对了白平衡那样重新生成画面，整体校正色偏。",
+                "saopaulo": "当同一画面里两种光源相互冲突时使用此模型，比如室内的暖色灯光与窗外照进来的日光。它会用多种白平衡渲染场景，再逐像素、逐区域地融合。"
+            }
+        },
+        "sharpen": {
+            "name": "锐化",
+            "models": {
+                "moscow": "当模糊源于相机失焦而非运动时使用此模型，例如背景或前景发虚的人像、拍虚了的微距照片，或任何镜头对错焦平面的场景。",
+                "petersburg": "当你需要快速、轻量的运动去模糊，并且效率比压榨最后一点画质更重要时，使用此模型。它很适合运动画面和手持抖动，在硬件受限时也是可靠的选择。",
+                "novgorod": "当模糊由相机抖动或快速移动的主体造成时使用此模型，例如体育场景、弱光下的手持拍摄，或任何曝光期间有物体移动的照片。它以最高的还原质量为优先、速度其次；在结果最重要时值得使用。"
+            }
+        },
+        "upscale": {
+            "name": "放大",
+            "models": {
+                "tokyo": "当你想要自然、不夸张的放大效果时使用此模型。它专注于保留原有观感和细微结构，而不是“臆造”新细节，因此在真实感和忠实度比锐度更重要时非常合适。",
+                "kyoto": "使用此模型处理真实世界的照片（人物、风景、产品）。它擅长在应对噪点、模糊和压缩失真的同时还原细节。适合图片并不完美的实际场景，让你快速得到观感讨喜且稳定的结果。",
+                "saitama": "使用此模型处理卡通、手绘、线稿和数字插画。它能保留干净的线条、平涂的色块和风格化的明暗，而不会引入照片般的纹理。当锐利的边缘和风格一致性比真实感更重要时，这是最佳选择。",
+                "osaka": "当你想要可获得的最佳放大画质时使用此模型。它会重建细节，而不只是锐化细节，在发虚或压缩严重的照片上效果最为出色。不过它速度较慢，需要性能强劲的显卡才能跑得顺畅。"
+            }
+        },
+        "add": "添加增强",
+        "remove": "移除增强",
+        "modelSelector": "AI 模型",
+        "bias": "偏移",
+        "strength": "力度",
+        "scale": {
+            "title": "倍数",
+            "max": "最大",
+            "custom": "自定义",
+            "shortcut": "{{scale}}倍"
+        },
+        "faces_other": "{{count}} 张人脸",
+        "faces_partial_other": "{{enabled}}/{{count}} 张人脸",
+        "info": "{{name}}，{{intensity}}%，{{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
+        "faceSelector": {
+            "title": "人脸",
+            "help": "你可以选择想要<br/>增强的单个人脸。",
+            "button": "选择人脸（{{count}}）"
+        },
+        "infoFaces": "{{name}}，{{faces}}，{{quality}}",
+        "infoScale": "{{name}}，{{scale}}x，{{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "拖放图片<br/>即可开始编辑",
+            "browse": "浏览图片"
+        },
+        "divider": "分隔线",
+        "pane": {
+            "original": "原图",
+            "enhanced": "增强后"
+        },
+        "progress": {
+            "downloading": "下载中 {{percent}}%",
+            "denoise": "降噪",
+            "faceRecovery": "人脸修复",
+            "colorization": "上色",
+            "lightAdjustment": "光线调整",
+            "colorBalance": "色彩平衡",
+            "upscale": "放大",
+            "sharpen": "锐化",
+            "enhancing": "增强中"
+        }
+    },
+    "menu": {
+        "file": {
+            "options": "{{name}} 的文件选项",
+            "close": "关闭图片",
+            "closeAll": "关闭所有图片",
+            "showIn": "在文件管理器中显示",
+            "showIn_darwin": "在访达中显示",
+            "showIn_windows": "在资源管理器中显示"
+        }
+    },
+    "errors": {
+        "autopilotFailed": "出了点问题。自动优化运行失败。",
+        "enhanceFailed": "出了点问题。图片增强失败。",
+        "faceDetectFailed": "出了点问题。人脸检测失败。",
+        "showLogsFailed": "无法打开日志文件。你可以在应用的配置文件夹中找到它。",
+        "revealFailed": "无法打开文件管理器。文件仍保存在导出位置。",
+        "revealFileFailed": "无法打开文件管理器。",
+        "boundary": {
+            "title": "出了点问题",
+            "message": "Open Photo AI 遇到了意外错误，无法继续运行。重新加载通常可以解决问题；你的设置会被保留，但当前会话中未保存的工作会丢失。",
+            "reload": "重新加载"
+        }
+    }
+}

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  The Common Controls v6 dependency, for every executable this crate links.
+
+  `tauri-build` embeds an identical file of its own through a Windows resource, and that resource
+  reaches the bin target alone. A test harness is its own executable and gets no resource, so it
+  would load Common Controls v5 from System32 - which does not export `TaskDialogIndirect`. The Tauri
+  runtime that `tauri`'s `test` feature links imports that function statically, so the loader fails
+  the process before any test runs, with `STATUS_ENTRYPOINT_NOT_FOUND` (0xc0000139) and nothing to
+  report.
+
+  So `build.rs` tells `tauri-build` not to embed its copy and embeds this one for every target
+  instead. Two `RT_MANIFEST` resources in one image is a link failure, so there is exactly one
+  manifest and this is it - which is why it must carry everything the binary needs and not only what
+  the tests do. Tauri's own file carries nothing beyond this dependency: no DPI awareness, no OS
+  compatibility list. Anything added here reaches the shipped application.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*"
+      />
+    </dependentAssembly>
+  </dependency>
+</assembly>

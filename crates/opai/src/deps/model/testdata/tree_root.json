@@ -1,0 +1,32 @@
+[
+  {
+    "type": "directory",
+    "oid": "4579117bbf1a3d9de1f7fc547b0ae8fb1c6bd698",
+    "size": 0,
+    "path": "models"
+  },
+  {
+    "type": "directory",
+    "oid": "fca30de287b425e9e3698d3ac28053d0f93a91c8",
+    "size": 0,
+    "path": "testdata"
+  },
+  {
+    "type": "file",
+    "oid": "4e67e5eb461588f5d8f83d79ccb19a103c5479dc",
+    "size": 2621,
+    "path": ".gitattributes"
+  },
+  {
+    "type": "file",
+    "oid": "6e25fa8f106e51b7dd538d35b1291301f821b2ad",
+    "size": 6,
+    "path": ".gitignore"
+  },
+  {
+    "type": "file",
+    "oid": "67073cbee7db3a87a5dae80fdfd8d8f6c23d9b1c",
+    "size": 3533,
+    "path": "README.md"
+  }
+]

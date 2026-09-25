@@ -1,0 +1,50 @@
+{
+    "compilerOptions": {
+        // ES2022 rather than ES2020. This code only ever runs in a Tauri webview - WKWebView,
+        // WebView2 or WebKitGTK - and every one of them has been past ES2022 for years, so
+        // downlevelling buys nothing but output. Not ESNext: `target` is a claim about the runtime
+        // floor, and the oldest WebKitGTK on a supported Linux is what sets it.
+        "target": "ES2022",
+        "useDefineForClassFields": true,
+        // `lib` one step past `target`, deliberately: it declares what the runtimes provide and
+        // downlevels nothing.
+        "lib": ["ES2023", "DOM", "DOM.Iterable"],
+        "module": "ESNext",
+        "skipLibCheck": true,
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "jsx": "react-jsx",
+        // Mirrored by `resolve.alias` in vite.config.ts. Both are required: this one only teaches
+        // `tsc`, and Vite does not read it - omitting the other breaks the build while `tsc` still
+        // passes. No `baseUrl`: TypeScript 7 removed it, and `paths` now resolves against this file.
+        //
+        // This alias is what keeps `crates/gui/src/` being Rust invisible to ported code: every
+        // `@/components/Foo` import from the Wails frontend transfers byte-identical.
+        "paths": { "@/*": ["./frontend/*"] },
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "exactOptionalPropertyTypes": true,
+        "noUncheckedIndexedAccess": true,
+        // A function that returns a value on one path and falls off the end on another is almost
+        // always a missing branch. React components are the exception - returning nothing is how you
+        // render nothing - so those say `return;` explicitly.
+        "noImplicitReturns": true,
+        "noImplicitOverride": true,
+        "verbatimModuleSyntax": true,
+        // A bare `import "./typo.css"` resolves to nothing and fails silently without this.
+        "noUncheckedSideEffectImports": true,
+        "forceConsistentCasingInFileNames": true,
+        "allowUnreachableCode": false
+    },
+    // `vite.config.ts` is checked here rather than through a referenced project: one that plain
+    // `tsc` never builds leaves the config silently unchecked. One project, one `tsc`, nothing
+    // skipped.
+    //
+    // `src` is deliberately absent - it is this crate's Rust, not TypeScript.
+    "include": ["frontend", "vite.config.ts"]
+}

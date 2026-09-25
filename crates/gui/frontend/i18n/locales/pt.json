@@ -1,0 +1,402 @@
+{
+    "common": {
+        "cancel": "Cancelar",
+        "save": "Salvar",
+        "close": "Fechar",
+        "apply": "Aplicar",
+        "reset": "Redefinir",
+        "yes": "Sim",
+        "no": "Não",
+        "or": "OU",
+        "previewAlt": "Prévia"
+    },
+    "models": {
+        "label": "{{model}} {{quality}}",
+        "quality": {
+            "hd": "HD",
+            "md": "SD"
+        }
+    },
+    "settings": {
+        "title": "Configurações",
+        "pages": {
+            "general": {
+                "title": "Geral",
+                "description": "Idioma, a área de prévia e diagnósticos do aplicativo."
+            },
+            "performance": {
+                "title": "Desempenho",
+                "description": "Escolha qual processador executa os modelos de IA."
+            },
+            "enhancements": {
+                "title": "Melhorias",
+                "description": "O modelo com que cada melhoria começa e se o piloto automático pode sugeri-la. O que estiver desligado ainda pode ser adicionado manualmente."
+            },
+            "export": {
+                "title": "Exportação",
+                "description": "Qualidade para os formatos com perdas. Valores menores geram arquivos menores; as escalas não são comparáveis entre formatos."
+            }
+        },
+        "app": {
+            "language": {
+                "title": "Idioma",
+                "description": "Aplicado quando você clica em Salvar."
+            },
+            "background": {
+                "title": "Fundo da prévia",
+                "description": "Exibido atrás das imagens na área de prévia.",
+                "particles": "Partículas",
+                "dotted": "Pontilhado"
+            },
+            "logs": {
+                "title": "Logs",
+                "description": "Úteis ao relatar um problema.",
+                "button": "Mostrar logs"
+            },
+            "analytics": {
+                "title": "Análise de uso",
+                "description": "Enviar dados de uso anônimos. Imagens ou dados pessoais nunca são coletados."
+            }
+        },
+        "performance": {
+            "aiProcessor": {
+                "title": "Processador de IA",
+                "auto": "Automático"
+            },
+            "processor": {
+                "auto": {
+                    "description": "Detecta o hardware desta máquina e usa o processador mais rápido que ele suporta."
+                },
+                "tensorrt": {
+                    "description": "A opção mais rápida em GPUs NVIDIA. Na primeira vez que cada modelo é executado, um mecanismo otimizado é criado, o que leva alguns minutos; as execuções seguintes começam imediatamente."
+                },
+                "cuda": {
+                    "description": "Executa os modelos na GPU NVIDIA sem etapa de criação. Mais lento que o TensorRT depois que seus mecanismos são criados."
+                },
+                "coreml": {
+                    "description": "Executa os modelos no Apple Neural Engine e na GPU. Muito mais rápido que a CPU, embora nem todo modelo possa usá-lo."
+                },
+                "cpu": {
+                    "description": "Funciona em qualquer máquina sem uma GPU compatível. As melhorias vão demorar bem mais."
+                }
+            },
+            "recommended": "Recomendado"
+        },
+        "export": {
+            "avif": {
+                "title": "AVIF"
+            },
+            "heic": {
+                "title": "HEIC"
+            },
+            "jpeg": {
+                "title": "JPEG"
+            },
+            "webp": {
+                "title": "WEBP"
+            },
+            "valueLabel": "Qualidade {{format}}"
+        },
+        "enhancements": {
+            "columns": {
+                "enhancement": "Melhoria",
+                "model": "Modelo padrão",
+                "autopilot": "Piloto automático"
+            },
+            "autopilotLabel": "Piloto automático: {{name}}"
+        },
+        "reset": "Restaurar padrões"
+    },
+    "navbar": {
+        "about": "Sobre",
+        "updateAvailable": "Atualização disponível",
+        "version": "v{{version}}",
+        "dimensions": {
+            "title": "Dimensões",
+            "original": "Original",
+            "cropped": "Recortada",
+            "output": "Saída"
+        },
+        "about_dialog": {
+            "iconAlt": "Ícone do aplicativo",
+            "version": "Versão {{version}}"
+        }
+    },
+    "sidebar": {
+        "autopilot": "Piloto automático",
+        "analysing": "Analisando imagem...",
+        "exportImage_one": "Exportar imagem",
+        "exportImage_other": "Exportar imagens",
+        "noPreview": "Nenhuma prévia disponível",
+        "zoomCropAlt": "Zoom e recorte"
+    },
+    "drawer": {
+        "addImages": "Adicionar imagens",
+        "showImages": "Mostrar imagens",
+        "hideImages": "Ocultar imagens",
+        "selectAll": "Selecionar todas",
+        "unselectAll": "Desmarcar todas",
+        "selectImage": "Selecionar {{name}}",
+        "zoom": "Zoom",
+        "zoomOut": "Reduzir zoom",
+        "zoomIn": "Aumentar zoom",
+        "zoomScale": "{{scale}}x",
+        "preview": {
+            "full": "Completa",
+            "sideBySide": "Lado a lado",
+            "split": "Dividida"
+        }
+    },
+    "faces": {
+        "selectFaces": "Selecionar rostos",
+        "toggleFace": "Alternar rosto {{number}}",
+        "hint": "Clique em uma caixa para incluir ou ignorar um rosto.",
+        "apply_one": "Aplicar a {{enabled}} de {{count}} rosto",
+        "apply_other": "Aplicar a {{enabled}} de {{count}} rostos"
+    },
+    "crop": {
+        "title": "Recortar/Girar",
+        "aspectRatio": "Proporção",
+        "zoomHint": "Você pode usar a roda do mouse ou o gesto de pinça no trackpad para aproximar e afastar a imagem à esquerda.",
+        "ratio": {
+            "free": "Livre",
+            "square": "Quadr."
+        },
+        "width": "l",
+        "height": "a",
+        "open": "Recortar/Girar",
+        "rotate": "Girar 90 graus",
+        "flipHorizontal": "Inverter horizontalmente",
+        "flipVertical": "Inverter verticalmente",
+        "swap": "Trocar largura e altura"
+    },
+    "export": {
+        "title": "Exportar",
+        "settings": {
+            "title": "Configurações de exportação",
+            "filename": {
+                "title": "Nome do arquivo",
+                "prefix": "Prefixo",
+                "suffix": "Sufixo",
+                "allowOverwrite": "Permitir sobrescrever?",
+                "sameLocationOverwrite": "Se a pasta e a extensão forem as mesmas, o arquivo original será sobrescrito. Isso não pode ser desfeito.",
+                "sameLocationRename": "Se a pasta e a extensão forem as mesmas, os novos arquivos recebem um número em vez de sobrescrever o original."
+            },
+            "format": {
+                "title": "Formato",
+                "preserve": "Preservar"
+            },
+            "quality": {
+                "title": "Qualidade"
+            },
+            "location": {
+                "title": "Salvar em",
+                "original": "Pasta original",
+                "browse": "Procurar..."
+            },
+            "abort": "Interromper",
+            "exportAgain": "Exportar novamente"
+        },
+        "queue": {
+            "title": "Fila ({{count}})",
+            "pipelineOrder": "na ordem de processamento",
+            "queued": "Na fila",
+            "analysing": "Analisando",
+            "enhancing": "Melhorando",
+            "writing": "Gravando",
+            "done": "Concluído",
+            "failed": "Falhou",
+            "writeFailed": "Não foi possível gravar {{name}} em {{folder}}.",
+            "enhanceFailed": "Não foi possível melhorar esta imagem.",
+            "unreadable": "Não foi possível ler esta imagem.",
+            "analysisFailed": "O Autopilot não conseguiu analisar esta imagem.",
+            "copied": "Copiado para a área de transferência"
+        },
+        "summary": {
+            "ready_one": "{{count}} arquivo pronto · nada gravado ainda",
+            "ready_other": "{{count}} arquivos prontos · nada gravado ainda",
+            "running_one": "{{written}} de {{count}} gravados · faltam {{remaining}}",
+            "running_other": "{{written}} de {{count}} gravados · faltam {{remaining}}",
+            "ended_one": "{{written}} de {{count}} gravados",
+            "ended_other": "{{written}} de {{count}} gravados",
+            "endedFailed_one": "{{written}} de {{count}} gravados, {{failed}} com falha",
+            "endedFailed_other": "{{written}} de {{count}} gravados, {{failed}} com falha"
+        }
+    },
+    "dialogs": {
+        "native": {
+            "selectImage": "Selecionar imagem",
+            "selectDirectory": "Selecionar pasta",
+            "imagesFilter": "Imagens"
+        },
+        "tensorRT": {
+            "title": "TensorRT detectado",
+            "logoAlt": "TensorRT",
+            "intro": "Detectamos uma GPU compatível com TensorRT. O TensorRT é uma tecnologia da NVIDIA que executa modelos de IA bem mais rápido que o CUDA.",
+            "optimization": "Quando o TensorRT está ativado, ele precisa primeiro otimizar o grafo do modelo para um formato que entende. <b>Essa otimização pode levar alguns minutos na primeira execução</b>; nas execuções seguintes será muito mais rápido.",
+            "question": "Deseja ativar o TensorRT?",
+            "footer": "Independentemente do que você escolher agora, pode mudar essa opção a qualquer momento na janela de <b>Configurações</b>, em <u>Processador de IA</u>."
+        }
+    },
+    "setup": {
+        "title": "Configurando o {{app}}",
+        "components": "Baixando os componentes que executam os modelos de IA.",
+        "cached": "Isso acontece apenas uma vez — eles ficam guardados para todas as próximas inicializações.",
+        "installed_one": "{{installed}} de {{count}} componente instalado",
+        "installed_other": "{{installed}} de {{count}} componentes instalados",
+        "state": {
+            "installed": "Instalado",
+            "downloading": "Baixando",
+            "extracting": "Extraindo",
+            "queued": "Na fila"
+        },
+        "throttling": "Esses arquivos ficam hospedados no GitHub, que limita a velocidade dos downloads quando são baixados com muita frequência — por isso isto pode ser mais lento do que a sua conexão permite.",
+        "footer": "O aplicativo estará pronto para uso quando os downloads terminarem.",
+        "quit": "Sair",
+        "error": {
+            "title": "Não foi possível concluir a configuração",
+            "needs": "O {{app}} precisa desses componentes para poder funcionar.",
+            "summary": {
+                "only": "Ele parou no meio.",
+                "first": "O primeiro parou no meio.",
+                "last": "{{finished}} de {{total}} concluídos; o último parou no meio.",
+                "rest": "{{finished}} de {{total}} concluídos; um parou no meio e os demais não foram alcançados."
+            },
+            "state": {
+                "error": "Erro"
+            },
+            "throttling": "Esses arquivos ficam hospedados no GitHub, que limita a velocidade dos downloads quando são baixados com muita frequência. Tentar de novo em alguns minutos costuma funcionar.",
+            "tryAgain": "Tentar de novo",
+            "copied": "Copiado!"
+        }
+    },
+    "toasts": {
+        "unsupportedFiles_one": "O arquivo \"{{names}}\" não é compatível.",
+        "unsupportedFiles_other": "{{count}} arquivos não são compatíveis: {{names}}"
+    },
+    "enhancements": {
+        "denoise": {
+            "name": "Redução de ruído",
+            "models": {
+                "stockholm": "Use este modelo quando você precisa de uma redução de ruído rápida e de alta qualidade em ruído real de sensor e a eficiência computacional importa. É uma boa escolha quando vazão e limites de recursos são preocupações reais, mantendo o tempo de inferência baixo sem sacrificar a qualidade.",
+                "gothenburg": "Use este modelo quando suas fotos têm ruído real de sensor, o tipo produzido ao fotografar com pouca luz ou ISO alto em um smartphone ou DSLR. Ele lida com os padrões complexos de ruído que as câmeras produzem, sendo a escolha certa para fotografia.",
+                "malmo": "Use este modelo para remover riscos de chuva em imagens externas, seja em uma garoa leve ou em um temporal. Ele lida com chuva de diferentes escalas, densidades e direções, restaurando os detalhes finos atrás dos riscos. Uma boa escolha quando artefatos do clima encobrem a cena."
+            }
+        },
+        "faceRecovery": {
+            "name": "Recuperação de rostos",
+            "models": {
+                "athens": "Use este modelo quando a fidelidade à identidade é o mais importante. Ele preserva a estrutura facial enquanto restaura detalhes, mesmo em rostos muito degradados. Melhor quando você quer restaurar sem mudar a pessoa.",
+                "santorini": "Use este modelo quando você quer uma melhoria agressiva e rápida e pode tolerar mudanças na identidade. Ele produz rostos nítidos e agradáveis em degradação moderada, mas pode inventar traços e alterar a identidade em imagens de qualidade muito baixa."
+            }
+        },
+        "colorization": {
+            "name": "Colorização",
+            "models": {
+                "delhi": "A melhor primeira opção para a maioria das fotos em preto e branco. Ele analisa a cena inteira para decidir como as coisas devem ficar, produzindo cores ricas e seguras com bordas limpas — embora às vezes aposte com ousadia em uma cor que não estava lá.",
+                "mumbai": "Use quando as cores do Delhi parecerem intensas ou modernas demais para a foto. Treinado com um toque mais criativo, ele tende a tons mais suaves e levemente estilizados, que combinam com retratos antigos e filmes digitalizados — embora suas escolhas variem mais de uma foto para outra.",
+                "jaipur": "Use quando a consistência for o mais importante. Suas cores são mais discretas que as dos outros, mas ele quase nunca produz manchas de cor estranhas ou palpites errados — uma escolha segura para retratos antigos, paisagens e digitalizações muito deterioradas."
+            }
+        },
+        "lightAdjustment": {
+            "name": "Ajuste de luz",
+            "models": {
+                "paris": "Use este modelo quando a luz da foto estiver irregular — cenas noturnas, assuntos em contraluz ou um rosto perdido na sombra enquanto o resto está bom. Ele traz de volta o que o escuro esconde, mantém as cores naturais e é muito rápido.",
+                "lyon": "Use este modelo quando a foto inteira ficou clara ou escura demais — céus lavados ou um assunto que some na sombra. Ele reconstrói o brilho da imagem inteira e resgata o detalhe nas duas pontas ao mesmo tempo."
+            }
+        },
+        "colorBalance": {
+            "name": "Equilíbrio de cores",
+            "models": {
+                "rio": "Use este modelo quando a foto inteira pende para o mesmo lado — alaranjada sob lâmpadas internas, azulada na sombra ou em dia nublado. Ele recria a imagem como se a câmera tivesse escolhido o balanço de branco certo, corrigindo o tom globalmente.",
+                "saopaulo": "Use este modelo quando duas fontes de luz disputam o mesmo enquadramento, como uma lâmpada quente dentro de casa contra a luz do dia vinda da janela. Ele gera a cena com vários balanços de branco e os mistura pixel a pixel, área por área."
+            }
+        },
+        "sharpen": {
+            "name": "Nitidez",
+            "models": {
+                "moscow": "Use este modelo quando o desfoque vem de a câmera estar fora de foco, e não de movimento — por exemplo, retratos com fundo ou primeiro plano borrado, macrofotografia que saiu suave, ou qualquer cena em que a lente não focou no plano certo.",
+                "petersburg": "Use este modelo quando você precisa remover desfoque de movimento de forma rápida e leve, e a eficiência importa mais do que extrair cada última gota de qualidade. Funciona bem em imagens de ação e tremor de câmera na mão, e é uma boa escolha em hardware limitado.",
+                "novgorod": "Use este modelo quando o desfoque vem do tremor da câmera ou de objetos em movimento rápido — por exemplo, esportes, fotos na mão com pouca luz, ou qualquer imagem em que algo se moveu durante a exposição. Ele prioriza a máxima qualidade de restauração em vez da velocidade; bom quando o resultado é o que mais importa."
+            }
+        },
+        "upscale": {
+            "name": "Ampliação",
+            "models": {
+                "tokyo": "Use este modelo quando você quer uma ampliação natural, sem exageros. Ele foca em preservar a aparência original e as estruturas finas em vez de \"inventar\" novos detalhes, sendo ideal quando realismo e fidelidade importam mais do que nitidez.",
+                "kyoto": "Use este modelo em fotos do mundo real (pessoas, paisagens, produtos). Ele é excelente em restaurar detalhes enquanto lida com ruído, desfoque e artefatos de compressão. Ideal para uso prático, quando as imagens são imperfeitas e você quer resultados agradáveis e robustos rapidamente.",
+                "saitama": "Use este modelo para desenhos, arte de linha, quadrinhos e ilustrações digitais. Ele preserva linhas limpas, cores chapadas e sombreamento estilizado sem introduzir texturas fotográficas. Melhor quando bordas nítidas e consistência de estilo importam mais do que realismo.",
+                "osaka": "Use este modelo quando você quer a melhor qualidade de ampliação possível. Ele reconstrói o detalhe em vez de apenas realçá-lo, e é o que vai mais longe em fotos suaves ou muito comprimidas. No entanto, é lento e precisa de uma GPU potente para rodar bem."
+            }
+        },
+        "add": "Adicionar melhoria",
+        "remove": "Remover melhoria",
+        "modelSelector": "Modelo de IA",
+        "bias": "Viés",
+        "strength": "Força",
+        "scale": {
+            "title": "Escala",
+            "max": "Máx",
+            "custom": "Personalizada",
+            "shortcut": "{{scale}}x"
+        },
+        "faces_one": "{{count}} rosto",
+        "faces_other": "{{count}} rostos",
+        "faces_partial_one": "{{enabled}}/{{count}} rosto",
+        "faces_partial_other": "{{enabled}}/{{count}} rostos",
+        "info": "{{name}}, {{intensity}}%, {{quality}}",
+        "infoModel": "{{name}}, {{quality}}",
+        "faceSelector": {
+            "title": "Rostos",
+            "help": "Você pode selecionar rostos<br/>individuais para melhorar.",
+            "button": "Selecionar rostos ({{count}})"
+        },
+        "infoFaces": "{{name}}, {{faces}}, {{quality}}",
+        "infoScale": "{{name}}, {{scale}}x, {{quality}}"
+    },
+    "preview": {
+        "empty": {
+            "title": "Arraste e solte imagens<br/>para começar a editá-las",
+            "browse": "Procurar imagens"
+        },
+        "divider": "Divisor",
+        "pane": {
+            "original": "Original",
+            "enhanced": "Melhorada"
+        },
+        "progress": {
+            "downloading": "Baixando {{percent}}%",
+            "denoise": "Redução de ruído",
+            "faceRecovery": "Recup. de rostos",
+            "colorization": "Colorização",
+            "lightAdjustment": "Ajuste de luz",
+            "colorBalance": "Equi. de cores",
+            "upscale": "Ampliação",
+            "sharpen": "Nitidez",
+            "enhancing": "Melhorando"
+        }
+    },
+    "menu": {
+        "file": {
+            "options": "Opções de arquivo de {{name}}",
+            "close": "Fechar imagem",
+            "closeAll": "Fechar todas as imagens",
+            "showIn": "Mostrar no gerenciador de arquivos",
+            "showIn_darwin": "Mostrar no Finder",
+            "showIn_windows": "Mostrar no Explorador de Arquivos"
+        }
+    },
+    "errors": {
+        "autopilotFailed": "Algo deu errado. Falha ao executar o piloto automático.",
+        "enhanceFailed": "Algo deu errado. Falha ao melhorar a imagem.",
+        "faceDetectFailed": "Algo deu errado. Falha ao detectar rostos.",
+        "showLogsFailed": "Não foi possível abrir o ficheiro de registo. Encontra-o na pasta de configuração da aplicação.",
+        "revealFailed": "Não foi possível abrir o gerenciador de arquivos. O arquivo continua salvo no local de exportação.",
+        "revealFileFailed": "Não foi possível abrir o gerenciador de arquivos.",
+        "boundary": {
+            "title": "Algo deu errado",
+            "message": "O Open Photo AI encontrou um erro inesperado e não pode continuar. Recarregar normalmente resolve; suas configurações são mantidas, mas qualquer trabalho não salvo nesta sessão será perdido.",
+            "reload": "Recarregar"
+        }
+    }
+}

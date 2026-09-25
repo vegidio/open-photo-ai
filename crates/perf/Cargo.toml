@@ -1,0 +1,61 @@
+[package]
+name = "perf"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Inference benchmark for Open Photo AI: the `perftest` binary."
+
+[[bin]]
+# The package is `perf` and the binary is `perftest`, matching the Go application's `cmd/perf`, so that a command
+# written down in one project's README is the command in the other's.
+name = "perftest"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+opai = { path = "../opai" }
+
+# Argument parsing. The derive API gives the flags, their validators, the `list` subcommand and `--help` from the
+# struct that has to exist anyway, and it is what a Rust developer expects to find in a repository - `argh` and
+# `bpaf` are smaller and neither is that.
+clap = { version = "4.6.7", features = ["derive"] }
+
+# The summary table, and the whole of this crate's exposure to it is `report::table`: rows of strings in, one
+# rendered table out. The `tty` default feature is OFF, which takes `crossterm` and the one `unsafe` in the
+# dependency tree with it - terminal detection is slice 7's question and a table crate is not where it should
+# arrive.
+comfy-table = { version = "8.0.0", default-features = false }
+
+# The live view. `default-features = false` drops the calendar widget, the macros and the layout cache, none of
+# which a one-line viewport uses; `crossterm` is the backend the ecosystem standardises on and the only one needing
+# no system library; `scrolling-regions` is what lets `Terminal::insert_before` push a finished model into the
+# terminal's own scrollback instead of clearing and redrawing the viewport, which is otherwise a visible flicker once
+# per model. No spinner crate: a spinner is an array of frames indexed by a tick counter.
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "scrolling-regions"] }
+
+# `--json`. Hand-writing it is how a report ends up unparseable on the first error message containing a quote.
+serde = { version = "1.0.228", features = ["derive"] }
+# `float_roundtrip` because this document's whole purpose is being read back: without it serde_json's parser trades
+# exactness for speed, and a duration written by one sweep comes back a few ulps from what was measured. A benchmark
+# whose numbers change by being saved and loaded is not one you can compare two of.
+serde_json = { version = "1.0.150", features = ["float_roundtrip"] }
+
+# The project's error convention, matching `rust-sak`, `opai` and `gui`.
+thiserror = "2.0.20"
+
+# The RAII temp file the embedded sample is materialized through - the module the project context names for temp
+# handles, which is why this is not `tempfile` directly. Pinned by git tag exactly as `opai` pins it; `Cargo.lock`
+# records the revision.
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.9.10", features = ["fs"] }
+
+# `Opai::initialize` and `Opai::process` are `async`, so `main` needs a runtime. `signal` is what turns a Ctrl-C
+# into the cancellation the sweep breaks out of.
+# `time` is what paces the live view's ticker, and `macros` is what `select!` needs to poll the sweep beside it.
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "signal", "time"] }
+
+# No `tracing-subscriber`: the log sink is `opai::logging::init`'s, and a second subscriber installed here would be
+# this crate deciding the format of a file `opai` owns.

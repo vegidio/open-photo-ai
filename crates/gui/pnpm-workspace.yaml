@@ -1,0 +1,16 @@
+# Kept from D9's starting point even though the first install blocked nothing: Vite 8 bundles
+# Rolldown where Vite 7 bundled esbuild, so esbuild is not in the resolved tree at all and this entry
+# is currently inert. It stays because it costs nothing and goes live the moment anything pulls
+# esbuild back in. Anything else is added from what pnpm actually reports blocking, not from a list
+# copied out of another project.
+allowBuilds:
+  esbuild: true
+
+# The supply-chain cooldown: a version younger than a day is not installed, which is the window in
+# which most hijacked releases are caught and yanked.
+#
+# No `minimumReleaseAgeExclude` entries. An exclusion only means anything while it names the version
+# being installed; both reference projects accumulated exemptions that drifted behind their
+# installed versions and became dead entries. One is added when the cooldown actually blocks
+# something, naming the version it blocks, and removed once that version ages out.
+minimumReleaseAge: 1440

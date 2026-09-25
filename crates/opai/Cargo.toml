@@ -1,0 +1,229 @@
+[package]
+name = "opai"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core library for Open Photo AI: inference, dependencies, image IO, caching and settings."
+
+[lints]
+workspace = true
+
+[dependencies]
+# `rust-sak` is a first-party crate that is not published to any registry, so it is pinned by git tag
+# rather than by version; `Cargo.lock` records the exact revision and CI's `--locked` enforces it.
+# Only the modules this crate needs are enabled - the crate has no default features. `crypto` covers
+# the install fingerprint, the one verification path the transfer's own digest cannot reach, and the XXH3-64 identity
+# a loaded image is keyed on; `sysinfo` covers the graphics-adapter probe the NVIDIA library selection is made from;
+# and `image` covers every codec the eight supported formats are decoded and encoded through, including the AVIF,
+# HEIF and WebP crates it wraps - which is why none of those three is depended on here directly.
+#
+# `image-raw` adds camera RAW decoding on top of `image`. It is what `image::load` develops a NEF or a DNG through
+# and what `image::probe_raw` reads a sensor's metadata with. It covers 29 of the 47 RAW extensions the application
+# recognises; the other 18 are refused by name, which is the visible edge of the gap against the Go application's
+# LibRaw build.
+#
+# ⚠️ It is a separate feature because of what it costs: it links `zenraw` (AGPL-3.0-only) and `rawler`/`rawloader`
+# (LGPL-2.1), so a binary built with it must be distributed under those terms. That is no change for this
+# application - Open Photo AI is itself AGPL-3.0 - which is exactly why the trade-off is acceptable here and why the
+# decoder lives behind a feature rather than in `rust-sak`'s default surface.
+#
+# `memo` is memoization with pluggable storage (memory, disk, or memory-over-disk) and disk/memory/none fallback
+# modes, so the per-operation run cache is an adoption of it rather than anything written here. Its disk tier is
+# `redb`, pure Rust with no C toolchain and no build-time download, which is what lets the suite open a real disk store
+# in a temporary directory on every CI platform instead of stubbing one.
+#
+# `memo-async` is deliberately **not** enabled. It adds `get_or_compute_async`, which would make the read, the run and
+# the write one call and coalesce concurrent identical runs — and both of those cost behaviour this crate specifies: a
+# dropped future releases every waiter with `ComputeAbandoned`, so one user's cancellation would fail an unrelated run,
+# and only the computing caller's progress callback fires, so a joined run would report nothing and then jump. The raw
+# `get_bytes`/`set_bytes` this crate does use need no feature of their own.
+#
+# `o11y-tracing` is `o11y`'s OTLP exporter plus the `tracing` layer that feeds it, which `src/logging` installs beside
+# the file layer and `src/telemetry` switches on. It is the whole of the Grafana path: batching, resource enrichment,
+# the session id and the export thread are all `o11y`'s. `tracing` and `tracing-subscriber` are named below, and the
+# exporter's `reqwest` is the one `fetch` already builds; the one crate it adds is `machine-uid`, which `o11y` hashes
+# into the machine id it reports.
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.9.10", features = [
+    "crypto",
+    "fetch",
+    "fs",
+    "image",
+    "image-raw",
+    "memo",
+    "o11y-tracing",
+    "sysinfo",
+] }
+
+# Not a choice: `rust-sak`'s decoders return `image::DynamicImage` and its encoders take one, so the type is already in
+# this crate's own public API and the crate has to be named to spell it. Pinned to the version `rust-sak` builds
+# against so the two resolve to one copy - two `image` crates would make `DynamicImage` two unrelated types.
+#
+# `default-features = false` so that nothing is compiled on this crate's account: only `DynamicImage` and the pixel
+# buffers are named here, never a codec, and which codecs exist is `rust-sak`'s decision. It does not make the build
+# smaller - `avif-rs`, `heif-rs` and `webp-rs` each depend on `image` with its defaults, and features union across a
+# graph, so the full codec set is compiled regardless. Off anyway, because the day those three stop pulling it in this
+# declaration should not be what keeps it.
+image = { version = "0.25.10", default-features = false }
+
+# The pixel primitives every model is built from — tiling, tensor conversion, padding, blending — as a workspace crate
+# of their own, so that none of them can reach back into models, sessions or orchestration. See its `lib.rs`.
+imaging = { path = "../imaging" }
+
+# The ONNX Runtime binding. `load-dynamic` is what lets the runtime be the library this project downloads, opened at a
+# path decided at run time, instead of one linked at build time; turning the defaults off is what stops
+# `download-binaries` from having a build script fetch a second copy of the 175 MB artifact this project installs
+# itself, and drops `ureq` and its TLS stack and `ndarray` with it.
+#
+# `tracing` is turned back **on**, explicitly, and it is the whole of this crate's capture of the runtime's C++
+# diagnostics. With it, `ort` creates the environment through `CreateEnvWithCustomLogger` and forwards every record
+# the runtime produces into `tracing` with its severity, its code location and its logger id intact; without it the
+# runtime writes them to the process's stderr, which a double-clicked `.app` bundle does not have. `src/logging` is the
+# subscriber that receives them. The one feature line stands in for the reference implementation's entire
+# stderr-capture stack: a 380-line descriptor tailer, a second `native.log`, 100 lines of regex over ORT's text format
+# and the replay of an unread tail on the next launch.
+#
+# `api-26` is not cosmetic: `ort` refuses to load a runtime whose minor version is lower than the one its enabled
+# `api-NN` feature names, and its default `api-27` would reject the pinned 1.26.0 outright. The feature therefore
+# tracks the runtime tag pinned in `src/deps/artifact.rs` (`ONNX_RUNTIME`) and MUST be bumped with it — the failure if
+# they drift is a startup error on every machine, phrased in `ort`'s words rather than ours.
+#
+# Pinned exactly because `2.0.0-rc.13` is a pre-release: three behaviours this crate depends on — the minor-version
+# refusal, the one `CreateEnv` per process, and the lazy `commit()` — are undocumented and already differ in `ort`'s
+# development tree, so a bump has to be a deliberate act that re-checks all three.
+#
+# `coreml`, `cuda` and `tensorrt` are marker features — `ort-sys` defines all three as `[]`, so they compile no code
+# and link nothing. What they gate is the three provider types whose option maps this crate configures; without them
+# `ort::ep::CoreML` and its two siblings simply do not exist, and the resolved options would have nowhere to go.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = [
+    "load-dynamic",
+    "api-26",
+    "coreml",
+    "cuda",
+    "tensorrt",
+    "tracing",
+] }
+
+# Daily rotation, gzip on rotate and a bounded history, against a **fixed live filename**. That last property is the
+# whole selection: `opai.log` is the name a user is asked to attach to a bug report, so rotation may move the old
+# records out and may not move the live ones.
+#
+# `tracing-appender` is the obvious candidate — it is the `tokio-rs/tracing` project's own appender — and it cannot do
+# that: it *"will automatically append the current date and hour (UTC format) to the file name"*, leaving no
+# `opai.log` to name, and it has no compression either. `tracing-rolling-file` and `rolling-file` have the same
+# dated-live-file shape; `firo` is too new for a file written at every launch. Writing the rotation here was weighed
+# and rejected on where such code stops being small: the retention pruning and the partially-written rotation.
+#
+# Pure Rust over `flate2`, which is already in this crate's graph, so no C toolchain — the same property that made
+# `redb` acceptable for the cache's disk tier. Its interface to the rest of this project is one `std::io::Write`
+# behind a `MakeWriter`, which is what bounds the exposure of a crate on an unhurried release cadence: replacing it
+# means changing the two lines that construct it and nothing that emits a record.
+file-rotate = "0.8.0"
+
+# The diffusion upscaler's per-region noise field, and nothing else in this project uses a generator at all.
+#
+# `rust-sak` has nothing for it and should not: its `crypto` module is SHA-256 and XXH3-64 *hashing*, which is not a
+# generator, and a PRNG is not a first-party concern — the ecosystem's answer is settled. The alternative weighed was a
+# counter-based generator over that XXH3-64, hashing `(seed, x, y, counter)` per draw, which would add no dependency at
+# all; rejected because it is inventing a PRNG whose statistical properties for this use would be asserted rather than
+# tested, to save one small and widely-audited crate.
+#
+# The algorithm is NAMED rather than left to `StdRng`, and that is the whole selection. Seeding alone does not give
+# reproducibility: `StdRng` carries no cross-version stability guarantee, so a routine dependency bump could change the
+# noise field under us and silently invalidate every cached Osaka result — a result the run cache had memoized and
+# the user could no longer reproduce. `ChaCha8Rng` is a named algorithm tested against reference vectors, and ChaCha8
+# is the reference implementation's own choice of stream.
+#
+# It does NOT reproduce the Go application's stream, and no crate does: `math/rand/v2.NewChaCha8` is Go's own
+# ChaCha8Rand construction, with a reseeding schedule of its own, rather than the plain ChaCha8 stream this produces.
+# Every property the seed exists for is about determinism *within* one implementation and is preserved in full; see
+# `models/upscale/osaka/noise.rs`.
+#
+# 0.10 rather than the 0.9 already in the graph, which arrives transitively through `image`'s AVIF encoder
+# (`rav1e` -> `rand`). Reusing that one would compile nothing new — the convention `tokio-util` and `tracing` below are
+# named under — and it is the wrong call here: that version is an implementation detail of a crate three levels away
+# that any bump of `image` could change, and being pinned to a superseded release for a transitive coincidence is not
+# a dependency this crate controls. The cost is one small extra crate; `ppv-lite86`, the only thing under it, is
+# already shared. The stream is unaffected either way, which is the point of naming the algorithm rather than
+# inheriting whichever one happens to be in the graph.
+#
+# `default-features = false` drops `std`, which this needs nothing from.
+rand_chacha = { version = "0.10.0", default-features = false }
+
+# `rand` itself is deliberately **not** here. `rand_chacha` needs only this for `SeedableRng` and `Rng::next_u64`,
+# and the one-line conversion of those bits to a float is owned in `noise.rs` rather than taken from `rand`'s
+# distributions — whose exact bit-level output is not something to depend on staying fixed, which is precisely what
+# this generator's whole purpose requires. Owning it makes reproducibility rest on `rand_chacha`'s documented stream
+# and nothing else.
+rand_core = { version = "0.10.1", default-features = false }
+
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+thiserror = "2.0.20"
+# `fetch` already requires a Tokio runtime, so this is a feature set rather than a new runtime. `rt`
+# brings `spawn_blocking`, which is where the synchronous, minute-long archive expansion and the equally synchronous
+# session build run; `time` brings the interval the background sweep of unused sessions ticks on.
+tokio = { version = "1.52.3", features = ["rt", "fs", "sync", "time"] }
+
+# `CancellationToken`, and nothing else. It is **already in this crate's dependency graph** — `reqwest` pulls it in
+# through `h2` — so naming it directly adds a manifest line and compiles nothing new; `cargo tree -p opai -i
+# tokio-util` shows the one copy.
+#
+# `default-features = false` because none is needed: `tokio_util::sync` is declared unconditionally in the crate's
+# `lib.rs` and its `default` feature list is empty, so the token costs no feature on this crate's account.
+tokio-util = { version = "0.7.19", default-features = false }
+
+# This crate's logging surface, and the only one: library code calls `tracing::info!`/`warn!`/`debug!` and there is no
+# logger handle threaded through anything. That is what makes the library silent by default without an API saying so —
+# with no subscriber installed an event is a load of a global, a `None` and a return, and its arguments are never
+# formatted. The `log` crate would be a smaller facade and the wrong one: `ort`'s records arrive as `tracing` events
+# carrying their fields on a span, and a bridge would drop exactly those.
+#
+# Like `tokio-util`, it is **already in this crate's dependency graph** — `reqwest` pulls it in through `h2` — so
+# naming it directly adds a manifest line and compiles nothing new; `cargo tree -p opai -i tracing` shows the one copy.
+tracing = "0.1.44"
+
+# The subscriber side, and only what `src/logging` actually builds on: `registry` is the span store the ORT records'
+# fields are read back out of, and what carries two layers — the file and the collector — each under its own filter,
+# `fmt` is the event formatter, the field visitor and the `MakeWriter` plumbing that this crate supplies only the
+# line's shape to, and `env-filter` is `RUST_LOG`, the separate `ort=warn` floor and the collector's fixed floor.
+#
+# `default-features = false` because the two defaults left out are both replaced here: `ansi` colours a file nobody
+# reads through a terminal, and `smallvec`'s allocation tuning is not worth a dependency on a sink writing a few dozen
+# records per session.
+tracing-subscriber = { version = "0.3.23", default-features = false, features = [
+    "registry",
+    "fmt",
+    "env-filter",
+    "chrono",
+] }
+
+# The CoreML check is `[[NSProcessInfo processInfo] operatingSystemVersion].majorVersion >= 12`, the same call the Go
+# cgo shim makes. `objc2-foundation` is close to free here: `rust-sak`'s `sysinfo` feature already pulls
+# `objc2-core-foundation` and `objc2-io-kit` into the macOS tree, so the `objc2` runtime is compiled either way.
+# Gated to `NSProcessInfo` so the rest of Foundation is not.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSProcessInfo"] }
+
+[dev-dependencies]
+# The same pin as the dependency above, so it resolves to the one crate. Declared again because an integration test
+# does not inherit the library's dependencies, and `tests/ort_load_semantics.rs` pins `ort`'s own load-global
+# behaviour rather than anything this crate wraps around it.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = [
+    "load-dynamic",
+    "api-26",
+    "coreml",
+    "cuda",
+    "tensorrt",
+    "tracing",
+] }
+
+# Declared again for the same reason, and it proves something on its own: `DynamicImage` is in this crate's public
+# API, so a consumer has to depend on the `image` crate to call `image::save`. `tests/public_api.rs` is a consumer,
+# and building its fixture the way a front end would is the check that the surface is actually usable from outside.
+image = { version = "0.25.10", default-features = false }
+# The picture fixtures `imaging`'s own suite uses, which this crate's suites share rather than copy.
+imaging = { path = "../imaging", features = ["test-support"] }
+tempfile = "3.27"
+tokio = { version = "1.52.3", features = ["macros", "net", "io-util", "rt-multi-thread", "time"] }

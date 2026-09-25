@@ -1,0 +1,49 @@
+[workspace]
+# A virtual manifest does not inherit the resolver from a member's edition, so it is set explicitly;
+# without it Cargo falls back to resolver 1 and warns.
+resolver = "3"
+members = ["crates/opai", "crates/imaging", "crates/cli", "crates/gui", "crates/perf"]
+
+[workspace.package]
+# CalVer (YY.M.MICRO), continuing the Go app's scheme: it shipped 25.12.0, so this stays ahead and a
+# release can never go backwards. Duplicated as a literal in crates/gui/tauri.conf.json, which
+# cannot resolve workspace inheritance - a test in crates/gui/src/lib.rs pins the two together.
+version = "26.10.0"
+# Kept in sync with `edition` in rustfmt.toml.
+edition = "2024"
+authors = ["Vinicius Egidio"]
+license = "AGPL-3.0"
+repository = "https://github.com/vegidio/opai-rust"
+# No `rust-version` pin: an application makes no MSRV commitment.
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "warn"
+todo = "warn"
+unimplemented = "warn"
+dbg_macro = "warn"
+
+# Development builds decode, resample and encode photographs at a usable speed.
+#
+# `tauri dev` builds with this profile, and at Cargo's default `opt-level = 0` the image pipeline is roughly 30x
+# slower than release: a 20-megapixel JPEG measured 4.35s to reach the drawer as a thumbnail and 6.23s to reach the
+# canvas, against 145ms and 234ms released. The Go application has no equivalent mode - `wails dev` compiles with the
+# normal Go optimizer - so without this a dev build of this application is compared against an optimized build of that
+# one.
+#
+# Two entries, because one does not do it. `package."*"` covers the dependencies, which is where the codecs and the
+# resampler live, and that alone fixes the thumbnails. It leaves the canvas at 3s, because `rust_sak::image::
+# encode_writer` is generic over `impl Write`: the whole chain down to `JpegEncoder<W>`'s inner loops is monomorphized
+# into `opai`, a workspace member, and compiled at whatever level the workspace is built at. Raising `profile.dev`
+# itself is what reaches it - 3.06s at 0, 401ms at 1, 300ms at 2.
+#
+# Measured cost: none worth naming. An incremental rebuild after touching `crates/gui` went 3.23s -> 2.45s, and after
+# touching `crates/opai` 7.38s -> 7.00s. What it does cost is one full rebuild of the dependency tree the first time,
+# and a debugger that steps less faithfully through this workspace's own crates.
+[profile.dev]
+opt-level = 2
+
+[profile.dev.package."*"]
+opt-level = 3

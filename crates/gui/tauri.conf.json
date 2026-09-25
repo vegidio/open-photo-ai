@@ -1,0 +1,61 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "Open Photo AI",
+    "mainBinaryName": "Open Photo AI",
+    "version": "26.10.0",
+    "identifier": "io.vinicius.opai",
+    "build": {
+        "beforeDevCommand": "pnpm dev",
+        "devUrl": "http://localhost:1420",
+        "beforeBuildCommand": "pnpm build",
+        "frontendDist": "../dist"
+    },
+    "app": {
+        "windows": [
+            {
+                "label": "main",
+                "title": "Open Photo AI",
+                "width": 1280,
+                "height": 720,
+                "minWidth": 1280,
+                "minHeight": 720,
+                "maximized": true,
+                "visible": false,
+                "backgroundColor": "#09090b",
+                "titleBarStyle": "Overlay",
+                "hiddenTitle": true,
+                "trafficLightPosition": { "x": 9, "y": 26 }
+            }
+        ],
+        "security": {
+            "csp": {
+                "default-src": "'self'",
+                "script-src": "'self'",
+                "style-src": "'self' 'unsafe-inline'",
+                "connect-src": "'self' ipc: http://ipc.localhost https://*.grafana.net",
+                "img-src": "'self' data: asset: http://asset.localhost opai: http://opai.localhost",
+                "font-src": "'self' data:",
+                "object-src": "'none'",
+                "base-uri": "'self'",
+                "frame-ancestors": "'none'"
+            },
+            "devCsp": {
+                "default-src": "'self'",
+                "script-src": "'self' 'unsafe-inline' 'unsafe-eval'",
+                "style-src": "'self' 'unsafe-inline'",
+                "connect-src": "'self' ipc: http://ipc.localhost ws://localhost:1420 ws://localhost:1421 http://localhost:1420 https://*.grafana.net",
+                "img-src": "'self' data: asset: http://asset.localhost opai: http://opai.localhost",
+                "font-src": "'self' data:",
+                "object-src": "'none'",
+                "base-uri": "'self'",
+                "frame-ancestors": "'none'"
+            },
+            "dangerousDisableAssetCspModification": ["style-src"]
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+    }
+}

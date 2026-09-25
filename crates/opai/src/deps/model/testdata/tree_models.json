@@ -1,0 +1,578 @@
+[
+  {
+    "type": "file",
+    "oid": "3ba10cd5e692b01e385692a0baaf35e4c5435e4c",
+    "size": 8743588,
+    "lfs": {
+      "oid": "5a13814be922b58259538850d9a5690a1ca74138c1dbaedbfed737cf242109e5",
+      "size": 8743588,
+      "pointerSize": 132
+    },
+    "xetHash": "e82af59f34f01bbf095cd16a9035b97577a519cae9708f29b4832e92625305cb",
+    "path": "models/cb_rio_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "d5bb0b17d98c4429b85af2057e917cb76e5c0b6e",
+    "size": 17475112,
+    "lfs": {
+      "oid": "a41d10c131e60a274c82bca0918a892ab07a7d2c2370c2b824f98530db670a7e",
+      "size": 17475112,
+      "pointerSize": 133
+    },
+    "xetHash": "24f7f91e4172444d770508005317bc854128125cd3ed5a1278ff9fb72cad3974",
+    "path": "models/cb_rio_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "66ab53e5f3db9fa4ccd84c013bed0b6673379342",
+    "size": 16678334,
+    "lfs": {
+      "oid": "6befa0fa38630fee30639a8eefa1a26a9b17562fc3bb2e03998d4dd6598c6a57",
+      "size": 16678334,
+      "pointerSize": 133
+    },
+    "xetHash": "e4d8c1948f6c080d8c0e434874d56ae7955c3a4e849c594a9819749c1431a913",
+    "path": "models/cb_saopaulo_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "3e05b566e4012ca6310da6590289df4c1410534d",
+    "size": 33182049,
+    "lfs": {
+      "oid": "8498d2b5594135613f7ad3f26b414042f46b4405bfea59c7750e02cf8f4bca6d",
+      "size": 33182049,
+      "pointerSize": 133
+    },
+    "xetHash": "fa8a7bfbfa820c373d8ee52c27c155824f4677dd1fba2d868b21522368511c67",
+    "path": "models/cb_saopaulo_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "448f655b66810480fbedb36882b851f254fbd855",
+    "size": 456413637,
+    "lfs": {
+      "oid": "85b0eeb07437c9842b4572fa7ad5dbb33a640aad58d48c0d16a1efc320f3d38f",
+      "size": 456413637,
+      "pointerSize": 134
+    },
+    "xetHash": "433cbe8104786b87ad494081f17bfd15966a6148e2c8615d369bcb093cb71301",
+    "path": "models/cl_delhi_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "cc82212106cc2cbc4b584bc3f574a378335337fa",
+    "size": 912077382,
+    "lfs": {
+      "oid": "2c40cc73808dc406853bec39bf297b843d0b983698e3ca8fa0fd09e1c228c6fc",
+      "size": 912077382,
+      "pointerSize": 134
+    },
+    "xetHash": "ad84f8294e01dd19a9581271bc503005f225d65c48a2ea58a58f371b01c32804",
+    "path": "models/cl_delhi_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "1c6213e7b8aba89e958d0bf07648e9235f1655db",
+    "size": 436496871,
+    "lfs": {
+      "oid": "a9ba2cf6d1f9788d262105ed2a6ba2d4d286ac69e629e8cebaf1a1f7ad9fe3af",
+      "size": 436496871,
+      "pointerSize": 134
+    },
+    "xetHash": "f8d9f0c14f81fcc3c7a9adc5f03e0a919741bd0a995ddb6d31a2aeeb215f8a6f",
+    "path": "models/cl_jaipur_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "308a2d6a9086239d6fa7ce3b70d7aaf77bfd1928",
+    "size": 872835111,
+    "lfs": {
+      "oid": "afb41efd90a21a2b52492703a85d778fba5de23a5c37a380fc9ab3d70b6ac368",
+      "size": 872835111,
+      "pointerSize": 134
+    },
+    "xetHash": "6d881b6bc9891651484d36ad7e98dc11776b2a5a207c692be8baa8a0afde7cd2",
+    "path": "models/cl_jaipur_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "30c5b21cbca6e76cfde62e0eb9a059f0eff474b3",
+    "size": 456413637,
+    "lfs": {
+      "oid": "2eb53310f4b878ae83f6b1f153eaccc087272e9c42ec996e008cdf830cdca460",
+      "size": 456413637,
+      "pointerSize": 134
+    },
+    "xetHash": "1e9c6b2d50268054e840b48d60984f43904382922294941cefa18491ac0fa74c",
+    "path": "models/cl_mumbai_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "0d6a8ec1bdf643c201c83cb4b50c2163b3e42555",
+    "size": 912077382,
+    "lfs": {
+      "oid": "04f2d5dde20a6f36d1c8c4df1af8eacc688db952fdc5fee447cf545488e60f38",
+      "size": 912077382,
+      "pointerSize": 134
+    },
+    "xetHash": "50f170b6d07883983a8ee7ac360c7c6ee9d9bf17c5164d9c9905f0c96dfbe438",
+    "path": "models/cl_mumbai_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "52c8d16886354f1b1301373d989bcf933e7dae67",
+    "size": 53039552,
+    "lfs": {
+      "oid": "5060d7a32966902d0a021d7b0c0e1a4bb026d378bdf8b1b9023eb6c5f1c99b53",
+      "size": 53039552,
+      "pointerSize": 133
+    },
+    "xetHash": "2ecfb44224afc7d8545b31b2f6df99034c07008f0fe994bc8ff3d96eeb74ad39",
+    "path": "models/dn_gothenburg_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "ccd6346e179a8d352cf7cdee06dd8cf651b376fd",
+    "size": 104999615,
+    "lfs": {
+      "oid": "5416b99ebad0de8cef47388ad6999fd71098ee75c6d6a913b0d350939c019895",
+      "size": 104999615,
+      "pointerSize": 134
+    },
+    "xetHash": "3e1e0a08e093e35cdc9400f1d85a3a23bfbe114107c54eec32bb9b7db419c659",
+    "path": "models/dn_gothenburg_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "b31ded6481cb0958ffa725c2bfd0172e103d9b4e",
+    "size": 53805746,
+    "lfs": {
+      "oid": "e5921654bc1873ec0fbe42304070a79bfb0b578dbe9b398e55cd4ff50e3f5ea6",
+      "size": 53805746,
+      "pointerSize": 133
+    },
+    "xetHash": "82f961160756dd5bccf287cdff9cb6ea23a387cabdefcfb0611e94cd134f6357",
+    "path": "models/dn_malmo_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "297ac9d523d1f77f1e09bcceb270206b2cfef327",
+    "size": 105628429,
+    "lfs": {
+      "oid": "f7257fa1216d71f7c0dafe4d1ec1f265aaf72913cd59bc1eed2565171c463c50",
+      "size": 105628429,
+      "pointerSize": 134
+    },
+    "xetHash": "fa557697cd3312a4a6c618fa8f05fac4c71c4de031f47cb0b572d97bc008d4c2",
+    "path": "models/dn_malmo_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "7e89bb378954e4641092524246d23b1a9588a9cc",
+    "size": 232374896,
+    "lfs": {
+      "oid": "01d144e25c36eddb5e59bf41e8291e8b34e08e0a18dd735f26d7bb9dcf031f80",
+      "size": 232374896,
+      "pointerSize": 134
+    },
+    "xetHash": "f4ac2045e7123cccebbbc377fb47ba01963e8ce6cf277689dd25a0691cd19645",
+    "path": "models/dn_stockholm_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "406159f51fb010e2367b5cb7f25048c8f84f9413",
+    "size": 464230517,
+    "lfs": {
+      "oid": "8ca3da79f350d3fbf4879f37980df222e6ae70ef659f5c3035cc75a4a2a526f8",
+      "size": 464230517,
+      "pointerSize": 134
+    },
+    "xetHash": "e0f322785f0ddac5994f50315ebb122a98f043d4e5e315585b1e7359328ca885",
+    "path": "models/dn_stockholm_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "430e4af96d8d8686891782f8d2b4b403deafbba3",
+    "size": 4903810,
+    "lfs": {
+      "oid": "cb90b279f549d2cab7fd6e20c38522438c65d84bdcca3d2a764cff7d857fdce2",
+      "size": 4903810,
+      "pointerSize": 132
+    },
+    "xetHash": "a35119ed9a8f10e0a2b3deb97e76b7514ba5544a90054adb4a469b5362e8c789",
+    "path": "models/dt_losangeles_decoder_int8.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "99e5c13218bdc81e53578d0375b1ae88371a9a13",
+    "size": 8882165,
+    "lfs": {
+      "oid": "cce23c7b2e5d4f330932738fb67ba518e04b0d99ccdd1cccd22a7da4e01f2971",
+      "size": 8882165,
+      "pointerSize": 132
+    },
+    "xetHash": "61cf4c11ff880e6d60501a9cd1876affb81e99c9a22b1cf1fb2732017b8c8446",
+    "path": "models/dt_losangeles_encoder_int8.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "672272b565e1a4c2861bb4627577f0d98631ade2",
+    "size": 44272782,
+    "lfs": {
+      "oid": "7ca71fd2038c5f392106653d3ad787b5f075c7b0404607eebc9b13433a888838",
+      "size": 44272782,
+      "pointerSize": 133
+    },
+    "xetHash": "add5e043775673bc0522263762486b39cdc33fde6d1e9b931e5db0ba46fadbdc",
+    "path": "models/dt_newyork_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "7902f99acfbd9ab54428143f87aa51c689b947f8",
+    "size": 88500296,
+    "lfs": {
+      "oid": "07430c90adbb2d90a9c98ef222500e7ba043bdfcc2643a9fc0e126d18d437d72",
+      "size": 88500296,
+      "pointerSize": 133
+    },
+    "xetHash": "68714a6d67ecb9890fe90a4bd0140fca854dc90f28b21a03d545d48254ed3089",
+    "path": "models/dt_newyork_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "1e5da54d4d4fb011d9efe6637b04cc95ae40d713",
+    "size": 188543498,
+    "lfs": {
+      "oid": "6b1765994c152313045cc29ec5a618c2adcbff47bc6f36ec7e03ec2b1e08923a",
+      "size": 188543498,
+      "pointerSize": 134
+    },
+    "xetHash": "389baf4bc88a85c5c63da28d77c95eb732f8bd44580e4976371fb13b2e5f35bb",
+    "path": "models/fr_athens_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "86c5952232da7b0d2348c3992de1eaa6642f7575",
+    "size": 376716366,
+    "lfs": {
+      "oid": "2c48e84213d5d989f2203c0e592776fbe5aeedcc8136a5510281f8d1c43a21c0",
+      "size": 376716366,
+      "pointerSize": 134
+    },
+    "xetHash": "c5339549fe67381cf3f9459d813e0bd07356179074e5f95481a3cf8699de7b77",
+    "path": "models/fr_athens_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "3c54e55a52e90b77dee8e24afebbbb3a6d97d1e5",
+    "size": 168884305,
+    "lfs": {
+      "oid": "3f0b853500e610c16e5b0955bb0435d42375b1a594ef214e671cdabfac59f5f4",
+      "size": 168884305,
+      "pointerSize": 134
+    },
+    "xetHash": "7c6a397b27340796844a10f7e6a3567ef146109dcd7f6aea48884743241533bb",
+    "path": "models/fr_santorini_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "a71adcbf0861450e8f42410b486593e12de87b2c",
+    "size": 337540861,
+    "lfs": {
+      "oid": "2d314a2241cde850f47b8ca914a8d0e09d5040b07b16090b5c20127da3f49aab",
+      "size": 337540861,
+      "pointerSize": 134
+    },
+    "xetHash": "6cdc6d1e4181943e4d72378dca63d670edd26167ecb9bb6cdfe67d5a54d6fe18",
+    "path": "models/fr_santorini_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "17ea131c4d7f61c07191be54cb923c783080fb1c",
+    "size": 65109366,
+    "lfs": {
+      "oid": "4c63de8d5b0788f7ec654d94b1b708420d4ba10e4df28f41649e15364c795643",
+      "size": 65109366,
+      "pointerSize": 133
+    },
+    "xetHash": "4f28e186be2447b5f3b465aee15926eba2602778d7b9cdb98ea611582b09be0c",
+    "path": "models/la_lyon_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "3fad86d7c5d6ecd2cee336760dea705cc3b7fb18",
+    "size": 129475548,
+    "lfs": {
+      "oid": "15d86d80d97a48e1ae9444b30fff53d366d73dad82a4b1d936d2eef8818cb28f",
+      "size": 129475548,
+      "pointerSize": 134
+    },
+    "xetHash": "f2ed864c11395d0eb956083e36c56bae4d652d29f99177c9a1c67958020b4365",
+    "path": "models/la_lyon_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "7c248b4a11c1ca56b56bf9702170dd1e1556410a",
+    "size": 149433,
+    "lfs": {
+      "oid": "e6695f08f559b8aa1ffa65c7f081c60c29b104334964bf2d62916ddb296162f2",
+      "size": 149433,
+      "pointerSize": 131
+    },
+    "xetHash": "134cdc8dc4ed122195d7b145fd40a3ebd7a372e4188a3376c0d06f84fe198682",
+    "path": "models/la_paris_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "abf9ea6243abdfa08bd61bb7db100c878a6537cf",
+    "size": 286407,
+    "lfs": {
+      "oid": "a01ea6a86bb858f1bb257ec8ab8def64a2edb90795c9c1eafe5ba1ba0e6cf3e4",
+      "size": 286407,
+      "pointerSize": 131
+    },
+    "xetHash": "361bd30fad83f7bfdbc12d8aa53a986ad6576a54287c7bdaea3a18d6793d8400",
+    "path": "models/la_paris_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "0816e0f1d3005d105d00253a03c76821b4ee8b76",
+    "size": 53059124,
+    "lfs": {
+      "oid": "9d0e87dd632bac0c79d3f4f45e2382ad7aa356feb4c245a5338dac0898708857",
+      "size": 53059124,
+      "pointerSize": 133
+    },
+    "xetHash": "b97d98ba082a2dc282efde760563b897aa15fc6a9b86077934d0ed85aee6948c",
+    "path": "models/sh_moscow_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "5b35094fc700a374a593bc1d7378632338ec1670",
+    "size": 105317487,
+    "lfs": {
+      "oid": "e0e35b0d1443329f540f3d143eae89a0986d26afea919aef560089f477f06984",
+      "size": 105317487,
+      "pointerSize": 134
+    },
+    "xetHash": "8b66e541afd6187fc6ea3fbde57e91ef5564dc7c139ef820d7d90c9595d7bfcb",
+    "path": "models/sh_moscow_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "4bb75e703145744e0e0109b05e892c34e37f923c",
+    "size": 53185379,
+    "lfs": {
+      "oid": "a75d6288abb4f92ff035d75a5e07a97c67afc35ae19de6b0f999e46bf574273f",
+      "size": 53185379,
+      "pointerSize": 133
+    },
+    "xetHash": "7d85e1012431f1641e6d2efea2a3e62bdf5f4f9b614e5e545804ce9745371127",
+    "path": "models/sh_novgorod_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "3a7892d51dc2b5a1be3fa67498028e464cc0de9d",
+    "size": 105438342,
+    "lfs": {
+      "oid": "4a1f0a561b55af66611f6aa51ffd5d6ab07fbee39b396591aa90840a4f7eee9b",
+      "size": 105438342,
+      "pointerSize": 134
+    },
+    "xetHash": "9f84efde66fcf23176b28f31e1b574e7086e472bb91a730696a4f9297600bb1a",
+    "path": "models/sh_novgorod_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "69d4ff1f1a06545e30496c8edefed3f8c5d4dfe0",
+    "size": 135888071,
+    "lfs": {
+      "oid": "45c0663b0a6e75311e0784a60a45e3d443fb036719baaf543e6101a9888709b2",
+      "size": 135888071,
+      "pointerSize": 134
+    },
+    "xetHash": "a378699cdb517f322e1b5cb2e42c9fea56f7399ec8ca2fe79d578d5773f3385b",
+    "path": "models/sh_petersburg_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "57336e784f17e6238defaeca9b721f2239c73fb6",
+    "size": 271595022,
+    "lfs": {
+      "oid": "3c7dbd8f87bd8d1267d0c3e9d934d620869adadc7117fbbb25a0e9e1fffaf05d",
+      "size": 271595022,
+      "pointerSize": 134
+    },
+    "xetHash": "25924593436efd79077b308c28bea749e76bf860fd54bb22fa6d69e176d12f81",
+    "path": "models/sh_petersburg_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "d3aba640762180bd912cd65f69ecf6b64cc57a49",
+    "size": 33712842,
+    "lfs": {
+      "oid": "9fcd3bc14d9068182b5c910b416dee2db96d6da1690e6b878a6e0a81027db1e4",
+      "size": 33712842,
+      "pointerSize": 133
+    },
+    "xetHash": "9cfe0c42fae94bdeab5ff05be5bd7fbd28e4b378feb388ffb2f16b52bf1fb864",
+    "path": "models/up_kyoto_2x_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "d78f46934b044bbbd583d73dc8000aea4db483ad",
+    "size": 67119422,
+    "lfs": {
+      "oid": "a6ed363c0796e7b863e49e6ee2ec40f2cbc02a14dff9b26f91e51b1a88ae5e4c",
+      "size": 67119422,
+      "pointerSize": 133
+    },
+    "xetHash": "e9e097adf66f50348985b14e7afc1ddbda64b1b38178c618461972254a9c089a",
+    "path": "models/up_kyoto_2x_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "03a401f7bf8773843446472f4c2f61dff8acabdd",
+    "size": 33701909,
+    "lfs": {
+      "oid": "070e6e9c94896625778094b372288881d0f893264c0c8a90fc81886dc571a06a",
+      "size": 33701909,
+      "pointerSize": 133
+    },
+    "xetHash": "9e15b6c22a5b973db65dd3253cc2b04f66294e7df275a732ccf75482a48d365f",
+    "path": "models/up_kyoto_4x_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "05cd75206e7261a5abd8461e479d4d7bb1aa867d",
+    "size": 67098087,
+    "lfs": {
+      "oid": "f437f55390d9e3d001dc96572e562b233d1c4cd19b1e064446ddb6ca97c5e863",
+      "size": 67098087,
+      "pointerSize": 133
+    },
+    "xetHash": "6b620f7635c17ab2bfeb7c53c589ccdca1abe2b918f976583ca8a5c8ecd4e335",
+    "path": "models/up_kyoto_4x_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "fabb0356af7376fc2e591f76c7b046e5aaef8f10",
+    "size": 2589005,
+    "lfs": {
+      "oid": "6351c6464ad1849adc8c1d5c610550fe7b64c3e43765276fa32a23bb65dfc98b",
+      "size": 2589005,
+      "pointerSize": 132
+    },
+    "xetHash": "045f1961aa062c843261355720f7cfa0380be51d0a012bf99fa13aea8f69a8a2",
+    "path": "models/up_osaka_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "6c253fb5716f1cc40591b102e1d479aa2b979fd1",
+    "size": 7036572320,
+    "lfs": {
+      "oid": "a96bb4b65a1fc29e2d14a43a7e008d6b90fef1e1ec344a18bbacf38133b6b504",
+      "size": 7036572320,
+      "pointerSize": 135
+    },
+    "xetHash": "b62bb60f4edfbd162d3d5ccf24760ef80e0d340c556e3b31645ad347c0a1be87",
+    "path": "models/up_osaka_fp16.onnx.data"
+  },
+  {
+    "type": "file",
+    "oid": "28bc593b7424c3b4cf81ce587c4fa0a3c089ae7d",
+    "size": 2633983,
+    "lfs": {
+      "oid": "1744c06080a8156b9db80fd59ca70a2de28c3ba2f9d62283f0d9b0a000f7c66c",
+      "size": 2633983,
+      "pointerSize": 132
+    },
+    "xetHash": "ce06239819153bc23a811dcd8121d0ef111f413de20a7ff715b61c2af7c0f5bd",
+    "path": "models/up_osaka_int8.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "5587656d2cf1aefae9f7e95eef7457ff91f43d96",
+    "size": 3678853792,
+    "lfs": {
+      "oid": "a12436f16d734977c264f696f7731fa74c74c3e8dc3768d93429ef4a07af984c",
+      "size": 3678853792,
+      "pointerSize": 135
+    },
+    "xetHash": "f4ac68373217195e6af889e6e0535307463bbf2fd41aa2f5df7db2e96039d6fa",
+    "path": "models/up_osaka_int8.onnx.data"
+  },
+  {
+    "type": "file",
+    "oid": "2243d9d7e37f05ee887a866962691aa575e15881",
+    "size": 103866938,
+    "lfs": {
+      "oid": "149243b2e1fa33e7d90ed462b3e16a7da66f4390fce313b434bf557fdf4de7d1",
+      "size": 103866938,
+      "pointerSize": 134
+    },
+    "xetHash": "d72c0dd8eecb8c35bd0f8ee8d2b9f4a212f8194f3c2b0aed5b57348856682633",
+    "path": "models/up_osaka_vae_decoder_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "30be887b26a514bb67b039fc50461be838762cbc",
+    "size": 68583401,
+    "lfs": {
+      "oid": "0d001682412a705b8ebd71e990e279f389eebbe7ee26727908d91d05cd1387cf",
+      "size": 68583401,
+      "pointerSize": 133
+    },
+    "xetHash": "8a8cf9be0f8561695f6227ad6147827325535acbde45dcce483d2dc11e7fdfa4",
+    "path": "models/up_osaka_vae_encoder_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "0bfeeaeb74e037a3d514365ca6096c902e92b81e",
+    "size": 8984791,
+    "lfs": {
+      "oid": "e1fc6151ec0743982159340333a4132b97ae9ac888d7a2fe1cc98b83ae109c99",
+      "size": 8984791,
+      "pointerSize": 132
+    },
+    "xetHash": "8f2dda0a56671a6ca3e28cfedcf50d75ea49643839a051b63b89f25f746a79e5",
+    "path": "models/up_saitama_4x_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "dfb58397a2f064b98ebd5afa1daaf4059b933ef4",
+    "size": 17920169,
+    "lfs": {
+      "oid": "a5297a5a3e29aabaafee8188d46eea4713ceceaee86cb6e2cd850add23c63daa",
+      "size": 17920169,
+      "pointerSize": 133
+    },
+    "xetHash": "dd904cb6e156d6df44ec2f8a52413c2698567860253d3cf5f358a9c8d3477051",
+    "path": "models/up_saitama_4x_fp32.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "575b17b9e216f7197f08465f44e6050642c63293",
+    "size": 68798101,
+    "lfs": {
+      "oid": "8978296b32cc826d2512216736680a84db07b22ec89c70fd491f903807bf18c6",
+      "size": 68798101,
+      "pointerSize": 133
+    },
+    "xetHash": "cc0a6b291e82914ec7734280d9f6ff4d79e2a90542452af6632d78e6aa988c6d",
+    "path": "models/up_tokyo_4x_fp16.onnx"
+  },
+  {
+    "type": "file",
+    "oid": "38f36c481096ea91bb667e902600db6628927aa7",
+    "size": 136342058,
+    "lfs": {
+      "oid": "ea862ae842c494af6d394befe6aea2b7225e9d9a59599ea293b6bb5cd2cbcea8",
+      "size": 136342058,
+      "pointerSize": 134
+    },
+    "xetHash": "a9e78cc42b559e573c9400c482ede453cb23e3d183855683faff00f4a5e43f6e",
+    "path": "models/up_tokyo_4x_fp32.onnx"
+  }
+]
