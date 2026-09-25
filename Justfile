@@ -37,8 +37,15 @@ test suite="all": (_check-suite suite)
     {{ if suite != "rust" { "pnpm --dir crates/gui install --frozen-lockfile" } else { "" } }}
     {{ if suite != "rust" { "pnpm --dir crates/gui test" } else { "" } }}
 
+# Run a component in development mode. Currently only `gui` is supported.
+dev target: (_check-dev target)
+    pnpm --dir crates/gui tauri dev
+
 _check-suite suite:
     @{{ if suite =~ '^(all|rust|node)$' { "" } else { error("suite must be rust or node, got: " + suite) } }}
+
+_check-dev target:
+    @{{ if target == "gui" { "" } else { error("target must be gui, got: " + target) } }}
 
 _compile triple:
     rustup target add {{ triple }}
