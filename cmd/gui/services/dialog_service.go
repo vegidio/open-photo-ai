@@ -1,10 +1,13 @@
 package services
 
 import (
+	"fmt"
 	"gui/types"
 	guiutils "gui/utils"
 	"log/slog"
+	"runtime"
 	"strings"
+	"unicode"
 
 	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
@@ -31,12 +34,12 @@ func (s *DialogService) OpenFileDialog(title string, filterName string) ([]types
 	extensions := lo.Map(utils.SupportedInputExtensions(), func(ext string, _ int) string {
 		return "*." + ext
 	})
-	extFilter := strings.Join(extensions, ";")
+	label := strings.Join(extensions, ";")
 
 	dialog := s.app.Dialog.OpenFile()
 	dialog.SetTitle(title)
 	// Only the word is translated; the extension list is derived from what the decoder supports, so it stays here.
-	dialog.AddFilter(filterName+" ("+extFilter+")", extFilter)
+	dialog.AddFilter(filterName+" ("+label+")", filterPatterns(utils.SupportedInputExtensions(), runtime.GOOS))
 
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {
@@ -101,3 +104,28 @@ func isDialogCancelled(err error) bool {
 }
 
 func (s *DialogService) destroy() {}
+
+// filterPatterns builds the dialog's glob list. GTK matches glob patterns case-sensitively on Linux, so each letter
+// becomes a bracket class ("*.[dD][nN][gG]") that matches any casing, including mixed ones like "photo.Jpg". macOS turns
+// each pattern into a UTType and Windows doesn't support bracket classes; both match case-insensitively anyway.
+func filterPatterns(extensions []string, goos string) string {
+	patterns := make([]string, 0, len(extensions))
+	for _, ext := range extensions {
+		if goos != "linux" {
+			patterns = append(patterns, "*."+ext)
+			continue
+		}
+
+		var b strings.Builder
+		b.WriteString("*.")
+		for _, r := range ext {
+			if lower, upper := unicode.ToLower(r), unicode.ToUpper(r); lower != upper {
+				fmt.Fprintf(&b, "[%c%c]", lower, upper)
+			} else {
+				b.WriteRune(r)
+			}
+		}
+		patterns = append(patterns, b.String())
+	}
+	return strings.Join(patterns, ";")
+}
