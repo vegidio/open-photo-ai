@@ -28,6 +28,12 @@ vi.mock("@/lib/faro", () => ({
     traced: (_name: string, send: () => Promise<unknown>) => send(),
 }));
 vi.mock("@/ipc/os", () => ({ isMacOs: vi.fn(() => false), isWindows: vi.fn(() => false) }));
+// Closing an image releases its enhanced result in Rust, and there is no Rust behind jsdom.
+vi.mock("@/ipc/enhance", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/ipc/enhance")>()),
+    releaseEnhanced: vi.fn(() => Promise.resolve()),
+    releaseAllEnhanced: vi.fn(() => Promise.resolve()),
+}));
 
 const onMacOs = isMacOs as unknown as Mock;
 const checked = isOutdated as unknown as Mock;

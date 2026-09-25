@@ -437,16 +437,18 @@ describe("a face-recovery suggestion", () => {
     });
 
     it("is kept, and nothing recorded, where finding the faces fails", async () => {
-        vi.spyOn(console, "warn").mockImplementation(() => {});
+        const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+        const failure = { kind: "detect", message: "the detector could not be read" };
         const notice = failed();
 
         void analyse(HOLIDAY, undefined);
         await asking[0]?.answer(suggestions);
-        await detecting[0]?.fail({ kind: "detect", message: "the detector could not be read" });
+        await detecting[0]?.fail(failure);
 
         expect(familiesOf(HOLIDAY.path)).toEqual(["face_recovery", "upscale"]);
         expect(useFacesStore.getState().faces.has(HOLIDAY.identity ?? "")).toBe(false);
         expect(notice).not.toHaveBeenCalled();
+        expect(logged).toHaveBeenCalledWith("detecting the faces for an Autopilot suggestion failed", failure);
     });
 
     it("asks for no faces where it is not among the suggestions", async () => {

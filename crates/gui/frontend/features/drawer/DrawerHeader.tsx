@@ -144,16 +144,16 @@ export const DrawerHeader = ({ open }: DrawerHeaderProps) => {
             <div className="flex-1" />
 
             {/*
-             * `type='single'`, and with no value at all while nothing is open - which is what the
-             * Wails app does (`value={disabled ? undefined : previewMode}`) and what keeps the tray
-             * from claiming a comparison for an image that does not exist. Spread conditionally
-             * because under `exactOptionalPropertyTypes` an explicit `undefined` is not an absent
-             * prop, and Radix reads the two differently.
+             * `type='single'`, and with nothing chosen while nothing is open - which keeps the tray
+             * from claiming a comparison for an image that does not exist. The empty string rather
+             * than an absent `value`, which is Radix's own "none selected": omitting the prop would
+             * leave the group uncontrolled until the first image opened and then switch it to
+             * controlled, which React warns about.
              */}
             <ToggleGroup
                 type="single"
                 disabled={disabled}
-                {...(!disabled && { value: previewMode })}
+                value={disabled ? "" : previewMode}
                 onValueChange={(value: string) => {
                     // Radix reports an empty string when the mode already chosen is pressed again.
                     // A comparison is always one of the three, so that deselection is ignored rather

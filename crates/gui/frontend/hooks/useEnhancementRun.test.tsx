@@ -384,13 +384,16 @@ describe("a run that does not finish", () => {
     const toast = () => document.querySelector("[data-sonner-toast]");
 
     it("tells the user when a run fails", async () => {
+        const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+        const failure = { kind: "enhance", message: "no execution provider could be built" };
         stack(HOLIDAY.path, upscale(2));
         mount();
 
-        pending[0]?.reject({ kind: "enhance", message: "no execution provider could be built" });
+        pending[0]?.reject(failure);
 
         await waitFor(() => expect(toast()).toHaveTextContent("Failed to enhance image"));
         expect(answer.enhanced).toBeUndefined();
+        expect(logged).toHaveBeenCalledWith("enhancing the image failed", failure);
     });
 
     it("says nothing about a run that was stopped", async () => {
@@ -596,12 +599,15 @@ describe("a chain that restores faces", () => {
     });
 
     it("tells the user when a detection fails, and still runs the chain", async () => {
+        const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+        const failure = { kind: "detect", message: "no execution provider could be built" };
         stack(HOLIDAY.path, recovery(), upscale(2));
         mount();
 
-        detecting[0]?.fail({ kind: "detect", message: "no execution provider could be built" });
+        detecting[0]?.fail(failure);
 
         await waitFor(() => expect(toast()).toHaveTextContent("Failed to detect faces"));
+        expect(logged).toHaveBeenCalledWith("detecting the faces in the image failed", failure);
 
         // A failed detection means the faces are not restored. It must not also mean that the upscale
         // the user asked for in the same list does not happen.
@@ -615,6 +621,7 @@ describe("a chain that restores faces", () => {
     });
 
     it("records a failed detection as no faces rather than leaving the question unanswered", async () => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
         stack(HOLIDAY.path, recovery());
         mount();
 
@@ -691,6 +698,7 @@ describe("a chain that restores faces", () => {
     });
 
     it("holds nothing for a photograph closed while a detection that then failed was in flight", async () => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
         stack(HOLIDAY.path, recovery());
         const view = mount();
 
