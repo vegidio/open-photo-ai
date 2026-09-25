@@ -1,10 +1,13 @@
 package services
 
 import (
+	"fmt"
 	"gui/types"
 	guiutils "gui/utils"
 	"log/slog"
+	"runtime"
 	"strings"
+	"unicode"
 
 	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
@@ -36,7 +39,7 @@ func (s *DialogService) OpenFileDialog(title string, filterName string) ([]types
 	dialog := s.app.Dialog.OpenFile()
 	dialog.SetTitle(title)
 	// Only the word is translated; the extension list is derived from what the decoder supports, so it stays here.
-	dialog.AddFilter(filterName+" ("+label+")", filterPatterns(utils.SupportedInputExtensions()))
+	dialog.AddFilter(filterName+" ("+label+")", filterPatterns(utils.SupportedInputExtensions(), runtime.GOOS))
 
 	paths, err := dialog.PromptForMultipleSelection()
 	if err != nil {
@@ -102,16 +105,27 @@ func isDialogCancelled(err error) bool {
 
 func (s *DialogService) destroy() {}
 
-// filterPatterns builds the dialog's glob list with each extension in both lower and upper case. GTK matches glob
-// patterns case-sensitively on Linux, so "*.dng" alone hides a camera's "L1041576.DNG" - and cameras that name files
-// in upper case are the rule, not the exception. macOS and Windows match case-insensitively; the duplicates are harmless.
-func filterPatterns(extensions []string) string {
-	patterns := make([]string, 0, len(extensions)*2)
+// filterPatterns builds the dialog's glob list. GTK matches glob patterns case-sensitively on Linux, so each letter
+// becomes a bracket class ("*.[dD][nN][gG]") that matches any casing, including mixed ones like "photo.Jpg". macOS turns
+// each pattern into a UTType and Windows doesn't support bracket classes; both match case-insensitively anyway.
+func filterPatterns(extensions []string, goos string) string {
+	patterns := make([]string, 0, len(extensions))
 	for _, ext := range extensions {
-		patterns = append(patterns, "*."+ext)
-		if upper := strings.ToUpper(ext); upper != ext {
-			patterns = append(patterns, "*."+upper)
+		if goos != "linux" {
+			patterns = append(patterns, "*."+ext)
+			continue
 		}
+
+		var b strings.Builder
+		b.WriteString("*.")
+		for _, r := range ext {
+			if lower, upper := unicode.ToLower(r), unicode.ToUpper(r); lower != upper {
+				fmt.Fprintf(&b, "[%c%c]", lower, upper)
+			} else {
+				b.WriteRune(r)
+			}
+		}
+		patterns = append(patterns, b.String())
 	}
 	return strings.Join(patterns, ";")
 }
