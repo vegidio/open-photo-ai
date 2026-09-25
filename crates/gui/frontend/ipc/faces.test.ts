@@ -32,6 +32,8 @@ const face = (left: number): Face => ({
         { x: left + 2, y: 6.5 },
     ],
     confidence: 0.9,
+    restorable: true,
+    key: `${left},4,${left + 3},7`,
 });
 
 beforeEach(() => {

@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { CropInfo } from "./crop";
 import { type EnhanceError, mintRun, type Operation, type Processor, type RunProgress } from "./enhance";
 import { call } from "./invoke";
+import { once } from "./once";
 
 // Written a second time in `crates/gui/src/export/`, as `#[tauri::command]` function names: the first two in
 // `mod.rs`, then `directory.rs` and `written.rs`. A rename on one side alone is not a type error but an `invoke` that
@@ -11,6 +12,7 @@ const EXPORT_COMMAND = "export";
 const CANCEL_EXPORT_COMMAND = "cancel_export";
 const PICK_DIRECTORY_COMMAND = "pick_directory";
 const REVEAL_EXPORT_COMMAND = "reveal_export";
+const EXPORT_FORMATS_COMMAND = "export_formats";
 
 /**
  * The event an export's reports arrive under, written a second time in `crates/gui/src/export/progress.rs` as
@@ -22,11 +24,38 @@ const REVEAL_EXPORT_COMMAND = "reveal_export";
 const EXPORT_PROGRESS_EVENT = "export:progress";
 
 /**
- * The formats a photograph can be exported as.
- *
- * The four lossy ones are `QUALITY_FORMATS` in `stores/settings.ts`. `heic` is written by the library as HEIF.
+ * The formats a photograph can be exported as, as the window names them. What each can do - whether it takes a
+ * quality, what it is written as - is {@link ExportFormats}, published by Rust. `heic` is written by the library as
+ * HEIF.
  */
 export type ExportFormat = "bmp" | "gif" | "jpeg" | "png" | "tiff" | "avif" | "heic" | "webp";
+
+/** What a lossy format's quality may be, and what it is written at before a user moves a slider. */
+export type QualityRange = { min: number; max: number; default: number };
+
+/** What one format can do, as Rust's `FormatCapability` publishes it. */
+export type FormatCapability = {
+    format: ExportFormat;
+    /** The extension a file written in it is given when it is chosen, without its dot: `jpg` for JPEG. */
+    extension: string;
+    /**
+     * The source extensions a Preserve export writes back **as this format**, keeping the source's own extension:
+     * `jpeg` and `jpg` for JPEG, `heic` and `heif` for HEIC.
+     */
+    preserves: string[];
+    /**
+     * The quality it takes, or `null` for a lossless format, whose encoder ignores one. Per format rather than one
+     * shared number: the scales are not comparable across encoders.
+     */
+    quality: QualityRange | null;
+};
+
+/**
+ * Every format an export can be written in and what each can do, and what a Preserve export writes a source none of
+ * them writes back as itself - a camera RAW file - as instead. The one table `lib/export.ts` reads its format rules
+ * from, published by `export_formats` in `crates/gui/src/export/mod.rs`.
+ */
+export type ExportFormats = { formats: FormatCapability[]; fallback: ExportFormat };
 
 /** Where an export is written, and how. */
 export type ExportRequest = {
@@ -35,10 +64,11 @@ export type ExportRequest = {
     /** What to write. */
     format: ExportFormat;
     /**
-     * The quality, for AVIF, HEIC, JPEG and WebP. The other formats ignore it. A value outside 1 to 100 is brought
-     * inside that range rather than refused.
+     * The quality, for a format {@link ExportFormats} publishes as taking one - absent for the rest, and for a lossy
+     * format meant to be written at its published default. A value outside the range is brought inside it rather than
+     * refused.
      */
-    quality: number;
+    quality?: number;
     /**
      * Whether a file already at the destination may be replaced, the photograph's own file included. Without it, a
      * taken destination is written as `name_1.ext`, `name_2.ext` and so on.
@@ -123,6 +153,18 @@ export const exportImage = (
         }),
     };
 };
+
+// Kept because the Rust side answers from a table fixed at compile time, as the catalogue is.
+const formats = once(() => call<ExportFormats>(EXPORT_FORMATS_COMMAND));
+
+/**
+ * Every format an export can be written in, and what each can do. **Fetched once and kept**, as {@link once} keeps
+ * it: the answer cannot change while the application runs.
+ */
+export const exportFormats = () => formats.get();
+
+/** Forgets the fetched formats. For tests alone - see {@link once}. */
+export const forgetExportFormats = () => formats.forget();
 
 /**
  * Stop an export this window asked for, by the name {@link exportImage} answered.

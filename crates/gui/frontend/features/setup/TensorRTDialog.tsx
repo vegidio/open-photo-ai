@@ -28,15 +28,10 @@ export const TensorRTDialog = () => {
                 showCloseButton={false}
                 aria-describedby={undefined}
                 className="w-lg max-w-none gap-0 overflow-hidden rounded-xl border-border bg-card p-0 shadow-[0_24px_60px_rgb(0_0_0/0.7)] sm:max-w-none"
-                onOpenAutoFocus={(event) => {
-                    // As the setup dialog does, and for the same reason: Radix would focus No, and
-                    // WebKit would draw that programmatic focus as a ring on a dialog where neither
-                    // answer should look pre-chosen.
-                    event.preventDefault();
-
-                    const content = event.currentTarget;
-                    if (content instanceof HTMLElement) content.focus();
-                }}
+                // As the setup dialog does, and for the same reason: Radix would focus No, and
+                // WebKit would draw that programmatic focus as a ring on a dialog where neither
+                // answer should look pre-chosen.
+                focusContentOnOpen
                 // An unanswered question is one the application would have to ask again on the next
                 // launch, which is the repetition it exists to avoid - so neither Escape nor a click
                 // outside closes it. The reference behaves the same way: it passes no `onClose`.

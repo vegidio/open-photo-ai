@@ -164,7 +164,7 @@ fn the_catalogue_is_reachable_from_the_crate_root() {
     let scale_parameter: &ParameterEntry = kyoto.parameters.first().expect("upscale takes a scale");
     assert_eq!(scale_parameter.name, "scale");
 
-    let ParameterKind::Range { min, max } = scale_parameter.kind else {
+    let ParameterKind::Range { min, max, .. } = scale_parameter.kind else {
         panic!("a scale is a range a control offers, not {:?}", scale_parameter.kind);
     };
     assert_eq!((min, max), (1.0, 8.0));
@@ -497,7 +497,7 @@ fn the_catalogue_publishes_all_eight_families_to_the_crate_root() {
             .unwrap_or_else(|| panic!("{codename} publishes {name}"));
 
         match parameter.kind {
-            ParameterKind::Range { min, max } => (min, max),
+            ParameterKind::Range { min, max, .. } => (min, max),
             ParameterKind::Faces => panic!("{name} is not a range"),
         }
     };
@@ -643,7 +643,7 @@ fn a_published_catalogue_row_can_be_turned_back_into_an_operation_from_the_crate
         for parameter in variant.parameters {
             values = match parameter.kind {
                 ParameterKind::Faces => values.with_faces(Faces::new([face_at(12.34, 56.78, 90.12, 34.56)])),
-                ParameterKind::Range { min, max } => {
+                ParameterKind::Range { min, max, .. } => {
                     let midpoint = f64::midpoint(min, max);
 
                     // Matched against the constants the library publishes the names under, not against literals

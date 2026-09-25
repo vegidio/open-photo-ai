@@ -2,8 +2,10 @@
 //!
 //! [`SupportedProviders`] is what the *machine* can offer — a report initialization folds out of the GPU install
 //! plan. [`ExecutionProvider`] is what a *user* asked for, which a front end offers in a settings pane and hands back.
-//! [`options`] puts the two together into the plan a session is built from, and [`profile::EpProfile`] carries
-//! everything a measurement changes, declared by the variant it was measured against.
+//! `Accelerator` is the narrower thing a session actually attaches and configures: the three hardware providers,
+//! without the request (`Auto`) or the fallback that takes no configuration (the CPU). [`options`] puts the request
+//! and the machine together into the plan a session is built from, and [`profile::EpProfile`] carries everything a
+//! measurement changes, declared by the variant it was measured against.
 
 pub(crate) mod options;
 pub(crate) mod profile;
@@ -47,6 +49,26 @@ impl ExecutionProvider {
     /// Every published provider, in the order a user is most likely to reach for one.
     pub const ALL: [Self; 5] = [Self::Auto, Self::Cpu, Self::CoreMl, Self::Cuda, Self::TensorRt];
 
+    /// Every provider a session can be **built on**, in [`ALL`](Self::ALL) order: the CPU and each accelerator.
+    /// [`Auto`](Self::Auto) is a request — "pick for me" — rather than something anything runs on.
+    pub(crate) const BUILT_ON: [Self; 4] = [Self::Cpu, Self::CoreMl, Self::Cuda, Self::TensorRt];
+
+    /// The accelerator this names, or `None` for the two that are not one: [`Auto`](Self::Auto), which is a request,
+    /// and [`Cpu`](Self::Cpu), which is attached by nobody and configured with nothing — it is what the runtime falls
+    /// back to on its own.
+    ///
+    /// The one place the request vocabulary is narrowed to the hardware one, so everything downstream of it — the
+    /// attach list, the options it is configured with, the builder it reaches — holds an [`Accelerator`] and has no
+    /// arm for either of the two to answer.
+    pub(crate) const fn accelerator(self) -> Option<Accelerator> {
+        match self {
+            Self::Auto | Self::Cpu => None,
+            Self::CoreMl => Some(Accelerator::CoreMl),
+            Self::Cuda => Some(Accelerator::Cuda),
+            Self::TensorRt => Some(Accelerator::TensorRt),
+        }
+    }
+
     /// The user-facing spelling: `Auto`, `CPU`, `CoreML`, `CUDA`, `TensorRT`.
     pub const fn as_str(self) -> &'static str {
         // Written once, here, and matched by the `serde` renames on the arms above, so a stored choice and a displayed
@@ -58,6 +80,39 @@ impl ExecutionProvider {
             Self::Cuda => "CUDA",
             Self::TensorRt => "TensorRT",
         }
+    }
+}
+
+/// A provider a session attaches and configures: the hardware, without the request or the CPU.
+///
+/// Crate-internal, and deliberately not a replacement for [`ExecutionProvider`]: that is the public vocabulary a user
+/// chooses from and a settings file stores, and it has to be able to say "pick for me" and "the CPU". This is what
+/// the resolution narrows a request to, so the attach list, the options a provider is configured with and the builder
+/// dispatch each match three arms rather than five with two that must never happen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum Accelerator {
+    /// Apple's CoreML.
+    CoreMl,
+    /// NVIDIA's CUDA provider.
+    Cuda,
+    /// NVIDIA's TensorRT provider.
+    TensorRt,
+}
+
+impl From<Accelerator> for ExecutionProvider {
+    fn from(accelerator: Accelerator) -> Self {
+        match accelerator {
+            Accelerator::CoreMl => Self::CoreMl,
+            Accelerator::Cuda => Self::Cuda,
+            Accelerator::TensorRt => Self::TensorRt,
+        }
+    }
+}
+
+impl std::fmt::Display for Accelerator {
+    /// The user-facing spelling of the provider it is: `CoreML`, `CUDA`, `TensorRT`.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(ExecutionProvider::from(*self).as_str())
     }
 }
 
@@ -134,30 +189,31 @@ impl SupportedProviders {
 
     /// Whether this machine supports `provider`.
     ///
-    /// [`Auto`](ExecutionProvider::Auto) and [`Cpu`](ExecutionProvider::Cpu) are `true` on every machine, and neither
-    /// reads a field. The other three read the flag the install plan set.
+    /// [`Auto`](ExecutionProvider::Auto) and [`Cpu`](ExecutionProvider::Cpu) are `true` on every machine — there is no
+    /// machine the runtime cannot run on, so `Auto` always has at least the CPU to resolve to. An accelerator reads the
+    /// flag the install plan set; see [`offers`](Self::offers).
     pub fn supports(self, provider: ExecutionProvider) -> bool {
-        match provider {
-            // There is no machine the runtime cannot run on, so `Auto` always has at least the CPU to resolve to.
-            ExecutionProvider::Auto | ExecutionProvider::Cpu => true,
-            ExecutionProvider::CoreMl => self.coreml,
-            ExecutionProvider::Cuda => self.cuda,
-            ExecutionProvider::TensorRt => self.tensorrt,
+        provider.accelerator().is_none_or(|accelerator| self.offers(accelerator))
+    }
+
+    /// Whether this machine offers `accelerator`: the flag the install plan set for it, and no other.
+    pub(crate) const fn offers(self, accelerator: Accelerator) -> bool {
+        match accelerator {
+            Accelerator::CoreMl => self.coreml,
+            Accelerator::Cuda => self.cuda,
+            Accelerator::TensorRt => self.tensorrt,
         }
     }
 
     /// Every provider this machine can actually offer, in [`ExecutionProvider::ALL`] order.
     ///
     /// [`Auto`](ExecutionProvider::Auto) is **not** in it, although [`supports`](Self::supports) is `true` for it on
-    /// every machine: `Auto` is a request — "pick for me" — rather than a capability.
+    /// every machine: `Auto` is a request — "pick for me" — rather than a capability, which is why this reads the
+    /// providers a session can be built on rather than every published one.
     pub fn available(self) -> Vec<ExecutionProvider> {
         // Beside `supports` so a front end gets the list without writing a filter of its own — the same reasoning
-        // `cpu` is a field for, one level up. Every consumer remembering the `Auto` special case separately is how a
-        // settings pane ends up offering `Auto` as hardware.
-        ExecutionProvider::ALL
-            .into_iter()
-            .filter(|provider| *provider != ExecutionProvider::Auto && self.supports(*provider))
-            .collect()
+        // `cpu` is a field for, one level up.
+        ExecutionProvider::BUILT_ON.into_iter().filter(|provider| self.supports(*provider)).collect()
     }
 
     /// This report with `provider` additionally claimed.
@@ -296,6 +352,43 @@ pub(crate) mod tests {
             );
             assert!(error.to_string().contains(text), "the message did not name the text: {error}");
         }
+    }
+
+    #[test]
+    fn the_providers_a_session_is_built_on_are_every_published_one_but_the_request() {
+        let published: Vec<_> = ExecutionProvider::ALL
+            .into_iter()
+            .filter(|provider| *provider != ExecutionProvider::Auto)
+            .collect();
+
+        assert_eq!(ExecutionProvider::BUILT_ON.to_vec(), published);
+    }
+
+    #[test]
+    fn each_accelerator_is_the_provider_of_its_own_name_and_the_request_and_the_cpu_are_none() {
+        for provider in ExecutionProvider::ALL {
+            match provider.accelerator() {
+                Some(accelerator) => {
+                    assert_eq!(ExecutionProvider::from(accelerator), provider);
+                    assert_eq!(accelerator.to_string(), provider.as_str());
+                }
+                None => assert!(matches!(provider, ExecutionProvider::Auto | ExecutionProvider::Cpu), "{provider}"),
+            }
+        }
+    }
+
+    #[test]
+    fn the_published_spellings_are_pinned_as_literals() {
+        // Pinned before the request and the hardware were told apart in this crate, so that split could not move a
+        // spelling a settings file has stored.
+        assert_eq!(
+            ExecutionProvider::ALL.map(ExecutionProvider::as_str),
+            ["Auto", "CPU", "CoreML", "CUDA", "TensorRT"]
+        );
+        assert_eq!(
+            serde_json::to_string(&ExecutionProvider::ALL).expect("the providers serialize"),
+            r#"["Auto","CPU","CoreML","CUDA","TensorRT"]"#
+        );
     }
 
     #[test]

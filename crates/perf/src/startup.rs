@@ -146,7 +146,7 @@ fn install_progress() -> OnProgress {
             let _ = write!(
                 stderr,
                 "\rperftest: installing {name} — {} {:3.0}%",
-                phase(progress.phase),
+                view::phase_label(progress.phase),
                 progress.fraction * 100.0
             );
 
@@ -159,7 +159,7 @@ fn install_progress() -> OnProgress {
             let _ = writeln!(
                 stderr,
                 "perftest: installing {name} — {} {:3.0}%",
-                phase(progress.phase),
+                view::phase_label(progress.phase),
                 progress.fraction * 100.0
             );
         }
@@ -168,14 +168,6 @@ fn install_progress() -> OnProgress {
 
         *current = if finished { None } else { Some(step) };
     })
-}
-
-/// Which part of an install a report is about, as a line spells it.
-///
-/// The live view names the same three parts, so the mapping lives with the codes it shares — see [`view::label`].
-/// Spelled here as well, the two would have to be remembered together every time `Phase` gains a part.
-fn phase(phase: Phase) -> &'static str {
-    view::label(view::code(phase))
 }
 
 /// Says the log sink could not be installed, once, to stderr.

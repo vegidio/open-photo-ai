@@ -4,7 +4,7 @@
 // Deleting the model is deleting this directory plus the arms in `ColorizationVariant` that name it.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile};
+use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
@@ -40,10 +40,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // None of this helps the cold start, which the reference records as the graph's real remaining cost: CoreML
     // spending about five minutes compiling the MLProgram on a first run, whether it is producing one program or six.
     // The one first run made on this project's build (M2 Max, 2026-09-23) took 8 s; why was not investigated.
-    match precision {
-        Precision::Fp16 => EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-        _ => EpProfile::default(),
-    }
+    cpu_and_gpu_at_fp16(precision)
 }
 
 #[cfg(test)]
@@ -54,22 +51,15 @@ mod tests {
     use crate::models::precision::FloatPrecision;
 
     #[test]
-    fn mumbai_is_kept_off_the_neural_engine_at_fp16_and_nothing_else() {
+    fn mumbai_declares_the_shared_fp16_profile_through_its_variant() {
         // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
-        // refactor can break. On a single-partition export the default compute units make this graph wrong, not slow.
-        assert_eq!(
-            ColorizationVariant::Mumbai(FloatPrecision::Fp16).profile(),
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-            "Mumbai at FP16 is not the setting measured for it"
-        );
-    }
-
-    #[test]
-    fn mumbai_declares_nothing_at_fp32() {
-        assert_eq!(
-            ColorizationVariant::Mumbai(FloatPrecision::Fp32).profile(),
-            EpProfile::default(),
-            "Mumbai at FP32 declared a setting nothing measured"
-        );
+        // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
+        for precision in FloatPrecision::ALL {
+            assert_eq!(
+                ColorizationVariant::Mumbai(precision).profile(),
+                cpu_and_gpu_at_fp16(precision.into()),
+                "{precision:?}"
+            );
+        }
     }
 }

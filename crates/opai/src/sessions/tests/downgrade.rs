@@ -3,7 +3,7 @@
 use super::*;
 
 #[tokio::test]
-async fn a_provider_that_cannot_open_the_model_is_downgraded_to_the_cpu_and_reports_both() {
+async fn a_provider_that_cannot_open_the_model_is_downgraded_to_the_cpu() {
     let server = TestServer::start(vec![]).await;
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::Cuda], ..Bench::default() });
@@ -16,17 +16,13 @@ async fn a_provider_that_cannot_open_the_model_is_downgraded_to_the_cpu_and_repo
         .unwrap();
 
     assert_eq!(handle.provider(), ExecutionProvider::Cpu, "the downgrade did not build on the CPU");
-    assert_eq!(handle.requested(), ExecutionProvider::Cuda, "the handle lost what was asked for");
     assert_eq!(bench.built_on(), vec![ExecutionProvider::Cuda, ExecutionProvider::Cpu]);
 }
 
 #[tokio::test]
-async fn a_downgrade_served_a_cpu_session_an_explicit_cpu_request_filed_still_reports_the_downgrade() {
-    // The entry is shared by both requests and cannot carry this: whichever arrived first would decide what the
-    // other was told it had asked for, and here the first asked for the CPU and got it. Reporting `Cpu` beside
-    // `Cpu` to the second is the exact shape of an honoured request, so both signals a broken driver produces —
-    // this accessor and the `warn` beside it — would be lost precisely when a CPU session happened to be
-    // resident.
+async fn a_downgrade_is_served_the_cpu_session_an_explicit_cpu_request_filed() {
+    // The fallback re-enters the cache rather than building beside it, so a CPU session that happened to be resident
+    // is the one a downgrade is handed.
     let server = TestServer::start(vec![]).await;
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::Cuda], ..Bench::default() });
@@ -42,18 +38,12 @@ async fn a_downgrade_served_a_cpu_session_an_explicit_cpu_request_filed_still_re
         .await
         .unwrap();
 
-    assert_eq!(honoured.requested(), ExecutionProvider::Cpu, "the honoured request lost what it asked for");
     assert_eq!(honoured.provider(), ExecutionProvider::Cpu);
-    assert_eq!(
-        downgraded.requested(),
-        ExecutionProvider::Cuda,
-        "the downgrade was reported as an honoured CPU run"
-    );
     assert_eq!(downgraded.provider(), ExecutionProvider::Cpu);
 
-    // Both are the one session — the point of the fallback re-entering the cache — so the two handles differing
-    // is the whole of what the fix buys. Copied out in two statements, not one: a tuple expression would hold the
-    // first borrow while taking the second, and these two handles are on the one entry.
+    // Both are the one session — the point of the fallback re-entering the cache. Copied out in two statements, not
+    // one: a tuple expression would hold the first borrow while taking the second, and these two handles are on the
+    // one entry.
     let honoured_session = *honoured.session();
     let downgraded_session = *downgraded.session();
     assert_eq!(honoured_session, downgraded_session, "the downgrade rebuilt a session that was already filed");

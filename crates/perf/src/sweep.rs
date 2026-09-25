@@ -25,8 +25,8 @@
 use std::time::{Duration, Instant};
 
 use opai::{
-    CancellationToken, Detection, Enhanced, ExecuteOptions, ExecutionProvider, Faces, FloatPrecision, InferenceError,
-    OnInference, Opai, Picture, ProcessOptions, ProviderReport,
+    CancellationToken, Detection, Enhanced, ExecuteOptions, ExecutionProvider, Faces, InferenceError, OnInference,
+    Opai, Picture, ProcessOptions, ProviderReport,
 };
 
 use crate::cli::Options;
@@ -107,16 +107,16 @@ impl Detected {
 /// The run cache is **off** for it, as it is for the sweep's own runs by default: a served analysis builds no model,
 /// and a pass that was served from an earlier invocation would hand the sweep faces without having demonstrated that
 /// the detector works on this machine.
-pub async fn detect(
-    opai: &Opai,
-    input: &Input,
-    precision: FloatPrecision,
-    provider: ExecutionProvider,
-    cancel: &CancellationToken,
-) -> Detected {
+///
+/// # The application's detection, not the sweep's precision
+///
+/// [`Detection::for_face_recovery`], whatever precision the rows were selected at: that is the detection the
+/// application feeds every face recovery with, so the faces a row restores are the faces the application would have
+/// handed it. Following the sweep's precision would benchmark a detector build the application never runs.
+pub async fn detect(opai: &Opai, input: &Input, provider: ExecutionProvider, cancel: &CancellationToken) -> Detected {
     let options = ExecuteOptions { provider, cancel: cancel.clone(), cache: false, ..Default::default() };
 
-    match opai.execute(&input.picture, &Detection::newyork(precision), Some(options)).await {
+    match opai.execute(&input.picture, &Detection::for_face_recovery(), Some(options)).await {
         Ok(executed) if executed.value.is_empty() => Detected::Empty,
         Ok(executed) => Detected::Found(executed.value),
         Err(error) => Detected::Failed { reason: error.to_string() },

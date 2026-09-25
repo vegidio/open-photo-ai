@@ -1,14 +1,14 @@
 import { useTranslation } from "react-i18next";
 import type { FamilyEntry } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
-import type { Enhancement } from "@/lib/enhancements";
+import { type Enhancement, withParameter } from "@/lib/enhancements";
 import { IntensityOptions } from "./IntensityOptions";
 
 type ColorBalanceOptionsProps = {
     /** The enhancement this panel is open over, which every control here reports and writes. */
     enhancement: Enhancement;
     /** The colour balance itself, as the stack carries it. */
-    operation: Extract<Operation, { family: "color_balance" }>;
+    operation: Operation;
     /** What the catalogue publishes for colour balance: its models, their precisions and their bounds. */
     entry: FamilyEntry | undefined;
     /** Writes the enhancement back to the stack, which is what re-runs the preview. */
@@ -37,9 +37,9 @@ export const ColorBalanceOptions = ({ enhancement, operation, entry, onChange }:
             parameter="bias"
             label={t("enhancements.bias")}
             mark={0}
-            amount={operation.bias}
+            amount={operation.parameters.bias}
             onModelChange={({ codename, precision }) => onChange({ ...operation, codename, precision })}
-            onAmountChange={(bias) => onChange({ ...operation, bias })}
+            onAmountChange={(bias) => onChange(withParameter(operation, "bias", bias))}
         />
     );
 };

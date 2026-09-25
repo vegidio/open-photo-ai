@@ -6,19 +6,19 @@ import "@/i18n";
 import { cancelSuggest, type Suggestion, suggest } from "@/ipc/autopilot";
 import type { Family } from "@/ipc/catalogue";
 import type { CropInfo } from "@/ipc/crop";
-import { detectFaces, type Face } from "@/ipc/faces";
+import { detectFaces } from "@/ipc/faces";
 import { ENHANCEMENTS } from "@/lib/enhancements";
 import { track } from "@/lib/faro";
 import { useAutopilotStore } from "@/stores/autopilot";
-import { useCropStore } from "@/stores/crop";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { useFacesStore } from "@/stores/faces";
 import { useFileStore } from "@/stores/files";
 import { useSettingsStore } from "@/stores/settings";
 import {
+    APPLY_ORDER,
     CATALOGUE,
-    FRAMING,
     frame,
+    FRAMING,
     HOLIDAY,
     openFiles,
     render,
@@ -68,26 +68,8 @@ type Asking = {
 
 const asking: Asking[] = [];
 
-/** One follow-up detection the test settles by hand. */
-type Detecting = { crop?: CropInfo; found: (faces: Face[]) => Promise<void>; fail: (error: unknown) => Promise<void> };
-
-const detecting: Detecting[] = [];
-
 /** Lets every promise chain the settled one started run to its end, inside React's `act`. */
 const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
-
-/** A square face `edge` pixels on a side. */
-const face = (left: number, edge: number): Face => ({
-    bounding_box: { min: { x: left, y: 0 }, max: { x: left + edge, y: edge } },
-    landmarks: [
-        { x: left + 1, y: 1 },
-        { x: left + 2, y: 1 },
-        { x: left + 1.5, y: 2 },
-        { x: left + 1, y: 2.5 },
-        { x: left + 2, y: 2.5 },
-    ],
-    confidence: 0.9,
-});
 
 const stackOf = (path: string) => useEnhancementStore.getState().enhancements.get(path);
 const familiesOf = (path: string) => stackOf(path)?.map((operation) => operation.family);
@@ -101,7 +83,6 @@ const failed = () => vi.spyOn(toast, "error");
 beforeEach(() => {
     vi.clearAllMocks();
     asking.length = 0;
-    detecting.length = 0;
 
     let minted = 0;
     asked.mockImplementation((source: string, _processor: string, families: Family[], crop?: CropInfo) => {
@@ -120,31 +101,6 @@ beforeEach(() => {
             ...(crop && { crop }),
             answer: async (suggestions) => {
                 resolve(suggestions);
-                await settle();
-            },
-            fail: async (error) => {
-                reject(error);
-                await settle();
-            },
-        });
-
-        return { run, done };
-    });
-
-    let detections = 0;
-    detected.mockImplementation((_source: string, _processor: string, crop?: CropInfo) => {
-        const run = `detect-${++detections}`;
-        let resolve: (faces: Face[]) => void = () => {};
-        let reject: (error: unknown) => void = () => {};
-        const done = new Promise<Face[]>((yes, no) => {
-            resolve = yes;
-            reject = no;
-        });
-
-        detecting.push({
-            ...(crop && { crop }),
-            found: async (faces) => {
-                resolve(faces);
                 await settle();
             },
             fail: async (error) => {
@@ -212,8 +168,8 @@ describe("an analysis", () => {
 
         expect(writes).toHaveBeenCalledTimes(1);
         expect(stackOf(HOLIDAY.path)).toEqual([
-            { family: "colorization", codename: "mumbai", precision: "fp16" },
-            { family: "upscale", codename: "tokyo", precision: "fp32", scale: 4 },
+            { family: "colorization", codename: "mumbai", precision: "fp16", parameters: {} },
+            { family: "upscale", codename: "tokyo", precision: "fp32", parameters: { scale: 4 } },
         ]);
     });
 
@@ -235,13 +191,17 @@ describe("an analysis", () => {
         void analyse(HOLIDAY, undefined);
         useEnhancementStore
             .getState()
-            .addEnhancement(HOLIDAY.path, { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 });
+            .addEnhancement(
+                HOLIDAY.path,
+                { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } },
+                APPLY_ORDER,
+            );
 
         await asking[0]?.answer([{ family: "upscale", scale: 4 }, { family: "light_adjustment" }]);
 
         expect(stackOf(HOLIDAY.path)).toEqual([
-            { family: "light_adjustment", codename: "paris", precision: "fp32", bias: 0.5 },
-            { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 },
+            { family: "light_adjustment", codename: "paris", precision: "fp32", parameters: { bias: 0.5 } },
+            { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } },
         ]);
     });
 
@@ -398,64 +358,15 @@ describe("an analysis an export asks for", () => {
 });
 
 describe("a face-recovery suggestion", () => {
-    const suggestions: Suggestion[] = [{ family: "face_recovery" }, { family: "upscale", scale: 2 }];
-
-    it("is dropped where every face found is larger than the tile a restoration works at", async () => {
+    // The backend suggests one only where a face is restorable - `opai`'s `Face::restorable` - so the window takes
+    // it as it comes rather than detecting again to second-guess it.
+    it("is added as the backend suggested it, without a follow-up detection", async () => {
         void analyse(HOLIDAY, undefined);
-        await asking[0]?.answer(suggestions);
-        await detecting[0]?.found([face(0, 900)]);
-
-        expect(familiesOf(HOLIDAY.path)).toEqual(["upscale"]);
-    });
-
-    it("is kept where one face is small enough", async () => {
-        void analyse(HOLIDAY, undefined);
-        await asking[0]?.answer(suggestions);
-        await detecting[0]?.found([face(0, 300), face(1000, 900)]);
+        await asking[0]?.answer([{ family: "face_recovery" }, { family: "upscale", scale: 2 }]);
 
         expect(familiesOf(HOLIDAY.path)).toEqual(["face_recovery", "upscale"]);
-    });
-
-    it.each([
-        ["kept", [face(0, 300)]],
-        ["dropped", [face(0, 900)]],
-    ])("records the faces at the framing the analysis was made at when it is %s", async (_, found) => {
-        frame(HOLIDAY);
-        const crop = useCropStore.getState().crops.get(HOLIDAY.identity ?? "");
-
-        void analyse(HOLIDAY, crop);
-        await asking[0]?.answer(suggestions);
-
-        expect(detected).toHaveBeenCalledExactlyOnceWith(HOLIDAY.identity, "auto", crop);
-
-        await detecting[0]?.found(found);
-
-        const recorded = useFacesStore.getState().faces.get(HOLIDAY.identity ?? "");
-        expect(recorded?.faces).toEqual(found);
-        // The same reference, which is what `useImageFaces` matches the framing by.
-        expect(recorded?.crop).toBe(crop);
-    });
-
-    it("is kept, and nothing recorded, where finding the faces fails", async () => {
-        const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-        const failure = { kind: "detect", message: "the detector could not be read" };
-        const notice = failed();
-
-        void analyse(HOLIDAY, undefined);
-        await asking[0]?.answer(suggestions);
-        await detecting[0]?.fail(failure);
-
-        expect(familiesOf(HOLIDAY.path)).toEqual(["face_recovery", "upscale"]);
-        expect(useFacesStore.getState().faces.has(HOLIDAY.identity ?? "")).toBe(false);
-        expect(notice).not.toHaveBeenCalled();
-        expect(logged).toHaveBeenCalledWith("detecting the faces for an Autopilot suggestion failed", failure);
-    });
-
-    it("asks for no faces where it is not among the suggestions", async () => {
-        void analyse(HOLIDAY, undefined);
-        await asking[0]?.answer([{ family: "denoise" }]);
-
         expect(detected).not.toHaveBeenCalled();
+        expect(useFacesStore.getState().faces.has(HOLIDAY.identity ?? "")).toBe(false);
     });
 });
 
@@ -475,17 +386,6 @@ describe("an answer the user has moved past", () => {
         expect(cancelled).toHaveBeenCalledExactlyOnceWith("suggest-1");
         expect(stackOf(HOLIDAY.path)).toBeUndefined();
         expect(notice).not.toHaveBeenCalled();
-    });
-
-    it("writes nothing, faces included, when the stop lands during the follow-up detection", async () => {
-        void analyse(HOLIDAY, undefined);
-        await asking[0]?.answer([{ family: "face_recovery" }]);
-
-        act(() => useAutopilotStore.getState().stop(HOLIDAY.path));
-        await detecting[0]?.found([face(0, 300)]);
-
-        expect(stackOf(HOLIDAY.path)).toBeUndefined();
-        expect(useFacesStore.getState().faces.has(HOLIDAY.identity ?? "")).toBe(false);
     });
 
     it("says nothing about a failure that arrives after a stop", async () => {
@@ -539,7 +439,10 @@ describe("the trigger", () => {
     });
 
     it.each([
-        ["carrying enhancements", [{ family: "denoise", codename: "stockholm", precision: "fp32", strength: 1 }]],
+        [
+            "carrying enhancements",
+            [{ family: "denoise", codename: "stockholm", precision: "fp32", parameters: { strength: 1 } }],
+        ],
         ["whose enhancements were all removed", []],
     ] as const)("does not analyse a photograph %s", (_, operations) => {
         useEnhancementStore.setState({ enhancements: new Map([[HOLIDAY.path, [...operations]]]) });
@@ -618,8 +521,8 @@ describe("the trigger", () => {
         frame(HOLIDAY);
         mount();
 
-        const byHand = { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 } as const;
-        act(() => useEnhancementStore.getState().addEnhancement(HOLIDAY.path, byHand));
+        const byHand = { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } } as const;
+        act(() => useEnhancementStore.getState().addEnhancement(HOLIDAY.path, byHand, APPLY_ORDER));
         frame(HOLIDAY, REFRAMED);
 
         expect(cancelled).toHaveBeenCalledExactlyOnceWith("suggest-1");

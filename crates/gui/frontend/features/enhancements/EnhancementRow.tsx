@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -6,10 +6,15 @@ import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { SelectFacesDialog } from "@/features/faces/SelectFacesDialog";
 import type { FamilyEntry } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
-import { type Enhancement, modelValue, optionFor, qualityLabel, toPercent } from "@/lib/enhancements";
+import { type Enhancement, modelValue, optionFor, parameterOf, qualityLabel } from "@/lib/enhancements";
+import { detectFaces } from "@/ipc/faces";
 import { enabledFaces } from "@/lib/faces";
+import { report } from "@/lib/report";
+import { toPercent } from "@/lib/utils";
 import { useImageCrop } from "@/stores/crop";
-import { useImageFaces, useSkippedFaces } from "@/stores/faces";
+import { useFaceChoice, useFacesStore, useImageFaces } from "@/stores/faces";
+import { useFileStore } from "@/stores/files";
+import { useSettingsStore } from "@/stores/settings";
 import { ColorBalanceOptions } from "./ColorBalanceOptions";
 import { ColorizationOptions } from "./ColorizationOptions";
 import { DenoiseOptions } from "./DenoiseOptions";
@@ -79,12 +84,13 @@ export const EnhancementRow = ({
     const faces = useImageFaces(identity, crop);
 
     /*
-     * Which of them the user has skipped, which is what turns `2 Faces` into `1/2 Faces` and what the
-     * button in the options panel counts down from. Not compared against the framing, unlike the
-     * faces: a skipped key names a face, so one recorded at another framing matches nothing.
+     * The choice made among them, which is what turns `2 Faces` into `1/2 Faces` and what the button in
+     * the options panel counts down from - each face's own default, `restorable`, where the user said
+     * nothing. Not compared against the framing, unlike the faces: a choice names faces by key, so one
+     * recorded at another framing matches nothing.
      */
-    const skipped = useSkippedFaces(identity);
-    const chosen = enabledFaces(faces ?? [], skipped).length;
+    const choice = useFaceChoice(identity);
+    const chosen = enabledFaces(faces ?? [], choice).length;
 
     /*
      * Whether the Select faces dialog is up, held here rather than in `FaceRecoveryOptions` so the
@@ -99,6 +105,34 @@ export const EnhancementRow = ({
      * draws one thing on screen at a time, not a panel peeking out from behind a modal.
      */
     const [panelOpen, setPanelOpen] = useState(false);
+
+    /*
+     * **The picker's own detection**: a face recovery's options opened over a photograph whose faces are
+     * not known at this framing yet ask `detect_faces` for them, so Select faces has something to offer
+     * without waiting for the chain. The chain finds the same faces for itself inside its own run - one
+     * detection, `Detection::for_face_recovery`, served from `opai`'s run store to whichever asks second -
+     * and records them when it answers; this is only for the panel a person is looking at now.
+     *
+     * Written only while the photograph is still open, as every late answer is: a photograph that was
+     * closed has had every owner told to forget it. A failure is reported and nothing more - the chain's
+     * own answer says whether the faces could be found, and it is the one that tells the user.
+     */
+    const lookingForFaces = panelOpen && operation.family === "face_recovery" && faces === undefined;
+
+    useEffect(() => {
+        if (!lookingForFaces || !identity) return;
+
+        const { processor } = useSettingsStore.getState();
+
+        detectFaces(identity, processor, crop).done.then(
+            (found) => {
+                if (!useFileStore.getState().files.some((open) => open.identity === identity)) return;
+
+                useFacesStore.getState().setFaces(identity, crop, found);
+            },
+            (error: unknown) => report("detecting the faces for the picker failed", error),
+        );
+    }, [lookingForFaces, identity, crop]);
 
     /*
      * What the model is called and which quality it is being run at, read off the catalogue rather
@@ -180,12 +214,16 @@ export const EnhancementRow = ({
         }
     };
 
+    // Zero where the amount is known to nobody - the operation carries none and the catalogue has not
+    // arrived - which reads as the model's effect withheld rather than as a number that was never set.
+    const amount = (name: string) => parameterOf(operation, entry, name) ?? 0;
+
     /*
      * Which sentence the line is depends on what the enhancement has to report - a scale, an
      * intensity, a face count, or nothing but the model - so it is chosen against the operation's
      * own family rather than declared beside the enhancement's name. `noImplicitReturns` is what
-     * makes a new member of the union arriving without a sentence a compile error rather than a row
-     * whose line reads "NaN%".
+     * makes a new family arriving without a sentence a compile error rather than a row whose line
+     * reads "NaN%".
      */
     const info = () => {
         switch (operation.family) {
@@ -227,11 +265,11 @@ export const EnhancementRow = ({
             case "sharpen":
                 // Shared by the two families that carry a strength, and kept apart from the bias cases below:
                 // the field they read differs.
-                return t("enhancements.info", { name, quality, intensity: toPercent(operation.strength) });
+                return t("enhancements.info", { name, quality, intensity: toPercent(amount("strength")) });
             case "light_adjustment":
             case "color_balance":
                 // A negative bias keeps its sign: the direction is what it changes.
-                return t("enhancements.info", { name, quality, intensity: toPercent(operation.bias) });
+                return t("enhancements.info", { name, quality, intensity: toPercent(amount("bias")) });
             case "colorization":
                 // The model and the quality alone: there is no amount to report. Its own case rather than a
                 // fall-through onto face recovery, whose case counts faces.
@@ -240,7 +278,8 @@ export const EnhancementRow = ({
                 return t("enhancements.infoScale", {
                     name,
                     quality,
-                    scale: Number.parseFloat(operation.scale.toFixed(SCALE_PLACES)),
+                    // 1x where the scale is known to nobody: a factor that changes nothing.
+                    scale: Number.parseFloat((parameterOf(operation, entry, "scale") ?? 1).toFixed(SCALE_PLACES)),
                 });
         }
     };

@@ -16,7 +16,7 @@ const balance = (codename: string, precision: Operation["precision"], bias: numb
     family: "color_balance",
     codename,
     precision,
-    bias,
+    parameters: { bias },
 });
 
 /** What the current image is set to have done to it. */

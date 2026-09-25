@@ -27,6 +27,7 @@ vi.mock("@/ipc/enhance", () => ({
     releaseEnhanced: vi.fn(() => Promise.resolve()),
 }));
 
+// Mocked only to say it is never reached: the run finds its own faces.
 vi.mock("@/ipc/faces", () => ({ detectFaces: vi.fn() }));
 
 const asked = enhance as unknown as Mock;
@@ -44,10 +45,20 @@ const deliver = (report: RunProgress) => {
     for (const [handler] of subscribed.mock.calls) act(() => (handler as (r: RunProgress) => void)(report));
 };
 
-const upscale = (scale: number): Operation => ({ family: "upscale", codename: "kyoto", precision: "fp32", scale });
+const upscale = (scale: number): Operation => ({
+    family: "upscale",
+    codename: "kyoto",
+    precision: "fp32",
+    parameters: { scale },
+});
 
 /** A face recovery as the add menu creates one: a model, and no faces until the run path puts them in. */
-const recovery = (): Operation => ({ family: "face_recovery", codename: "athens", precision: "fp32", faces: [] });
+const recovery = (): Operation => ({
+    family: "face_recovery",
+    codename: "athens",
+    precision: "fp32",
+    parameters: {},
+});
 
 const face = (left: number): Face => ({
     bounding_box: { min: { x: left, y: 4 }, max: { x: left + 3, y: 7 } },
@@ -59,12 +70,9 @@ const face = (left: number): Face => ({
         { x: left + 2, y: 6.5 },
     ],
     confidence: 0.9,
+    restorable: true,
+    key: `${left},4,${left + 3},7`,
 });
-
-/** One detection the test settles by hand, in the shape `detectFaces` answers with. */
-type Detecting = { run: string; found: (faces: Face[]) => void; fail: (error: unknown) => void };
-
-const detecting: Detecting[] = [];
 
 const progress = (run: string, extra: Partial<RunProgress> = {}): RunProgress => ({
     run,
@@ -96,7 +104,6 @@ const stack = (path: string, ...operations: Operation[]) =>
 beforeEach(() => {
     vi.clearAllMocks();
     pending.length = 0;
-    detecting.length = 0;
     sonner.dismiss();
 
     let minted = 0;
@@ -110,20 +117,6 @@ beforeEach(() => {
             entry.reject = (error) => act(() => reject(error));
         });
         pending.push(entry);
-
-        return { run, done };
-    });
-
-    let detections = 0;
-    detected.mockImplementation(() => {
-        const run = `detect-${++detections}`;
-        const entry: Detecting = { run, found: () => {}, fail: () => {} };
-
-        const done = new Promise<Face[]>((resolve, reject) => {
-            entry.found = (faces) => act(() => resolve(faces));
-            entry.fail = (error) => act(() => reject(error));
-        });
-        detecting.push(entry);
 
         return { run, done };
     });
@@ -414,660 +407,115 @@ describe("a chain that restores faces", () => {
 
     const faces = () => useFacesStore.getState().faces;
 
-    it("detects nothing for a photograph whose enhancements do not restore faces", () => {
-        // Detection costs a model in memory and, on a first run, transferring one. A window that
-        // detected in every photograph it opened would pay that for photographs nobody is going to
-        // restore a face in.
-        stack(HOLIDAY.path, upscale(2));
+    const enhanced = (extra: Partial<Extract<Enhancement, { outcome: "enhanced" }>> = {}): Enhancement => ({
+        outcome: "enhanced",
+        identity: "abcdef0123456789",
+        width: 6000,
+        height: 4000,
+        ...extra,
+    });
+
+    it("asks for the chain at once, and never detects first", () => {
+        // The run finds its own faces, inside the one request: one progress stream, one stop.
+        stack(HOLIDAY.path, recovery(), upscale(2));
         mount();
 
         expect(detected).not.toHaveBeenCalled();
+        expect(asked).toHaveBeenCalledExactlyOnceWith(HOLIDAY.identity, [recovery(), upscale(2)], "auto", undefined);
+    });
+
+    it("sends the choice made among the photograph's faces, and leaves the stack without it", async () => {
+        const choice = { skipped: [faceKey(face(0))], restored: [] };
+        act(() => useFacesStore.getState().setFaceChoice(HOLIDAY.identity ?? "", choice));
+        stack(HOLIDAY.path, recovery(), upscale(2));
+        mount();
+
+        expect(asked).toHaveBeenCalledWith(
+            HOLIDAY.identity,
+            [{ ...recovery(), faces: choice }, upscale(2)],
+            "auto",
+            undefined,
+        );
+        expect(useEnhancementStore.getState().enhancements.get(HOLIDAY.path)).toEqual([recovery(), upscale(2)]);
+    });
+
+    it("records the faces the run found, at the framing it ran at, and re-runs nothing for them", async () => {
+        stack(HOLIDAY.path, recovery());
+        mount();
+
+        pending[0]?.settle(enhanced({ faces: [face(0), face(20)] }));
+
+        await waitFor(() => expect(faces().get(HOLIDAY.identity ?? "")).toEqual({ faces: [face(0), face(20)] }));
+        await act(async () => {});
         expect(asked).toHaveBeenCalledTimes(1);
     });
 
-    it("finds the faces before running anything, and runs nothing until they land", async () => {
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        expect(detected).toHaveBeenCalledWith(HOLIDAY.identity, "auto", undefined);
-
-        // The whole of what this arrangement is for: a run started before the faces arrive would
-        // restore nothing, would be stored as the result for an empty selection, and would have to be
-        // run again the moment they landed.
-        expect(asked).not.toHaveBeenCalled();
-
-        detecting[0]?.found([face(0), face(20)]);
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-        expect(asked).toHaveBeenCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [face(0), face(20)] }],
-            "auto",
-            undefined,
-        );
-    });
-
-    it("leaves the stack itself carrying no faces", async () => {
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        detecting[0]?.found([face(0)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        // The stack is the user's choice and the faces are a property of the pixels: they are put in
-        // on the way to the run and nowhere else, so a framing change rewrites no photograph's stack.
-        expect(useEnhancementStore.getState().enhancements.get(HOLIDAY.path)).toEqual([recovery()]);
-    });
-
-    it("puts the faces only into the operations that restore them", async () => {
-        stack(HOLIDAY.path, recovery(), upscale(2));
-        mount();
-
-        detecting[0]?.found([face(0)]);
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-        expect(asked).toHaveBeenCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [face(0)] }, upscale(2)],
-            "auto",
-            undefined,
-        );
-    });
-
-    it("detects nothing again once the faces for the framing in force are known", async () => {
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        detecting[0]?.found([face(0)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        // Adding a second enhancement and changing the processor are both re-runs, and neither is a
-        // question about the pixels the detector already answered.
-        stack(HOLIDAY.path, recovery(), upscale(2));
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-
-        act(() => useSettingsStore.setState({ processor: "cpu" }));
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(3));
-
-        expect(detected).toHaveBeenCalledTimes(1);
-    });
-
-    it("detects again when the framing changes", async () => {
+    it("starts exactly one run for an applied choice, and none for a render that wrote none", async () => {
         stack(HOLIDAY.path, recovery());
         const view = mount();
 
-        detecting[0]?.found([face(0), face(20)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        // A flip, a turn or a cut moves every face and can add or remove one, so the previous answer
-        // describes a photograph nobody is looking at any more.
-        view.rerender(<Probe crop={FRAMING} />);
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(2));
-        expect(detected).toHaveBeenLastCalledWith(HOLIDAY.identity, "auto", FRAMING);
-
-        detecting[1]?.found([face(0)]);
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-        expect(asked).toHaveBeenLastCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [face(0)] }],
-            "auto",
-            FRAMING,
-        );
-    });
-
-    it("holds one answer per photograph, so a framing change discards the previous one", async () => {
-        stack(HOLIDAY.path, recovery());
-        const view = mount();
-
-        detecting[0]?.found([face(0), face(20)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        view.rerender(<Probe crop={FRAMING} />);
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(2));
-        detecting[1]?.found([face(0)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-
-        // One entry, replaced - not a cache of every framing the user has passed through. This store
-        // is a cache of the run path's own step; the cache of framings is `opai`'s run store, which is
-        // bounded, shared and outlives the process. A second unbounded one here would need an
-        // eviction policy of its own for nothing. See design.md D9.
-        expect(faces().size).toBe(1);
-        expect(faces().get(HOLIDAY.identity ?? "")).toEqual({ crop: FRAMING, faces: [face(0)] });
-    });
-
-    it("asks again for a framing returned to, and answers what was found the first time", async () => {
-        stack(HOLIDAY.path, recovery());
-        const view = mount();
-
-        detecting[0]?.found([face(0), face(20)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        view.rerender(<Probe crop={FRAMING} />);
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(2));
-        detecting[1]?.found([face(0)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-
-        // Back to the framing detected at first. A third request is made and **no detection model is
-        // run for it**: a framing returned to is one identity returned to, so `opai`'s run store
-        // answers it before anything is transferred or opened. That is where the saving is, and it is
-        // why this side keeps no per-framing cache of its own. See design.md D3.
         view.rerender(<Probe />);
+        expect(asked).toHaveBeenCalledTimes(1);
 
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(3));
-        expect(detected).toHaveBeenLastCalledWith(HOLIDAY.identity, "auto", undefined);
-
-        detecting[2]?.found([face(0), face(20)]);
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(3));
-        expect(asked).toHaveBeenLastCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [face(0), face(20)] }],
-            "auto",
-            undefined,
-        );
-    });
-
-    it("reports a detection's progress under the run it named", async () => {
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        const report = progress("detect-1", { family: "detection", stage: "installing", installFraction: 0.4 });
-        deliver(report);
-
-        // The indicator is on screen from the moment the detection is asked for, and the transfer of
-        // the detector is what it is drawing: the first thing a user sees of a face recovery.
-        await waitFor(() => expect(answer.report).toEqual(report));
-        expect(answer.running).toBe(true);
-    });
-
-    it("says nothing about a photograph with nobody in it, and runs the chain", async () => {
-        stack(HOLIDAY.path, recovery(), upscale(2));
-        mount();
-
-        detecting[0]?.found([]);
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-        expect(asked).toHaveBeenCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [] }, upscale(2)],
-            "auto",
-            undefined,
-        );
-        expect(toast()).toBeNull();
-    });
-
-    it("tells the user when a detection fails, and still runs the chain", async () => {
-        const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-        const failure = { kind: "detect", message: "no execution provider could be built" };
-        stack(HOLIDAY.path, recovery(), upscale(2));
-        mount();
-
-        detecting[0]?.fail(failure);
-
-        await waitFor(() => expect(toast()).toHaveTextContent("Failed to detect faces"));
-        expect(logged).toHaveBeenCalledWith("detecting the faces in the image failed", failure);
-
-        // A failed detection means the faces are not restored. It must not also mean that the upscale
-        // the user asked for in the same list does not happen.
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-        expect(asked).toHaveBeenCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [] }, upscale(2)],
-            "auto",
-            undefined,
-        );
-    });
-
-    it("records a failed detection as no faces rather than leaving the question unanswered", async () => {
-        vi.spyOn(console, "error").mockImplementation(() => {});
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        detecting[0]?.fail({ kind: "detect", message: "no execution provider could be built" });
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        // Otherwise the run would be held forever waiting for an answer that is never coming, and the
-        // next re-run would detect again and fail again.
-        expect(faces().get(HOLIDAY.identity ?? "")).toEqual({ faces: [] });
-
-        stack(HOLIDAY.path, recovery(), upscale(2));
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-        expect(detected).toHaveBeenCalledTimes(1);
-    });
-
-    it("asks nothing further while the detection that will answer it is still in flight", async () => {
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-
-        // The store cannot say a detection is in flight - its entry appears only once the answer
-        // lands - so without a guard each of these would ask the same question again, and two
-        // detectors would run over the same pixels at once.
-        stack(HOLIDAY.path, recovery(), upscale(2));
-        act(() => useSettingsStore.setState({ processor: "cpu" }));
-
-        expect(detected).toHaveBeenCalledTimes(1);
-        expect(asked).not.toHaveBeenCalled();
-
-        detecting[0]?.found([face(0)]);
-
-        // And the answer serves the stack as it stands now, not as it stood when it was asked for.
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-        expect(asked).toHaveBeenCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [face(0)] }, upscale(2)],
-            "cpu",
-            undefined,
-        );
-    });
-
-    it("goes on drawing the detection in flight across a change that asks nothing", async () => {
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-        stack(HOLIDAY.path, recovery(), upscale(2));
-
-        // The pass that asked nothing still has to name what it is waiting for, or the chip would go
-        // out for the rest of a transfer the window is still sitting through.
-        deliver(progress("detect-1", { family: "detection" }));
-
-        expect(answer.running).toBe(true);
-        expect(answer.report?.run).toBe("detect-1");
-    });
-
-    it("holds nothing for a photograph that was closed while its detection was in flight", async () => {
-        stack(HOLIDAY.path, recovery());
-        const view = mount();
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-
-        // Closing has already told every owner to forget this photograph. An answer landing after
-        // that would put an entry back that nothing empties, since the close it belongs to is over.
-        act(() => useFileStore.getState().closeFile(HOLIDAY.path));
-        view.rerender(<Probe file={SUNSET} />);
-
-        detecting[0]?.found([face(0), face(20)]);
-        await act(async () => {});
-
-        expect(faces().size).toBe(0);
-    });
-
-    it("holds nothing for a photograph closed while a detection that then failed was in flight", async () => {
-        vi.spyOn(console, "error").mockImplementation(() => {});
-        stack(HOLIDAY.path, recovery());
-        const view = mount();
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-
-        act(() => useFileStore.getState().closeFile(HOLIDAY.path));
-        view.rerender(<Probe file={SUNSET} />);
-
-        detecting[0]?.fail({ kind: "detect", message: "no execution provider could be built" });
-
-        // The notice is still raised: what it reports is that a detection this window asked for
-        // failed, which is true whether or not the photograph is still open.
-        await waitFor(() => expect(toast()).toHaveTextContent("Failed to detect faces"));
-        expect(faces().has(HOLIDAY.identity ?? "")).toBe(false);
-    });
-
-    it("holds what a detection answers for a photograph the window has only moved off", async () => {
-        stack(HOLIDAY.path, recovery());
-        const view = mount();
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-
-        // Moving to another photograph is not closing this one, and a late answer for it is a warm
-        // cache: it is read by nobody until that photograph is current again.
-        view.rerender(<Probe file={SUNSET} />);
-        detecting[0]?.found([face(0)]);
-
-        await waitFor(() => expect(faces().get(HOLIDAY.identity ?? "")).toEqual({ faces: [face(0)] }));
-    });
-
-    it("keeps one photograph's faces out of another's run", async () => {
-        stack(HOLIDAY.path, recovery());
-        const view = mount();
-
-        detecting[0]?.found([face(0), face(20)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        act(() =>
-            useEnhancementStore.setState({
-                enhancements: new Map([
-                    [HOLIDAY.path, [recovery()]],
-                    [SUNSET.path, [recovery()]],
-                ]),
-            }),
-        );
-        view.rerender(<Probe file={SUNSET} />);
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(2));
-        expect(detected).toHaveBeenLastCalledWith(SUNSET.identity, "auto", undefined);
-    });
-});
-
-describe("which of a photograph's faces a chain restores", () => {
-    /** Applies a choice, as the Select faces dialog's Apply does: one write however many boxes were clicked. */
-    const skip = (...faces: Face[]) =>
-        act(() => useFacesStore.getState().setSkippedFaces(HOLIDAY.identity ?? "", new Set(faces.map(faceKey))));
-
-    /** A chain over a photograph whose two faces have already been found. */
-    const detectedTwo = async () => {
-        stack(HOLIDAY.path, recovery());
-        const view = mount();
-
-        detecting[0]?.found([face(0), face(20)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        return view;
-    };
-
-    it("carries every face found while none are skipped", async () => {
-        await detectedTwo();
-
-        expect(asked).toHaveBeenLastCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [face(0), face(20)] }],
-            "auto",
-            undefined,
-        );
-    });
-
-    it("carries only the chosen faces once a choice is applied", async () => {
-        await detectedTwo();
-
-        skip(face(0));
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-        expect(asked).toHaveBeenLastCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [face(20)] }],
-            "auto",
-            undefined,
-        );
-    });
-
-    it("starts exactly one run for an applied choice, whatever it changed", async () => {
-        // The dialog writes once, on Apply, however many boxes were clicked - so this is one run and
-        // not one per face. It stops the run it replaces, as every other change to a chain does.
-        await detectedTwo();
-
-        skip(face(0), face(20));
+        act(() => useFacesStore.getState().setFaceChoice(HOLIDAY.identity ?? "", { skipped: ["a"], restored: [] }));
 
         await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
         expect(stopped).toHaveBeenCalledWith("run-1");
     });
 
-    it("starts no run for a choice that changes nothing", async () => {
-        // A write is what re-runs the chain, so "applying a choice that changes nothing starts no run"
-        // rests on that apply writing nothing - which is `useFaceSelection`'s guard, pinned in its own
-        // file. What this pins is the other half: an unchanged selection reaches nothing here.
-        await detectedTwo();
+    it("leaves the chain alone for a choice recorded against another photograph", async () => {
+        stack(HOLIDAY.path, recovery());
+        mount();
 
-        const committed = useFacesStore.getState().skipped;
+        act(() => useFacesStore.getState().setFaceChoice(SUNSET.identity ?? "", { skipped: ["a"], restored: [] }));
+        await act(async () => {});
 
-        act(() => {
-            useFacesStore.setState({ skipped: committed });
-        });
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+        expect(asked).toHaveBeenCalledTimes(1);
     });
 
-    it("runs the chain with no faces at all when every one of them is skipped", async () => {
-        // A face-recovery operation carrying no faces is a request rather than a failure: nothing is
-        // restored and every other operation in the chain is still applied.
+    it("tells the user when the faces could not be found, and keeps the result the chain still made", async () => {
+        const logged = vi.spyOn(console, "error").mockImplementation(() => {});
         stack(HOLIDAY.path, recovery(), upscale(2));
         mount();
 
-        detecting[0]?.found([face(0)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
+        pending[0]?.settle(enhanced({ facesError: "no execution provider could be built" }));
 
-        skip(face(0));
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-        expect(asked).toHaveBeenLastCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [] }, upscale(2)],
-            "auto",
-            undefined,
+        await waitFor(() => expect(toast()).toHaveTextContent("Failed to detect faces"));
+        expect(logged).toHaveBeenCalledWith(
+            "detecting the faces in the image failed",
+            "no execution provider could be built",
         );
+        // Recorded as none, so the row says so rather than waiting for an answer that is not coming.
+        expect(faces().get(HOLIDAY.identity ?? "")).toEqual({ faces: [] });
+        expect(answer.enhanced).toEqual({ identity: "abcdef0123456789", width: 6000, height: 4000 });
     });
 
-    it("re-runs nothing on a render that wrote no choice", async () => {
-        // The filtered array is built inside the effect for exactly this: computing it in the render
-        // body and listing it would hand the effect a fresh array - and a new run - every render.
-        const view = await detectedTwo();
-
-        skip(face(0));
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-
-        view.rerender(<Probe file={HOLIDAY} />);
-        view.rerender(<Probe file={HOLIDAY} />);
-
-        expect(asked).toHaveBeenCalledTimes(2);
-    });
-
-    it("detects nothing again when a choice is applied", async () => {
-        // A choice is not a question about the pixels: the faces for this framing are already known.
-        await detectedTwo();
-
-        skip(face(20));
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-        expect(detected).toHaveBeenCalledTimes(1);
-    });
-
-    it("leaves the chain alone for a choice recorded against another photograph", async () => {
-        await detectedTwo();
-
-        act(() => useFacesStore.getState().setSkippedFaces(SUNSET.identity ?? "", new Set([faceKey(face(0))])));
-
-        expect(asked).toHaveBeenCalledTimes(1);
-    });
-
-    it("carries every face again when a framing change re-detects them", async () => {
-        // Nothing here resets the choice: the faces in the new framing are at new coordinates, so the
-        // keys skipped at the old one match none of them.
-        const view = await detectedTwo();
-
-        skip(face(0));
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-
-        view.rerender(<Probe file={HOLIDAY} crop={FRAMING} />);
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(2));
-
-        detecting[1]?.found([face(40), face(60)]);
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(3));
-        expect(asked).toHaveBeenLastCalledWith(
-            HOLIDAY.identity,
-            [{ ...recovery(), faces: [face(40), face(60)] }],
-            "auto",
-            FRAMING,
-        );
-    });
-});
-
-/*
- * What the bar draws while a face recovery works.
- *
- * Underneath it there are two runs - the detection and then the chain - each reporting its own
- * `0..1` and each landing on exactly 1. Drawn as they arrived that filled the bar, emptied it and
- * filled it again, which reads as the enhancement having been applied twice. These pin the one
- * figure that spans both.
- */
-describe("one bar across a detection and the chain it was run for", () => {
-    /** Where the bar is, as a whole percentage - which is all it is ever drawn as. */
-    const at = () => Math.round(answer.fraction * 100);
-
-    /** A detection reporting `fraction` of its own run. */
-    const detecting1 = (fraction: number) =>
-        deliver(progress("detect-1", { family: "detection", operation: "New York (FP32)", chainFraction: fraction }));
-
-    /** The chain reporting `fraction` of its own run. */
-    const running = (run: string, fraction: number) =>
-        deliver(progress(run, { family: "face_recovery", chainFraction: fraction }));
-
-    it("gives the detection the head of the bar and the chain what it leaves", async () => {
+    it("holds nothing for a photograph that was closed before its run answered", async () => {
         stack(HOLIDAY.path, recovery());
-        mount();
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-
-        // A fifth, which is the reference's own `progressAfterDetect`.
-        detecting1(0);
-        expect(at()).toBe(0);
-        detecting1(0.5);
-        expect(at()).toBe(10);
-        detecting1(1);
-        expect(at()).toBe(20);
-
-        detecting[0]?.found([face(0)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        running("run-1", 0);
-        expect(at()).toBe(20);
-        running("run-1", 0.5);
-        expect(at()).toBe(60);
-        running("run-1", 1);
-        expect(at()).toBe(100);
-    });
-
-    it("never takes the bar backwards, and fills it exactly once", async () => {
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-
-        const drawn: number[] = [];
-        const sample = () => drawn.push(at());
-
-        for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
-            detecting1(fraction);
-            sample();
-        }
-
-        detecting[0]?.found([face(0)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-        // Where the bar sits through the seconds the chain spends loading its model, which is the
-        // interval that used to show it empty again.
-        sample();
-
-        for (const fraction of [0, 0.3, 0.6, 1]) {
-            running("run-1", fraction);
-            sample();
-        }
-
-        expect(drawn.every((position, index) => index === 0 || position >= (drawn[index - 1] ?? 0))).toBe(true);
-        expect(drawn.filter((position) => position === 100)).toHaveLength(1);
-        expect(drawn.at(-1)).toBe(100);
-    });
-
-    it("goes on naming the enhancement while the chain loads its model", async () => {
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-        detecting1(1);
-
-        detecting[0]?.found([face(0)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        // The chain reports nothing while it loads, and a report cleared here left the chip reading
-        // the generic label for those seconds - the enhancement appearing to start over.
-        expect(answer.report?.family).toBe("detection");
-        expect(at()).toBe(20);
-    });
-
-    it("gives a chain that needed no detection the whole bar", () => {
-        stack(HOLIDAY.path, upscale(2));
-        mount();
-
-        deliver(progress("run-1", { chainFraction: 0.5 }));
-
-        expect(at()).toBe(50);
-    });
-
-    it("gives the bar back in full to a re-run over faces already known", async () => {
-        stack(HOLIDAY.path, recovery());
-        mount();
-
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-        detecting[0]?.found([face(0)]);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        // A second run over the same faces - here a model changed, but a scale or the processor is
-        // the same thing. Nothing is detected, so nothing is owed the head of the bar.
-        stack(HOLIDAY.path, { ...recovery(), codename: "santorini" });
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
-
-        expect(detected).toHaveBeenCalledTimes(1);
-        running("run-2", 0.5);
-        expect(at()).toBe(50);
-    });
-
-    it("runs a stack Autopilot wrote at once, over the faces it recorded, with the whole bar", async () => {
-        // Autopilot's handover: its follow-up detection recorded the faces at the crop in force, and then its
-        // batch wrote a stack carrying face recovery. The run has nothing left to detect.
-        render(<Probe crop={FRAMING} />);
-        act(() => useFacesStore.getState().setFaces(HOLIDAY.identity ?? "", FRAMING, [face(0)]));
-        stack(HOLIDAY.path, recovery());
-
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        expect(detected).not.toHaveBeenCalled();
-        expect(asked).toHaveBeenCalledWith(HOLIDAY.identity, [{ ...recovery(), faces: [face(0)] }], "auto", FRAMING);
-
-        running("run-1", 0.5);
-        expect(at()).toBe(50);
-    });
-
-    it("does not hand another photograph's chain the tail a detection left", async () => {
-        // The detection was for HOLIDAY. SUNSET's upscale follows it in time and has nothing to do
-        // with it, so it owns the whole bar - a bare "a detection happened" would start it at a
-        // fifth.
-        act(() =>
-            useEnhancementStore.setState({
-                enhancements: new Map([
-                    [HOLIDAY.path, [recovery()]],
-                    [SUNSET.path, [upscale(2)]],
-                ]),
-            }),
-        );
         const view = mount();
 
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
-
+        // Closing has already told every owner to forget this photograph. An answer landing after that
+        // would put an entry back that nothing empties, since the close it belongs to is over.
+        act(() => useFileStore.getState().closeFile(HOLIDAY.path));
         view.rerender(<Probe file={SUNSET} />);
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
 
-        running("run-1", 0.5);
-        expect(at()).toBe(50);
+        pending[0]?.settle(enhanced({ faces: [face(0)] }));
+        await act(async () => {});
+
+        expect(faces().size).toBe(0);
     });
 
-    it("leaves a running chain alone when a detection lands for a stack that no longer needs faces", async () => {
+    it("draws the run's own bar, the detection already on its head", async () => {
+        // Rust maps the detection it makes onto the head of the bar and the chain onto the rest, so the
+        // window draws the report's own fraction and the bar moves forward once.
         stack(HOLIDAY.path, recovery());
         mount();
 
-        await waitFor(() => expect(detected).toHaveBeenCalledTimes(1));
+        deliver(progress("run-1", { family: "detection", operation: "New York (FP32)", chainFraction: 0.1 }));
+        await waitFor(() => expect(answer.fraction).toBe(0.1));
+        expect(answer.report?.family).toBe("detection");
 
-        // The face recovery is taken out while its detection is still in flight, so the chain that
-        // replaces it needs no faces and runs at once.
-        stack(HOLIDAY.path, upscale(2));
-        await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
-
-        detecting[0]?.found([face(0)]);
-        await act(async () => {});
-
-        // The answer is still recorded - it is a warm cache for the framing it was found at - but it
-        // is not a question this stack asked, so the run in flight is not cancelled and re-asked.
-        expect(useFacesStore.getState().faces.get(HOLIDAY.identity ?? "")).toEqual({ faces: [face(0)] });
-        expect(asked).toHaveBeenCalledTimes(1);
-        expect(stopped).not.toHaveBeenCalledWith("run-1");
+        deliver(progress("run-1", { family: "face_recovery", operation: "Athens (FP32)", chainFraction: 0.6 }));
+        await waitFor(() => expect(answer.fraction).toBe(0.6));
     });
 });

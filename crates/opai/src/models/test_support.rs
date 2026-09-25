@@ -32,7 +32,7 @@ pub(crate) fn published_values(variant: &catalogue::VariantEntry) -> ParameterVa
     for parameter in variant.parameters {
         values = match parameter.kind {
             ParameterKind::Faces => values.with_faces(Faces::new([face::tests::face_at(12.34, 56.78, 90.12, 34.56)])),
-            ParameterKind::Range { min, max } => {
+            ParameterKind::Range { min, max, .. } => {
                 let midpoint = f64::midpoint(min, max);
 
                 match parameter.name {
@@ -225,3 +225,227 @@ pub(crate) fn kyoto() -> super::ArtifactId {
 pub(crate) fn tokyo() -> super::ArtifactId {
     artifact(upscale::UpscaleVariant::Tokyo(super::FloatPrecision::Fp32), 4.0)
 }
+
+/// The identity, cache-tag, pipeline-seam and serde tests denoise and sharpen answer alike, generated into a
+/// `strength_family` module inside the family's own tests.
+///
+/// The two families are one shape — three variants at two precisions, one graph each, a [`Strength`] per run — and
+/// these tests say nothing a literal of either family pins. What each family pins itself stays in its own module: its
+/// artifact names, its written cache tags, its labels, its serialized spelling, and which of its variants is guarded.
+///
+/// `first`, `second` and `third` are the family's three variant constructors, in the roles the tests give them.
+macro_rules! strength_family_tests {
+    (
+        $family:ident, $variant:ident { $first:ident, $second:ident, $third:ident },
+        params: $params:ident,
+        every_variant: $every_variant:path $(,)?
+    ) => {
+        mod strength_family {
+            use super::*;
+            use $crate::models::precision::FloatPrecision;
+            use $crate::models::test_support::hash_of;
+            use $crate::pipeline::Model;
+            use $crate::pipeline::test_support::NoBackend;
+
+            fn strength(value: f64) -> Strength {
+                Strength::new(value).expect("the test supplied a strength in range")
+            }
+
+            #[test]
+            fn an_operation_requires_exactly_one_artifact() {
+                for variant in $every_variant() {
+                    let required = $family::new(variant, strength(0.5)).required_artifacts();
+
+                    assert_eq!(required.len(), 1, "{variant:?} required something other than one artifact");
+                    assert_eq!(required[0], $family::new(variant, strength(0.5)).artifact());
+                }
+            }
+
+            #[test]
+            fn the_strength_never_reaches_the_artifact_name() {
+                // The reference pins this too: the intensity is a per-run parameter and must never leak into the
+                // identity or the file it resolves to.
+                let variant = $variant::$first(FloatPrecision::Fp32);
+                let artifact = $family::new(variant, strength(1.0)).artifact();
+
+                for value in [0.0, 0.5, 1.0, 3.0] {
+                    assert_eq!(
+                        $family::new(variant, strength(value)).artifact(),
+                        artifact,
+                        "strength {value} reached the name"
+                    );
+                }
+            }
+
+            #[test]
+            fn two_strengths_of_one_variant_are_two_operations() {
+                // The question a consumer holding two operations actually has: did the user change anything? A
+                // strength is part of the request, so two of them are two requests.
+                //
+                // Nothing is reloaded by their differing. A resident session is filed under the artifact it was
+                // opened from and the provider it was opened on — see `crate::sessions` — so both of these need one
+                // artifact and the second finds the weights the first opened, however the two compare.
+                let variant = $variant::$first(FloatPrecision::Fp32);
+                let soft = $family::new(variant, strength(0.5));
+                let strong = $family::new(variant, strength(2.5));
+
+                assert_ne!(soft, strong, "two strengths of one variant read as one request");
+                assert_ne!(hash_of(&soft), hash_of(&strong), "two different operations hashed alike");
+
+                // And the other half of the property: one request built twice is one operation.
+                assert_eq!(soft, $family::new(variant, strength(0.5)));
+                assert_eq!(hash_of(&soft), hash_of(&$family::new(variant, strength(0.5))));
+            }
+
+            #[test]
+            fn an_operation_is_usable_as_a_lookup_key_directly() {
+                // Keyed on the whole request, so a differing strength is a differing key — which is what a consumer
+                // asking "have I seen this request before?" wants. What must not reload is the *weights*, and that is
+                // decided by `required_artifacts` rather than by this comparison; the two operations below name the
+                // same artifact.
+                let mut seen = std::collections::HashMap::new();
+                let quiet = $family::new($variant::$third(FloatPrecision::Fp16), strength(0.5));
+                let loud = $family::new($variant::$third(FloatPrecision::Fp16), strength(2.0));
+
+                seen.insert(quiet, "requested");
+
+                assert_eq!(seen.get(&quiet), Some(&"requested"), "one request did not find itself");
+                assert_eq!(seen.get(&loud), None, "a different strength found another request's entry");
+                assert_eq!(
+                    quiet.required_artifacts(),
+                    loud.required_artifacts(),
+                    "the two would load different weights"
+                );
+            }
+
+            #[test]
+            fn two_precisions_are_different_operations() {
+                let fp32 = $family::new($variant::$second(FloatPrecision::Fp32), strength(1.0));
+                let fp16 = $family::new($variant::$second(FloatPrecision::Fp16), strength(1.0));
+
+                assert_ne!(fp32, fp16, "two precisions served by different artifacts compared as one model");
+            }
+
+            #[test]
+            fn two_variants_are_never_the_same_operation() {
+                let first = $family::new($variant::$first(FloatPrecision::Fp32), strength(1.0));
+                let third = $family::new($variant::$third(FloatPrecision::Fp32), strength(1.0));
+
+                assert_ne!(first, third);
+            }
+
+            #[test]
+            fn two_strengths_do_not_collide_in_the_cache() {
+                // They name one set of weights and produce different images, so the tag has to tell them apart. The
+                // identity does too, and the tag is still the answer to "the same pixels" rather than a restatement
+                // of it: the two are separate questions that happen to agree here.
+                let soft = $family::new($variant::$first(FloatPrecision::Fp32), strength(0.5));
+                let strong = $family::new($variant::$first(FloatPrecision::Fp32), strength(2.5));
+
+                assert_eq!(
+                    soft.required_artifacts(),
+                    strong.required_artifacts(),
+                    "the premise is that one graph serves both"
+                );
+                assert_ne!(soft.cache_tag(), strong.cache_tag(), "two strengths shared a cache key");
+            }
+
+            #[test]
+            fn a_repeated_operation_reports_a_stable_tag() {
+                let operation = $family::new($variant::$second(FloatPrecision::Fp32), strength(1.5));
+
+                assert_eq!(operation.cache_tag(), operation.cache_tag());
+                assert_eq!(
+                    operation.cache_tag(),
+                    $family::new($variant::$second(FloatPrecision::Fp32), strength(1.5)).cache_tag()
+                );
+            }
+
+            #[test]
+            fn no_two_operations_producing_different_images_share_one_tag() {
+                let mut seen = std::collections::HashMap::new();
+
+                for variant in $every_variant() {
+                    for value in [0.0, 0.5, 1.0, 1.5, 2.0, 3.0] {
+                        let operation = $family::new(variant, strength(value));
+
+                        if let Some(previous) = seen.insert(operation.cache_tag(), operation) {
+                            panic!("{previous:?} and {operation:?} share the cache tag {}", operation.cache_tag());
+                        }
+                    }
+                }
+            }
+
+            #[test]
+            fn a_cache_tag_can_never_be_mistaken_for_an_artifact_name() {
+                for variant in $every_variant() {
+                    let tag = $family::new(variant, strength(1.0)).cache_tag();
+
+                    assert!(!tag.contains('_'), "{tag} is spelled the way an artifact name is");
+                }
+            }
+
+            #[test]
+            fn a_pipeline_built_for_each_variant_names_that_variants_one_artifact_and_one_session() {
+                // The family's seam, checked for every variant and precision rather than one: all three reach the
+                // same contract, so a seam that had regressed to naming one model would still hand back a working
+                // pipeline for the others. Asked through `Model`, which is the whole of what the chain driver asks a
+                // pipeline before it runs.
+                for variant in $every_variant() {
+                    let operation = $family::new(variant, strength(0.5));
+                    let pipeline = operation.pipeline::<NoBackend>();
+
+                    assert_eq!(
+                        Model::<NoBackend>::required(pipeline.as_ref()),
+                        [operation.artifact()],
+                        "{variant:?} asked for something other than its own one artifact"
+                    );
+
+                    let sessions = Model::<NoBackend>::sessions(pipeline.as_ref());
+                    assert_eq!(sessions.len(), 1, "{variant:?} asked for {} sessions", sessions.len());
+                    assert_eq!(*sessions[0].0, operation.artifact(), "{variant:?} paired the wrong artifact");
+                    assert_eq!(
+                        *sessions[0].1,
+                        operation.profile(),
+                        "{variant:?} was opened under another graph's profile"
+                    );
+                }
+            }
+
+            #[test]
+            fn one_session_serves_every_strength_of_one_variant() {
+                // The pipeline half of `the_strength_never_reaches_the_artifact_name`: every position of a slider
+                // asks for the same artifact under the same settings, so dragging it installs and opens nothing.
+                let variant = $variant::$second(FloatPrecision::Fp16);
+                let first = $family::new(variant, strength(0.0)).pipeline::<NoBackend>();
+                let second = $family::new(variant, strength(3.0)).pipeline::<NoBackend>();
+
+                assert_eq!(Model::<NoBackend>::required(first.as_ref()), Model::<NoBackend>::required(second.as_ref()));
+                assert_eq!(Model::<NoBackend>::sessions(first.as_ref()), Model::<NoBackend>::sessions(second.as_ref()));
+            }
+
+            #[test]
+            fn a_run_is_handed_the_strength_the_identity_does_not_carry() {
+                let operation = $family::new($variant::$first(FloatPrecision::Fp32), strength(2.5));
+
+                assert_eq!(operation.params(), $params { strength: strength(2.5) });
+            }
+
+            #[test]
+            fn an_operation_round_trips_through_its_serialized_form() {
+                for variant in $every_variant() {
+                    let operation = $family::new(variant, strength(0.5));
+                    let json = serde_json::to_string(&operation).expect("an operation serializes");
+                    let back: $family = serde_json::from_str(&json).expect("an operation deserializes");
+
+                    assert_eq!(back, operation, "{json} did not round-trip to an equal operation");
+                    assert_eq!(back.variant(), operation.variant(), "{json} lost its variant or precision");
+                    assert_eq!(back.strength(), operation.strength(), "{json} lost its strength");
+                    assert_eq!(back.cache_tag(), operation.cache_tag(), "{json} round-tripped to a different image");
+                }
+            }
+        }
+    };
+}
+
+pub(crate) use strength_family_tests;

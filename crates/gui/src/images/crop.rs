@@ -22,6 +22,8 @@ use image::metadata::Orientation;
 use opai::Picture;
 use serde::Deserialize;
 
+use super::files::Opened;
+
 // A thousandth of a degree over a 60-megapixel edge is a fifth of a pixel, so nothing a user can express is lost to
 // the unit; see `Crop` for why the turn is an integer.
 /// How many of [`Crop::millidegrees`] make one degree.
@@ -236,7 +238,34 @@ pub(super) fn frame(pixels: &DynamicImage, crop: Crop) -> Cow<'_, DynamicImage> 
     // `Rgba<u8>` and flatten a developed sixteen-bit RAW on the way through. These dispatch on the
     // variant and keep it.
     //
-    // Borrowed until something has to change it: a cut alone is a copy of the rectangle, not of the photograph.
+    // With no turn, the rectangle is cut first and only the cut is flipped. A flip maps the picture onto itself, so
+    // the rectangle measured in the flipped picture is its mirror image in the source — and copying out that mirror
+    // and flipping it is the same pixels as flipping the whole photograph and copying out the rectangle, for the cost
+    // of the rectangle rather than a second full-size buffer. Pinned against the flip-first composition by
+    // `cutting_before_flipping_is_the_same_pixels`.
+    if crop.millidegrees == 0 {
+        // Against `pixels` rather than a flipped copy of it: a flip keeps the dimensions, so the clamp is the same.
+        let (left, top, width, height) = inside(pixels, crop);
+
+        // `inside` keeps `left + width` within the width and `top + height` within the height, so neither wraps.
+        let left = if crop.flip_horizontal { pixels.width() - left - width } else { left };
+        let top = if crop.flip_vertical { pixels.height() - top - height } else { top };
+
+        let mut cut = pixels.crop_imm(left, top, width, height);
+
+        if crop.flip_horizontal {
+            cut.apply_orientation(Orientation::FlipHorizontal);
+        }
+
+        if crop.flip_vertical {
+            cut.apply_orientation(Orientation::FlipVertical);
+        }
+
+        return Cow::Owned(cut);
+    }
+
+    // A turn is about the picture's centre, so the flips cannot be moved past it this cheaply: they are applied to the
+    // whole photograph, then the turn, then the cut.
     let mut framed = Cow::Borrowed(pixels);
 
     if crop.flip_horizontal {
@@ -247,12 +276,10 @@ pub(super) fn frame(pixels: &DynamicImage, crop: Crop) -> Cow<'_, DynamicImage> 
         framed.to_mut().apply_orientation(Orientation::FlipVertical);
     }
 
-    // Skipped when there is no turn, and not as an optimisation: `rotate` promotes its result to the alpha-bearing
-    // sibling of the input's colour type, and a plain rectangular cut has no exposed corners to be honest about.
-    // Turning by zero would make every framing a PNG.
-    if crop.millidegrees != 0 {
-        framed = Cow::Owned(rust_sak::image::rotate(&framed, crop.rotation_degrees()));
-    }
+    // Only reached with a turn. The early return above is not only the cheaper path: `rotate` promotes its result to
+    // the alpha-bearing sibling of the input's colour type, and a plain rectangular cut has no exposed corners to be
+    // honest about. Turning by zero would make every framing a PNG.
+    framed = Cow::Owned(rust_sak::image::rotate(&framed, crop.rotation_degrees()));
 
     let (left, top, width, height) = inside(&framed, crop);
 
@@ -306,7 +333,8 @@ fn identity_of(source: &str, crop: Crop) -> String {
     ))
 }
 
-/// The admitted file at `path`, decoded and framed as `crop` describes, off the runtime's own threads.
+/// The admitted file `identity` names, at `path`, decoded and framed as `crop` describes, off the runtime's own
+/// threads.
 ///
 /// # Errors
 ///
@@ -315,11 +343,18 @@ fn identity_of(source: &str, crop: Crop) -> String {
 /// # Panics
 ///
 /// Where the framing itself panics.
-pub(crate) async fn load_framed(path: PathBuf, crop: Option<Crop>) -> Result<Picture, opai::image::ImageIoError> {
+pub(crate) async fn load_framed(
+    opened: &Opened,
+    identity: &str,
+    path: PathBuf,
+    crop: Option<Crop>,
+) -> Result<Picture, opai::image::ImageIoError> {
     // **Here rather than beside either caller.** `crate::enhance::run` loads and frames its chain's input this way
     // and `crate::faces` a detection's on the same terms, so beside either they would be one sequence written twice.
     // Each caller still maps a failure into its own error, because each names what it was reading for.
-    let picture = opai::image::load(path).await?;
+    //
+    // Through the decoded cache `opened` keeps, which the canvas's own rendition has usually filled already.
+    let picture = opened.decoded().load(identity.to_string(), path).await?;
 
     let Some(crop) = crop else {
         return Ok(picture);
@@ -473,6 +508,37 @@ mod tests {
 
         assert_eq!(framed.pixels(), &expected, "the framing was not flip, flip, turn, cut");
         assert_eq!(framed.dimensions(), (2, 3), "the cut did not answer the rectangle's own dimensions");
+    }
+
+    #[test]
+    fn cutting_before_flipping_is_the_same_pixels() {
+        // The unturned path cuts the mirrored rectangle out of the source and flips only the cut. This is the
+        // composition it replaced — flip the whole photograph, then cut — for every combination of flips, over a
+        // picture and rectangles that are asymmetric on both axes so a mirror taken the wrong way cannot agree by
+        // accident. The last rectangle runs past both edges, so the clamp is covered too.
+        let source = picture_of(37, 23);
+
+        for (flip_horizontal, flip_vertical) in [(false, false), (true, false), (false, true), (true, true)] {
+            for (left, top, width, height) in [(3, 5, 11, 7), (0, 0, 36, 22), (30, 1, 20, 40)] {
+                let crop = Crop::new(left, top, width, height, 0, flip_horizontal, flip_vertical).expect("legal");
+
+                let mut flipped = source.pixels().clone();
+                if flip_horizontal {
+                    flipped = flipped.fliph();
+                }
+                if flip_vertical {
+                    flipped = flipped.flipv();
+                }
+                let (cut_left, cut_top, cut_width, cut_height) = inside(&flipped, crop);
+                let expected = flipped.crop_imm(cut_left, cut_top, cut_width, cut_height);
+
+                assert_eq!(
+                    frame(source.pixels(), crop).as_ref(),
+                    &expected,
+                    "flips {flip_horizontal}/{flip_vertical} over {left},{top} {width}x{height} framed other pixels"
+                );
+            }
+        }
     }
 
     #[test]

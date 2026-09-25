@@ -42,14 +42,13 @@ use super::{CHANNELS, RANGE, RENDERINGS, SETTINGS, rendering_offset};
 use crate::error::InferenceError;
 use crate::models::ArtifactId;
 use crate::pipeline::Backend;
-use crate::pipeline::session::GraphShape;
-use crate::pipeline::{ImagePipeline, OnOneGraph, Shared, SingleGraph, checkpoint, reporter};
+use crate::pipeline::{
+    DepthGeneric, OnOneGraph, Ran, Shared, Shown, SingleGraph, Square, checkpoint, reflected, reporter,
+};
 use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
-use imaging::ChannelDepth;
 use imaging::bilinear::{self, Axis};
 use imaging::mix::blended;
-use imaging::present::{plan, presented};
 use imaging::tensor::{Channel, Sampler};
 
 // One step per stage, and what each costs:
@@ -100,40 +99,20 @@ impl OnOneGraph for Mixed {
     }
 }
 
-impl<B: Backend> ImagePipeline<B> for Mixed {
+impl DepthGeneric for Mixed {
     /// One graph run, whatever the photograph is.
     fn stages(&self) -> usize {
         // The fixed square is the whole of why this is a constant rather than something derived from the image.
         1
     }
 
-    fn run(
-        &self,
-        input: &DynamicImage,
-        sessions: &[SessionHandle<B::Session>],
-        depth: ChannelDepth,
-        progress: Option<&dyn Fn(f64)>,
-        cancelled: &dyn Fn() -> bool,
-    ) -> Result<DynamicImage, InferenceError> {
-        // Dispatched once at the top, as Rio's `corrected` and `Adjust::adjusted` dispatch it. The fused pass below
-        // walks the photograph's own resolution — twenty-four million iterations on a 24-megapixel source, each
-        // evaluating two polynomials — and it is the clearest case in this crate for hoisting the branch. The fit is
-        // `f32`/`f64` throughout and is not monomorphised.
-        //
-        // This is also the divergence from the reference, deliberately: its `blendWeighted` writes into an
-        // `image.NewRGBA`, so a 16-bit photograph comes back at 256 levels per channel whatever was asked for.
-        match depth {
-            ChannelDepth::Eight => self.rendered::<u8, B>(input, sessions, progress, cancelled).map(u8::into_dynamic),
-            ChannelDepth::Sixteen => {
-                self.rendered::<u16, B>(input, sessions, progress, cancelled).map(u16::into_dynamic)
-            }
-        }
-    }
-}
-
-impl Mixed {
-    /// [`ImagePipeline::run`]'s body, once, at whichever channel the caller asked for.
-    fn rendered<T: Channel, B: Backend>(
+    // Generic over the channel because the fused pass below walks the photograph's own resolution — twenty-four
+    // million iterations on a 24-megapixel source, each evaluating two polynomials — and it is the clearest case in
+    // this crate for hoisting the branch. The fit is `f32`/`f64` throughout and is not monomorphised.
+    //
+    // This is also the divergence from the reference, deliberately: its `blendWeighted` writes into an
+    // `image.NewRGBA`, so a 16-bit photograph comes back at 256 levels per channel whatever was asked for.
+    fn run_at<T: Channel, B: Backend>(
         &self,
         input: &DynamicImage,
         sessions: &[SessionHandle<B::Session>],
@@ -143,48 +122,27 @@ impl Mixed {
     where
         Rgb<T>: image::Pixel<Subpixel = T>,
     {
-        let (width, height) = (input.width(), input.height());
-
-        // Before anything is allocated. There is no scaling of an empty photograph onto the square, no samples to
-        // fit a mapping from, and no destination for a weight map to be carried up to.
-        if width == 0 || height == 0 {
-            return Err(InferenceError::Untileable { width, height });
-        }
-
         let report = reporter(progress);
-        let planned = plan(width, height, self.canvas);
         let side = self.canvas as usize;
-        let shown = GraphShape::new(3, side, side);
-        let produced = GraphShape::new(CHANNELS, side, side);
-        let crop = (planned.scaled_width, planned.scaled_height);
-
-        // Checked at each of the five step boundaries. A cancelled run returns no image at all — not the
-        // photograph, and not the partly blended buffer the cancellation landed in, which a caller has no way to
-        // tell from a finished correction.
-        if cancelled() {
-            return Err(InferenceError::Cancelled);
-        }
-
-        let mut tensor = vec![0.0_f32; shown.len()];
-        // `expect` rather than a folded error, as Rio's presentation does and for the same reason: the scratch is
-        // allocated here at exactly the shape the graph is run at, so a disagreement is this function contradicting
-        // itself rather than anything a caller could have caused.
-        //
-        // The resampled photograph is **dropped**. Nothing here divides by what the model was shown: the fit reads
-        // it back out of the tensor at the graph's own range, and the blend reads the photograph's own pixels.
-        presented(input, planned, RANGE, &mut tensor)
-            .expect("the scratch is allocated at the square the graph accepts");
-
-        checkpoint(&report, cancelled, 1.0 / STEPS as f64)?;
 
         // **Nine planes out of three in**, which is the whole of what makes this a second contract rather than a
         // second set of weights. `GraphShape` carries a channel count and `run_graph` takes the two shapes
         // separately, which is all the shared seam needs for it.
-        let mut output = vec![0.0_f32; produced.len()];
-        B::run_graph(&sessions[0], &tensor, shown, &mut output, produced)
-            .map_err(InferenceError::run(&self.graph.name, 0))?;
+        let square = Square { side: self.canvas, planes: CHANNELS, steps: STEPS };
 
-        checkpoint(&report, cancelled, 2.0 / STEPS as f64)?;
+        // Checked at each of the five step boundaries; the first two are the presentation's and the graph run's.
+        //
+        // The resampled photograph is **dropped**. Nothing here divides by what the model was shown: the fit reads
+        // it back out of the tensor at the graph's own range, and the blend reads the photograph's own pixels.
+        let Ran { tensor, output, presented: Shown { planned, .. } } = self.graph.present_and_run::<B, _>(
+            &sessions[0],
+            input,
+            square,
+            &report,
+            cancelled,
+            reflected(self.canvas, RANGE),
+        )?;
+        let crop = (planned.scaled_width, planned.scaled_height);
 
         // Every view cropped to the plan, which is where the extension leaves this run: it must stay out of these
         // **global** fits, for the reason, and the 4.8 dB, that `samples` gives.
@@ -211,7 +169,7 @@ impl Mixed {
 
         let sampler = Sampler::new(input);
         let map = &output[..SETTINGS * side * side];
-        let weighted = weighted::<T>(&sampler, &mappings, map, self.canvas, crop, (width, height));
+        let weighted = weighted::<T>(&sampler, &mappings, map, self.canvas, crop, (input.width(), input.height()));
 
         drop(output);
 
@@ -293,6 +251,10 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use crate::pipeline::ImagePipeline;
+    use crate::pipeline::session::GraphShape;
+    use imaging::ChannelDepth;
+    use imaging::present::{plan, presented};
 
     use super::super::super::{ColorBalance, ColorBalanceVariant};
 

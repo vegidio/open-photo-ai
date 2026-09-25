@@ -16,7 +16,7 @@ const denoise = (codename: string, precision: Operation["precision"], strength: 
     family: "denoise",
     codename,
     precision,
-    strength,
+    parameters: { strength },
 });
 
 /** What the current image is set to have done to it. */

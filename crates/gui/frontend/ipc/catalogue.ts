@@ -35,9 +35,10 @@ export type Precision = "fp32" | "fp16" | "int8";
  * by a detection run rather than by a control - there is no slider to draw, and what it says is that
  * this model needs another operation's output before it can be built at all.
  *
- * The bounds are flattened onto the tag, which is `#[serde(flatten)]` on the Rust side.
+ * The bounds are flattened onto the tag, which is `#[serde(flatten)]` on the Rust side. `default` is what a
+ * newly added enhancement starts at, published by the library so no front end restates a number of its own.
  */
-export type ParameterKind = { kind: "range"; min: number; max: number } | { kind: "faces" };
+export type ParameterKind = { kind: "range"; min: number; max: number; default: number } | { kind: "faces" };
 
 /** One parameter a model takes, named as its own error message names it, and what kind of value it is. */
 export type ParameterEntry = { name: string } & ParameterKind;
@@ -63,6 +64,16 @@ export type VariantEntry = {
 /** What one family offers: its models, and what each of them takes. */
 export type FamilyEntry = {
     family: Family;
+    /**
+     * Where this family's operation sits in a chain, as `opai`'s `Family::APPLY_ORDER` places it - or absent
+     * for `detection`, which is never in one.
+     *
+     * **The order a chain runs in is the library's.** `Opai::process` puts every chain into it whatever order
+     * it is sent in, so a stack drawn in any other order would show one sequence while another ran. Not the
+     * order the entries are listed in, which is a presentation decision of its own. Read through
+     * `applyOrder` in `lib/enhancements.ts`.
+     */
+    order?: number;
     variants: VariantEntry[];
 };
 

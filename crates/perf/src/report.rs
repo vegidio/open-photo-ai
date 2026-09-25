@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use comfy_table::{ContentArrangement, Table, presets};
-use opai::{CacheMode, ExecutionProvider};
+use opai::{CacheMode, Detection, ExecutionProvider};
 
 use crate::cli::Options;
 use crate::input::Input;
@@ -158,9 +158,9 @@ pub fn header(conditions: &Conditions<'_>) -> String {
     if let Some(detected) = conditions.detected {
         let found = match detected {
             Detected::Found(faces) => format!(
-                "{} detected before the sweep, at {} — supplied to every face-recovery row, timed in none",
+                "{} detected before the sweep, by {} — supplied to every face-recovery row, timed in none",
                 faces.len(),
-                conditions.options.precision()
+                Detection::for_face_recovery().display_name()
             ),
             Detected::Empty => {
                 "none detected in this image — every face-recovery row is failed rather than measured".to_string()
@@ -516,8 +516,9 @@ mod tests {
 
         assert!(found.contains("faces"), "{found}");
         assert!(found.contains("2 detected before the sweep"), "{found}");
-        // At the sweep's own precision, which is the other half of what makes the number comparable.
-        assert!(found.contains("fp16"), "{found}");
+        // By the application's own detector, whatever the sweep's precision — the other half of what makes the number
+        // comparable, and the one detection every face recovery in the application is fed by.
+        assert!(found.contains("New York (FP32)"), "{found}");
         // And that it cost no model anything, which is the claim a reader would otherwise have to take on trust.
         assert!(found.contains("timed in none"), "{found}");
 

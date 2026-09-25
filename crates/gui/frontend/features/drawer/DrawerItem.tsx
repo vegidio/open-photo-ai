@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FileMenuTrigger, FileOptionsMenu, THUMBNAIL_ANCHOR } from "@/features/files/FileOptionsMenu";
 import type { ImageRecord } from "@/ipc/images";
-import { renditionUrl } from "@/ipc/images";
+import { renditionFor } from "@/ipc/images";
 import { THUMBNAIL_BOUND } from "@/lib/constants";
 import { fileName } from "@/lib/paths";
 import { cn } from "@/lib/utils";
@@ -93,7 +93,7 @@ const DrawerItemComponent = ({ file, index, current, onClick, drawer }: DrawerIt
                  * otherwise.
                  */}
                 <img
-                    {...(file.identity && { src: renditionUrl(file.identity, THUMBNAIL_BOUND) })}
+                    src={renditionFor(file, THUMBNAIL_BOUND)}
                     alt=""
                     loading="lazy"
                     className="size-full object-cover"

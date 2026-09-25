@@ -88,9 +88,7 @@ async fn run(options: &Options) -> ExitCode {
     // Before the header as well as before the sweep, because what it found is one of the conditions the numbers were
     // produced under.
     let detected = if select::needs_faces(&selection) {
-        let precision = select::detection_precision(&selection).expect("a row that needs faces carries a precision");
-
-        Some(sweep::detect(&started.opai, &input, precision, options.provider, &cancel).await)
+        Some(sweep::detect(&started.opai, &input, options.provider, &cancel).await)
     } else {
         None
     };

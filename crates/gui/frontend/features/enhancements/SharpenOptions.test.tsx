@@ -16,7 +16,7 @@ const sharpen = (codename: string, precision: Operation["precision"], strength: 
     family: "sharpen",
     codename,
     precision,
-    strength,
+    parameters: { strength },
 });
 
 /** What the current image is set to have done to it. */

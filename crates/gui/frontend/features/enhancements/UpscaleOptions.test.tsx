@@ -17,7 +17,7 @@ const upscale = (codename: string, precision: Operation["precision"], scale: num
     family: "upscale",
     codename,
     precision,
-    scale,
+    parameters: { scale },
 });
 
 /** What the current image is set to have done to it. */

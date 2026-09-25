@@ -15,6 +15,7 @@ use image::imageops::FilterType;
 use tauri::{AppHandle, Manager};
 
 use super::crop::Crop;
+use super::decoded::Decoded;
 use super::files::Opened;
 use super::renditions::{Claim, Rendition, Renditions};
 use crate::task::spawn_blocking;
@@ -160,8 +161,8 @@ enum Refusal {
 /// Where the pixels for an identity are to be found: an admitted file not yet decoded, or an enhanced
 /// result already held (shared, not copied — see design.md D4).
 enum Pixels {
-    /// An admitted file, not yet decoded.
-    File(PathBuf),
+    /// An admitted file, not yet decoded: its identity, where it is, and the cache to decode it through.
+    File(String, PathBuf, Decoded),
     /// The enhanced result this application is holding.
     Held(opai::Picture),
 }
@@ -181,7 +182,10 @@ fn locate(opened: &Opened, runs: &crate::enhance::Runs, identity: &str) -> Resul
         None => {}
     }
 
-    opened.resolve(identity).map(Pixels::File).ok_or(Refusal::Unknown)
+    opened
+        .resolve(identity)
+        .map(|path| Pixels::File(identity.to_string(), path, opened.decoded().clone()))
+        .ok_or(Refusal::Unknown)
 }
 
 /// Decodes the file behind `pixels`, or hands back a held result unchanged.
@@ -192,7 +196,11 @@ fn decode(pixels: Pixels) -> Result<opai::Picture, Refusal> {
     match pixels {
         Pixels::Held(picture) => Ok(picture),
         // Not logged: `opai` records the failure itself, naming the file and the reason.
-        Pixels::File(path) => opai::image::load_blocking(&path).map_err(|_| Refusal::Unreadable),
+        //
+        // Through the decoded cache, so the thumbnail, the canvas and every run that follows share one decode.
+        Pixels::File(identity, path, decoded) => {
+            decoded.load_blocking(&identity, &path).map_err(|_| Refusal::Unreadable)
+        }
     }
 }
 

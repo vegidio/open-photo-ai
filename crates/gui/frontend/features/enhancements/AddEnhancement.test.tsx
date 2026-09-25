@@ -1,11 +1,22 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import { forgetCatalogue } from "@/ipc/catalogue";
 import { track } from "@/lib/faro";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { useSettingsStore } from "@/stores/settings";
-import { CATALOGUE, HOLIDAY, openFiles, render, resetFileStore } from "@/test/support";
+import {
+    APPLY_ORDER,
+    CATALOGUE,
+    frame,
+    FRAMING,
+    HOLIDAY,
+    openFiles,
+    render,
+    resetCropStore,
+    resetFileStore,
+} from "@/test/support";
 import { AddEnhancement } from "./AddEnhancement";
 import { EnhancementList } from "./EnhancementList";
 
@@ -19,9 +30,10 @@ vi.mock("@/lib/faro", () => ({
 }));
 
 // The catalogue is an `invoke`, and what the menu adds is built from it: the model, its precision
-// and the tier behind it all come from what the library publishes.
+// and the tier behind it all come from what the library publishes. So is the scale a new upscale starts
+// at, which is the library's ladder - answered here as 2x, so the value visibly came from the backend.
 vi.mock("@tauri-apps/api/core", () => ({
-    invoke: vi.fn(() => Promise.resolve(CATALOGUE)),
+    invoke: vi.fn((command: string) => Promise.resolve(command === "suggested_scale" ? 2 : CATALOGUE)),
     convertFileSrc: vi.fn((identity: string) => `opai://localhost/${identity}`),
 }));
 
@@ -45,6 +57,8 @@ describe("adding an enhancement", () => {
         localStorage.clear();
         forgetCatalogue();
         resetFileStore();
+        resetCropStore();
+        vi.mocked(invoke).mockClear();
         useEnhancementStore.setState({ autopilot: true, enhancements: new Map() });
         useSettingsStore.setState({ models: {}, autopilotExcluded: [] });
         vi.mocked(track).mockClear();
@@ -95,13 +109,27 @@ describe("adding an enhancement", () => {
         open();
         fireEvent.click(await upscale());
 
-        // HOLIDAY is 3000x2000 - six megapixels, so the largest bucket and no enlargement by
-        // default. The model and its precision are the stored selection, split through the
-        // catalogue's own codename.
+        // The scale is the backend's answer for HOLIDAY's own 3000x2000. The model and its precision
+        // are the stored selection, split through the catalogue's own codename.
         await waitFor(() =>
-            expect(stack()).toEqual([{ family: "upscale", codename: "kyoto", precision: "fp16", scale: 1 }]),
+            expect(stack()).toEqual([
+                { family: "upscale", codename: "kyoto", precision: "fp16", parameters: { scale: 2 } },
+            ]),
         );
+        expect(invoke).toHaveBeenCalledWith("suggested_scale", { width: 3000, height: 2000 });
         expect(track).toHaveBeenCalledExactlyOnceWith("enhancement_added", { family: "upscale", source: "manual" });
+    });
+
+    it("asks for the scale of the photograph as it is framed, not as the file is", async () => {
+        openFiles(HOLIDAY);
+        frame(HOLIDAY);
+
+        render(<AddEnhancement />);
+        open();
+        fireEvent.click(await upscale());
+
+        await waitFor(() => expect(stack()).toHaveLength(1));
+        expect(invoke).toHaveBeenCalledWith("suggested_scale", { width: FRAMING.width, height: FRAMING.height });
     });
 
     it("adds a light adjustment at the user's default model and a bias of 50%, with its options closed", async () => {
@@ -117,7 +145,9 @@ describe("adding an enhancement", () => {
         fireEvent.click(await screen.findByRole("menuitem", { name: "Light Adjustment" }));
 
         await waitFor(() =>
-            expect(stack()).toEqual([{ family: "light_adjustment", codename: "paris", precision: "fp32", bias: 0.5 }]),
+            expect(stack()).toEqual([
+                { family: "light_adjustment", codename: "paris", precision: "fp32", parameters: { bias: 0.5 } },
+            ]),
         );
         // The user opens the options from the row; adding an enhancement does not open them for any family.
         expect(await screen.findByText("Paris, 50%, HD")).toBeInTheDocument();
@@ -137,7 +167,9 @@ describe("adding an enhancement", () => {
         fireEvent.click(await screen.findByRole("menuitem", { name: "Color Balance" }));
 
         await waitFor(() =>
-            expect(stack()).toEqual([{ family: "color_balance", codename: "rio", precision: "fp32", bias: 0.5 }]),
+            expect(stack()).toEqual([
+                { family: "color_balance", codename: "rio", precision: "fp32", parameters: { bias: 0.5 } },
+            ]),
         );
         expect(await screen.findByText("Rio, 50%, HD")).toBeInTheDocument();
         expect(document.querySelector("[data-slot='enhancement-options']")).toBeNull();
@@ -157,7 +189,9 @@ describe("adding an enhancement", () => {
 
         // The model's own output, and Stockholm because the catalogue lists it first.
         await waitFor(() =>
-            expect(stack()).toEqual([{ family: "denoise", codename: "stockholm", precision: "fp32", strength: 1 }]),
+            expect(stack()).toEqual([
+                { family: "denoise", codename: "stockholm", precision: "fp32", parameters: { strength: 1 } },
+            ]),
         );
         expect(await screen.findByText("Stockholm, 100%, HD")).toBeInTheDocument();
         expect(document.querySelector("[data-slot='enhancement-options']")).toBeNull();
@@ -177,7 +211,9 @@ describe("adding an enhancement", () => {
 
         // The model's own output, and Moscow because the catalogue lists it first.
         await waitFor(() =>
-            expect(stack()).toEqual([{ family: "sharpen", codename: "moscow", precision: "fp32", strength: 1 }]),
+            expect(stack()).toEqual([
+                { family: "sharpen", codename: "moscow", precision: "fp32", parameters: { strength: 1 } },
+            ]),
         );
         expect(await screen.findByText("Moscow, 100%, HD")).toBeInTheDocument();
         expect(document.querySelector("[data-slot='enhancement-options']")).toBeNull();
@@ -197,7 +233,7 @@ describe("adding an enhancement", () => {
 
         // Colorization takes no parameter, and Delhi because the catalogue lists it first.
         await waitFor(() =>
-            expect(stack()).toEqual([{ family: "colorization", codename: "delhi", precision: "fp32" }]),
+            expect(stack()).toEqual([{ family: "colorization", codename: "delhi", precision: "fp32", parameters: {} }]),
         );
         expect(await screen.findByText("Delhi, HD")).toBeInTheDocument();
         expect(document.querySelector("[data-slot='enhancement-options']")).toBeNull();
@@ -233,7 +269,11 @@ describe("adding an enhancement", () => {
         openFiles(HOLIDAY);
         useEnhancementStore
             .getState()
-            .addEnhancement(HOLIDAY.path, { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 });
+            .addEnhancement(
+                HOLIDAY.path,
+                { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } },
+                APPLY_ORDER,
+            );
 
         render(<AddEnhancement />);
         open();

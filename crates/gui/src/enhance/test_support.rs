@@ -15,7 +15,7 @@ pub(super) fn request(run: &str, source: &str, operations: Vec<Requested>) -> Re
         run: run.to_string(),
         source: source.to_string(),
         operations,
-        processor: Processor::Coreml,
+        processor: Processor(opai::ExecutionProvider::CoreMl),
         crop: None,
     }
 }
@@ -27,7 +27,7 @@ pub(super) fn framed_request(run: &str, source: &str, operations: Vec<Requested>
 
 /// One upscale the catalogue publishes, as the window would name it.
 pub(super) fn kyoto() -> Requested {
-    Requested::Upscale { codename: "kyoto".to_string(), precision: Precision::Fp32, scale: 2.0 }
+    Requested::named(opai::Family::Upscale, "kyoto", Precision::Fp32, &[("scale", 2.0)])
 }
 
 /// A temporary directory, an empty pair of registries, and one admitted image's identity.

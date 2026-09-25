@@ -288,6 +288,31 @@ impl Face {
     pub const fn confidence(&self) -> Confidence {
         self.confidence
     }
+
+    /// Whether a face recovery can give this face back more detail than the photograph already holds: its box covers
+    /// **at most** the square a recovery model restores a face at, 512 x 512.
+    ///
+    /// Not a round number picked for looking like one: every face-recovery model is published at a static
+    /// `[1, 3, 512, 512]` and aligns a face to a 512-pixel template. A face whose box already covers more than that is
+    /// *reduced* into the square, restored and pasted back enlarged, so what the model can give back is bounded by
+    /// what the reduction threw away — and on a face that was already sharp that is a softening rather than a
+    /// restoration. At or below it the model works at or above the detail the photograph holds.
+    ///
+    /// Compared as an **area** rather than edge against edge: a 1024 x 256 box and a 512 x 512 one cover the same
+    /// pixels and are the same amount of face to restore. A face exactly at the square is restorable: it is neither
+    /// reduced nor enlarged, so there is nothing to defend it from.
+    ///
+    /// The one definition of "too large" every caller shares — the autopilot's face-recovery suggestion, and the
+    /// default a front end applies to faces nobody has chosen about — so a suggestion survives exactly when the
+    /// recovery it adds would restore at least one face by default.
+    pub fn restorable(&self) -> bool {
+        // Widened before subtracting, so a box whose corners are whole pixels — the only boxes that can land exactly
+        // on the bound — is measured exactly.
+        let Rect { min, max } = self.bounding_box;
+        let area = (f64::from(max.x) - f64::from(min.x)) * (f64::from(max.y) - f64::from(min.y));
+
+        area <= f64::from(super::face_recovery::restore::TILE).powi(2)
+    }
 }
 
 // Without it a face read back from disk or from an `invoke` payload would keep whatever precision the payload
@@ -466,6 +491,20 @@ pub(crate) mod tests {
             ],
             Confidence::new(0.9).expect("0.9 is in range"),
         )
+    }
+
+    #[test]
+    fn a_face_is_restorable_up_to_and_including_the_square_a_recovery_model_restores_at() {
+        // Exactly at the square: neither reduced nor enlarged, so restorable.
+        assert!(face_at(10.0, 20.0, 522.0, 532.0).restorable());
+        // One pixel wider: reduced into the square, so not.
+        assert!(!face_at(10.0, 20.0, 523.0, 532.0).restorable());
+        // An area rather than an edge: a long thin box covering the same pixels as the square is restorable, and one
+        // edge past 512 is not by itself a refusal.
+        assert!(face_at(0.0, 0.0, 1024.0, 256.0).restorable());
+        assert!(!face_at(0.0, 0.0, 1024.0, 257.0).restorable());
+        // A small face, the case a restoration exists for.
+        assert!(face_at(10.0, 20.0, 110.0, 140.0).restorable());
     }
 
     #[test]

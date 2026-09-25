@@ -2,9 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Progress } from "@/components/ui/progress";
 import type { RunProgress } from "@/ipc/enhance";
 import { progressLabelKey } from "@/lib/enhancements";
-
-/** What a fraction of one is as a whole percentage, which is all either figure is drawn as. */
-const percent = (fraction: number) => Math.round(fraction * 100);
+import { toPercent } from "@/lib/utils";
 
 /**
  * What the run is doing, over the preview: how far the whole chain has got, and which enhancement it
@@ -54,7 +52,7 @@ export const ProgressBar = ({ report, fraction }: { report?: RunProgress; fracti
 
     const label =
         report?.stage === "installing" && report.installFraction !== undefined
-            ? t("preview.progress.downloading", { percent: percent(report.installFraction) })
+            ? t("preview.progress.downloading", { percent: toPercent(report.installFraction) })
             : named
               ? t(named)
               : t("preview.progress.enhancing");
@@ -78,7 +76,7 @@ export const ProgressBar = ({ report, fraction }: { report?: RunProgress; fracti
              * be the whole of how the bar reads. It also makes the thing a `progressbar` to a
              * screen reader, which a pair of nested boxes was not.
              */}
-            <Progress value={percent(fraction)} className="h-full rounded-lg bg-secondary" />
+            <Progress value={toPercent(fraction)} className="h-full rounded-lg bg-secondary" />
 
             {/*
              * The bevel, as an overlay of its own rather than as an inset shadow on the box above:

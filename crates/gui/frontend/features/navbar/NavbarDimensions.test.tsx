@@ -7,7 +7,12 @@ import { FRAMING, frame, HOLIDAY, openFiles, render, resetCropStore, resetFileSt
 import { NavbarDimensions } from "./NavbarDimensions";
 
 /** An upscale of the given factor, as a chooser built from the catalogue hands one over. */
-const upscale = (scale: number): Operation => ({ family: "upscale", codename: "kyoto", precision: "fp32", scale });
+const upscale = (scale: number): Operation => ({
+    family: "upscale",
+    codename: "kyoto",
+    precision: "fp32",
+    parameters: { scale },
+});
 
 const stack = (path: string, ...operations: Operation[]) =>
     act(() => useEnhancementStore.setState({ enhancements: new Map([[path, operations]]) }));

@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Condvar, Mutex};
 
 use super::serve::Asked;
+use crate::sync::lock;
 
 /// The bytes of an image, and the form they are in: what `super::serve`'s `render` produces and its
 /// [`serve`](super::serve::serve) streams.
@@ -107,7 +108,7 @@ impl Renditions {
     /// a `?` and a panic included. A caller that finds another thread already rendering waits instead of
     /// rendering it a second time.
     pub(super) fn claim(&self, asked: &Asked) -> Claim<'_> {
-        let mut kept = self.lock();
+        let mut kept = lock(&self.kept);
 
         loop {
             kept.clock += 1;
@@ -133,7 +134,7 @@ impl Renditions {
     /// Releases a claim, keeping `rendition` if there is one, and wakes everything waiting on it.
     fn settle(&self, asked: &Asked, rendition: Option<&Rendition>) {
         {
-            let mut kept = self.lock();
+            let mut kept = lock(&self.kept);
 
             kept.rendering.remove(asked);
 
@@ -151,7 +152,7 @@ impl Renditions {
     fn put(&self, asked: Asked, rendition: &Rendition) {
         // Production reaches `keep` through `Producing::keep`, so one request is rendered once. This exists so
         // eviction/accounting tests don't need to spell out a claim and a guard for every fixture row.
-        let mut kept = self.lock();
+        let mut kept = lock(&self.kept);
 
         self.keep(&mut kept, asked, rendition);
     }
@@ -190,12 +191,6 @@ impl Renditions {
                 kept.bytes -= evicted.bytes.len();
             }
         }
-    }
-
-    /// The map, treating a poisoned lock as readable.
-    fn lock(&self) -> std::sync::MutexGuard<'_, Kept> {
-        // For the reason `super::files::Opened::lock` gives.
-        self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
@@ -325,7 +320,7 @@ mod tests {
             cached(&renditions, &asked_for("iiiiiiiiiiiiiiii", 384)).is_some(),
             "the newest one was never kept"
         );
-        assert_eq!(renditions.lock().entries.len(), 8, "more than the one entry that had to go was evicted");
+        assert_eq!(lock(&renditions.kept).entries.len(), 8, "more than the one entry that had to go was evicted");
     }
 
     #[test]
@@ -336,7 +331,7 @@ mod tests {
             renditions.put(asked_for("0123456789abcdef", bound), &rendition_of(100));
         }
 
-        let kept = renditions.lock();
+        let kept = lock(&renditions.kept);
         assert!(kept.bytes <= 800, "the cache holds {} bytes", kept.bytes);
         assert_eq!(
             kept.bytes,
@@ -355,7 +350,7 @@ mod tests {
         renditions.put(asked.clone(), &rendition_of(renditions.largest_kept() + 1));
 
         assert_eq!(cached(&renditions, &asked), None, "an oversized rendition was kept");
-        assert_eq!(renditions.lock().bytes, 0, "an oversized rendition was counted against the budget");
+        assert_eq!(lock(&renditions.kept).bytes, 0, "an oversized rendition was counted against the budget");
     }
 
     #[test]
@@ -368,7 +363,7 @@ mod tests {
             renditions.put(asked_for("0123456789abcdef", bound), &rendition_of(30 * 1024));
         }
 
-        assert_eq!(renditions.lock().entries.len(), 1000, "a thousand thumbnails did not fit in the budget");
+        assert_eq!(lock(&renditions.kept).entries.len(), 1000, "a thousand thumbnails did not fit in the budget");
     }
 
     #[test]
@@ -418,7 +413,7 @@ mod tests {
             1,
             "the photograph was rendered more than once"
         );
-        assert!(renditions.lock().rendering.is_empty(), "a claim outlived the thread holding it");
+        assert!(lock(&renditions.kept).rendering.is_empty(), "a claim outlived the thread holding it");
     }
 
     #[test]
@@ -434,7 +429,7 @@ mod tests {
             Claim::Produce(producing) => drop(producing),
         }
 
-        assert!(renditions.lock().rendering.is_empty(), "the claim was not released");
+        assert!(lock(&renditions.kept).rendering.is_empty(), "the claim was not released");
         assert!(matches!(renditions.claim(&asked), Claim::Produce(_)), "the request could not be claimed again");
     }
 
@@ -448,7 +443,7 @@ mod tests {
         renditions.put(asked.clone(), &rendition_of(64));
         renditions.put(asked.clone(), &rendition_of(64));
 
-        assert_eq!(renditions.lock().entries.len(), 1);
-        assert_eq!(renditions.lock().bytes, 64, "one request was counted twice against the budget");
+        assert_eq!(lock(&renditions.kept).entries.len(), 1);
+        assert_eq!(lock(&renditions.kept).bytes, 64, "one request was counted twice against the budget");
     }
 }

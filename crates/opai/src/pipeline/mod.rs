@@ -32,10 +32,13 @@ pub(crate) mod test_support;
 
 use std::sync::Arc;
 
-use image::DynamicImage;
+use image::{DynamicImage, ImageBuffer, Rgb};
 use imaging::ChannelDepth;
+use imaging::present::{Plan, plan, presented};
+use imaging::tensor::{Channel, Normalisation};
 
 pub(crate) use backend::Backend;
+use session::GraphShape;
 
 use crate::error::InferenceError;
 use crate::models::ArtifactId;
@@ -234,5 +237,157 @@ impl<B: Backend, P: OnOneGraph> Model<B> for P {
         let graph = self.graph();
 
         vec![(&graph.artifact[0], &graph.profile)]
+    }
+}
+
+// The depth match every whole-image pipeline opened its `run` with, written once. What each of them says about *why*
+// it hoists the branch — a full-resolution loop compiled per channel type rather than branching per pixel over twenty-
+// four million of them — is the reason this exists rather than something any one of them decided.
+/// A picture-producing pipeline whose body is written once over the channel type and monomorphised for `u8` and
+/// `u16`, rather than branching on the depth per pixel.
+///
+/// Implementing this and [`Model`] is implementing [`ImagePipeline`]: the blanket impl below matches on the requested
+/// [`ChannelDepth`] once and hands the result back as the matching [`DynamicImage`].
+///
+/// Generic over the backend per method rather than per trait: a trait parameter a downstream type could fill is what
+/// would stop the blanket impl from coexisting with the pipelines that implement [`ImagePipeline`] directly.
+pub(crate) trait DepthGeneric: Send + Sync {
+    /// How many model runs this step is; see [`ImagePipeline::stages`].
+    fn stages(&self) -> usize;
+
+    /// [`ImagePipeline::run`]'s body, once, at whichever channel the caller asked for.
+    ///
+    /// # Errors
+    ///
+    /// As [`ImagePipeline::run`].
+    fn run_at<T: Channel, B: Backend>(
+        &self,
+        input: &DynamicImage,
+        sessions: &[SessionHandle<B::Session>],
+        progress: Option<&dyn Fn(f64)>,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<ImageBuffer<Rgb<T>, Vec<T>>, InferenceError>
+    where
+        Rgb<T>: image::Pixel<Subpixel = T>;
+}
+
+impl<B: Backend, P: DepthGeneric + Model<B>> ImagePipeline<B> for P {
+    fn stages(&self) -> usize {
+        DepthGeneric::stages(self)
+    }
+
+    fn run(
+        &self,
+        input: &DynamicImage,
+        sessions: &[SessionHandle<B::Session>],
+        depth: ChannelDepth,
+        progress: Option<&dyn Fn(f64)>,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<DynamicImage, InferenceError> {
+        match depth {
+            ChannelDepth::Eight => self.run_at::<u8, B>(input, sessions, progress, cancelled).map(u8::into_dynamic),
+            ChannelDepth::Sixteen => self.run_at::<u16, B>(input, sessions, progress, cancelled).map(u16::into_dynamic),
+        }
+    }
+}
+
+/// The fixed square a whole-image pipeline runs its one graph at, and the schedule the run reports on.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Square {
+    /// The side of the square the graph was exported at, and the only one it accepts.
+    pub(crate) side: u32,
+    /// How many planes the graph returns at that side.
+    pub(crate) planes: usize,
+    /// How many progress steps the whole run is. The presentation ends the first and the graph run the second.
+    pub(crate) steps: usize,
+}
+
+/// What [`SingleGraph::present_and_run`] leaves behind: the tensor the graph was shown, what it returned, and whatever
+/// the presentation handed over beside the tensor.
+pub(crate) struct Ran<S> {
+    /// The three planes the graph was run over.
+    pub(crate) tensor: Vec<f32>,
+    /// The [`Square::planes`] planes it returned.
+    pub(crate) output: Vec<f32>,
+    /// What the presentation produced besides the tensor.
+    pub(crate) presented: S,
+}
+
+/// What [`reflected`] hands over beside the tensor: the geometry it used, and the photograph as the graph saw it.
+pub(crate) struct Shown {
+    /// The size the photograph was resampled to, and the extension that fills the rest of the square.
+    pub(crate) planned: Plan,
+    /// The photograph resampled to the planned size, before it was padded.
+    pub(crate) resampled: DynamicImage,
+}
+
+impl SingleGraph {
+    // The first two steps of every pipeline that runs its graph once over a fixed square, whatever it then does with
+    // the answer. The order is the one each of them wrote out by hand: nothing is allocated for an empty photograph,
+    // a run cancelled before it started does no work, and each of the two steps is a boundary the run reports and
+    // checks cancellation at.
+    /// Refuses an empty photograph, presents `input` to the graph through `present`, and runs the graph once over the
+    /// result, reporting and checking cancellation after each of the two.
+    ///
+    /// A cancelled run returns no image at all — not the photograph, and not a partly corrected buffer, which a
+    /// caller has no way to tell from a finished one.
+    ///
+    /// # Errors
+    ///
+    /// [`InferenceError::Untileable`] for a photograph with no area, [`InferenceError::Cancelled`] at any step
+    /// boundary, and the graph's own failure folded through [`InferenceError::run`].
+    pub(crate) fn present_and_run<B: Backend, S>(
+        &self,
+        session: &SessionHandle<B::Session>,
+        input: &DynamicImage,
+        square: Square,
+        report: &dyn Fn(f64),
+        cancelled: &dyn Fn() -> bool,
+        present: impl FnOnce(&DynamicImage) -> (Vec<f32>, S),
+    ) -> Result<Ran<S>, InferenceError> {
+        let (width, height) = (input.width(), input.height());
+
+        // Before anything is allocated. There is no scaling of an empty photograph onto the square, and a graph run
+        // over a square holding nothing but a reflection of nothing is not a correction of anything.
+        if width == 0 || height == 0 {
+            return Err(InferenceError::Untileable { width, height });
+        }
+
+        if cancelled() {
+            return Err(InferenceError::Cancelled);
+        }
+
+        let side = square.side as usize;
+        let (tensor, presented) = present(input);
+
+        checkpoint(report, cancelled, 1.0 / square.steps as f64)?;
+
+        let produced = GraphShape::new(square.planes, side, side);
+        let mut output = vec![0.0_f32; produced.len()];
+        B::run_graph(session, &tensor, GraphShape::new(3, side, side), &mut output, produced)
+            .map_err(InferenceError::run(&self.name, 0))?;
+
+        checkpoint(report, cancelled, 2.0 / square.steps as f64)?;
+
+        Ok(Ran { tensor, output, presented })
+    }
+}
+
+/// The presentation light adjustment and colour balance share: the photograph's longer side fitted onto the `canvas`
+/// square, and the rest of it filled by reflection, as planar CHW in `range`.
+///
+/// For [`SingleGraph::present_and_run`], and only for a non-empty photograph, which that refuses first.
+pub(crate) fn reflected(canvas: u32, range: Normalisation) -> impl FnOnce(&DynamicImage) -> (Vec<f32>, Shown) {
+    move |input| {
+        let planned = plan(input.width(), input.height(), canvas);
+        let mut tensor = vec![0.0_f32; GraphShape::new(3, canvas as usize, canvas as usize).len()];
+
+        // `expect` rather than a folded error, as `run_tiled` does with its own conversion and for the same reason:
+        // the scratch is allocated here at exactly the shape the graph is run at, so a disagreement is this function
+        // contradicting itself rather than anything a caller could have caused or acted on.
+        let resampled = presented(input, planned, range, &mut tensor)
+            .expect("the scratch is allocated at the square the graph accepts");
+
+        (tensor, Shown { planned, resampled })
     }
 }

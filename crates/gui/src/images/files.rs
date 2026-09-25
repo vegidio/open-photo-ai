@@ -9,7 +9,9 @@ use serde::Serialize;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
+use super::decoded::Decoded;
 use crate::command::{Answer, CommandError, Ended, Traceparent, command_span, traced, traced_sync};
+use crate::sync::lock;
 use crate::task::spawn_blocking;
 
 // ── What a file becomes ───────────────────────────────────────────────────────────────────────────────────────────
@@ -48,17 +50,18 @@ impl ImageRecord {
     /// the whole file, the header for dimensions, and the metadata for size.
     pub(super) fn describe(path: &Path) -> Self {
         // Each read fails on its own: a selection is a batch, and one bad file shouldn't cost the rest.
-        let identity = identity_of(path);
-
-        // The RAW probe reads the whole file rather than a header, which is fine here since the hash above
-        // already did.
         //
         // A failure is not logged here: `opai` records it, naming the file and the reason — which is what tells a
         // truncated header from a file on an ejected drive, two things that look identical to the user.
-        let dimensions = if opai::image::is_raw(path) {
-            opai::image::probe_raw_blocking(path).ok().map(|info| (info.width, info.height))
+        let (identity, dimensions) = if opai::image::is_raw(path) {
+            // The RAW probe needs the whole file rather than a header, and so does the hash, so both come from one
+            // read rather than two — a folder of 40 MB RAWs would otherwise be read twice over.
+            match opai::image::identify_raw_blocking(path) {
+                Ok((identity, info)) => (Some(identity), info.ok().map(|info| (info.width, info.height))),
+                Err(_) => (None, None),
+            }
         } else {
-            opai::image::probe_blocking(path).ok().map(|info| (info.width, info.height))
+            (identity_of(path), opai::image::probe_blocking(path).ok().map(|info| (info.width, info.height)))
         };
 
         Self {
@@ -88,6 +91,9 @@ fn identity_of(path: &Path) -> Option<String> {
 pub(crate) struct Opened {
     // Nothing is removed because a path and a 16-character string per file is noise.
     admitted: Mutex<Admitted>,
+    /// The admitted photographs most recently decoded. Beside the registry because every reader of an admitted
+    /// file's pixels already holds this, and it bounds itself — see [`Decoded`].
+    decoded: Decoded,
 }
 
 /// The inside of [`Opened`], behind its one lock.
@@ -114,7 +120,7 @@ impl Opened {
     /// Re-admitting a known identity overwrites its path: the same photograph opened from a second
     /// location is served from wherever it was most recently pointed at.
     pub(super) fn admit(&self, described: &[(ImageRecord, PathBuf)]) {
-        let mut admitted = self.lock();
+        let mut admitted = lock(&self.admitted);
 
         for (record, path) in described {
             admitted.paths.insert(path.clone());
@@ -127,20 +133,18 @@ impl Opened {
 
     /// Where the file with this identity is, or `None` if this application never admitted it.
     pub(crate) fn resolve(&self, identity: &str) -> Option<PathBuf> {
-        self.lock().files.get(identity).cloned()
+        lock(&self.admitted).files.get(identity).cloned()
+    }
+
+    /// The cache every reader of an admitted file's pixels decodes through.
+    pub(crate) fn decoded(&self) -> &Decoded {
+        &self.decoded
     }
 
     /// Whether this application opened the file at this path. Compared verbatim, not canonicalized.
     fn knows(&self, path: &Path) -> bool {
         // Not canonicalized because both sides come from the same string already.
-        self.lock().paths.contains(path)
-    }
-
-    /// What has been admitted, treating a poisoned lock as readable.
-    fn lock(&self) -> std::sync::MutexGuard<'_, Admitted> {
-        // A panic while holding the lock still leaves a usable map, and propagating the panic would break every
-        // future open.
-        self.admitted.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        lock(&self.admitted).paths.contains(path)
     }
 }
 
@@ -506,7 +510,7 @@ mod tests {
                 .expect("the runtime is alive");
 
         assert_eq!(records.len(), 1, "the file the user named was dropped");
-        assert!(opened.lock().files.is_empty(), "a file with no identity was admitted anyway");
+        assert!(lock(&opened.admitted).files.is_empty(), "a file with no identity was admitted anyway");
     }
 
     #[test]

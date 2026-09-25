@@ -31,13 +31,12 @@ use super::super::samples::Samples;
 use crate::error::InferenceError;
 use crate::models::ArtifactId;
 use crate::pipeline::Backend;
-use crate::pipeline::session::GraphShape;
-use crate::pipeline::{ImagePipeline, OnOneGraph, Shared, SingleGraph, checkpoint, reporter};
+use crate::pipeline::{
+    DepthGeneric, OnOneGraph, Ran, Shared, Shown, SingleGraph, Square, checkpoint, reflected, reporter,
+};
 use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
-use imaging::ChannelDepth;
 use imaging::mix::blended;
-use imaging::present::{plan, presented};
 use imaging::tensor::{Channel, Normalisation, Sampler};
 
 // Deep_White_Balance is trained on the unit range, against the `[-1, 1]` face recovery's restorers were trained on.
@@ -100,7 +99,7 @@ impl OnOneGraph for Balance {
     }
 }
 
-impl<B: Backend> ImagePipeline<B> for Balance {
+impl DepthGeneric for Balance {
     /// One graph run, whatever the photograph is.
     fn stages(&self) -> usize {
         // The fixed square is the whole of why this is a constant rather than something derived from the image: a
@@ -108,30 +107,10 @@ impl<B: Backend> ImagePipeline<B> for Balance {
         1
     }
 
-    fn run(
-        &self,
-        input: &DynamicImage,
-        sessions: &[SessionHandle<B::Session>],
-        depth: ChannelDepth,
-        progress: Option<&dyn Fn(f64)>,
-        cancelled: &dyn Fn() -> bool,
-    ) -> Result<DynamicImage, InferenceError> {
-        // Dispatched once at the top, as `Adjust::adjusted` and `restore` dispatch it. The apply below walks the
-        // photograph's own resolution — twenty-four million iterations on a 24-megapixel source — and a per-pixel
-        // branch on the depth there is the one place this pattern is load-bearing rather than stylistic. The fit
-        // is `f32`/`f64` throughout and is not monomorphised.
-        match depth {
-            ChannelDepth::Eight => self.corrected::<u8, B>(input, sessions, progress, cancelled).map(u8::into_dynamic),
-            ChannelDepth::Sixteen => {
-                self.corrected::<u16, B>(input, sessions, progress, cancelled).map(u16::into_dynamic)
-            }
-        }
-    }
-}
-
-impl Balance {
-    /// [`ImagePipeline::run`]'s body, once, at whichever channel the caller asked for.
-    fn corrected<T: Channel, B: Backend>(
+    // Generic over the channel because the apply below walks the photograph's own resolution — twenty-four million
+    // iterations on a 24-megapixel source — and a per-pixel branch on the depth there is the one place this pattern is
+    // load-bearing rather than stylistic. The fit is `f32`/`f64` throughout and is not monomorphised.
+    fn run_at<T: Channel, B: Backend>(
         &self,
         input: &DynamicImage,
         sessions: &[SessionHandle<B::Session>],
@@ -141,45 +120,23 @@ impl Balance {
     where
         Rgb<T>: image::Pixel<Subpixel = T>,
     {
-        let (width, height) = (input.width(), input.height());
-
-        // Before anything is allocated. There is no scaling of an empty photograph onto the square, no samples to
-        // fit a mapping from, and a graph run over a square holding nothing but a reflection of nothing is not a
-        // correction of anything.
-        if width == 0 || height == 0 {
-            return Err(InferenceError::Untileable { width, height });
-        }
-
         let report = reporter(progress);
-        let planned = plan(width, height, self.canvas);
-        let shape = GraphShape::new(3, self.canvas as usize, self.canvas as usize);
-        let crop = (planned.scaled_width, planned.scaled_height);
+        let square = Square { side: self.canvas, planes: 3, steps: STEPS };
 
-        // Checked at each of the five step boundaries. A cancelled run returns no image at all — not the
-        // photograph, and not the partly corrected buffer the cancellation landed in, which a caller has no way to
-        // tell from a finished correction.
-        if cancelled() {
-            return Err(InferenceError::Cancelled);
-        }
-
-        let mut tensor = vec![0.0_f32; shape.len()];
-        // `expect` rather than a folded error, as `run_tiled` does with its own conversion and for the same reason:
-        // the scratch is allocated here at exactly the shape the graph is run at, so a disagreement is this
-        // function contradicting itself rather than anything a caller could have caused or acted on.
+        // Checked at each of the five step boundaries; the first two are the presentation's and the graph run's.
         //
         // The resampled photograph is **dropped**. It is what light adjustment's gain map needs as a denominator;
         // nothing here divides by what the model was shown, because the fit reads it back out of the tensor at the
         // graph's own range rather than as an image.
-        presented(input, planned, RANGE, &mut tensor)
-            .expect("the scratch is allocated at the square the graph accepts");
-
-        checkpoint(&report, cancelled, 1.0 / STEPS as f64)?;
-
-        let mut output = vec![0.0_f32; shape.len()];
-        B::run_graph(&sessions[0], &tensor, shape, &mut output, shape)
-            .map_err(InferenceError::run(&self.graph.name, 0))?;
-
-        checkpoint(&report, cancelled, 2.0 / STEPS as f64)?;
+        let Ran { tensor, output, presented: Shown { planned, .. } } = self.graph.present_and_run::<B, _>(
+            &sessions[0],
+            input,
+            square,
+            &report,
+            cancelled,
+            reflected(self.canvas, RANGE),
+        )?;
+        let crop = (planned.scaled_width, planned.scaled_height);
 
         // Both views cropped to the plan, which is where the extension leaves this run: it must stay out of a
         // **global** fit, for the reason, and the 4.8 dB, that `samples` gives.
@@ -203,7 +160,7 @@ impl Balance {
         checkpoint(&report, cancelled, 3.0 / STEPS as f64)?;
 
         let sampler = Sampler::new(input);
-        let mapped = mapped::<T>(&sampler, &mapping, (width, height));
+        let mapped = mapped::<T>(&sampler, &mapping, (input.width(), input.height()));
 
         checkpoint(&report, cancelled, 4.0 / STEPS as f64)?;
 
@@ -245,6 +202,10 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use crate::pipeline::ImagePipeline;
+    use crate::pipeline::session::GraphShape;
+    use imaging::ChannelDepth;
+    use imaging::present::{plan, presented};
 
     use super::super::super::{ColorBalance, ColorBalanceVariant};
 

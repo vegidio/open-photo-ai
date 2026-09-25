@@ -22,7 +22,7 @@
 // checkpoint carries both.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile};
+use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
 
 // It cannot be exported with dynamic axes, though not for the reason one would expect. A dynamic export is numerically
 // perfect — the tracer turns the mask calculation into real operations rather than baking a constant, and the result is
@@ -102,10 +102,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // independently by `paris`' sweep — leaves about 690 ms for the graph at FP16 against the reference's 687, and
     // about 850 ms at FP32 against its 830. CoreML is **14x** the CPU provider here, which is the other half of the
     // precondition: a graph that had fallen apart into partitions would not be.
-    match precision {
-        Precision::Fp16 => EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-        _ => EpProfile::default(),
-    }
+    cpu_and_gpu_at_fp16(precision)
 }
 
 #[cfg(test)]
@@ -117,14 +114,16 @@ mod tests {
     use crate::providers::profile::ExecutionMode;
 
     #[test]
-    fn lyon_carries_the_compute_units_and_nothing_else_at_fp16() {
-        // The whole declaration, asked through the variant so that the arm reaching this file is inside what is
-        // checked.
-        assert_eq!(
-            LightAdjustmentVariant::Lyon(FloatPrecision::Fp16).profile(),
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-            "Lyon at FP16 is not the one setting measured for it"
-        );
+    fn lyon_declares_the_shared_fp16_profile_through_its_variant() {
+        // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
+        // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
+        for precision in FloatPrecision::ALL {
+            assert_eq!(
+                LightAdjustmentVariant::Lyon(precision).profile(),
+                cpu_and_gpu_at_fp16(precision.into()),
+                "{precision:?}"
+            );
+        }
     }
 
     #[test]
@@ -146,17 +145,6 @@ mod tests {
         // And the half they agree on, which is what makes the disagreement above a measurement rather than an
         // oversight: both are kept off the Neural Engine, and both were measured separately to get there.
         assert_eq!(lyon.coreml_compute_units, paris.coreml_compute_units);
-    }
-
-    #[test]
-    fn lyon_declares_nothing_at_fp32() {
-        // The precision split, as Paris follows it and for the same reason: the compute-unit figures above are FP16
-        // measurements, and an FP32 MLProgram cannot reach the Neural Engine in the first place.
-        assert_eq!(
-            LightAdjustmentVariant::Lyon(FloatPrecision::Fp32).profile(),
-            EpProfile::default(),
-            "Lyon at FP32 declared a setting nothing measured"
-        );
     }
 
     #[test]

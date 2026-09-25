@@ -45,7 +45,7 @@ use ort::session::builder::SessionBuilder;
 use crate::deps::manifest;
 use crate::error::{InitError, SessionError};
 use crate::models::ArtifactId;
-use crate::providers::ExecutionProvider;
+use crate::providers::Accelerator;
 use crate::providers::options::{CachePaths, ProviderOptions, SessionPlan, SessionSettings};
 use crate::providers::profile::{DISABLED_OPTIMIZER_SEPARATOR, ExecutionMode};
 
@@ -125,7 +125,7 @@ fn open(artifact: &ArtifactId, plan: &SessionPlan, model: &Path) -> Result<Sessi
 
     // In the plan's own order, so that one provider declining a node at session-build time leaves the next to run
     // the graph. Empty for a CPU run, which attaches nothing.
-    let dispatches: Vec<ExecutionProviderDispatch> = plan.providers.iter().filter_map(dispatch).collect();
+    let dispatches: Vec<ExecutionProviderDispatch> = plan.providers.iter().map(dispatch).collect();
 
     let mut builder = Session::builder()
         .map_err(failed)?
@@ -136,21 +136,19 @@ fn open(artifact: &ArtifactId, plan: &SessionPlan, model: &Path) -> Result<Sessi
     builder.commit_from_file(model).map_err(failed)
 }
 
-/// The dispatch `options` describes, or `None` where it names nothing a session attaches.
+/// The dispatch `options` describes.
 ///
-/// [`ExecutionProvider::Auto`] and [`ExecutionProvider::Cpu`] are the `None`: the first is a request rather than a
-/// provider, and the second takes no configuration and is what the runtime falls back to on its own once everything
-/// above it has declined. Neither can reach a builder from here, which is what keeps the resolution's promise that
-/// the attach list never contains them from resting on the resolution alone.
-fn dispatch(options: &ProviderOptions) -> Option<ExecutionProviderDispatch> {
+/// One arm per [`Accelerator`], and none for the request or the CPU: the attach list cannot hold either — the first is
+/// a request rather than a provider, and the second takes no configuration and is what the runtime falls back to on
+/// its own once everything above it has declined.
+fn dispatch(options: &ProviderOptions) -> ExecutionProviderDispatch {
     let dispatch = match options.provider {
-        ExecutionProvider::TensorRt => configure(ort::ep::TensorRT::default(), &options.options).build(),
-        ExecutionProvider::Cuda => configure(ort::ep::CUDA::default(), &options.options).build(),
-        ExecutionProvider::CoreMl => configure(ort::ep::CoreML::default(), &options.options).build(),
-        ExecutionProvider::Auto | ExecutionProvider::Cpu => return None,
+        Accelerator::TensorRt => configure(ort::ep::TensorRT::default(), &options.options).build(),
+        Accelerator::Cuda => configure(ort::ep::CUDA::default(), &options.options).build(),
+        Accelerator::CoreMl => configure(ort::ep::CoreML::default(), &options.options).build(),
     };
 
-    Some(dispatch.error_on_failure())
+    dispatch.error_on_failure()
 }
 
 /// Applies every entry of `options` to `provider`.
@@ -165,7 +163,7 @@ fn configure<E: ArbitrarilyConfigurableExecutionProvider>(provider: E, options: 
 
 /// Whether TensorRT is among the providers this plan attaches.
 fn attaches_tensorrt(plan: &SessionPlan) -> bool {
-    plan.providers.iter().any(|options| options.provider == ExecutionProvider::TensorRt)
+    plan.providers.iter().any(|options| options.provider == Accelerator::TensorRt)
 }
 
 /// Runs `build`, serialized against every other TensorRT build in this process and dropping the shared timing cache
@@ -266,6 +264,7 @@ impl BuilderSettings {
 mod tests {
     use super::*;
     use crate::logging;
+    use crate::providers::ExecutionProvider;
     use crate::providers::profile::EpProfile;
     use std::cell::RefCell;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -301,8 +300,8 @@ mod tests {
     }
 
     /// A plan attaching exactly `providers`, with default settings.
-    fn plan_attaching(providers: Vec<ExecutionProvider>) -> SessionPlan {
-        let resolved = providers.first().copied().unwrap_or(ExecutionProvider::Cpu);
+    fn plan_attaching(providers: Vec<Accelerator>) -> SessionPlan {
+        let resolved = providers.first().map_or(ExecutionProvider::Cpu, |&accelerator| accelerator.into());
 
         SessionPlan {
             requested: resolved,
@@ -316,8 +315,8 @@ mod tests {
         }
     }
 
-    /// The options for one provider, without going through the whole resolution.
-    fn resolved_for(provider: ExecutionProvider) -> ProviderOptions {
+    /// The options for one accelerator, without going through the whole resolution.
+    fn resolved_for(provider: Accelerator) -> ProviderOptions {
         ProviderOptions { provider, options: BTreeMap::new() }
     }
 
@@ -347,7 +346,7 @@ mod tests {
         ];
 
         for (provider, name) in cases {
-            let dispatch = dispatch(&resolved(provider)).unwrap_or_else(|| panic!("{provider} produced no dispatch"));
+            let dispatch = dispatch(&resolved(provider));
 
             // `ort` exposes neither the provider's name nor the flag as accessors; its `Debug` prints both, and they
             // are the two facts that decide which provider is attached and what happens when it will not.
@@ -358,12 +357,11 @@ mod tests {
     }
 
     #[test]
-    fn neither_auto_nor_the_cpu_can_reach_the_builder() {
-        // The resolution never puts either in an attach list, because neither is something a session attaches. This
-        // is that promise held a second time, at the point where breaking it would mean asking the runtime for a
-        // provider that does not exist.
+    fn neither_auto_nor_the_cpu_is_anything_the_builder_can_be_handed() {
+        // The resolution narrows a request to the accelerators it attaches, and the builder takes nothing wider: the
+        // two that are not one have no `Accelerator` to be, so there is no dispatch to refuse them with.
         for provider in [ExecutionProvider::Auto, ExecutionProvider::Cpu] {
-            assert!(dispatch(&resolved_for(provider)).is_none(), "{provider} produced a dispatch");
+            assert_eq!(provider.accelerator(), None, "{provider} named an accelerator");
         }
     }
 
@@ -417,10 +415,10 @@ mod tests {
         // The `Auto` chain attaches TensorRT first and CUDA behind it; an explicit CUDA request attaches neither
         // ahead of nor behind TensorRT. Reading only the resolved provider would miss a chain that attaches it
         // second, which no chain does today and which is exactly the kind of thing a later provider changes.
-        assert!(attaches_tensorrt(&plan_attaching(vec![ExecutionProvider::TensorRt, ExecutionProvider::Cuda])));
-        assert!(attaches_tensorrt(&plan_attaching(vec![ExecutionProvider::Cuda, ExecutionProvider::TensorRt])));
-        assert!(!attaches_tensorrt(&plan_attaching(vec![ExecutionProvider::Cuda])));
-        assert!(!attaches_tensorrt(&plan_attaching(vec![ExecutionProvider::CoreMl])));
+        assert!(attaches_tensorrt(&plan_attaching(vec![Accelerator::TensorRt, Accelerator::Cuda])));
+        assert!(attaches_tensorrt(&plan_attaching(vec![Accelerator::Cuda, Accelerator::TensorRt])));
+        assert!(!attaches_tensorrt(&plan_attaching(vec![Accelerator::Cuda])));
+        assert!(!attaches_tensorrt(&plan_attaching(vec![Accelerator::CoreMl])));
         assert!(!attaches_tensorrt(&plan_attaching(Vec::new())));
     }
 

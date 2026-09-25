@@ -24,6 +24,7 @@ mod reveal;
 mod setup;
 mod single_instance;
 mod stops;
+mod sync;
 mod task;
 #[cfg(test)]
 mod test_support;
@@ -138,8 +139,10 @@ pub fn run(prepared: Result<(), opai::InitError>) {
             faces::detect_faces,
             autopilot::suggest,
             autopilot::cancel_suggest,
+            autopilot::suggested_scale,
             export::export,
             export::cancel_export,
+            export::export_formats,
             export::directory::pick_directory,
             export::written::reveal_export,
             images::files::open_images,
@@ -152,10 +155,20 @@ pub fn run(prepared: Result<(), opai::InitError>) {
         .expect("error while building the Open Photo AI application")
         .run(move |_, event| {
             if let tauri::RunEvent::Exit = event {
+                // Before telemetry stops, so a write that had to be abandoned is still recorded. The handle in the
+                // setup state is never dropped on this path, so its own wait on drop does not run.
+                if !opai::settle_cache_writes(CACHE_SETTLE) {
+                    tracing::warn!(target: "gui", "the last results were still being cached and were abandoned");
+                }
+
                 closing(began.elapsed(), opai::telemetry::stop);
             }
         });
 }
+
+/// How long closing waits for the run cache to finish writing the last results: a large result's encode and write,
+/// on a window that is already gone.
+const CACHE_SETTLE: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Records the session's end, then stops telemetry through `stop`.
 ///

@@ -11,10 +11,14 @@
 //!
 //! # What can be wrong, and what cannot
 //!
-//! Exactly two things, and both are decided by data the entry holds: a codename the family does not publish, and a
-//! precision this variant is not published at. Everything else is a value the caller already holds — a [`Scale`], a
-//! [`Strength`], a [`Bias`], a [`Fidelity`] or a set of [`Faces`] — and each of those is bounded on construction, so
-//! there is no third way for a request to be wrong and no third arm on [`BuildError`].
+//! Two things decided by data the entry holds: a codename the family does not publish, and a precision this variant is
+//! not published at. Everything else is a value the caller already holds — a [`Scale`], a [`Strength`], a [`Bias`], a
+//! [`Fidelity`] or a set of [`Faces`] — and each of those is bounded on construction.
+//!
+//! The third arm on [`BuildError`] belongs to the one path that takes a value by **name** rather than by type,
+//! [`ParameterValues::set`]: a name no parameter is published under. It exists so a front end that speaks only the
+//! catalogue's vocabulary — a name and a number, as it read them — can hand them back without a match of its own over
+//! the four bounded types.
 
 use super::artifact::Family;
 use super::bias::Bias;
@@ -59,6 +63,13 @@ pub enum BuildError {
         codename: &'static str,
         /// The precision it is not published at.
         precision: Precision,
+    },
+
+    /// No parameter is published under that name — see [`ParameterValues::set`].
+    #[error("no model takes a parameter called `{name}`")]
+    UnknownParameter {
+        /// What was asked for, as the caller spelled it.
+        name: String,
     },
 }
 
@@ -140,6 +151,60 @@ impl ParameterValues {
         self.faces = faces;
         self
     }
+
+    /// Sets the parameter the catalogue publishes under `name` to `value`, **brought inside its range** rather than
+    /// refused.
+    ///
+    /// The by-name counterpart of the `with_*` methods, for a caller that speaks the catalogue's vocabulary — a
+    /// [`ParameterEntry::name`](super::catalogue::ParameterEntry::name) and a number, as a control built from that
+    /// entry hands them back — and would otherwise have to match the name onto one of four bounded types itself. The
+    /// match lives here, once, beside the types it constructs.
+    ///
+    /// **Clamped, and logged once when it had to be.** A value from a control bounded by the published range can only
+    /// be out of it through a fault, and running at the nearest permitted value is more useful to a user than a
+    /// refused enhancement — but the fault is written to the log at `warn`, naming the parameter, what was asked and
+    /// the range, so it stays diagnosable. A value that is not a number bounds the way each type's own `clamped`
+    /// documents.
+    ///
+    /// Setting a parameter the chosen variant does not read is harmless, as it is for the `with_*` methods: Santorini
+    /// handed a fidelity has nowhere to put it and ignores it.
+    ///
+    /// # Errors
+    ///
+    /// [`BuildError::UnknownParameter`] where no parameter is published under `name`. The faces are not one of
+    /// these: a set of faces is not a number, and [`with_faces`](Self::with_faces) is how they are handed over.
+    pub fn set(&mut self, name: &str, value: f64) -> Result<(), BuildError> {
+        match name {
+            Scale::NAME => self.scale = clamped_logged(Scale::NAME, value, Scale::MIN, Scale::MAX, Scale::clamped),
+            Strength::NAME => {
+                self.strength = clamped_logged(Strength::NAME, value, Strength::MIN, Strength::MAX, Strength::clamped);
+            }
+            Bias::NAME => self.bias = clamped_logged(Bias::NAME, value, Bias::MIN, Bias::MAX, Bias::clamped),
+            Fidelity::NAME => {
+                self.fidelity = clamped_logged(Fidelity::NAME, value, Fidelity::MIN, Fidelity::MAX, Fidelity::clamped);
+            }
+            name => return Err(BuildError::UnknownParameter { name: name.to_string() }),
+        }
+
+        Ok(())
+    }
+}
+
+/// `value` through `clamped`, with one `warn` record where it was outside `min..=max` — the one copy of the rule
+/// [`ParameterValues::set`] applies to every parameter.
+fn clamped_logged<T>(name: &str, value: f64, min: f64, max: f64, clamped: fn(f64) -> T) -> T {
+    // A containment test, so a `NaN` — which is neither below nor above — is logged as the fault it is too.
+    if !(min..=max).contains(&value) {
+        tracing::warn!(
+            parameter = name,
+            value,
+            min,
+            max,
+            "a value outside the permitted range was requested; running at the nearest permitted value"
+        );
+    }
+
+    clamped(value)
 }
 
 impl Default for ParameterValues {
@@ -264,7 +329,7 @@ impl VariantEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::catalogue::FamilyEntry;
+    use crate::models::catalogue::{FamilyEntry, ParameterKind};
     use crate::models::precision::FloatPrecision;
     use crate::models::test_support::published_values as values_for;
 
@@ -337,6 +402,64 @@ mod tests {
             .expect("Kyoto is published at FP32");
 
         assert_eq!(built, Subject::Enhancement(Upscale::kyoto(FloatPrecision::Fp32, Scale::clamped(4.0))));
+    }
+
+    #[test]
+    fn a_value_set_by_its_published_name_is_the_value_the_typed_builder_would_carry() {
+        let mut named = ParameterValues::new();
+        for (name, value) in [("scale", 2.5), ("strength", 0.25), ("bias", -0.35), ("fidelity", 0.05)] {
+            named.set(name, value).expect("every range the catalogue publishes can be set by its name");
+        }
+
+        let typed = ParameterValues::new()
+            .with_scale(Scale::clamped(2.5))
+            .with_strength(Strength::clamped(0.25))
+            .with_bias(Bias::clamped(-0.35))
+            .with_fidelity(Fidelity::clamped(0.05));
+
+        assert_eq!(named, typed);
+    }
+
+    #[test]
+    fn a_value_set_by_name_outside_its_range_runs_at_the_nearest_permitted_one() {
+        let mut values = ParameterValues::new();
+        values.set(Scale::NAME, 99.0).expect("scale is published");
+        values.set(Bias::NAME, -7.0).expect("bias is published");
+
+        assert_eq!(
+            values,
+            ParameterValues::new()
+                .with_scale(Scale::clamped(Scale::MAX))
+                .with_bias(Bias::clamped(Bias::MIN))
+        );
+    }
+
+    #[test]
+    fn a_name_no_parameter_is_published_under_is_refused_and_so_are_the_faces() {
+        let mut values = ParameterValues::new();
+
+        for name in ["radius", "faces"] {
+            assert_eq!(
+                values.set(name, 1.0).expect_err("not a range anyone publishes"),
+                BuildError::UnknownParameter { name: name.to_string() }
+            );
+        }
+        assert_eq!(values, ParameterValues::new(), "a refused name changed something");
+    }
+
+    #[test]
+    fn every_range_the_catalogue_publishes_can_be_set_by_its_name() {
+        for entry in catalogue() {
+            for variant in &entry.variants {
+                for parameter in variant.parameters {
+                    if let ParameterKind::Range { default, .. } = parameter.kind {
+                        ParameterValues::new()
+                            .set(parameter.name, default)
+                            .unwrap_or_else(|error| panic!("{}'s {}: {error}", variant.codename, parameter.name));
+                    }
+                }
+            }
+        }
     }
 
     #[test]

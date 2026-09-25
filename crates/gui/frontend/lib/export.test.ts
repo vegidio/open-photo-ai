@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import { describe, expect, it } from "vitest";
 import type { Operation } from "@/ipc/enhance";
 import type { ImageRecord } from "@/ipc/images";
+import { EXPORT_FORMATS } from "@/test/support";
 import {
     describeExportError,
     destinationFor,
@@ -10,7 +11,8 @@ import {
     FORMAT_CHOICES,
     formatFor,
     groupByChain,
-    queueQualityFormat,
+    qualityFor,
+    queueQualityFor,
 } from "./export";
 import { directoryOf } from "./paths";
 
@@ -38,17 +40,17 @@ describe("formatFor and extensionFor", () => {
         ["/photos/beach.heic", "heic", "heic"],
         ["/photos/beach.tif", "tiff", "tif"],
     ])("Preserve keeps %s as its own format and extension", (path, format, extension) => {
-        expect(formatFor(record(path), "preserve")).toBe(format);
-        expect(extensionFor(record(path), "preserve")).toBe(extension);
+        expect(formatFor(record(path), "preserve", EXPORT_FORMATS)).toBe(format);
+        expect(extensionFor(record(path), "preserve", EXPORT_FORMATS)).toBe(extension);
     });
 
     it("Preserve writes a RAW source as TIFF", () => {
-        expect(formatFor(record("/photos/shot.nef"), "preserve")).toBe("tiff");
-        expect(extensionFor(record("/photos/shot.nef"), "preserve")).toBe("tiff");
+        expect(formatFor(record("/photos/shot.nef"), "preserve", EXPORT_FORMATS)).toBe("tiff");
+        expect(extensionFor(record("/photos/shot.nef"), "preserve", EXPORT_FORMATS)).toBe("tiff");
     });
 
     it("Preserve writes a source with no extension as TIFF", () => {
-        expect(extensionFor(record("/photos/shot"), "preserve")).toBe("tiff");
+        expect(extensionFor(record("/photos/shot"), "preserve", EXPORT_FORMATS)).toBe("tiff");
     });
 
     it.each([
@@ -61,8 +63,8 @@ describe("formatFor and extensionFor", () => {
         ["tiff", "tiff"],
         ["webp", "webp"],
     ] as const)("a chosen %s writes its own format with the extension %s, whatever the source", (choice, extension) => {
-        expect(formatFor(record("/photos/shot.nef"), choice)).toBe(choice);
-        expect(extensionFor(record("/photos/shot.nef"), choice)).toBe(extension);
+        expect(formatFor(record("/photos/shot.nef"), choice, EXPORT_FORMATS)).toBe(choice);
+        expect(extensionFor(record("/photos/shot.nef"), choice, EXPORT_FORMATS)).toBe(extension);
     });
 
     it("offers Preserve and the eight formats", () => {
@@ -74,33 +76,40 @@ describe("destinationFor", () => {
     it("puts the affixes around the name and writes into the source's directory", () => {
         const choices = { prefix: "new-", suffix: "-opai" };
 
-        expect(exportNameFor(record("/photos/beach.jpg"), choices, "webp")).toBe("new-beach-opai.webp");
-        expect(destinationFor(record("/photos/beach.jpg"), choices, "webp")).toBe("/photos/new-beach-opai.webp");
+        expect(exportNameFor(record("/photos/beach.jpg"), choices, "webp", EXPORT_FORMATS)).toBe("new-beach-opai.webp");
+        expect(destinationFor(record("/photos/beach.jpg"), choices, "webp", EXPORT_FORMATS)).toBe(
+            "/photos/new-beach-opai.webp",
+        );
     });
 
     it("keeps a Windows path in backslashes", () => {
-        expect(destinationFor(record("C:\\Users\\someone\\beach.JPG"), unaffixed, "png")).toBe(
+        expect(destinationFor(record("C:\\Users\\someone\\beach.JPG"), unaffixed, "png", EXPORT_FORMATS)).toBe(
             "C:\\Users\\someone\\beach.png",
         );
     });
 
     it("cuts only the extension from a name with dots in it", () => {
-        expect(destinationFor(record("/photos/2026.09.24 beach.jpg"), unaffixed, "preserve")).toBe(
+        expect(destinationFor(record("/photos/2026.09.24 beach.jpg"), unaffixed, "preserve", EXPORT_FORMATS)).toBe(
             "/photos/2026.09.24 beach.jpg",
         );
     });
 
     it("writes into a browsed folder instead", () => {
-        expect(destinationFor(record("/photos/beach.jpg"), { ...unaffixed, location: "/exports" }, "png")).toBe(
-            "/exports/beach.png",
-        );
-        expect(destinationFor(record("/photos/beach.jpg"), { ...unaffixed, location: "D:\\Exports\\" }, "png")).toBe(
-            "D:\\Exports\\beach.png",
-        );
+        expect(
+            destinationFor(record("/photos/beach.jpg"), { ...unaffixed, location: "/exports" }, "png", EXPORT_FORMATS),
+        ).toBe("/exports/beach.png");
+        expect(
+            destinationFor(
+                record("/photos/beach.jpg"),
+                { ...unaffixed, location: "D:\\Exports\\" },
+                "png",
+                EXPORT_FORMATS,
+            ),
+        ).toBe("D:\\Exports\\beach.png");
     });
 
     it("writes a file at the root into the root", () => {
-        expect(destinationFor(record("/beach.jpg"), unaffixed, "png")).toBe("/beach.png");
+        expect(destinationFor(record("/beach.jpg"), unaffixed, "png", EXPORT_FORMATS)).toBe("/beach.png");
     });
 });
 
@@ -116,8 +125,8 @@ describe("directoryOf", () => {
 });
 
 describe("groupByChain", () => {
-    const upscale: Operation = { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 };
-    const bigger: Operation = { ...upscale, scale: 4 };
+    const upscale: Operation = { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } };
+    const bigger: Operation = { ...upscale, parameters: { scale: 4 } };
     const denoise = { family: "denoise", codename: "stockholm", precision: "fp32" } as Operation;
 
     it("puts stacks running the same families together, groups in the order of their first member", () => {
@@ -146,22 +155,43 @@ describe("groupByChain", () => {
     });
 });
 
-describe("queueQualityFormat", () => {
+describe("qualityFor", () => {
+    it("is the written format's published range, for a format that takes one", () => {
+        expect(qualityFor(record("/a.png"), "jpeg", EXPORT_FORMATS)).toEqual({
+            format: "jpeg",
+            range: { min: 1, max: 100, default: 90 },
+        });
+        expect(qualityFor(record("/a.jpg"), "png", EXPORT_FORMATS)).toBeUndefined();
+    });
+
+    it("reads which formats take one off what Rust publishes, naming none of its own", () => {
+        const noneLossy = {
+            ...EXPORT_FORMATS,
+            formats: EXPORT_FORMATS.formats.map((format) => ({ ...format, quality: null })),
+        };
+
+        expect(qualityFor(record("/a.jpg"), "jpeg", noneLossy)).toBeUndefined();
+    });
+});
+
+describe("queueQualityFor", () => {
     it("is the one lossy format a uniform queue is written in", () => {
-        expect(queueQualityFormat([record("/a.png"), record("/b.nef")], "webp")).toBe("webp");
-        expect(queueQualityFormat([record("/a.jpg"), record("/b.jpeg")], "preserve")).toBe("jpeg");
-        expect(queueQualityFormat([record("/a.heic"), record("/b.heif")], "preserve")).toBe("heic");
+        expect(queueQualityFor([record("/a.png"), record("/b.nef")], "webp", EXPORT_FORMATS)?.format).toBe("webp");
+        expect(queueQualityFor([record("/a.jpg"), record("/b.jpeg")], "preserve", EXPORT_FORMATS)?.format).toBe("jpeg");
+        expect(queueQualityFor([record("/a.heic"), record("/b.heif")], "preserve", EXPORT_FORMATS)?.format).toBe(
+            "heic",
+        );
     });
 
     it("is nothing for a mixed Preserve", () => {
-        expect(queueQualityFormat([record("/a.jpg"), record("/b.png")], "preserve")).toBeUndefined();
-        expect(queueQualityFormat([record("/a.jpg"), record("/b.webp")], "preserve")).toBeUndefined();
+        expect(queueQualityFor([record("/a.jpg"), record("/b.png")], "preserve", EXPORT_FORMATS)).toBeUndefined();
+        expect(queueQualityFor([record("/a.jpg"), record("/b.webp")], "preserve", EXPORT_FORMATS)).toBeUndefined();
     });
 
     it("is nothing for a lossless format, and for an empty queue", () => {
-        expect(queueQualityFormat([record("/a.jpg")], "png")).toBeUndefined();
-        expect(queueQualityFormat([record("/a.nef")], "preserve")).toBeUndefined();
-        expect(queueQualityFormat([], "jpeg")).toBeUndefined();
+        expect(queueQualityFor([record("/a.jpg")], "png", EXPORT_FORMATS)).toBeUndefined();
+        expect(queueQualityFor([record("/a.nef")], "preserve", EXPORT_FORMATS)).toBeUndefined();
+        expect(queueQualityFor([], "jpeg", EXPORT_FORMATS)).toBeUndefined();
     });
 });
 

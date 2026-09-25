@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { Family } from "@/ipc/catalogue";
 import { type Operation, releaseAllEnhanced, releaseEnhanced } from "@/ipc/enhance";
-import { ENHANCEMENTS } from "@/lib/enhancements";
 import { report } from "@/lib/report";
 import { registerFileOwner } from "@/stores/files";
 
@@ -39,8 +39,8 @@ type EnhancementStore = {
     setAutopilot: (enable: boolean) => void;
     toggle: () => void;
 
-    addEnhancement: (path: string, operation: Operation) => void;
-    addEnhancements: (path: string, operations: Operation[]) => void;
+    addEnhancement: (path: string, operation: Operation, order: readonly Family[]) => void;
+    addEnhancements: (path: string, operations: Operation[], order: readonly Family[]) => void;
     replaceEnhancement: (path: string, operation: Operation) => void;
     removeEnhancement: (path: string, family: Operation["family"]) => void;
 
@@ -49,15 +49,25 @@ type EnhancementStore = {
 };
 
 /**
- * Where a family sits in the order enhancements are applied, which is the order
- * {@link ENHANCEMENTS} already publishes them in. A family that list does not name sorts last.
+ * `operations` in the order a chain applies them, which is `order` - the library's, read off the
+ * catalogue by `applyOrder` in `lib/enhancements.ts`. A family `order` does not name sorts last, and
+ * operations the order does not tell apart keep the order they were in.
+ *
+ * **The order is handed in by the writer** rather than read here, because it arrives with the catalogue
+ * and both writers already hold it: the add menu builds its operation from the catalogue, and Autopilot
+ * awaits it before building its batch. A store reading the catalogue itself would be a second, hidden
+ * wait on the same answer.
  */
-const pipelineOrder = (operation: Operation) => {
-    const index = ENHANCEMENTS.findIndex((entry) => entry.family === operation.family);
+const inApplyOrder = (operations: Operation[], order: readonly Family[]) => {
+    const position = (operation: Operation) => {
+        const index = order.indexOf(operation.family);
 
-    // Last rather than first: an unknown family cannot arrive from the menu, and putting an unknown
-    // operation at the head of a chain would change what every operation after it sees.
-    return index < 0 ? ENHANCEMENTS.length : index;
+        // Last rather than first: an unknown family cannot arrive from the menu, and putting an unknown
+        // operation at the head of a chain would change what every operation after it sees.
+        return index < 0 ? order.length : index;
+    };
+
+    return operations.sort((left, right) => position(left) - position(right));
 };
 
 // Every writer replaces the Map rather than mutating it: see `setTransform` in `stores/transform.ts`.
@@ -79,22 +89,20 @@ export const useEnhancementStore = create<EnhancementStore>()(
 
             toggle: () => set((state) => ({ autopilot: !state.autopilot })),
 
-            /** Appends an enhancement to one image's stack and puts the stack back in pipeline order. */
-            addEnhancement: (path: string, operation: Operation) =>
+            /** Appends an enhancement to one image's stack and puts the stack back in `order`, the chain's own. */
+            addEnhancement: (path: string, operation: Operation, order: readonly Family[]) =>
                 set((state) => {
                     // Ordered on the way in rather than on the way out, as the reference does it: the
                     // chain that is sent and the list that is drawn are the same array, so there is no
                     // second place for the two to disagree about what order the operations run in.
-                    const next = [...(state.enhancements.get(path) ?? []), operation].sort(
-                        (left, right) => pipelineOrder(left) - pipelineOrder(right),
-                    );
+                    const next = inApplyOrder([...(state.enhancements.get(path) ?? []), operation], order);
 
                     return { enhancements: new Map(state.enhancements).set(path, next) };
                 }),
 
             /**
              * Adds a batch of enhancements to one image's stack in **one write**, leaving out any family the stack
-             * already carries, and puts the stack back in pipeline order.
+             * already carries, and puts the stack back in `order`, the chain's own.
              *
              * Autopilot's writer. One write rather than one {@link EnhancementStore.addEnhancement} per operation,
              * because the run effect keys on the stack array: N writes would start a run on the first suggestion,
@@ -103,14 +111,15 @@ export const useEnhancementStore = create<EnhancementStore>()(
              * **The key is written even for an empty batch**, which is what makes an analysis that answered
              * "nothing" mean "analysed": the photograph now has a list, so it is not analysed again.
              */
-            addEnhancements: (path: string, operations: Operation[]) =>
+            addEnhancements: (path: string, operations: Operation[], order: readonly Family[]) =>
                 set((state) => {
                     // An enhancement already there - one the user added by hand while the analysis ran - is kept
                     // as it is: the store holds one entry per family, and the user's is the later word.
                     const current = state.enhancements.get(path) ?? [];
                     const present = new Set(current.map((operation) => operation.family));
-                    const next = [...current, ...operations.filter((operation) => !present.has(operation.family))].sort(
-                        (left, right) => pipelineOrder(left) - pipelineOrder(right),
+                    const next = inApplyOrder(
+                        [...current, ...operations.filter((operation) => !present.has(operation.family))],
+                        order,
                     );
 
                     return { enhancements: new Map(state.enhancements).set(path, next) };

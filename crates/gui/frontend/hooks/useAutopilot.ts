@@ -4,18 +4,15 @@ import { familyEntry } from "@/hooks/useCatalogue";
 import i18n from "@/i18n";
 import { type Suggestion, suggest } from "@/ipc/autopilot";
 import { catalogue } from "@/ipc/catalogue";
-import type { CropInfo } from "@/ipc/crop";
+import { type CropInfo, cropKey } from "@/ipc/crop";
 import type { Operation } from "@/ipc/enhance";
-import { detectFaces } from "@/ipc/faces";
 import type { ImageRecord } from "@/ipc/images";
-import { familiesWhere, suggestedOperation } from "@/lib/enhancements";
-import { noFaceToRestore } from "@/lib/faces";
+import { applyOrder, familiesWhere, suggestedOperation } from "@/lib/enhancements";
 import { track } from "@/lib/faro";
 import { report } from "@/lib/report";
 import { useAutopilotStore } from "@/stores/autopilot";
 import { useImageCrop } from "@/stores/crop";
 import { useEnhancementStore } from "@/stores/enhancements";
-import { useFacesStore } from "@/stores/faces";
 import { useCurrentFile, useFileStore } from "@/stores/files";
 import { useSettingsStore } from "@/stores/settings";
 
@@ -41,13 +38,7 @@ export type AnalysisOutcome = "added" | "stopped" | { failed: unknown };
  *       |
  *       +-- stopped   -> nothing
  *       +-- rejects   -> notice (errors.autopilotFailed), decline if current
- *       +-- answers   -> ours()?
- *              |
- *              +-- face recovery among them -> detectFaces(identity, processor, crop) -> ours()?
- *              |        +-- answers -> setFaces(identity, crop, faces); drop it if noFaceToRestore
- *              |        +-- rejects -> keep it, record nothing
- *              |
- *              +-- catalogue() -> ours()? -> addEnhancements(path, operations)
+ *       +-- answers   -> ours()? -> catalogue() -> ours()? -> addEnhancements(path, operations)
  *   finally: end(path, run)
  * ```
  *
@@ -62,11 +53,10 @@ export type AnalysisOutcome = "added" | "stopped" | { failed: unknown };
  * which the photograph has neither a stack nor an analysis, and the trigger would start a second one. `end` runs
  * on every exit through the `finally`, and is a no-op where a stop already removed the entry.
  *
- * **The follow-up detection is Autopilot's, not the canvas's.** The analysis just ran the same detection at the
- * same precision on the same framed identity, so it is a run-store hit. Its progress reports carry a run name
- * `useEnhancementRun` never minted, so the canvas indicator ignores them; the analysing row stays up through it,
- * because the entry does. The faces are recorded whether or not the suggestion survives, so the run that follows
- * - or a face recovery the user adds later at this framing - does not detect again.
+ * **No follow-up detection.** A face-recovery suggestion already means a face the recovery can restore: the
+ * backend suggests one only where `opai`'s `Face::restorable` holds for at least one face - the rule a
+ * run keeps a face by when nobody chose (`isKept` in `lib/faces.ts`). The faces themselves are found by
+ * the run that follows, from the run store the analysis just warmed.
  *
  * A photograph with no identity cannot be analysed and is never asked about; it answers a failure with no cause.
  *
@@ -97,28 +87,8 @@ export const analyse = async (
     const ours = () => useAutopilotStore.getState().analysing.get(path)?.run === run;
 
     try {
-        let suggestions: Suggestion[] = await done;
+        const suggestions: Suggestion[] = await done;
         if (!ours()) return "stopped";
-
-        if (suggestions.some((suggestion) => suggestion.family === "face_recovery")) {
-            try {
-                const faces = await detectFaces(identity, processor, crop).done;
-                if (!ours()) return "stopped";
-
-                // The crop reference `begin` captured, which `ours()` guarantees is still the crop store's
-                // current one - so `useImageFaces` matches it.
-                useFacesStore.getState().setFaces(identity, crop, faces);
-
-                if (noFaceToRestore(faces)) {
-                    suggestions = suggestions.filter((suggestion) => suggestion.family !== "face_recovery");
-                }
-            } catch (error) {
-                // The suggestion is kept and nothing is recorded: the run path then detects when it runs, and
-                // reports its own failure there, as it does for a face recovery added by hand.
-                report("detecting the faces for an Autopilot suggestion failed", error);
-                if (!ours()) return "stopped";
-            }
-        }
 
         const entries = await catalogue();
         if (!ours()) return "stopped";
@@ -126,16 +96,11 @@ export const analyse = async (
         const { models } = useSettingsStore.getState();
         const operations = suggestions
             .map((suggestion) =>
-                suggestedOperation(
-                    suggestion,
-                    familyEntry(entries, suggestion.family),
-                    models[suggestion.family],
-                    file,
-                ),
+                suggestedOperation(suggestion, familyEntry(entries, suggestion.family), models[suggestion.family]),
             )
             .filter((operation): operation is Operation => operation !== undefined);
 
-        useEnhancementStore.getState().addEnhancements(path, operations);
+        useEnhancementStore.getState().addEnhancements(path, operations, applyOrder(entries));
 
         // The user's analysis only: an export's own is not a decision anyone made about this photograph.
         if (notify) {
@@ -244,8 +209,8 @@ export const useAutopilot = () => {
         // Ahead of the stack check: a stack added to by hand during the analysis does not exempt it from the
         // reframe stop, or its answer would land measured on a framing that is gone.
         if (inFlight) {
-            // By reference, as every other reader of the crop store compares it.
-            if (inFlight.crop === crop) return;
+            // By value, as every other reader of the crop store compares it.
+            if (cropKey(inFlight.crop) === cropKey(crop)) return;
 
             store.stop(file.path);
         }

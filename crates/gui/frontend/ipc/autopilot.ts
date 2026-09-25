@@ -8,6 +8,7 @@ import { call } from "./invoke";
 // half, and `generate_handler![]` the Rust one by refusing to compile against a function that does not exist.
 const SUGGEST_COMMAND = "suggest";
 const CANCEL_SUGGEST_COMMAND = "cancel_suggest";
+const SUGGESTED_SCALE_COMMAND = "suggested_scale";
 
 /**
  * One enhancement an analysis concluded a photograph calls for, as Rust's `SuggestionWire` serializes it.
@@ -74,3 +75,16 @@ export const suggest = (source: string, processor: Processor, families: Family[]
  * Resolves whatever happened; there is no outcome to act on.
  */
 export const cancelSuggest = (run: string) => call<void>(CANCEL_SUGGEST_COMMAND, { run });
+
+/**
+ * The scale a newly added upscale starts at, for a photograph framed to `width` x `height`.
+ *
+ * **The library's ladder, not this side's**: `opai::suggested_scale`, the same one an analysis suggests an upscale
+ * by, with 1x where the photograph is already big enough. Asked rather than restated, so the add menu and Autopilot
+ * cannot come to disagree about what one photograph calls for. Ask with the **framed** dimensions - the size that
+ * will actually be upscaled.
+ *
+ * Cannot fail on the Rust side; a rejection is the bridge itself going away.
+ */
+export const suggestedScale = (width: number, height: number) =>
+    call<number>(SUGGESTED_SCALE_COMMAND, { width, height });

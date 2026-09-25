@@ -135,12 +135,14 @@ describe("SidebarMiniature", () => {
                 { x: 700, y: 650 },
             ],
             confidence: 0.9,
+            restorable: true,
+            key: "500,400,800,700",
         };
 
         openFiles(HOLIDAY);
         act(() => {
             useFacesStore.getState().setFaces(identity, undefined, [face]);
-            useFacesStore.getState().setSkippedFaces(identity, new Set([faceKey(face)]));
+            useFacesStore.getState().setFaceChoice(identity, { skipped: [faceKey(face)], restored: [] });
         });
 
         render(<SidebarMiniature />);

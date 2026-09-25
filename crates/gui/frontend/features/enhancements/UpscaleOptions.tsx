@@ -1,7 +1,14 @@
 import { Separator } from "@/components/ui/separator";
-import type { FamilyEntry, ParameterEntry } from "@/ipc/catalogue";
+import type { FamilyEntry } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
-import { type Enhancement, modelValue, optionFor } from "@/lib/enhancements";
+import {
+    type Enhancement,
+    modelValue,
+    parameterOf,
+    publishedRange,
+    withModel,
+    withParameter,
+} from "@/lib/enhancements";
 import { ModelTray } from "./ModelTray";
 import { ScaleControl } from "./ScaleControl";
 
@@ -18,7 +25,7 @@ type UpscaleOptionsProps = {
     /** The enhancement this panel is open over, which every control here reports and writes. */
     enhancement: Enhancement;
     /** The upscale itself, as the stack carries it. */
-    operation: Extract<Operation, { family: "upscale" }>;
+    operation: Operation;
     /** What the catalogue publishes for upscale: its models, their precisions and their bounds. */
     entry: FamilyEntry | undefined;
     /** Writes the enhancement back to the stack, which is what re-runs the preview. */
@@ -37,28 +44,13 @@ type UpscaleOptionsProps = {
 export const UpscaleOptions = ({ enhancement, operation, entry, onChange }: UpscaleOptionsProps) => {
     const value = modelValue(operation);
 
-    // The selected model's rather than the family's, because `VariantEntry.parameters` is per model:
-    // two models of one family may disagree, and a control built from a family-wide list would offer
-    // one of them a value its sibling refuses.
-    const variant = entry?.variants.find((published) => published.codename === operation.codename);
-    // The predicate narrows as well as finds: `ParameterEntry` is a union, and the bounds only
-    // exist on the `range` arm.
-    const range = variant?.parameters.find(
-        (parameter): parameter is ParameterEntry & { kind: "range" } =>
-            parameter.name === SCALE_PARAMETER && parameter.kind === "range",
-    );
+    // The selected model's rather than the family's - see `publishedRange`.
+    const range = publishedRange(entry, operation.codename, SCALE_PARAMETER);
 
-    /*
-     * A chosen model is resolved to the option it names rather than parsed: the option carries both
-     * halves as fields, so nothing here knows how the value is composed. One the catalogue no longer
-     * publishes resolves to nothing and is ignored, which leaves the enhancement on the model it is
-     * already running.
-     */
+    // Resolved rather than parsed - see `withModel`.
     const chooseModel = (chosen: string) => {
-        const option = optionFor(entry, chosen);
-        if (!option) return;
-
-        onChange({ ...operation, codename: option.codename, precision: option.precision });
+        const updated = withModel(operation, entry, chosen);
+        if (updated) onChange(updated);
     };
 
     return (
@@ -68,9 +60,10 @@ export const UpscaleOptions = ({ enhancement, operation, entry, onChange }: Upsc
             <Separator />
 
             <ScaleControl
-                value={operation.scale}
+                // 1x where neither the operation nor the catalogue knows a scale: a factor that changes nothing.
+                value={parameterOf(operation, entry, SCALE_PARAMETER) ?? 1}
                 {...(range && { min: range.min, max: range.max })}
-                onChange={(scale) => onChange({ ...operation, scale })}
+                onChange={(scale) => onChange(withParameter(operation, SCALE_PARAMETER, scale))}
             />
         </>
     );

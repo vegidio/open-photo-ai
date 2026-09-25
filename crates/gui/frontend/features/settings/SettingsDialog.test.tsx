@@ -6,14 +6,20 @@ import "@/i18n";
 import i18n from "@/i18n";
 import { forgetCatalogue } from "@/ipc/catalogue";
 import { track } from "@/lib/faro";
-import { DEFAULT_QUALITY, type SettingsData, settingsData, useSettingsStore } from "@/stores/settings";
+import { type SettingsData, settingsData, useSettingsStore } from "@/stores/settings";
 import { useSetupStore } from "@/stores/setup";
-import { CATALOGUE, PROVIDERS, render, resetSetupStore } from "@/test/support";
+import { CATALOGUE, PROVIDERS, PUBLISHED_QUALITY, render, resetSetupStore } from "@/test/support";
 import { useDraftState } from "./draft.tsx";
 import { SettingsDialog } from "./SettingsDialog.tsx";
 import { changedSettings, useSettingsDialog } from "./useSettingsDialog.ts";
 
 // Mocked at `lib/faro.ts`'s own boundary: what `track` does with an event is pinned by `faro.test.ts`.
+// Rust's format table, answered at once: the hook's own fetch is pinned by `ipc/export.test.ts`.
+vi.mock("@/hooks/useExportFormats", async () => {
+    const { EXPORT_FORMATS } = await import("@/test/support");
+
+    return { useExportFormats: () => EXPORT_FORMATS };
+});
 vi.mock("@/lib/faro", () => ({
     track: vi.fn(),
     sendError: vi.fn(),
@@ -253,8 +259,9 @@ describe("drafts, Cancel and Save", () => {
             language: "en",
             processor: "auto",
             models: {},
-            quality: { jpeg: 90 },
         });
+        // No format was ever moved, so none has a quality of its own: each is at the default Rust publishes.
+        expect(useSettingsStore.getState().quality).toEqual({});
         // Unchanged throughout: the draft was never applied, so there was nothing to take back.
         expect(i18n.resolvedLanguage).toBe("en");
     });
@@ -421,7 +428,7 @@ describe("Reset to defaults", () => {
         useSettingsStore.setState({
             models: { upscale: "kyoto_fp16", denoise: "gothenburg_fp16" },
             autopilotExcluded: ["colorization", "sharpen"],
-            quality: { ...DEFAULT_QUALITY, jpeg: 42 },
+            quality: { ...PUBLISHED_QUALITY, jpeg: 42 },
         });
         await openSurface();
 

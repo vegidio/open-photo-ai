@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use super::profile::{EpProfile, ExecutionMode};
-use super::{ExecutionProvider, SupportedProviders};
+use super::{Accelerator, ExecutionProvider, SupportedProviders};
 
 // A property of the providers rather than of the operating system, which is why there is no per-platform table
 // anywhere in this crate: CoreML is already unsupported off macOS and the two NVIDIA providers are unsupported until
@@ -19,9 +19,8 @@ use super::{ExecutionProvider, SupportedProviders};
 //
 // The CPU is deliberately absent, as it is in the reference implementation's chains. It takes no configuration, and it
 // is what the runtime falls back to on its own once every provider above it has declined a node.
-/// The order [`ExecutionProvider::Auto`] prefers providers in, best first.
-const AUTO_ORDER: [ExecutionProvider; 3] =
-    [ExecutionProvider::TensorRt, ExecutionProvider::Cuda, ExecutionProvider::CoreMl];
+/// The order [`ExecutionProvider::Auto`] prefers accelerators in, best first.
+const AUTO_ORDER: [Accelerator; 3] = [Accelerator::TensorRt, Accelerator::Cuda, Accelerator::CoreMl];
 
 /// What a request resolved to on this machine: which providers to attach, in order, and what was asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,9 +40,10 @@ pub(crate) struct ChainResolution {
     /// Not a promise that the provider builds: one that attaches can still decline the graph at session-build time,
     /// and the runtime falls through to the next in [`attach`](Self::attach) and ultimately to the CPU when it does.
     pub(crate) resolved: ExecutionProvider,
-    /// The providers to attach, in attach order. Empty means a CPU run, and never contains
-    /// [`ExecutionProvider::Cpu`] or [`ExecutionProvider::Auto`], neither of which is something a session attaches.
-    pub(crate) attach: Vec<ExecutionProvider>,
+    /// The accelerators to attach, in attach order. Empty means a CPU run. An [`Accelerator`] rather than an
+    /// [`ExecutionProvider`], so neither the request (`Auto`) nor the CPU — neither of which is something a session
+    /// attaches — can be put here at all.
+    pub(crate) attach: Vec<Accelerator>,
 }
 
 /// What `requested` resolves to on a machine reporting `supported`.
@@ -55,28 +55,30 @@ pub(crate) struct ChainResolution {
 ///   `Auto` chain — asking for CUDA on a machine that also has TensorRT means CUDA.
 /// - Anything else is a CPU run carrying what was asked for, rather than a failure.
 pub(crate) fn resolve_chain(requested: ExecutionProvider, supported: SupportedProviders) -> ChainResolution {
-    let attach: Vec<ExecutionProvider> = match requested {
+    let attach: Vec<Accelerator> = match requested {
         // Every one rather than only the best, so that TensorRT declining the graph at session-build time leaves CUDA
         // to run it instead of dropping the run to the CPU.
-        ExecutionProvider::Auto => AUTO_ORDER.into_iter().filter(|&provider| supported.supports(provider)).collect(),
-        // The CPU attaches nothing and is configured with nothing. It is not absent from the run — it is what runs
-        // the graph — but there is no provider to append for it and no options to produce.
-        ExecutionProvider::Cpu => Vec::new(),
-        named if supported.supports(named) => vec![named],
-        // The downgrade. Nothing is attached, and `resolved` below reports the CPU beside the request. A settings file
-        // written on another machine, or before a driver was removed, costs speed rather than the run.
+        ExecutionProvider::Auto => {
+            AUTO_ORDER.into_iter().filter(|&accelerator| supported.offers(accelerator)).collect()
+        }
+        // Anything else attaches at most the one accelerator it names, where this machine offers it.
         //
-        // This unifies two outcomes the reference implementation keeps apart, and neither of its answers is right: a
-        // provider absent from the platform's chain (CoreML on Linux) fails the run outright, while one present but
-        // uninstalled is attached anyway, declines natively, and is logged at Warn, which a user sees only as the app
-        // getting slow. Both are the same fact, so both get the same answer here: this machine cannot serve it, the
-        // run is a CPU run, and the resolution says so.
-        _ => Vec::new(),
+        // The CPU names none: it attaches nothing and is configured with nothing. It is not absent from the run — it is
+        // what runs the graph — but there is nothing to append for it and no options to produce.
+        //
+        // An accelerator this machine does not offer is the downgrade. Nothing is attached, and `resolved` below
+        // reports the CPU beside the request. A settings file written on another machine, or before a driver was
+        // removed, costs speed rather than the run. This unifies two outcomes the reference implementation keeps
+        // apart, and neither of its answers is right: a provider absent from the platform's chain (CoreML on Linux)
+        // fails the run outright, while one present but uninstalled is attached anyway, declines natively, and is
+        // logged at Warn, which a user sees only as the app getting slow. Both are the same fact, so both get the same
+        // answer here: this machine cannot serve it, the run is a CPU run, and the resolution says so.
+        named => named.accelerator().filter(|&accelerator| supported.offers(accelerator)).into_iter().collect(),
     };
 
     // The resolved provider is the first one that will be tried, or the CPU when there is none — so the two fields
     // cannot disagree with the list they describe.
-    let resolved = attach.first().copied().unwrap_or(ExecutionProvider::Cpu);
+    let resolved = attach.first().map_or(ExecutionProvider::Cpu, |&accelerator| accelerator.into());
 
     ChainResolution { requested, resolved, attach }
 }
@@ -108,8 +110,8 @@ pub(crate) struct CachePaths {
 pub(crate) struct ProviderOptions {
     // The runtime's own spelling is what makes a row here comparable line for line with the provider's documentation,
     // with the reference implementation's measured table, and with a runtime log line.
-    /// Which provider these configure. Never [`ExecutionProvider::Auto`] or [`ExecutionProvider::Cpu`].
-    pub(crate) provider: ExecutionProvider,
+    /// Which accelerator these configure.
+    pub(crate) provider: Accelerator,
     // A `BTreeMap` rather than a `HashMap` so a test can compare a whole map by equality and a failure prints in a
     // stable order.
     /// The options, by ONNX Runtime's own key.
@@ -304,13 +306,9 @@ pub(crate) fn resolve(
         .into_iter()
         .map(|provider| {
             let options = match provider {
-                ExecutionProvider::TensorRt => tensorrt_options(paths, profile),
-                ExecutionProvider::Cuda => cuda_options(profile),
-                ExecutionProvider::CoreMl => coreml_options(paths, profile),
-                // Unreachable by construction: `resolve_chain` never puts either in the attach list, because neither
-                // is something a session attaches. Answered with an empty map rather than a panic, so a sixth
-                // provider added to the chain and left out of this match costs its options rather than the process.
-                ExecutionProvider::Auto | ExecutionProvider::Cpu => BTreeMap::new(),
+                Accelerator::TensorRt => tensorrt_options(paths, profile),
+                Accelerator::Cuda => cuda_options(profile),
+                Accelerator::CoreMl => coreml_options(paths, profile),
             };
 
             ProviderOptions { provider, options }
@@ -342,7 +340,7 @@ mod tests {
     fn auto_on_a_machine_with_the_nvidia_libraries_attaches_tensorrt_before_cuda() {
         let resolution = resolve_chain(ExecutionProvider::Auto, nvidia());
 
-        assert_eq!(resolution.attach, vec![ExecutionProvider::TensorRt, ExecutionProvider::Cuda]);
+        assert_eq!(resolution.attach, vec![Accelerator::TensorRt, Accelerator::Cuda]);
         // Both are attached rather than only the best one, so that TensorRT declining the graph at session-build
         // time leaves CUDA to run it instead of dropping the run to the CPU.
         assert_eq!(resolution.resolved, ExecutionProvider::TensorRt);
@@ -352,7 +350,7 @@ mod tests {
     fn auto_on_a_mac_attaches_coreml_alone() {
         let resolution = resolve_chain(ExecutionProvider::Auto, mac());
 
-        assert_eq!(resolution.attach, vec![ExecutionProvider::CoreMl]);
+        assert_eq!(resolution.attach, vec![Accelerator::CoreMl]);
         assert_eq!(resolution.resolved, ExecutionProvider::CoreMl);
     }
 
@@ -366,27 +364,12 @@ mod tests {
     }
 
     #[test]
-    fn auto_never_offers_the_cpu_as_something_to_attach() {
-        // The CPU takes no configuration and is what the runtime falls back to on its own; putting it in the chain
-        // would mean producing options for a provider that has none. `Auto` is likewise not something to attach.
-        for machine in [nvidia(), mac(), machine_supporting(true, true, true), no_accelerator()] {
-            let resolution = resolve_chain(ExecutionProvider::Auto, machine);
-
-            assert!(!resolution.attach.contains(&ExecutionProvider::Cpu), "{machine:?}");
-            assert!(!resolution.attach.contains(&ExecutionProvider::Auto), "{machine:?}");
-        }
-    }
-
-    #[test]
     fn auto_follows_one_preference_order_rather_than_the_platform() {
         // What makes the per-platform table unnecessary: the order is fixed, and every machine's chain is that order
         // with the unsupported providers removed. A machine claiming everything shows the order whole.
         let resolution = resolve_chain(ExecutionProvider::Auto, machine_supporting(true, true, true));
 
-        assert_eq!(
-            resolution.attach,
-            vec![ExecutionProvider::TensorRt, ExecutionProvider::Cuda, ExecutionProvider::CoreMl]
-        );
+        assert_eq!(resolution.attach, vec![Accelerator::TensorRt, Accelerator::Cuda, Accelerator::CoreMl]);
     }
 
     #[test]
@@ -395,9 +378,9 @@ mod tests {
         // become the `Auto` chain, or the choice would have no effect on the machines where it matters most.
         let resolution = resolve_chain(ExecutionProvider::Cuda, nvidia());
 
-        assert_eq!(resolution.attach, vec![ExecutionProvider::Cuda]);
+        assert_eq!(resolution.attach, vec![Accelerator::Cuda]);
         assert!(
-            !resolution.attach.contains(&ExecutionProvider::TensorRt),
+            !resolution.attach.contains(&Accelerator::TensorRt),
             "an explicit CUDA request attached TensorRT"
         );
         assert_eq!(resolution.resolved, ExecutionProvider::Cuda);
@@ -413,7 +396,7 @@ mod tests {
         ] {
             let resolution = resolve_chain(provider, machine);
 
-            assert_eq!(resolution.attach, vec![provider]);
+            assert_eq!(resolution.attach, provider.accelerator().into_iter().collect::<Vec<_>>());
             assert_eq!(resolution.resolved, provider);
         }
     }
@@ -482,7 +465,7 @@ mod tests {
 
                 assert_eq!(
                     resolution.resolved,
-                    resolution.attach.first().copied().unwrap_or(ExecutionProvider::Cpu),
+                    resolution.attach.first().map_or(ExecutionProvider::Cpu, |&accelerator| accelerator.into()),
                     "{provider} on {machine:?}"
                 );
             }
@@ -854,8 +837,8 @@ mod tests {
         let plan =
             resolve(ExecutionProvider::Auto, machine_supporting(false, true, true), &EpProfile::default(), &paths());
 
-        let attached: Vec<ExecutionProvider> = plan.providers.iter().map(|entry| entry.provider).collect();
-        assert_eq!(attached, vec![ExecutionProvider::TensorRt, ExecutionProvider::Cuda]);
+        let attached: Vec<Accelerator> = plan.providers.iter().map(|entry| entry.provider).collect();
+        assert_eq!(attached, vec![Accelerator::TensorRt, Accelerator::Cuda]);
 
         // Each carries its own provider's keys rather than a shared map: TensorRT's cache paths are not CUDA's
         // business, and one option update rejected wholesale is what a misplaced key costs.

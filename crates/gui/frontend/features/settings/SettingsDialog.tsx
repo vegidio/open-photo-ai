@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DialogTitleBar } from "@/components/ui/dialog-title-bar";
 import { type SettingsData, settingsDefaults } from "@/stores/settings";
-import { SettingsDraftProvider, type useDraftState } from "./draft.tsx";
+import { type SettingsDraft, SettingsDraftProvider } from "./draft.tsx";
 import { EnhancementsPage } from "./EnhancementsPage.tsx";
 import { ExportPage } from "./ExportPage.tsx";
 import { GeneralPage } from "./GeneralPage.tsx";
@@ -97,8 +97,6 @@ const SettingsSurface = ({ close, draft }: { close: (save: boolean) => void; dra
         </div>
     );
 };
-
-type SettingsDraft = ReturnType<typeof useDraftState>["draft"];
 
 /**
  * Screens 16, 16b, 16c and 16d: the application's settings, as four pages shown one at a time.

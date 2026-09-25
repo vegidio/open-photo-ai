@@ -5,7 +5,8 @@
 //! 255/100 and offsets a/b by 128. That encoding renders a plausible photograph and raises no error, which is why the
 //! first test in this module pins OpenCV's own values.
 //!
-//! The sRGB transfer is here only because Lab needs it.
+//! The sRGB transfer is here because Lab needs it. Its decoding half is also what the autopilot's colour signal
+//! linearises with, so there is one definition of the curve for both rather than two that could drift apart.
 //!
 //! # The fast paths
 //!
@@ -51,7 +52,7 @@ fn f_inv(ft: f64) -> f64 {
 }
 
 /// Removes the sRGB gamma from a `[0, 1]` channel.
-fn srgb_to_linear(c: f64) -> f64 {
+pub(crate) fn srgb_to_linear(c: f64) -> f64 {
     if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
 }
 

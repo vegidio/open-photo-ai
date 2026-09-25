@@ -34,9 +34,9 @@ const AnalysingRow = () => {
 export const EnhancementList = () => {
     const file = useCurrentFile();
     const families = useCatalogue();
-    // The order is the store's: it puts a stack back into pipeline order as each enhancement is added,
-    // so the list drawn here and the chain that is sent are the same array rather than two orderings
-    // that could disagree.
+    // The order is the store's: it puts a stack back into the library's apply order - published on the
+    // catalogue - as each enhancement is added, so the list drawn here and the chain that runs are the same
+    // order rather than two orderings that could disagree.
     const stack = useFileEnhancements(file?.path);
     const removeEnhancement = useEnhancementStore((state) => state.removeEnhancement);
     const replaceEnhancement = useEnhancementStore((state) => state.replaceEnhancement);

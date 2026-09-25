@@ -2,7 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
-use rust_sak::image::{ImageError, ImageInfo, RawImageInfo, probe_file, probe_raw_file};
+use rust_sak::crypto::xxh3_bytes;
+use rust_sak::image::{ImageError, ImageInfo, RawFormat, RawImageInfo, probe_file, probe_raw_bytes, probe_raw_file};
 
 use super::error::{self, ImageIoError};
 use super::raw;
@@ -130,7 +131,12 @@ fn probe_raw_at(path: &Path) -> Result<RawImageInfo, ImageIoError> {
     // extension itself.
     raw::route(path)?;
 
-    probe_raw_file(path).map_err(|err| match err {
+    probe_raw_file(path).map_err(|err| raw_error(path, err))
+}
+
+/// The [`ImageIoError`] a RAW probe of `path` that failed with `err` reports.
+fn raw_error(path: &Path, err: ImageError) -> ImageIoError {
+    match err {
         // Kept apart the way `probe_blocking` keeps them apart, and for the same reason: a missing file and a corrupt
         // one are two different things to tell a user, and a caller matching `Read` to mean "the file is gone" has to
         // be right about both probes and the load.
@@ -142,7 +148,60 @@ fn probe_raw_at(path: &Path) -> Result<RawImageInfo, ImageIoError> {
         // Only reachable by probing a path that is not RAW at all. A caller's mistake, passed through as the codec's
         // refusal rather than dressed up as an unsupported RAW format.
         other => ImageIoError::Codec { path: path.to_path_buf(), source: other },
-    })
+    }
+}
+
+/// The identity of the camera RAW file at `path` and its metadata, from **one** read of it, on the calling thread.
+///
+/// [`identity_blocking`](super::identity_blocking) and [`probe_raw_blocking`] each read the whole file, so a listing
+/// that wants both — which is what describing a RAW is — paid for every RAW twice. This reads it once and answers the
+/// same two things: the identity is the value `identity_blocking` answers, and the metadata the value
+/// `probe_raw_blocking` answers, format included.
+///
+/// # Errors
+///
+/// The outer error is the read's: [`ImageIoError::Read`] if the file does not exist or cannot be read, in which case
+/// neither answer exists. Past the read, the two fail independently — a file whose bytes hash but whose metadata will
+/// not parse still has an identity — so the probe's failure is the inner `Result`, and is whatever
+/// [`probe_raw_blocking`] would report for the same bytes.
+pub fn identify_raw_blocking(
+    path: impl AsRef<Path>,
+) -> Result<(String, Result<RawImageInfo, ImageIoError>), ImageIoError> {
+    let path = path.as_ref();
+
+    // The read is accounted as the identity's, which is the unit a listing already records for it.
+    let span = unit_span!("image_identity", path = %path.display());
+    let (bytes, identity) = error::traced(Unit::ImageIdentity, span, || {
+        let bytes = std::fs::read(path)
+            .map_err(ImageIoError::read(path))
+            .inspect_err(error::unreadable("identity", path))?;
+        let identity = xxh3_bytes(&bytes);
+
+        Ok((bytes, identity))
+    })?;
+
+    let span = unit_span!("image_probe_raw", path = %path.display());
+    let info = error::traced(Unit::ImageProbeRaw, span, || {
+        probe_raw_in(path, &bytes).inspect_err(error::unreadable("probe_raw", path))
+    });
+
+    Ok((identity, info))
+}
+
+/// [`identify_raw_blocking`]'s probe, over bytes already read from `path`.
+fn probe_raw_in(path: &Path, bytes: &[u8]) -> Result<RawImageInfo, ImageIoError> {
+    // The same routing decision the path-based probe makes, so the two refuse the same extensions.
+    raw::route(path)?;
+
+    // `probe_raw_file` refuses a name that is no RAW format before it reads anything, and names the format from the
+    // extension — `probe_raw_bytes` cannot tell the TIFF-based formats apart and would answer `None` for them. Both
+    // are reproduced here, so the two probes agree about every path.
+    let format = RawFormat::from_path(path).ok_or_else(|| raw_error(path, ImageError::UnknownExtension))?;
+
+    let mut info = probe_raw_bytes(bytes).map_err(|err| raw_error(path, err))?;
+    info.format = Some(format);
+
+    Ok(info)
 }
 
 #[cfg(test)]
@@ -281,6 +340,52 @@ mod tests {
         // The sensor's depth rather than the developed picture's, which is 16-bit whatever this says. The fixture
         // records 16-bit photosites at a white level of 65535, so the backend has something to derive it from.
         assert_eq!(info.bit_depth, Some(16));
+    }
+
+    #[test]
+    fn identifying_a_raw_file_answers_what_hashing_and_probing_it_separately_do() {
+        let dir = tempdir().expect("a temporary directory");
+        let path = write_fixture(dir.path(), "DSC_0001.dng", &written_dng());
+
+        let (identity, info) = identify_raw_blocking(&path).expect("readable");
+        let info = info.expect("a DNG this crate wrote can be described");
+        let probed = probe_raw_blocking(&path).expect("describable");
+
+        assert_eq!(identity, crate::image::identity_blocking(&path).expect("readable"));
+        assert_eq!(
+            (info.format, info.width, info.height, info.bit_depth, &info.make, &info.model, info.is_dng),
+            (
+                probed.format,
+                probed.width,
+                probed.height,
+                probed.bit_depth,
+                &probed.make,
+                &probed.model,
+                probed.is_dng
+            )
+        );
+    }
+
+    #[test]
+    fn identifying_a_raw_file_fails_the_way_its_two_halves_do() {
+        let dir = tempdir().expect("a temporary directory");
+
+        // Unreadable: neither half exists.
+        let missing = identify_raw_blocking(dir.path().join("never-written.dng")).expect_err("nothing to read");
+        assert!(matches!(missing, ImageIoError::Read { .. }), "expected a read failure, got {missing:?}");
+
+        // Readable and not RAW: the identity survives the probe's failure, which is the probe's own.
+        for (name, bytes) in [("DSC_0001.nef", written_png()), ("holiday.png", written_png())] {
+            let path = write_fixture(dir.path(), name, &bytes);
+            let (identity, info) = identify_raw_blocking(&path).expect("readable");
+
+            assert_eq!(identity, crate::image::identity_blocking(&path).expect("readable"));
+            assert_eq!(
+                std::mem::discriminant(&info.expect_err("not RAW")),
+                std::mem::discriminant(&probe_raw_blocking(&path).expect_err("not RAW")),
+                "{name} failed differently from the path-based probe"
+            );
+        }
     }
 
     #[test]

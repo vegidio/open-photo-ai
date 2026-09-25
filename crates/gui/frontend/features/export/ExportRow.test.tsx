@@ -6,10 +6,16 @@ import { revealExport } from "@/ipc/export";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { type Row, useExportBatchStore } from "@/stores/exportBatch";
 import { useExportSettingsStore } from "@/stores/exportSettings";
-import { HOLIDAY, openFiles, render, resetFileStore, SUNSET } from "@/test/support";
+import { APPLY_ORDER, HOLIDAY, openFiles, render, resetFileStore, SUNSET } from "@/test/support";
 import { ExportQueue } from "./ExportQueue";
 import { ExportRow } from "./ExportRow";
 
+// Rust's format table, answered at once: the hook's own fetch is pinned by `ipc/export.test.ts`.
+vi.mock("@/hooks/useExportFormats", async () => {
+    const { EXPORT_FORMATS } = await import("@/test/support");
+
+    return { useExportFormats: () => EXPORT_FORMATS };
+});
 vi.mock("@tauri-apps/api/core", () => ({
     convertFileSrc: vi.fn((identity: string) => `opai://localhost/${identity}`),
 }));
@@ -44,7 +50,11 @@ describe("a row", () => {
         useExportSettingsStore.setState({ prefix: "new-", suffix: "-opai", format: "webp" });
         useEnhancementStore
             .getState()
-            .addEnhancement(HOLIDAY.path, { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 });
+            .addEnhancement(
+                HOLIDAY.path,
+                { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } },
+                APPLY_ORDER,
+            );
 
         renderRow();
 

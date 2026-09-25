@@ -21,16 +21,19 @@ mod slot;
 mod test_support;
 
 // `RunProgress` is also what an export re-sends on its own event, wrapped — see `crate::export`.
-pub(crate) use progress::{Reporting, RunProgress, reporting};
+pub(crate) use progress::{Handover, Reporting, RunProgress, reporting};
 // Read by `faces`' tests, which assert on what the window receives for a detection.
 #[cfg(test)]
 pub(crate) use progress::Stage;
 // Read by `export`'s tests, which pin that an export reports somewhere else.
 #[cfg(test)]
 pub(crate) use progress::PROGRESS_EVENT;
-// `Enhancer`, `Requested` and `UnknownOperation` are also an export's: it runs the window's chain through the same
-// seam, and refuses an operation it cannot serve with the same refusal — see `crate::export`.
-pub(crate) use operation::{Requested, UnknownOperation};
+// `Enhancer`, `Requested` and `EnhanceError` are also an export's: it runs the window's chain through the same seam,
+// and refuses an operation it cannot serve with the same refusal — see `crate::export`.
+pub(crate) use operation::Requested;
+// Read by `export`'s tests, which build the refusal an export carries inside its `EnhanceError`.
+#[cfg(test)]
+pub(crate) use operation::UnknownOperation;
 pub(crate) use run::{EnhanceError, Enhancement, Enhancer, Processor, Request, enhance_with};
 pub(crate) use slot::{Resident, Runs};
 

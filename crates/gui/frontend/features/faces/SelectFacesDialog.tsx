@@ -8,7 +8,7 @@ import { useFaceSelection } from "@/features/faces/useFaceSelection";
 import { framedDimensions } from "@/ipc/crop";
 import { renditionFor } from "@/ipc/images";
 import { FACES_DIALOG_BOUND } from "@/lib/constants";
-import { enabledFaces } from "@/lib/faces";
+import { faceKey } from "@/lib/faces";
 import { useImageCrop } from "@/stores/crop";
 import { useImageFaces } from "@/stores/faces";
 import { useCurrentFile } from "@/stores/files";
@@ -83,7 +83,7 @@ export const SelectFacesDialog = ({ open, onClose }: { open: boolean; onClose: (
     const crop = useImageCrop(file?.identity);
     const faces = useImageFaces(file?.identity, crop) ?? [];
 
-    const { skipped, toggle, apply } = useFaceSelection(file?.identity, open);
+    const { skipped, toggle, apply } = useFaceSelection(file?.identity, faces, open);
 
     /*
      * What the rendition decoded to, for the one photograph `framedDimensions` cannot answer for: one
@@ -95,7 +95,8 @@ export const SelectFacesDialog = ({ open, onClose }: { open: boolean; onClose: (
 
     const { width = natural?.width, height = natural?.height } = framedDimensions(file, crop);
 
-    const chosen = enabledFaces(faces, skipped).length;
+    // The working copy is the faces left unchosen, so every other face is chosen.
+    const chosen = faces.filter((face) => !skipped.has(faceKey(face))).length;
 
     /*
      * Absent only for a photograph this application could not measure and whose rendition has not

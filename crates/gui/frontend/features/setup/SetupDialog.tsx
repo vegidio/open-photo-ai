@@ -42,17 +42,10 @@ export const SetupDialog = ({ onRetry }: { onRetry: () => void }) => {
                  * it, and the content comes out a plain div with no role at all.
                  */
                 role={failure ? "alertdialog" : "dialog"}
-                onOpenAutoFocus={(event) => {
-                    // Radix focuses the first tabbable element when a dialog opens - and WebKit
-                    // matches `:focus-visible` on that programmatic focus, so the design's flat
-                    // buttons would come up wearing a focus ring. Focusing the dialog itself leaves the
-                    // trap, the labelling and Tab-to-the-buttons exactly as they were, and
-                    // pre-selects nothing on a dialog whose actions end or restart the application.
-                    event.preventDefault();
-
-                    const content = event.currentTarget;
-                    if (content instanceof HTMLElement) content.focus();
-                }}
+                // The dialog rather than its first button, so nothing wears WebKit's focus ring on
+                // open and nothing is pre-selected on a dialog whose actions end or restart the
+                // application - see `DialogContent`.
+                focusContentOnOpen
                 // Radix offers three ways to close a dialog by default and all three are turned off
                 // explicitly here, at the one place the dialog is built, rather than by hiding the close
                 // button and hoping. Nothing in the application can be used until initialization has

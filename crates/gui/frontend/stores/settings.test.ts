@@ -1,14 +1,7 @@
+import { PUBLISHED_QUALITY } from "@/test/support";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_LANGUAGE } from "@/i18n/languages";
-import {
-    BACKGROUNDS,
-    DEFAULT_QUALITY,
-    MAX_QUALITY,
-    MIN_QUALITY,
-    settingsData,
-    settingsDefaults,
-    useSettingsStore,
-} from "./settings.ts";
+import { BACKGROUNDS, MAX_QUALITY, MIN_QUALITY, settingsData, settingsDefaults, useSettingsStore } from "./settings.ts";
 
 /** Seeds `localStorage` with a stored settings state and rehydrates the store from it. */
 const stored = async (state: Record<string, unknown>) => {
@@ -45,7 +38,7 @@ describe("apply", () => {
             analytics: false,
             processor: "coreml",
             models: { upscale: "kyoto_fp16" },
-            quality: { ...DEFAULT_QUALITY, jpeg: 42 },
+            quality: { ...PUBLISHED_QUALITY, jpeg: 42 },
         });
 
         expect(useSettingsStore.getState()).toMatchObject({
@@ -54,7 +47,7 @@ describe("apply", () => {
             analytics: false,
             processor: "coreml",
             models: { upscale: "kyoto_fp16" },
-            quality: { ...DEFAULT_QUALITY, jpeg: 42 },
+            quality: { ...PUBLISHED_QUALITY, jpeg: 42 },
         });
     });
 
@@ -67,7 +60,7 @@ describe("apply", () => {
     });
 
     it("bounds a quality a caller hands it", () => {
-        useSettingsStore.getState().apply({ quality: { ...DEFAULT_QUALITY, jpeg: 0, webp: 4000 } });
+        useSettingsStore.getState().apply({ quality: { ...PUBLISHED_QUALITY, jpeg: 0, webp: 4000 } });
 
         expect(useSettingsStore.getState().quality).toMatchObject({ jpeg: MIN_QUALITY, webp: MAX_QUALITY });
     });
@@ -135,12 +128,26 @@ describe("what a restart reads back", () => {
         ["above the bounds", { jpeg: MAX_QUALITY + 1 }],
         ["below the bounds", { jpeg: MIN_QUALITY - 1 }],
         ["not a number", { jpeg: "high" }],
-    ])("replaces a %s quality with that format's starting value", async (_case, quality) => {
+        ["for a format this application has no name for", { jpeg: 50, raw: 50 }],
+    ])("drops a %s quality, which reads as that format's published starting value", async (_case, quality) => {
         await stored({ ...SOUND, quality: { ...quality, avif: 42 } });
 
-        expect(useSettingsStore.getState().quality.jpeg).toBe(DEFAULT_QUALITY.jpeg);
+        const repaired = useSettingsStore.getState().quality as Record<string, number | undefined>;
+        if (_case.startsWith("for a format")) {
+            expect(repaired.raw).toBeUndefined();
+            expect(repaired.jpeg).toBe(50);
+        } else {
+            expect(repaired.jpeg).toBeUndefined();
+        }
         // The sound value beside it is untouched - the repair is per format, not per record.
         expect(useSettingsStore.getState().quality.avif).toBe(42);
+    });
+
+    it("reads a record saved when every lossy format was written out as the same values", async () => {
+        // What every Save wrote before the defaults moved to Rust: the four starting values, in full.
+        await stored({ ...SOUND, quality: { ...PUBLISHED_QUALITY } });
+
+        expect(useSettingsStore.getState().quality).toEqual(PUBLISHED_QUALITY);
     });
 
     it("keeps a stored model as written, for the row to resolve", async () => {
@@ -180,7 +187,7 @@ describe("what a restart reads back", () => {
             processor: "auto",
             models: {},
             autopilotExcluded: [],
-            quality: DEFAULT_QUALITY,
+            quality: {},
         });
     });
 

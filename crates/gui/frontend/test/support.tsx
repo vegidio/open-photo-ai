@@ -1,15 +1,18 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { PhysicalPosition } from "@tauri-apps/api/dpi";
 import { act, type RenderOptions, type RenderResult, render as renderBare } from "@testing-library/react";
 import { vi } from "vitest";
+import { SettingsDraftProvider, useDraftState } from "@/features/settings/draft";
 import type { Family, FamilyEntry, Precision, VariantEntry } from "@/ipc/catalogue";
 import type { CropInfo } from "@/ipc/crop";
+import type { ExportFormats } from "@/ipc/export";
 import type { ImageRecord } from "@/ipc/images";
+import { applyOrder } from "@/lib/enhancements";
 import type { SetupError, SetupEvent, SupportedProviders } from "@/ipc/setup";
 import { AppProviders } from "@/providers";
 import { useCropStore } from "@/stores/crop";
 import { useFileStore } from "@/stores/files";
-import { type Background, useSettingsStore } from "@/stores/settings";
+import { type Background, type SettingsData, useSettingsStore } from "@/stores/settings";
 import { useSetupStore } from "@/stores/setup";
 
 /**
@@ -177,21 +180,46 @@ const variant = (
  * the options panel reads its range from the selected model's own entry rather than from a constant
  * of its own, so a fixture that elided it would be testing a control with no bounds at all.
  */
-const SCALE: VariantEntry["parameters"] = [{ name: "scale", kind: "range", min: 1, max: 8 }];
+const SCALE: VariantEntry["parameters"] = [{ name: "scale", kind: "range", min: 1, max: 8, default: 1 }];
 
 /**
  * The amount every light-adjustment and colour-balance model publishes, with the bounds `Bias::MIN` and
  * `Bias::MAX` enforce.
  */
-const BIAS: VariantEntry["parameters"] = [{ name: "bias", kind: "range", min: -1, max: 1 }];
+const BIAS: VariantEntry["parameters"] = [{ name: "bias", kind: "range", min: -1, max: 1, default: 0.5 }];
 
 /**
  * The amount every denoise and sharpen model publishes, with the bounds `Strength::MIN` and
  * `Strength::MAX` enforce.
  */
-const STRENGTH: VariantEntry["parameters"] = [{ name: "strength", kind: "range", min: 0, max: 3 }];
+const STRENGTH: VariantEntry["parameters"] = [{ name: "strength", kind: "range", min: 0, max: 3, default: 1 }];
 
-const family = (name: Family, variants: VariantEntry[]): FamilyEntry => ({ family: name, variants });
+/**
+ * What Athens publishes: the faces a detection supplies, and the fidelity with the bounds `Fidelity::MIN` and
+ * `Fidelity::MAX` enforce, starting at the maximum. Santorini publishes the faces alone.
+ */
+const FACES_AND_FIDELITY: VariantEntry["parameters"] = [
+    { name: "faces", kind: "faces" },
+    { name: "fidelity", kind: "range", min: 0, max: 1, default: 1 },
+];
+const FACES: VariantEntry["parameters"] = [{ name: "faces", kind: "faces" }];
+
+/** The place `opai`'s `Family::APPLY_ORDER` gives each family in a chain; detection has none. */
+const ORDER: Partial<Record<Family, number>> = {
+    denoise: 0,
+    face_recovery: 1,
+    colorization: 2,
+    light_adjustment: 3,
+    color_balance: 4,
+    sharpen: 5,
+    upscale: 6,
+};
+
+const family = (name: Family, variants: VariantEntry[]): FamilyEntry => {
+    const order = ORDER[name];
+
+    return { family: name, ...(order !== undefined && { order }), variants };
+};
 
 /**
  * The catalogue, as `crates/opai/src/models/catalogue.rs` builds it.
@@ -199,9 +227,9 @@ const family = (name: Family, variants: VariantEntry[]): FamilyEntry => ({ famil
  * Codenames, labels, published precisions and the order of both families and variants are that
  * file's, read off the variant rows it is built from - so a test asserting that upscale defaults to
  * Tokyo is asserting about the order the library actually publishes rather than about a convenient
- * fixture. The parameters are elided to `[]` everywhere a control is not built from them, which is
- * every family but denoise, sharpen, upscale, light adjustment and colour balance: see {@link SCALE}, {@link BIAS}
- * and {@link STRENGTH}.
+ * fixture. The parameters are the library's, defaults included, for every family that publishes any - see
+ * {@link SCALE}, {@link BIAS}, {@link STRENGTH} and {@link FACES_AND_FIDELITY} - because a new operation
+ * starts each of them at its published default.
  *
  * One fixture rather than one per test file, for the reason the plan above is one: a catalogue
  * copied into four files is four things that can quietly stop agreeing about what the library
@@ -239,8 +267,40 @@ export const CATALOGUE: FamilyEntry[] = [
     // Published, and drawn by nothing: "which model detects faces" is model vocabulary the library
     // declines to leave a front end to restate, but it is not an enhancement a user adds.
     family("detection", [variant("newyork", "New York")]),
-    family("face_recovery", [variant("athens", "Athens"), variant("santorini", "Santorini")]),
+    family("face_recovery", [
+        variant("athens", "Athens", ["fp32", "fp16"], FACES_AND_FIDELITY),
+        variant("santorini", "Santorini", ["fp32", "fp16"], FACES),
+    ]),
 ];
+
+/**
+ * What `export_formats` answers, as `crates/gui/src/export/format.rs` builds it: every format, what it is written
+ * with, the source extensions a Preserve export writes back as it, and the quality the four lossy ones take.
+ */
+export const EXPORT_FORMATS: ExportFormats = {
+    formats: [
+        { format: "avif", extension: "avif", preserves: ["avif"], quality: { min: 1, max: 100, default: 60 } },
+        { format: "bmp", extension: "bmp", preserves: ["bmp"], quality: null },
+        { format: "gif", extension: "gif", preserves: ["gif"], quality: null },
+        { format: "heic", extension: "heic", preserves: ["heic", "heif"], quality: { min: 1, max: 100, default: 60 } },
+        { format: "jpeg", extension: "jpg", preserves: ["jpeg", "jpg"], quality: { min: 1, max: 100, default: 90 } },
+        { format: "png", extension: "png", preserves: ["png"], quality: null },
+        { format: "tiff", extension: "tiff", preserves: ["tif", "tiff"], quality: null },
+        { format: "webp", extension: "webp", preserves: ["webp"], quality: { min: 1, max: 100, default: 75 } },
+    ],
+    fallback: "tiff",
+};
+
+/** What each lossy format in {@link EXPORT_FORMATS} starts at, by format - the quality a user never moved. */
+export const PUBLISHED_QUALITY: Record<"avif" | "heic" | "jpeg" | "webp", number> = {
+    avif: 60,
+    heic: 60,
+    jpeg: 90,
+    webp: 75,
+};
+
+/** The order {@link CATALOGUE} publishes a chain in, as the application reads it off the catalogue. */
+export const APPLY_ORDER = applyOrder(CATALOGUE);
 
 /**
  * A photograph as Rust describes one, for the tests that need an image open.
@@ -372,3 +432,27 @@ export const applyBackground = (background: Background) => useSettingsStore.getS
 
 /** Back to what a fresh profile draws, so a surface one test applied is not the next one's premise. */
 export const resetSettingsStore = () => useSettingsStore.setState(useSettingsStore.getInitialState(), true);
+
+/**
+ * A settings draft standing on its own, for a test that mounts one row rather than the whole dialog.
+ *
+ * This gives the row the same thing the dialog gives it - `useDraftState`'s draft, seeded from what
+ * the store holds with `seed` over it - and hands the test back the values so it can assert on what a
+ * control wrote. A row mounted without a draft throws, which is the point, and not something a test
+ * should work around by reaching into the store.
+ */
+export const DraftHarness = ({
+    seed,
+    onDraft,
+    children,
+}: {
+    seed?: Partial<SettingsData>;
+    onDraft?: (values: SettingsData) => void;
+    children: ReactNode;
+}) => {
+    const { draft } = useDraftState(seed);
+
+    onDraft?.(draft.values);
+
+    return <SettingsDraftProvider draft={draft}>{children}</SettingsDraftProvider>;
+};

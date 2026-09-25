@@ -248,6 +248,30 @@ export const useFileStore = create<FileStore>()((set) => ({
 // One accessor rather than four regions each writing `files[currentIndex]`, exactly as the reference
 // does it: the canvas, the navbar, the sidebar and the drawer all ask the same question, and it
 // should have one answer.
+/** The last list {@link filesByPath} indexed, and its index. */
+let indexed: { files: ImageRecord[]; byPath: ReadonlyMap<string, ImageRecord> } | undefined;
+
+/**
+ * The open images by path, built once per list rather than once per reader.
+ *
+ * Memoised on the list's reference, which every write to the store replaces, so the export queue's
+ * rows - one subscription each - share one index where each used to scan the list on every change.
+ * The first record wins a path, as `files.find` would have answered.
+ */
+const filesByPath = (files: ImageRecord[]) => {
+    if (indexed?.files !== files) {
+        const byPath = new Map<string, ImageRecord>();
+        for (const file of files) if (!byPath.has(file.path)) byPath.set(file.path, file);
+
+        indexed = { files, byPath };
+    }
+
+    return indexed.byPath;
+};
+
+/** The open image at `path`, or `undefined` where none is. */
+export const useFileByPath = (path: string) => useFileStore((state) => filesByPath(state.files).get(path));
+
 /**
  * The image the window is reporting and drawing, or `undefined` while none is open.
  *

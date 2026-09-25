@@ -8,44 +8,42 @@
 
 use std::future::Future;
 
-use opai::{Enhanced, ExecutionProvider, InferenceError, Opai, OutputDepth, Picture, ProcessOptions};
+use opai::{
+    Analysis, Enhanced, ExecuteOptions, Executed, ExecutionProvider, Faces, InferenceError, Opai, OutputDepth, Picture,
+    ProcessOptions,
+};
 use serde::{Deserialize, Serialize};
 
 use super::operation::{Requested, UnknownOperation};
-use super::progress::Reporting;
+use super::progress::{Handover, Reporting};
 use super::slot::Runs;
 use crate::command::{Answer, CommandError, Ended};
+use crate::faces::{ChainFaces, DetectedFace, for_chain};
 use crate::images::{Crop, Opened, load_framed};
 
-/// The processor the window chose for this run.
+/// The processor the window chose for this run: an [`ExecutionProvider`], read from the settings store's spelling.
 ///
-/// Spelled as the frontend spells it (`keyof SupportedProviders` plus "auto") rather than as
-/// [`ExecutionProvider`]'s own renames — the settings store persists these five strings, so the translation
-/// happens once, here.
+/// The store spells each provider as `keyof SupportedProviders` plus "auto" — `auto`, `cpu`, `coreml`, `cuda`,
+/// `tensorrt` — which is the library's own spelling of the same five, lowercased. The library's parse is
+/// case-insensitive, so the store's words are read **through it** rather than through a mirror of five arms kept here:
+/// a provider the library adds is readable here the moment it is published, and one it renames cannot be matched by a
+/// stale arm. The settings store persists these strings, so they do not change; see `frontend/stores/settings.ts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum Processor {
-    /// Whichever of the others this machine supports, best first.
-    Auto,
-    /// The CPU, which every other provider falls back to.
-    Cpu,
-    /// Apple's CoreML.
-    Coreml,
-    /// NVIDIA's CUDA provider.
-    Cuda,
-    /// NVIDIA's TensorRT provider.
-    Tensorrt,
+#[serde(try_from = "String")]
+pub(crate) struct Processor(pub(crate) ExecutionProvider);
+
+impl TryFrom<String> for Processor {
+    type Error = opai::InitError;
+
+    /// The provider `text` names, or the library's own refusal of a name no build published.
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        text.parse().map(Self)
+    }
 }
 
 impl From<Processor> for ExecutionProvider {
     fn from(processor: Processor) -> Self {
-        match processor {
-            Processor::Auto => Self::Auto,
-            Processor::Cpu => Self::Cpu,
-            Processor::Coreml => Self::CoreMl,
-            Processor::Cuda => Self::Cuda,
-            Processor::Tensorrt => Self::TensorRt,
-        }
+        processor.0
     }
 }
 
@@ -68,6 +66,14 @@ pub(crate) enum Enhancement {
         width: u32,
         /// The result's height in pixels.
         height: u32,
+        /// Every face found in the framed photograph, for a chain carrying a face recovery — what the window counts
+        /// and offers the picker over. Absent for a chain that looked for none, and for one whose detection failed.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        faces: Option<Vec<DetectedFace>>,
+        /// Why the faces could not be found, where they could not: `opai`'s own sentence, untranslated. The recovery
+        /// then restored none and the rest of the chain ran — see [`crate::faces::for_chain`].
+        #[serde(skip_serializing_if = "Option::is_none")]
+        faces_error: Option<String>,
     },
     /// The run was stopped, by the window or by a later run displacing it. No image at all.
     Stopped,
@@ -151,6 +157,23 @@ pub(crate) trait Enhancer {
         operations: &[opai::Operation],
         options: ProcessOptions,
     ) -> impl Future<Output = Result<Enhanced, InferenceError>> + Send;
+
+    /// Runs `analysis` over `source`, as [`Opai::execute`] does: the detection a chain carrying a face recovery makes
+    /// for its faces — see [`crate::faces::for_chain`].
+    ///
+    /// **The default finds nobody**, which is what every fake that is not about faces wants: a chain carrying no face
+    /// recovery never asks, and one that does restores an empty selection. [`Opai`] runs the real detection.
+    fn detect(
+        &self,
+        _source: &Picture,
+        _analysis: &Analysis,
+        _options: ExecuteOptions,
+    ) -> impl Future<Output = Result<Executed<Faces>, InferenceError>> + Send {
+        std::future::ready(Ok(Executed {
+            value: Faces::empty(),
+            providers: opai::ProviderReport { requested: ExecutionProvider::Auto, actual: Vec::new() },
+        }))
+    }
 }
 
 impl Enhancer for Opai {
@@ -161,6 +184,15 @@ impl Enhancer for Opai {
         options: ProcessOptions,
     ) -> impl Future<Output = Result<Enhanced, InferenceError>> + Send {
         Opai::process(self, source, operations, Some(options))
+    }
+
+    fn detect(
+        &self,
+        source: &Picture,
+        analysis: &Analysis,
+        options: ExecuteOptions,
+    ) -> impl Future<Output = Result<Executed<Faces>, InferenceError>> + Send {
+        Opai::execute(self, source, analysis, Some(options))
     }
 }
 
@@ -192,8 +224,16 @@ pub(crate) struct Request {
 ///   3. write the slot               --> the run in flight stops; the held result is dropped
 ///   4. decode the source
 ///   5. frame it                     --> the chain's input, and what every cache key is folded from
-///   6. run
+///   6. find the faces               --> only for a chain carrying a face recovery; stoppable like the run
+///   7. run
 /// ```
+///
+/// # A face recovery finds its own faces
+///
+/// Step 6 is [`for_chain`]: the chain detects inside this request rather than the window detecting first and asking
+/// second, so the whole of it is one stop and one progress stream, the detection on the head of the bar. The faces
+/// found come back beside the result for the window to count and offer, and a detection that failed comes back as the
+/// reason, with the chain run anyway over no faces.
 ///
 /// A refused request must not displace the run the user is watching (1, 2 before 3). The slot is written
 /// before decoding (3 before 4) so a displaced run stops immediately rather than after a slow decode, and so
@@ -248,10 +288,33 @@ pub(crate) async fn enhance_with<E: Enhancer>(
     }
 
     // Not logged here, nor the run's failure below: `opai` records each once, where it happened.
-    let picture = load_framed(path, request.crop).await.map_err(|error| EnhanceError::UnreadableSource {
-        identity: request.source.clone(),
-        message: error.to_string(),
+    let picture = load_framed(opened, &request.source, path, request.crop).await.map_err(|error| {
+        EnhanceError::UnreadableSource { identity: request.source.clone(), message: error.to_string() }
     })?;
+
+    // One bar over the detection and the chain after it — see `Handover`.
+    let handover = reporting.as_ref().map(|reporting| Handover::new(&reporting.on_progress));
+
+    // The provider and the stop the chain runs under, so a detection is stopped with it and runs where it would.
+    let detecting = ExecuteOptions {
+        provider: request.processor.into(),
+        on_progress: handover.as_ref().map(Handover::detection),
+        cancel: cancel.clone(),
+        ..Default::default()
+    };
+
+    let (operations, faces) = match for_chain(enhancer, &picture, &request.operations, operations, detecting).await {
+        Ok(found) => found,
+        // Stopped during the detection, before the chain began.
+        Err(_) => {
+            if let Some(reporting) = &reporting {
+                reporting.release();
+            }
+            tracing::debug!("a run was stopped while its faces were being found");
+
+            return Ok(Enhancement::Stopped);
+        }
+    };
 
     // `..Default::default()` keeps this source-compatible as `ProcessOptions` grows; `cache` stays on by
     // default so a re-run doesn't pay twice.
@@ -262,7 +325,7 @@ pub(crate) async fn enhance_with<E: Enhancer>(
     let options = ProcessOptions {
         provider: request.processor.into(),
         depth: OutputDepth::Eight,
-        on_progress: reporting.as_ref().map(|reporting| std::sync::Arc::clone(&reporting.on_progress)),
+        on_progress: handover.as_ref().map(Handover::chain),
         cancel,
         ..Default::default()
     };
@@ -288,7 +351,13 @@ pub(crate) async fn enhance_with<E: Enhancer>(
                 return Ok(Enhancement::Stopped);
             }
 
-            Ok(Enhancement::Enhanced { identity, width, height })
+            let (faces, faces_error) = match faces {
+                ChainFaces::NotAsked => (None, None),
+                ChainFaces::Found(found) => (Some(found), None),
+                ChainFaces::Failed(message) => (None, Some(message)),
+            };
+
+            Ok(Enhancement::Enhanced { identity, width, height, faces, faces_error })
         }
         // Not a failure — a user who changed their mind and a run displaced on their behalf both arrive here.
         Err(InferenceError::Cancelled) => {
@@ -433,7 +502,7 @@ mod tests {
         let outcome = run_now(&enhancer, &opened, &runs, request("run-1", &identity, vec![kyoto(), kyoto()]))
             .expect("an admitted source and a published chain should run");
 
-        let Enhancement::Enhanced { identity: produced, width, height } = outcome else {
+        let Enhancement::Enhanced { identity: produced, width, height, .. } = outcome else {
             panic!("a completed run was not reported as enhanced");
         };
 
@@ -493,10 +562,8 @@ mod tests {
 
         // The second operation is the one that cannot be served; nothing is fetched for the first, since the
         // whole chain is judged before any of it begins.
-        let chain = vec![
-            kyoto(),
-            Requested::Upscale { codename: "berlin".to_string(), precision: Precision::Fp32, scale: 2.0 },
-        ];
+        let chain =
+            vec![kyoto(), Requested::named(opai::Family::Upscale, "berlin", Precision::Fp32, &[("scale", 2.0)])];
 
         let refused = run_now(&enhancer, &opened, &runs, request("run-1", &identity, chain))
             .expect_err("a chain naming an unpublished model is refused");
@@ -697,6 +764,9 @@ mod tests {
 
             assert_eq!(ExecutionProvider::from(parsed), provider);
         }
+
+        // A name no build ever published is refused, as the library refuses it, rather than run on something else.
+        assert!(serde_json::from_value::<Processor>(serde_json::json!("openvino")).is_err());
     }
 
     // ── The framing a run is given ────────────────────────────────────────────────────────────────────────
@@ -789,7 +859,7 @@ mod tests {
         let outcome = run_now(&enhancer, &opened, &runs, request("run-1", &identity, vec![kyoto()]))
             .expect("an admitted source and a published chain should run");
 
-        let Enhancement::Enhanced { identity: produced, width, height } = outcome else {
+        let Enhancement::Enhanced { identity: produced, width, height, .. } = outcome else {
             panic!("a completed run was not reported as enhanced");
         };
 
@@ -873,9 +943,106 @@ mod tests {
             assert_eq!(CommandError::ended(&error).cell(), cell, "{error:?}");
         }
 
-        let answer = Enhancement::Enhanced { identity: s(), width: 1, height: 1 };
+        let answer = Enhancement::Enhanced { identity: s(), width: 1, height: 1, faces: None, faces_error: None };
         assert_eq!(Answer::ended(&answer).cell(), "finished");
         assert_eq!(Answer::ended(&Enhancement::Stopped).cell(), "stopped");
+    }
+
+    #[test]
+    fn an_answer_that_found_no_faces_keeps_the_wire_shape_it_always_had() {
+        // Pinned before the faces were added beside it, so a chain carrying no face recovery answers exactly as before.
+        let answer = Enhancement::Enhanced {
+            identity: "cafebabecafebabe".to_string(),
+            width: 600,
+            height: 400,
+            faces: None,
+            faces_error: None,
+        };
+
+        assert_eq!(
+            serde_json::to_value(answer).expect("an answer serializes"),
+            serde_json::json!({ "outcome": "enhanced", "identity": "cafebabecafebabe", "width": 600, "height": 400 })
+        );
+        assert_eq!(
+            serde_json::to_value(Enhancement::Stopped).expect("an answer serializes"),
+            serde_json::json!({ "outcome": "stopped" })
+        );
+    }
+
+    /// An enhancer whose detection finds one small face, and which records the chain it was asked to run.
+    #[derive(Default)]
+    struct FindingOne {
+        seen: Mutex<Vec<Vec<opai::Operation>>>,
+    }
+
+    impl FindingOne {
+        fn face() -> opai::Face {
+            opai::Face::new(
+                opai::Rect::new(opai::Point::new(1.0, 1.0), opai::Point::new(5.0, 5.0)),
+                [opai::Point::new(2.0, 2.0); opai::Face::LANDMARKS],
+                opai::Confidence::new(0.9).expect("in range"),
+            )
+        }
+    }
+
+    impl Enhancer for FindingOne {
+        async fn process(
+            &self,
+            source: &Picture,
+            operations: &[opai::Operation],
+            _options: ProcessOptions,
+        ) -> Result<Enhanced, InferenceError> {
+            self.seen.lock().expect("unpoisoned").push(operations.to_vec());
+
+            Ok(enhanced(source, 8, 6, "cafebabecafebabe"))
+        }
+
+        async fn detect(
+            &self,
+            _source: &Picture,
+            _analysis: &Analysis,
+            _options: ExecuteOptions,
+        ) -> Result<Executed<Faces>, InferenceError> {
+            Ok(Executed {
+                value: Faces::new([Self::face()]),
+                providers: opai::ProviderReport { requested: ExecutionProvider::Auto, actual: Vec::new() },
+            })
+        }
+    }
+
+    #[test]
+    fn a_face_recovery_finds_its_faces_inside_the_run_and_answers_them() {
+        let (_dir, opened, runs, identity) = fixture();
+        let enhancer = FindingOne::default();
+        let recovery = Requested::named(Family::FaceRecovery, "santorini", Precision::Fp32, &[]);
+
+        let answer =
+            run_now(&enhancer, &opened, &runs, request("run-1", &identity, vec![recovery])).expect("the chain runs");
+
+        let Enhancement::Enhanced { faces: Some(faces), faces_error: None, .. } = answer else {
+            panic!("the faces found were not answered: {answer:?}");
+        };
+        assert_eq!(faces, [DetectedFace::from(FindingOne::face())]);
+
+        // The chain ran over the face the detection found, which is restorable and not skipped.
+        let seen = enhancer.seen.lock().expect("unpoisoned");
+        assert_eq!(
+            seen.as_slice(),
+            [vec![opai::FaceRecovery::santorini(
+                opai::FloatPrecision::Fp32,
+                Faces::new([FindingOne::face()])
+            )]]
+        );
+    }
+
+    #[test]
+    fn a_chain_carrying_no_face_recovery_answers_no_faces() {
+        let (_dir, opened, runs, identity) = fixture();
+
+        let answer = run_now(&FindingOne::default(), &opened, &runs, request("run-1", &identity, vec![kyoto()]))
+            .expect("the chain runs");
+
+        assert!(matches!(answer, Enhancement::Enhanced { faces: None, faces_error: None, .. }), "{answer:?}");
     }
 
     #[test]

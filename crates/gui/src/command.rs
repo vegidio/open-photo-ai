@@ -164,7 +164,16 @@ macro_rules! finished {
     };
 }
 
-finished!((), bool, Option<String>, &'static str, &'static [opai::FamilyEntry], Vec<&'static str>);
+finished!(
+    (),
+    bool,
+    f64,
+    crate::export::ExportFormats,
+    Option<String>,
+    &'static str,
+    &'static [opai::FamilyEntry],
+    Vec<&'static str>
+);
 
 /// Runs `body` inside `span`, then records on the span how it ended.
 pub(crate) async fn traced<T: Outcome>(span: Span, body: impl Future<Output = T>) -> T {

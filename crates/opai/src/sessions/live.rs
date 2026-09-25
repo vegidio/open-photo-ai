@@ -68,7 +68,6 @@ async fn opens_on(provider: ExecutionProvider) {
         .unwrap_or_else(|err| panic!("{artifact} did not open on {provider}: {err}"));
 
     assert_eq!(handle.provider(), provider, "the session was downgraded rather than built on {provider}");
-    assert_eq!(handle.requested(), provider);
 
     println!("{artifact} opened on {} ({})", handle.provider(), ort::info());
 }
@@ -90,7 +89,6 @@ async fn a_published_model_is_installed_opened_on_the_cpu_and_kept_resident() {
     assert!(model.is_file(), "the graph is not on disk at {}", model.display());
 
     assert_eq!(first.provider(), ExecutionProvider::Cpu, "a CPU request was built on something else");
-    assert_eq!(first.requested(), ExecutionProvider::Cpu, "a CPU request was recorded as a downgrade");
 
     // Kept resident: the second request is served the session the first built.
     let second = opai

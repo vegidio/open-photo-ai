@@ -1,3 +1,5 @@
+import { clampTo } from "@/lib/utils";
+
 /**
  * Where the photograph is drawn, and nothing about how it is drawn.
  *
@@ -83,4 +85,4 @@ export const constrainPosition = (position: Position, scaled: Size, container: S
  * before there is anything measured to take a fraction of.
  */
 export const imageFraction = (offset: number, scaledSize: number): number =>
-    scaledSize > 0 ? Math.min(Math.max(offset / scaledSize, 0), 1) : 0.5;
+    scaledSize > 0 ? clampTo(offset / scaledSize, 0, 1) : 0.5;

@@ -61,14 +61,8 @@ impl Affine {
 
     /// Where this transform sends `(x, y)`.
     ///
-    /// The two callers that map a point in anger — the warp and the composite — each destructure [`rows`](Self::rows)
-    /// and expand the expression themselves, for the opposite reasons their own comments give: one must not hoist the
-    /// row terms and the other must. This is the plain form, and what the tests that check the fit's own arithmetic
-    /// read it through.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the two mapping loops expand the matrix for their own hoisting")
-    )]
+    /// Test-only: the warp and the composite each expand [`rows`](Self::rows) themselves, for their own hoisting.
+    #[cfg(test)]
     pub(crate) fn apply(self, x: f32, y: f32) -> (f32, f32) {
         let [[a00, a01, a02], [a10, a11, a12]] = self.rows;
 

@@ -7,13 +7,19 @@
 // of it that has drifted.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 
+use rust_sak::image::ImageFormat;
 use tempfile::TempDir;
 
 use crate::deps::artifact::ONNX_RUNTIME;
 use crate::deps::release::{Dependency as Descriptor, RELEASE_BASE_URL};
+use crate::models::filter::GUARDED;
+use crate::models::precision::FloatPrecision;
+use crate::models::{Operation, Strength};
+use crate::providers::ExecutionProvider;
 use crate::setup::Plan;
-use crate::{Opai, runtime};
+use crate::{Opai, ProcessOptions, runtime};
 use imaging::tensor::Sampler;
 
 /// The environment variable that overrides the committed fixture with a photograph of the runner's own.
@@ -136,4 +142,131 @@ pub(crate) fn green_levels(picture: &image::DynamicImage) -> usize {
         .map(|(x, y)| sampler.rgb(x, y)[1])
         .collect::<std::collections::BTreeSet<u16>>()
         .len()
+}
+
+/// A strength family — denoise or sharpen — as its live check drives it: three variants through the shared
+/// guarded-filter pipeline, one of which has the guard.
+pub(crate) struct StrengthFamily {
+    /// The application name the family's checks install under.
+    pub(crate) name: &'static str,
+    /// The family's three codenames, in the order the results are compared.
+    pub(crate) variants: [&'static str; 3],
+    /// The one codename whose guard may keep a tile; the other two keeping one is a failure.
+    pub(crate) guarded: &'static str,
+    /// The operation running a codename at a precision and strength.
+    pub(crate) operation: fn(&str, FloatPrecision, Strength) -> Operation,
+}
+
+impl StrengthFamily {
+    // The family's own tests exercise everything else against a fake backend on every CI platform — the tile grid at
+    // scale 1, the guard, the blend, the progress schedule, the depth dispatch, the cancellation and the refusal. What
+    // no CI platform can prove is that a real session produces a photograph at its own size, that the strength gates
+    // every route to the pixels, and whether the guarded variant's guard fires on a real photograph at all.
+
+    /// `provider` against both precisions of all three variants, and the three against one another at each precision.
+    pub(crate) async fn everywhere(&self, provider: ExecutionProvider) {
+        // A delta rather than a reset, as each run's own count is, so the total below is this check's own even in a
+        // process that ran something else guarded before it.
+        let guarded_before = GUARDED.load(Ordering::Relaxed);
+
+        for precision in FloatPrecision::ALL {
+            let mut results = Vec::with_capacity(self.variants.len());
+
+            for codename in self.variants {
+                results.push(self.on(codename, precision, provider).await);
+            }
+
+            // Three sets of weights at one strength: two identical results would mean a seam handed two variants one
+            // graph.
+            for (left, right) in [(0, 1), (0, 2), (1, 2)] {
+                assert!(
+                    !identical(results[left].pixels(), results[right].pixels()),
+                    "{} and {} at {precision:?} on {provider} produced the same photograph",
+                    self.variants[left],
+                    self.variants[right]
+                );
+            }
+        }
+
+        println!(
+            "\n{provider}: {} tile(s) kept by {}'s guard across both precisions",
+            GUARDED.load(Ordering::Relaxed) - guarded_before,
+            self.guarded
+        );
+    }
+
+    /// Puts the committed photograph through `codename` at `precision` on `provider`, at a strength of 0 and of 1,
+    /// states the properties, and hands back the result at 1.
+    async fn on(&self, codename: &str, precision: FloatPrecision, provider: ExecutionProvider) -> crate::Picture {
+        // A fresh application per call, so no result is served from another provider's run of the same operation.
+        let (_root, opai) = live_application(self.name).await;
+        let source = photograph().await;
+        let (width, height) = source.dimensions();
+
+        println!("\n{codename} at {precision:?} on {provider}: source {width}x{height}");
+
+        let mut kept = None;
+
+        for strength in [1.0, 0.0] {
+            let operation = (self.operation)(
+                codename,
+                precision,
+                Strength::new(strength).expect("a live check supplies a strength in range"),
+            );
+            let options = ProcessOptions { provider, ..Default::default() };
+            let guarded_before = GUARDED.load(Ordering::Relaxed);
+            let started = std::time::Instant::now();
+
+            let enhanced = opai
+                .process(&source, &[operation], Some(options))
+                .await
+                .unwrap_or_else(|err| panic!("{codename} at {precision:?} on {provider}, strength {strength}: {err}"));
+
+            let guarded = GUARDED.load(Ordering::Relaxed) - guarded_before;
+            let produced = enhanced.picture;
+
+            println!(
+                "  strength {strength}: {:?} on {:?}, {guarded} tile(s) kept by the guard",
+                started.elapsed(),
+                enhanced.providers.actual
+            );
+
+            assert_eq!(
+                produced.dimensions(),
+                (width, height),
+                "{codename} at strength {strength} did not return the photograph's own dimensions"
+            );
+
+            if codename != self.guarded {
+                assert_eq!(guarded, 0, "{codename} is not guarded, yet a tile was kept");
+            }
+
+            if strength == 0.0 {
+                // After every tile has run and been stitched, and then multiplied by nothing: anything that reached
+                // the pixels by another route shows here.
+                assert!(
+                    identical(produced.pixels(), source.pixels()),
+                    "{codename} at a strength of 0 did not return the photograph unchanged"
+                );
+            } else {
+                assert!(
+                    !identical(produced.pixels(), source.pixels()),
+                    "{codename} at a strength of 1 returned the photograph untouched"
+                );
+
+                // Kept where it can be looked at: a wrong normalisation or a seam is a photograph rather than a number.
+                let keep =
+                    std::env::temp_dir().join(format!("opai-live-{codename}-{precision:?}-{provider}-t{strength}.png"));
+
+                crate::image::save(produced.shared_pixels(), &keep, ImageFormat::Png, None)
+                    .await
+                    .expect("a result must encode to PNG");
+                println!("  inspect at {}", keep.display());
+
+                kept = Some(produced);
+            }
+        }
+
+        kept.expect("the run at a strength of 1 keeps its result")
+    }
 }

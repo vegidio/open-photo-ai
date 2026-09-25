@@ -3,110 +3,63 @@
 //! An operation is named rather than spelled — see the module documentation in `mod.rs` for why, and
 //! design.md D1.
 
-use opai::{
-    Bias, BuildError, Face, Faces, Family, Fidelity, ParameterValues, Precision, Scale, Strength, Subject, VariantEntry,
-};
+use std::collections::BTreeMap;
+
+use opai::{BuildError, Family, ParameterValues, Precision, Subject, VariantEntry};
 use serde::{Deserialize, Serialize};
 
-/// One operation, as the window names it.
+use crate::faces::FaceChoice;
+
+/// One operation, as the window names it: a catalogue row, a precision, and the values of the row's parameters.
 ///
-/// Tagged by family, spelled as [`Family`] spells itself, carrying the codename and precision every family
-/// names plus that family's own parameters.
+/// ```text
+/// { "family": "upscale", "codename": "kyoto", "precision": "fp32", "parameters": { "scale": 2.0 } }
+/// { "family": "face_recovery", "codename": "athens", "precision": "fp32", "parameters": { "fidelity": 1.0 },
+///   "faces": { "skipped": ["10,20,110,140"], "restored": [] } }
+/// ```
+///
+/// **One shape for every family**, spelled in the catalogue's own vocabulary: the family as [`Family`] spells it, the
+/// codename and precision as [`VariantEntry`] publishes them, and each range parameter under the
+/// [`ParameterEntry::name`](opai::ParameterEntry::name) it is published under. A chooser and a control built from
+/// the catalogue therefore send back exactly what they read, and neither this crate nor the window keeps a per-family
+/// table of which parameter a family takes — the row says so, and [`ParameterValues::set`] matches the name onto the
+/// library's own bounded type.
 ///
 /// **Not [`opai::Operation`] itself** — that type's `Deserialize` reads its internal enum shape, not the
-/// catalogue's vocabulary. This shape mirrors what [`VariantEntry`] publishes (`codename` + `precision`),
-/// so a chooser built from the catalogue sends back exactly what it was given.
+/// catalogue's vocabulary.
 ///
-/// Seven arms, one per enhancement the window presents. Detection has none: the window asks for faces through
-/// [`crate::faces::detect_faces`], never as an operation in a chain.
+/// Detection is named by the catalogue and refused here as a model with no image result: the window asks for faces
+/// through [`crate::faces::detect_faces`], never as an operation in a chain.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(tag = "family", rename_all = "snake_case")]
-pub(crate) enum Requested {
-    /// An upscale run: which model, at which precision, enlarging by how much.
-    Upscale {
-        /// The model's developer-facing identifier, as [`opai::VariantEntry::codename`] publishes it.
-        codename: String,
-        /// The precision to run at, as [`opai::VariantEntry::precisions`] publishes them.
-        precision: Precision,
-        /// The factor to enlarge by. Clamped into range rather than refused — see [`Requested::resolve`].
-        scale: f64,
-    },
-
-    /// A denoise run: which model, at which precision, applied how strongly.
-    Denoise {
-        /// The model's developer-facing identifier, as [`opai::VariantEntry::codename`] publishes it.
-        codename: String,
-        /// The precision to run at, as [`opai::VariantEntry::precisions`] publishes them.
-        precision: Precision,
-        /// The strength as the library's unit value, 0..3 where 1 is the model's own output — not the percentage the
-        /// window shows. Clamped into range rather than refused — see [`Requested::resolve`].
-        strength: f64,
-    },
-
-    /// A face-recovery run: which model, at which precision, over which faces.
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Requested {
+    /// Which family the codename is looked up in.
+    pub(crate) family: Family,
+    /// The model's developer-facing identifier, as [`VariantEntry::codename`] publishes it.
+    pub(crate) codename: String,
+    /// The precision to run at, as [`VariantEntry::precisions`] publishes them.
+    pub(crate) precision: Precision,
+    /// Each range parameter's value by its published name, in the library's own unit — a strength of 1 is the
+    /// model's own output, not the percentage the window shows. Clamped into range rather than refused — see
+    /// [`Requested::resolve`].
     ///
-    /// **No fidelity.** The window fixes it at [`Fidelity::MAXIMUM`] for every run and offers no control for it,
-    /// so a field here would describe a choice the user cannot make — see [`Requested::resolve`] and design.md D7.
-    FaceRecovery {
-        /// The model's developer-facing identifier, as [`opai::VariantEntry::codename`] publishes it.
-        codename: String,
-        /// The precision to run at, as [`opai::VariantEntry::precisions`] publishes them.
-        precision: Precision,
-        /// The faces to restore, as [`crate::faces::detect_faces`] found them in the framed photograph.
-        ///
-        /// Order-sensitive: [`Faces`] keeps the order it is given, and that order is folded into the run cache
-        /// tag — so the set the window hands back is the set the result is stored under.
-        faces: Vec<Face>,
-    },
-
-    /// A light-adjustment run: which model, at which precision, shifted which way and how far.
-    LightAdjustment {
-        /// The model's developer-facing identifier, as [`opai::VariantEntry::codename`] publishes it.
-        codename: String,
-        /// The precision to run at, as [`opai::VariantEntry::precisions`] publishes them.
-        precision: Precision,
-        /// The bias as the library's unit value, -1..1 about a neutral 0 — not the percentage the window shows.
-        /// Clamped into range rather than refused — see [`Requested::resolve`].
-        bias: f64,
-    },
-
-    /// A colour-balance run: which model, at which precision, shifted which way and how far.
-    ColorBalance {
-        /// The model's developer-facing identifier, as [`opai::VariantEntry::codename`] publishes it.
-        codename: String,
-        /// The precision to run at, as [`opai::VariantEntry::precisions`] publishes them.
-        precision: Precision,
-        /// The bias as the library's unit value, -1..1 about a neutral 0 — not the percentage the window shows.
-        /// Clamped into range rather than refused — see [`Requested::resolve`].
-        bias: f64,
-    },
-
-    /// A sharpen run: which model, at which precision, applied how strongly.
-    Sharpen {
-        /// The model's developer-facing identifier, as [`opai::VariantEntry::codename`] publishes it.
-        codename: String,
-        /// The precision to run at, as [`opai::VariantEntry::precisions`] publishes them.
-        precision: Precision,
-        /// The strength as the library's unit value, 0..3 where 1 is the model's own output — not the percentage the
-        /// window shows. Clamped into range rather than refused — see [`Requested::resolve`].
-        strength: f64,
-    },
-
-    /// A colorization run: which model, at which precision.
+    /// A parameter left out runs at [`ParameterValues::new`]'s neutral value; the window sends every one its row
+    /// publishes, starting from the catalogue's published defaults. Absent altogether for a family that takes none.
+    #[serde(default)]
+    pub(crate) parameters: BTreeMap<String, f64>,
+    /// Which of the faces found a face recovery restores — the user's exceptions to the default, by key — and
+    /// absent for every other family, or for a recovery nobody has chosen faces for.
     ///
-    /// **No value.** Colorization takes no parameter, so a field here would describe a choice the user cannot make —
-    /// see design.md D1 of `add-gui-colorization`.
-    Colorization {
-        /// The model's developer-facing identifier, as [`opai::VariantEntry::codename`] publishes it.
-        codename: String,
-        /// The precision to run at, as [`opai::VariantEntry::precisions`] publishes them.
-        precision: Precision,
-    },
+    /// **Not the faces.** The run finds them itself, inside the same request — see [`crate::faces::for_chain`] — and
+    /// [`resolve`](Self::resolve) builds every face recovery over an empty selection for it to fill in.
+    #[serde(default)]
+    pub(crate) faces: Option<FaceChoice>,
 }
 
 /// Why an operation the window named cannot be run.
 ///
-/// Two cases: an unpublished codename, or a precision the model was never released at (e.g. `up_osaka_fp32`).
+/// Three cases: an unpublished codename, a precision the model was never released at (e.g. `up_osaka_fp32`), or a
+/// parameter name nothing publishes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, thiserror::Error)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum UnknownOperation {
@@ -127,12 +80,20 @@ pub(crate) enum UnknownOperation {
         /// The precision it does not carry.
         precision: Precision,
     },
+
+    /// No parameter is published under that name — the window's own mistake, since it only sends names it read off
+    /// the catalogue.
+    #[error("no model takes a parameter called `{name}`")]
+    Parameter {
+        /// What was sent.
+        name: String,
+    },
 }
 
 impl From<BuildError> for UnknownOperation {
     /// The library's refusal in the words the window already knows.
     ///
-    /// One arm each, and the two types say the same two things — which is why this is a mapping rather than a
+    /// One arm each, and the two types say the same three things — which is why this is a mapping rather than a
     /// re-export: [`UnknownOperation`] is what crosses the wire, tagged and shaped for the window, and a library
     /// error is neither. Nothing is lost on the way through and the rendered sentences are the same.
     fn from(error: BuildError) -> Self {
@@ -141,6 +102,7 @@ impl From<BuildError> for UnknownOperation {
             BuildError::UnpublishedPrecision { codename, precision } => {
                 Self::Precision { codename: codename.to_string(), precision }
             }
+            BuildError::UnknownParameter { name } => Self::Parameter { name },
         }
     }
 }
@@ -148,138 +110,52 @@ impl From<BuildError> for UnknownOperation {
 impl Requested {
     /// The [`opai::Operation`] this names, or why it cannot be run.
     ///
-    /// **No place in this crate names a model.** The codename and the precision go to the library, which resolves
-    /// them against the same catalogue this window built its chooser from and hands back the run they name — so a
-    /// model `opai` publishes is runnable by being published, and there is no table here to keep in step with it.
+    /// **No place in this crate names a model or a parameter.** The codename and the precision go to the library,
+    /// which resolves them against the same catalogue this window built its chooser from; each parameter goes to
+    /// [`ParameterValues::set`] under the name the catalogue published it with. A model or a parameter `opai`
+    /// publishes is runnable by being published, and there is no table here to keep in step with it.
     ///
-    /// What is left is the one decision this crate owns: a scale, a strength or a bias is clamped via
-    /// [`Scale::clamped`], [`Strength::clamped`] or [`Bias::clamped`] rather than refused, because the slider that
-    /// drives it is already bounded — an out-of-range value can only be a fault, and clamping is more useful to the user
+    /// A value out of range is clamped rather than refused, and logged once by the library: the control that drives
+    /// it is already bounded, so an out-of-range value can only be a fault, and clamping is more useful to the user
     /// than a failed enhancement. See design.md D7.
+    ///
+    /// **No fidelity is fixed here any more.** Athens runs at the fidelity the window sends, which starts at the
+    /// catalogue's published default — maximum fidelity, the value this crate used to pin — and at
+    /// [`ParameterValues::new`]'s, the same maximum, where none is sent.
     ///
     /// # Errors
     ///
     /// [`UnknownOperation`]. Nothing is fetched or run until the whole chain has been checked.
     pub(crate) fn resolve(&self) -> Result<opai::Operation, UnknownOperation> {
-        match self {
-            Self::Upscale { codename, precision, scale } => {
-                // Logged rather than refused, so a control that sent an out-of-range value is diagnosable.
-                if !(Scale::MIN..=Scale::MAX).contains(scale) {
-                    tracing::warn!(
-                        codename,
-                        scale,
-                        min = Scale::MIN,
-                        max = Scale::MAX,
-                        "a scale outside the permitted range was requested; running at the nearest permitted value"
-                    );
-                }
+        let row = VariantEntry::published(self.family, &self.codename)?;
 
-                let values = ParameterValues::new().with_scale(Scale::clamped(*scale));
-                let built = VariantEntry::published(Family::Upscale, codename)?.build(*precision, &values)?;
+        // No faces: they are found inside the run, after the whole chain has been judged here. See `faces`.
+        let mut values = ParameterValues::new();
+        for (name, value) in &self.parameters {
+            values.set(name, *value)?;
+        }
 
-                enhancement(Family::Upscale, codename, built)
-            }
-            Self::Denoise { codename, precision, strength } => {
-                // Logged rather than refused, for the reason the scale is.
-                if !(Strength::MIN..=Strength::MAX).contains(strength) {
-                    tracing::warn!(
-                        codename,
-                        strength,
-                        min = Strength::MIN,
-                        max = Strength::MAX,
-                        "a strength outside the permitted range was requested; running at the nearest permitted value"
-                    );
-                }
-
-                let values = ParameterValues::new().with_strength(Strength::clamped(*strength));
-                let built = VariantEntry::published(Family::Denoise, codename)?.build(*precision, &values)?;
-
-                enhancement(Family::Denoise, codename, built)
-            }
-            Self::FaceRecovery { codename, precision, faces } => {
-                // `with_fidelity` although `ParameterValues::new()` already defaults it to `MAXIMUM`: one line, and
-                // it pins the *window's* intent to run every face recovery at 1.0 rather than inheriting a library
-                // default that is free to change. There is no per-model branch here because `build`'s own arm is
-                // the branch — Athens reads the fidelity and Santorini has no parameter for one. See design.md D7.
-                let values = ParameterValues::new()
-                    .with_faces(Faces::new(faces.iter().copied()))
-                    .with_fidelity(Fidelity::MAXIMUM);
-                let built = VariantEntry::published(Family::FaceRecovery, codename)?.build(*precision, &values)?;
-
-                enhancement(Family::FaceRecovery, codename, built)
-            }
-            Self::LightAdjustment { codename, precision, bias } => {
-                // Logged rather than refused, for the reason the scale is.
-                if !(Bias::MIN..=Bias::MAX).contains(bias) {
-                    tracing::warn!(
-                        codename,
-                        bias,
-                        min = Bias::MIN,
-                        max = Bias::MAX,
-                        "a bias outside the permitted range was requested; running at the nearest permitted value"
-                    );
-                }
-
-                let values = ParameterValues::new().with_bias(Bias::clamped(*bias));
-                let built = VariantEntry::published(Family::LightAdjustment, codename)?.build(*precision, &values)?;
-
-                enhancement(Family::LightAdjustment, codename, built)
-            }
-            // Written out rather than folded into the arm above: serde needs one variant per tag, and a shared helper
-            // would hide which family a reader is looking at. See design.md D1 of `add-gui-color-balance`.
-            Self::ColorBalance { codename, precision, bias } => {
-                if !(Bias::MIN..=Bias::MAX).contains(bias) {
-                    tracing::warn!(
-                        codename,
-                        bias,
-                        min = Bias::MIN,
-                        max = Bias::MAX,
-                        "a bias outside the permitted range was requested; running at the nearest permitted value"
-                    );
-                }
-
-                let values = ParameterValues::new().with_bias(Bias::clamped(*bias));
-                let built = VariantEntry::published(Family::ColorBalance, codename)?.build(*precision, &values)?;
-
-                enhancement(Family::ColorBalance, codename, built)
-            }
-            // Written out rather than folded into the denoise arm: serde needs one variant per tag, and a shared helper
-            // would hide which family a reader is looking at. See design.md D1 of `add-gui-sharpen`.
-            Self::Sharpen { codename, precision, strength } => {
-                if !(Strength::MIN..=Strength::MAX).contains(strength) {
-                    tracing::warn!(
-                        codename,
-                        strength,
-                        min = Strength::MIN,
-                        max = Strength::MAX,
-                        "a strength outside the permitted range was requested; running at the nearest permitted value"
-                    );
-                }
-
-                let values = ParameterValues::new().with_strength(Strength::clamped(*strength));
-                let built = VariantEntry::published(Family::Sharpen, codename)?.build(*precision, &values)?;
-
-                enhancement(Family::Sharpen, codename, built)
-            }
-            Self::Colorization { codename, precision } => {
-                let built = VariantEntry::published(Family::Colorization, codename)?
-                    .build(*precision, &ParameterValues::new())?;
-
-                enhancement(Family::Colorization, codename, built)
+        match row.build(self.precision, &values)? {
+            Subject::Enhancement(operation) => Ok(operation),
+            // Detection, the one family whose result is not an image: published, and not something a chain can
+            // hold. Answered rather than asserted, so it is a refusal rather than a panic reachable from the wire.
+            Subject::Analysis(_) => {
+                Err(UnknownOperation::Model { family: self.family, codename: self.codename.clone() })
             }
         }
     }
-}
 
-/// The enhancement `built` carries, or a refusal naming what could not be served.
-///
-/// Unreachable while every model these families publish produces an image, which is a property of the library
-/// rather than of anything the window can send. Answered rather than asserted, for the reason the codename match
-/// this replaced was: a refusal, not a panic reachable from the wire.
-fn enhancement(family: Family, codename: &str, built: Subject) -> Result<opai::Operation, UnknownOperation> {
-    match built {
-        Subject::Enhancement(operation) => Ok(operation),
-        Subject::Analysis(_) => Err(UnknownOperation::Model { family, codename: codename.to_string() }),
+    /// The operation naming `codename` of `family` at `precision`, carrying `parameters` — what the window would send,
+    /// for the tests that build a chain.
+    #[cfg(test)]
+    pub(crate) fn named(family: Family, codename: &str, precision: Precision, parameters: &[(&str, f64)]) -> Self {
+        Self {
+            family,
+            codename: codename.to_string(),
+            precision,
+            parameters: parameters.iter().map(|(name, value)| ((*name).to_string(), *value)).collect(),
+            faces: None,
+        }
     }
 }
 
@@ -288,25 +164,11 @@ mod tests {
     // The typed constructors the assertions compare against: what `resolve` produced has to be the operation the
     // library's own constructor produces, not merely something of the right family.
     use opai::{
-        ColorBalance, Colorization, Confidence, Denoise, FaceRecovery, FloatPrecision, LightAdjustment, Point, Rect,
-        Sharpen, Upscale,
+        Bias, ColorBalance, Colorization, Denoise, FaceRecovery, Faces, Fidelity, FloatPrecision, LightAdjustment,
+        Scale, Sharpen, Strength, Upscale,
     };
 
     use super::*;
-
-    /// One face, as the detector would have reported it.
-    fn face(left: f32, top: f32) -> Face {
-        Face::new(
-            Rect::new(Point::new(left, top), Point::new(left + 40.0, top + 50.0)),
-            [Point::new(left + 10.0, top + 15.0); Face::LANDMARKS],
-            Confidence::new(0.9).expect("0.9 is inside the permitted range"),
-        )
-    }
-
-    /// The faces a window would hand back for a photograph with two people in it.
-    fn two_faces() -> Vec<Face> {
-        vec![face(10.0, 20.0), face(120.0, 30.0)]
-    }
 
     /// The float precision the wire's own [`Precision`] names.
     ///
@@ -325,13 +187,13 @@ mod tests {
         }
     }
 
-    /// What the window would send for one face recovery.
-    fn recovery(codename: &str, precision: &str, faces: &[Face]) -> serde_json::Value {
+    /// What the window would send for one face recovery, with one face skipped by key.
+    fn recovery(codename: &str, precision: &str) -> serde_json::Value {
         serde_json::json!({
             "family": "face_recovery",
             "codename": codename,
             "precision": precision,
-            "faces": faces,
+            "faces": { "skipped": ["10,20,50,70"], "restored": [] },
         })
     }
 
@@ -345,7 +207,9 @@ mod tests {
 
     /// What the window would send for one upscale.
     fn upscale(codename: &str, precision: &str, scale: f64) -> serde_json::Value {
-        serde_json::json!({ "family": "upscale", "codename": codename, "precision": precision, "scale": scale })
+        serde_json::json!({
+            "family": "upscale", "codename": codename, "precision": precision, "parameters": { "scale": scale },
+        })
     }
 
     /// The wire shape parsed from what the window would actually send.
@@ -500,12 +364,11 @@ mod tests {
     /// catalogue rather than a hardcoded list, so a model added there and unnamed here fails this test.
     #[test]
     fn every_published_face_recovery_model_can_be_named_at_every_precision_it_is_published_at() {
-        let faces = two_faces();
         let mut resolved = 0;
 
         for variant in &published_face_recovery().variants {
             for precision in variant.precisions {
-                let operation = parse(recovery(variant.codename, precision.as_str(), &faces))
+                let operation = parse(recovery(variant.codename, precision.as_str()))
                     .resolve()
                     .unwrap_or_else(|error| panic!("{} at {precision} should resolve: {error}", variant.codename));
 
@@ -534,9 +397,8 @@ mod tests {
 
     #[test]
     fn athens_resolves_to_the_operation_the_library_constructs_at_maximum_fidelity() {
-        // D7: the fidelity is the window's own decision, fixed at 1.0 and never on the wire — so what `resolve`
-        // produces has to be what the library's constructor produces when handed `Fidelity::MAXIMUM`.
-        let faces = two_faces();
+        // A face recovery sent with no fidelity runs at `ParameterValues::new`'s, which is `Fidelity::MAXIMUM` — the
+        // value this crate used to pin, and the catalogue's published default.
 
         for precision in published_face_recovery()
             .variants
@@ -545,13 +407,13 @@ mod tests {
             .expect("Athens is a face-recovery model the library publishes")
             .precisions
         {
-            let resolved = parse(recovery("athens", precision.as_str(), &faces))
+            let resolved = parse(recovery("athens", precision.as_str()))
                 .resolve()
                 .unwrap_or_else(|error| panic!("Athens at {precision}: {error}"));
 
             assert_eq!(
                 resolved,
-                FaceRecovery::athens(float(*precision), Faces::new(faces.iter().copied()), Fidelity::MAXIMUM),
+                FaceRecovery::athens(float(*precision), Faces::empty(), Fidelity::MAXIMUM),
                 "Athens at {precision} resolved to something other than what the library builds"
             );
         }
@@ -559,10 +421,8 @@ mod tests {
 
     #[test]
     fn santorini_resolves_to_the_operation_the_library_constructs_and_carries_no_fidelity() {
-        // The other half of D7: handing a fidelity to Santorini is not a value being ignored, it is a value that
-        // model's constructor has no parameter for — so the operation carries `None` and its cache tag is
-        // unaffected by the one the window fixed.
-        let faces = two_faces();
+        // Handing a fidelity to Santorini is not a value being ignored, it is a value that model's constructor has no
+        // parameter for — so the operation carries `None` and its cache tag is unaffected by any the window sends.
 
         for precision in published_face_recovery()
             .variants
@@ -571,13 +431,13 @@ mod tests {
             .expect("Santorini is a face-recovery model the library publishes")
             .precisions
         {
-            let resolved = parse(recovery("santorini", precision.as_str(), &faces))
+            let resolved = parse(recovery("santorini", precision.as_str()))
                 .resolve()
                 .unwrap_or_else(|error| panic!("Santorini at {precision}: {error}"));
 
             assert_eq!(
                 resolved,
-                FaceRecovery::santorini(float(*precision), Faces::new(faces.iter().copied())),
+                FaceRecovery::santorini(float(*precision), Faces::empty()),
                 "Santorini at {precision} resolved to something other than what the library builds"
             );
 
@@ -589,25 +449,24 @@ mod tests {
     }
 
     #[test]
-    fn the_faces_a_recovery_carries_are_the_ones_the_window_sent_in_the_order_it_sent_them() {
-        // `Faces` keeps the order it is given and folds an order-sensitive signature of the boxes into the run
-        // cache tag, so a reversal here would be a different stored result rather than a refusal.
-        let faces = two_faces();
-        let reversed = faces.iter().rev().copied().collect::<Vec<_>>();
+    fn the_choice_a_recovery_carries_is_read_and_it_resolves_over_no_faces_for_the_run_to_fill() {
+        // The faces are found inside the run — `crate::faces::for_chain` — so what the window names resolves to the
+        // model over an empty selection, and the choice travels beside it.
+        let requested = parse(recovery("athens", "fp32"));
 
-        let forwards = parse(recovery("athens", "fp32", &faces)).resolve().expect("Athens is published at FP32");
-        let backwards = parse(recovery("athens", "fp32", &reversed)).resolve().expect("Athens is published at FP32");
-
-        let opai::Operation::FaceRecovery(recovered) = &forwards else {
-            panic!("a face recovery resolved to another family's operation");
-        };
-        assert_eq!(recovered.faces().as_slice(), faces.as_slice(), "the faces sent are not the faces carried");
-        assert_ne!(forwards, backwards, "two orderings of one selection resolved to the same operation");
+        assert_eq!(
+            requested.faces,
+            Some(FaceChoice { skipped: vec!["10,20,50,70".to_string()], restored: Vec::new() })
+        );
+        assert_eq!(
+            requested.resolve().expect("Athens is published at FP32"),
+            FaceRecovery::athens(FloatPrecision::Fp32, Faces::empty(), Fidelity::MAXIMUM)
+        );
     }
 
     #[test]
     fn a_codename_face_recovery_does_not_publish_is_refused() {
-        let refused = parse(recovery("kyoto", "fp32", &two_faces()))
+        let refused = parse(recovery("kyoto", "fp32"))
             .resolve()
             .expect_err("Kyoto is an upscale model, not a face-recovery one");
 
@@ -620,7 +479,7 @@ mod tests {
 
     #[test]
     fn a_precision_a_face_recovery_model_is_not_published_at_is_refused() {
-        let refused = parse(recovery("athens", "int8", &two_faces())).resolve().expect_err("Athens has no INT8 build");
+        let refused = parse(recovery("athens", "int8")).resolve().expect_err("Athens has no INT8 build");
 
         assert_eq!(
             refused,
@@ -629,19 +488,24 @@ mod tests {
     }
 
     #[test]
-    fn a_face_recovery_carrying_no_faces_is_a_request_rather_than_a_refusal() {
-        // D10: a detection that found nothing, or one that failed, still runs the chain — so an empty selection has
-        // to resolve rather than be refused here.
-        let resolved = parse(recovery("athens", "fp32", &[]))
-            .resolve()
-            .expect("an empty selection is a legitimate request");
+    fn a_face_recovery_nobody_chose_faces_for_is_a_request_rather_than_a_refusal() {
+        // A recovery added a moment ago carries no choice at all, and every face then follows the default.
+        let mut sent = recovery("athens", "fp32");
+        sent.as_object_mut().expect("an object").remove("faces");
 
-        assert_eq!(resolved, FaceRecovery::athens(FloatPrecision::Fp32, Faces::empty(), Fidelity::MAXIMUM));
+        let requested = parse(sent);
+        assert_eq!(requested.faces, None);
+        assert_eq!(
+            requested.resolve().expect("a recovery with no choice is a legitimate request"),
+            FaceRecovery::athens(FloatPrecision::Fp32, Faces::empty(), Fidelity::MAXIMUM)
+        );
     }
 
     /// What the window would send for one light adjustment.
     fn light(codename: &str, precision: &str, bias: f64) -> serde_json::Value {
-        serde_json::json!({ "family": "light_adjustment", "codename": codename, "precision": precision, "bias": bias })
+        serde_json::json!({
+            "family": "light_adjustment", "codename": codename, "precision": precision, "parameters": { "bias": bias },
+        })
     }
 
     /// The light-adjustment family as the catalogue publishes it.
@@ -716,7 +580,9 @@ mod tests {
 
     /// What the window would send for one colour balance.
     fn balance(codename: &str, precision: &str, bias: f64) -> serde_json::Value {
-        serde_json::json!({ "family": "color_balance", "codename": codename, "precision": precision, "bias": bias })
+        serde_json::json!({
+            "family": "color_balance", "codename": codename, "precision": precision, "parameters": { "bias": bias },
+        })
     }
 
     /// The colour-balance family as the catalogue publishes it.
@@ -790,7 +656,9 @@ mod tests {
 
     /// What the window would send for one denoise.
     fn denoise(codename: &str, precision: &str, strength: f64) -> serde_json::Value {
-        serde_json::json!({ "family": "denoise", "codename": codename, "precision": precision, "strength": strength })
+        serde_json::json!({
+            "family": "denoise", "codename": codename, "precision": precision, "parameters": { "strength": strength },
+        })
     }
 
     /// The denoise family as the catalogue publishes it.
@@ -866,7 +734,9 @@ mod tests {
 
     /// What the window would send for one sharpen.
     fn sharpen(codename: &str, precision: &str, strength: f64) -> serde_json::Value {
-        serde_json::json!({ "family": "sharpen", "codename": codename, "precision": precision, "strength": strength })
+        serde_json::json!({
+            "family": "sharpen", "codename": codename, "precision": precision, "parameters": { "strength": strength },
+        })
     }
 
     /// The sharpen family as the catalogue publishes it.
@@ -1004,6 +874,69 @@ mod tests {
             refused,
             UnknownOperation::Model { family: Family::Colorization, codename: "moscow".to_string() },
             "the refusal did not name what could not be served"
+        );
+    }
+
+    #[test]
+    fn athens_runs_at_the_fidelity_the_window_sends_and_at_maximum_where_it_sends_none() {
+        let mut sent = recovery("athens", "fp32");
+        sent["parameters"] = serde_json::json!({ "fidelity": 0.25 });
+
+        assert_eq!(
+            parse(sent).resolve().expect("Athens is published at FP32"),
+            FaceRecovery::athens(FloatPrecision::Fp32, Faces::empty(), Fidelity::clamped(0.25))
+        );
+
+        // The catalogue's published default is the maximum the window used to pin, so a new Athens runs as before.
+        let default = published_face_recovery().variants[0]
+            .parameters
+            .iter()
+            .find_map(|parameter| match parameter.kind {
+                opai::ParameterKind::Range { default, .. } if parameter.name == Fidelity::NAME => Some(default),
+                _ => None,
+            })
+            .expect("Athens publishes a fidelity");
+        assert_eq!(Fidelity::clamped(default), Fidelity::MAXIMUM);
+    }
+
+    #[test]
+    fn a_parameter_name_nothing_publishes_is_refused_by_name() {
+        let mut sent = upscale("kyoto", "fp32", 2.0);
+        sent["parameters"]["radius"] = serde_json::json!(3.0);
+
+        assert_eq!(
+            parse(sent).resolve().expect_err("no model takes a radius"),
+            UnknownOperation::Parameter { name: "radius".to_string() }
+        );
+    }
+
+    #[test]
+    fn a_family_taking_no_parameter_needs_no_parameters_field_and_detection_is_not_a_chain_step() {
+        assert!(parse(colorization("delhi", "fp32")).parameters.is_empty());
+
+        let refused = parse(serde_json::json!({ "family": "detection", "codename": "newyork", "precision": "fp32" }))
+            .resolve()
+            .expect_err("a detection has no image result");
+        assert_eq!(refused, UnknownOperation::Model { family: Family::Detection, codename: "newyork".to_string() });
+    }
+
+    #[test]
+    fn the_refusals_keep_their_wire_shape() {
+        // Pinned before the operation's own shape changed, so the refusal the window already maps did not move with
+        // it.
+        let json = |refusal: UnknownOperation| serde_json::to_value(refusal).expect("a refusal serializes");
+
+        assert_eq!(
+            json(UnknownOperation::Model { family: Family::Upscale, codename: "berlin".to_string() }),
+            serde_json::json!({ "kind": "model", "family": "upscale", "codename": "berlin" })
+        );
+        assert_eq!(
+            json(UnknownOperation::Precision { codename: "osaka".to_string(), precision: Precision::Fp32 }),
+            serde_json::json!({ "kind": "precision", "codename": "osaka", "precision": "fp32" })
+        );
+        assert_eq!(
+            json(UnknownOperation::Parameter { name: "radius".to_string() }),
+            serde_json::json!({ "kind": "parameter", "name": "radius" })
         );
     }
 }

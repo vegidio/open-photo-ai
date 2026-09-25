@@ -1,9 +1,11 @@
 import type { ParseKeys, TFunction } from "i18next";
 import { type LucideIcon, Maximize2, Paintbrush, Palette, ScanFace, Sun, Triangle, Waves } from "lucide-react";
-import type { Suggestion } from "@/ipc/autopilot";
-import type { Family, FamilyEntry, Precision, VariantEntry } from "@/ipc/catalogue";
+import { type Suggestion, suggestedScale } from "@/ipc/autopilot";
+import type { Family, FamilyEntry, ParameterEntry, Precision, VariantEntry } from "@/ipc/catalogue";
+import { type CropInfo, framedDimensions } from "@/ipc/crop";
 import type { Operation } from "@/ipc/enhance";
 import type { ImageRecord } from "@/ipc/images";
+import { report } from "@/lib/report";
 
 /**
  * One enhancement this application presents, and what it is called.
@@ -33,18 +35,17 @@ export type Enhancement = {
 };
 
 /**
- * The seven enhancements, in pipeline order.
+ * The seven enhancements, in the order the add menu offers them.
  *
  * **This is the frontend's only list of domain names, and it is not model vocabulary.** It is which
  * enhancements this application presents and in what order - a presentation decision, which is why
- * it lives in a front end. `opai` says as much about its own list: `Family::ALL` is documented as
- * *"declaration order... Not the order the catalogue publishes - that one is a presentation decision
- * and is pinned where it is made"*, and neither of those is the pipeline's order either.
+ * it lives in a front end.
  *
- * One list rather than one per consumer, for the reference's reason: *"the two must agree: the add
- * menu offering them in one order while the pipeline ran them in another would be a silent
- * inconsistency."* It is in `lib/` rather than in `features/settings/` because that menu and the
- * sidebar are its next two readers.
+ * **Not the order a chain runs in.** That one is the library's: `Opai::process` puts every chain into
+ * `Family::APPLY_ORDER`, and the catalogue publishes each family's place in it, which is what a stack is
+ * kept in - see {@link applyOrder}. The two lists happen to agree today, as the reference's one list did:
+ * its comment is that *"the add menu offering them in one order while the pipeline ran them in another
+ * would be a silent inconsistency."* A test holds them to each other.
  *
  * **`detection` is named nowhere here.** The catalogue publishes it - deliberately, so that "which
  * model detects faces" is not something a front end restates - but it is not an enhancement a user
@@ -95,6 +96,22 @@ export const ENHANCEMENTS = [
         icon: Maximize2,
     },
 ] as const satisfies readonly Enhancement[];
+
+/**
+ * The order a chain runs its families in, read off the catalogue: every family that publishes a place
+ * in one, by that place. `detection` publishes none and is left out.
+ *
+ * **The library's order, not this side's**: `Opai::process` sorts every chain into `Family::APPLY_ORDER`
+ * whatever order it is sent in, so a stack kept in this order is drawn in the order it will actually run.
+ *
+ * Empty while the catalogue has not arrived, which sorts nothing - and nothing is added before it has,
+ * because `newOperation` builds nothing without a model to name.
+ */
+export const applyOrder = (families: readonly FamilyEntry[]): Family[] =>
+    families
+        .flatMap(({ family, order }) => (order === undefined ? [] : [{ family, order }]))
+        .sort((left, right) => left.order - right.order)
+        .map(({ family }) => family);
 
 /**
  * The families `keep` holds, in {@link ENHANCEMENTS}' order - so a list built from them does not
@@ -304,6 +321,84 @@ export const optionFor = (entry: FamilyEntry | undefined, value: string): ModelO
     modelChoice(entry, value).options.find((candidate) => candidate.value === value);
 
 /**
+ * The range `entry` publishes as `name` for the model `codename`, or `undefined` where that model
+ * publishes none - or the catalogue has not arrived.
+ *
+ * **The selected model's**, not the family's, because `VariantEntry.parameters` is per model: two models
+ * of one family may disagree, and a control built from a family-wide list would offer one of them a value
+ * its sibling refuses. **Named rather than found by kind**, because a model may publish more than one
+ * range - Athens publishes a fidelity beside its faces - and "the only range" would then be the wrong one.
+ * The predicate narrows as well as finds: the bounds only exist on the `range` arm.
+ */
+export const publishedRange = (
+    entry: FamilyEntry | undefined,
+    codename: string,
+    name: string,
+): (ParameterEntry & { kind: "range" }) | undefined =>
+    entry?.variants
+        .find((published) => published.codename === codename)
+        ?.parameters.find(
+            (parameter): parameter is ParameterEntry & { kind: "range" } =>
+                parameter.name === name && parameter.kind === "range",
+        );
+
+/** Every range `variant` publishes, at the value a newly added enhancement starts it at. */
+const publishedDefaults = (variant: VariantEntry | undefined): Record<string, number> =>
+    Object.fromEntries(
+        (variant?.parameters ?? []).flatMap((parameter) =>
+            parameter.kind === "range" ? [[parameter.name, parameter.default]] : [],
+        ),
+    );
+
+/**
+ * The value `operation` carries for the parameter published as `name`, or the catalogue's default for
+ * it where it carries none - `undefined` only where neither knows one.
+ *
+ * An operation built by {@link newOperation} carries every range its model publishes, so the fallback is
+ * for one whose model was switched to a sibling that publishes a parameter the first did not.
+ */
+export const parameterOf = (operation: Operation, entry: FamilyEntry | undefined, name: string): number | undefined =>
+    operation.parameters[name] ?? publishedRange(entry, operation.codename, name)?.default;
+
+/** `operation` with the parameter published as `name` set to `value`, and everything else as it was. */
+export const withParameter = (operation: Operation, name: string, value: number): Operation => ({
+    ...operation,
+    parameters: { ...operation.parameters, [name]: value },
+});
+
+/**
+ * `operation` switched to the model a chooser's `value` names, or `undefined` where the catalogue no
+ * longer publishes it.
+ *
+ * A chosen model is resolved to the option it names rather than parsed: the option carries both halves
+ * as fields, so nothing here knows how the value is composed. One the catalogue no longer publishes
+ * resolves to nothing, which a caller ignores - leaving the enhancement on the model it is already
+ * running.
+ *
+ * **The values already set are kept**, and a parameter the new model publishes that the operation does
+ * not carry yet arrives at its published default - so switching Santorini to Athens starts Athens'
+ * fidelity where a new Athens would. A value the new model does not read is kept too: switching back
+ * finds it where it was, and Rust ignores it meanwhile.
+ */
+export const withModel = (
+    operation: Operation,
+    entry: FamilyEntry | undefined,
+    value: string,
+): Operation | undefined => {
+    const option = optionFor(entry, value);
+    if (!option) return undefined;
+
+    const variant = entry?.variants.find((published) => published.codename === option.codename);
+
+    return {
+        ...operation,
+        codename: option.codename,
+        precision: option.precision,
+        parameters: { ...publishedDefaults(variant), ...operation.parameters },
+    };
+};
+
+/**
  * The families a progress report can carry that are not enhancements a user adds, and the enhancement
  * each is reported **as**.
  *
@@ -339,65 +434,47 @@ export const progressLabelKey = (family: Family | undefined): ParseKeys | undefi
 };
 
 /**
- * The two thresholds the scale a new upscale arrives at is chosen between, in pixels.
- *
- * The reference's `defaultUpscaleScale` thresholds unchanged, and they are powers of two rather than
- * round decimal megapixels: 1024² and 2048².
+ * What the library calls an upscale's multiplier: its own `Scale::NAME`, the name the catalogue publishes
+ * the range under and the operation carries the value under.
  */
-const SMALL_IMAGE = 1_048_576;
-const MEDIUM_IMAGE = 4_194_304;
+const SCALE = "scale";
 
 /**
- * The scale a freshly added upscale gets, chosen so the result lands in a sensible range for the
- * photograph it is being added to - 4x for a small one, 2x for a medium one, 1x for a large one.
+ * The scale a freshly added upscale starts at, for `file` as it is framed by `crop`: 4x for a small
+ * photograph, 2x for a medium one, 1x for a large one.
  *
- * Parity with the reference, thresholds included: a small photograph can afford more enlargement
- * than a large one, and a fixed multiplier would turn a 6000x4000 source into a 24000x16000 result
- * on the strength of nothing.
+ * **The ladder is the library's**, asked through {@link suggestedScale} rather than restated here: it
+ * is the one Autopilot's suggestion is read off, so the two cannot disagree about one photograph. A
+ * small photograph can afford more enlargement than a large one, and a fixed multiplier would turn a
+ * 6000x4000 source into a 24000x16000 result on the strength of nothing.
  *
- * **A record with no dimensions gets 1x**, which is the conservative end rather than the arithmetic
- * one. The dimensions are absent exactly when this application could not parse the file's header, so
- * nothing is known about how large the photograph is - and the reference's own expression answers 4x
- * there, because an unknown size multiplies out to zero pixels and lands in the smallest bucket.
- * Enlarging an unmeasured photograph fourfold is the worst of the three guesses.
+ * **Measured on the framed size**, which is what will actually be upscaled - the same size the
+ * analysis measures. A tight crop of a large photograph is a small photograph.
+ *
+ * **A photograph with no dimensions gets 1x** without asking, which is the conservative end rather
+ * than the arithmetic one. The dimensions are absent exactly when this application could not parse the
+ * file's header and it carries no framing, so nothing is known about how large it is - and the
+ * reference's own expression answers 4x there, because an unknown size multiplies out to zero pixels
+ * and lands in the smallest bucket. Enlarging an unmeasured photograph fourfold is the worst of the
+ * three guesses. A question the bridge fails to answer lands on the same 1x, for the same reason.
  */
-export const defaultScale = (file: ImageRecord | undefined): number => {
-    if (file?.width === undefined || file.height === undefined) return 1;
+export const startingScale = async (file: ImageRecord | undefined, crop: CropInfo | undefined): Promise<number> => {
+    const { width, height } = framedDimensions(file, crop);
+    if (width === undefined || height === undefined) return 1;
 
-    const pixels = file.width * file.height;
-
-    return pixels <= SMALL_IMAGE ? 4 : pixels <= MEDIUM_IMAGE ? 2 : 1;
+    try {
+        return await suggestedScale(width, height);
+    } catch (error) {
+        report("asking for the scale a new upscale starts at failed", error);
+        return 1;
+    }
 };
-
-/**
- * The bias a freshly added light adjustment or colour balance gets: halfway to the model's own output,
- * in the positive direction.
- *
- * The reference's `defaultAmount`, which is 0.5 for both families. A presentation decision like {@link defaultScale}, which is why it is
- * here rather than in the library - `autopilot.rs` already declines to hold defaults for a front end.
- */
-export const DEFAULT_BIAS = 0.5;
-
-/**
- * The strength a freshly added denoise or sharpen gets: the model's own output, neither weakened nor
- * amplified.
- *
- * The reference's `defaultAmount` for both families, and the value their sliders mark. Here beside
- * {@link DEFAULT_BIAS}, for the same reason.
- */
-export const DEFAULT_STRENGTH = 1;
-
-/**
- * A strength or a bias as the interface shows it: the wire speaks units, the row and the options panel
- * speak whole percent. One rounding for both, so the row and the field cannot disagree.
- */
-export const toPercent = (unit: number) => Math.round(unit * 100);
 
 /**
  * How much larger a chain makes the photograph it runs over: the upscale's own scale, or 1 where the
  * stack holds none.
  *
- * Here rather than inline in the navbar, beside {@link defaultScale} and the other derivations of
+ * Here rather than inline in the navbar, beside {@link startingScale} and the other derivations of
  * this shape, because it is the same question those answer - what the stack implies about the
  * photograph's size - and the navbar is the second region to depend on the stack's shape rather than
  * the owner of that dependency. The reference keeps the same function, in the same place.
@@ -411,14 +488,19 @@ export const toPercent = (unit: number) => Math.round(unit * 100);
  * "0 x 0" is a worse answer to a fault than the photograph's own size.
  */
 export const upscaleFactor = (operations: readonly Operation[]): number => {
-    const scale = operations.find((operation) => operation.family === "upscale")?.scale;
+    const scale = operations.find((operation) => operation.family === "upscale")?.parameters[SCALE];
 
     return scale !== undefined && Number.isFinite(scale) && scale > 0 ? scale : 1;
 };
 
 /**
- * The operation a newly added enhancement carries: the user's default model for that family, at a
- * value suited to the photograph.
+ * The operation a newly added enhancement carries: the user's default model for that family, with every
+ * parameter that model publishes at the catalogue's published default.
+ *
+ * **The defaults are the library's**, published beside the bounds on each range - a strength of 1, the
+ * model's own output; a bias of 0.5; Athens' maximum fidelity - so no number here restates one. The one
+ * exception is an upscale's `scale`, the factor it starts at: {@link startingScale}'s answer for the
+ * photograph, asked by the caller because it is a question for the backend, and read by no other family.
  *
  * **The model is resolved through {@link modelChoice}**, which is the same call the settings rows
  * make - so the default for a family never chosen for, the repair of a selection naming a model the
@@ -438,39 +520,31 @@ export const newOperation = (
     family: Operation["family"],
     entry: FamilyEntry | undefined,
     stored: string | undefined,
-    file: ImageRecord | undefined,
+    scale = 1,
 ): Operation | undefined => {
     const { options, selected } = modelChoice(entry, stored);
     const option = options.find((candidate) => candidate.value === selected);
 
     if (!option) return undefined;
 
-    switch (family) {
-        case "face_recovery":
-            /*
-             * **No faces**, and not because none have been found yet: the stack is the user's choice and
-             * the faces are a property of the pixels, which change when the framing does. They are put in
-             * by `useEnhancementRun` on the way to `enhance` - the one place they are resolved - so a
-             * framing change re-detects without rewriting a single photograph's stack. See design.md D5.
-             */
-            return { family, codename: option.codename, precision: option.precision, faces: [] };
-        case "denoise":
-        case "sharpen":
-            return { family, codename: option.codename, precision: option.precision, strength: DEFAULT_STRENGTH };
-        case "light_adjustment":
-        case "color_balance":
-            return { family, codename: option.codename, precision: option.precision, bias: DEFAULT_BIAS };
-        case "colorization":
-            // The model alone: colorization takes no parameter, so there is no value to choose a default for.
-            return { family, codename: option.codename, precision: option.precision };
-        case "upscale":
-            return {
-                family,
-                codename: option.codename,
-                precision: option.precision,
-                scale: defaultScale(file),
-            };
-    }
+    const variant = entry?.variants.find((published) => published.codename === option.codename);
+    const operation: Operation = {
+        family,
+        codename: option.codename,
+        precision: option.precision,
+        parameters: publishedDefaults(variant),
+    };
+
+    /*
+     * **No faces and no choice among them** for a face recovery: the stack is the user's choice about the
+     * enhancement, and the faces are a property of the pixels, which change when the framing does. The run
+     * finds them itself, and the choice is put in by `withChoice` on the way to `enhance`, so a framing
+     * change rewrites no photograph's stack. See design.md D5.
+     *
+     * The one value that is the photograph's rather than the catalogue's, an upscale's scale: see
+     * `startingScale`.
+     */
+    return family === "upscale" ? withParameter(operation, SCALE, scale) : operation;
 };
 
 /**
@@ -478,9 +552,8 @@ export const newOperation = (
  * that an upscale carries the scale the analysis chose.
  *
  * **Built through {@link newOperation}** rather than beside it, so a change to the menu's defaults moves both.
- * The upscale's scale is the one exception: {@link defaultScale} reads the file's header, and the analysis
- * measured the **framed** pixels by the same ladder, which is what will actually be upscaled. The two agree on
- * a photograph nobody has cropped.
+ * The upscale carries the scale the analysis chose, which is the library's ladder read off the framed pixels -
+ * the same answer {@link startingScale} would have asked for.
  *
  * `undefined` for a family the catalogue publishes no model for, as {@link newOperation} answers it.
  *
@@ -490,11 +563,10 @@ export const suggestedOperation = (
     suggestion: Suggestion,
     entry: FamilyEntry | undefined,
     stored: string | undefined,
-    file: ImageRecord | undefined,
 ): Operation | undefined => {
-    const operation = newOperation(suggestion.family, entry, stored, file);
+    const operation = newOperation(suggestion.family, entry, stored);
 
     return operation?.family === "upscale" && suggestion.family === "upscale"
-        ? { ...operation, scale: suggestion.scale }
+        ? withParameter(operation, SCALE, suggestion.scale)
         : operation;
 };

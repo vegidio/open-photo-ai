@@ -164,7 +164,7 @@ pub mod telemetry;
 pub use app::{CLI, GUI, Holder, PERF};
 /// What an analysis concluded, and the one enhancement it calls for. The module stays private; only the
 /// answer is public, not the signals behind it.
-pub use autopilot::{Suggestion, Suggestions};
+pub use autopilot::{Suggestion, Suggestions, suggested_scale};
 pub use cache::CacheMode;
 pub use deps::ModelTrust;
 pub use error::{InferenceError, InitError, UnsupportedReason};
@@ -218,6 +218,16 @@ use task::spawn_blocking;
 /// `io.vinicius.opai`, deliberately distinct from the Go app's `open-photo-ai` — no shared config, models,
 /// cache, log, or claim. Cost: a duplicate ~175 MB runtime + model download for existing Go app users.
 pub const APP_NAME: &str = "io.vinicius.opai";
+
+/// Waits for the results the run cache is still writing in the background, or for `timeout` to pass, and returns
+/// whether every one was written.
+///
+/// A run hands its result back before the result is stored, so a process that exits the moment its last run returns
+/// can lose that entry. Dropping the last [`Opai`] handle waits for them already; a front end whose handle is never
+/// dropped — one that exits from inside its event loop — calls this on its way out.
+pub fn settle_cache_writes(timeout: std::time::Duration) -> bool {
+    cache::settle(timeout)
+}
 
 /// Returns the application version.
 pub fn version() -> &'static str {
@@ -326,6 +336,21 @@ struct Inner {
     ///
     /// Opening the same directory twice in one process yields one shared store rather than a lock failure.
     cache: Store,
+}
+
+/// How long dropping the last [`Opai`] handle waits for the run cache's queued writes: long enough for a large result
+/// to be encoded and written, short enough that a process on its way out is not held there by a failing disk.
+const SETTLE_ON_DROP: std::time::Duration = std::time::Duration::from_secs(10);
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        // Before the claim is released with the other fields, so the next process to take the directory finds what
+        // this one's last run produced. Writes queued by another `Opai` in the process are waited for too, which
+        // costs at most the same bounded wait.
+        if !cache::settle(SETTLE_ON_DROP) {
+            tracing::warn!(timeout = ?SETTLE_ON_DROP, "results still being written to the run cache were abandoned");
+        }
+    }
 }
 
 /// This application's own sessions and the `ort` tile step, which is what a run is carried out against.
@@ -608,7 +633,7 @@ impl Opai {
     /// while in use.
     ///
     /// If `requested`'s providers can't open the model, it's rebuilt with nothing attached and the handle
-    /// reports what was asked for beside what it ran on; the downgrade isn't latched.
+    /// reports what it ran on; the downgrade isn't latched.
     ///
     /// `profile` is the tuning measured for this artifact ([`Operation::profile`]).
     ///
@@ -631,10 +656,13 @@ impl Opai {
         self.inner.sessions.session(artifact, profile, requested, interest).await
     }
 
-    /// Runs `source` through `operations` in order and returns the enhanced image beside what it ran on.
+    /// Runs `source` through `operations` and returns the enhanced image beside what it ran on.
     ///
-    /// Each operation applies to the result of the one before it. An empty chain returns `source` unchanged —
-    /// a valid request, sent when a user has toggled every enhancement off.
+    /// Each operation applies to the result of the one before it, **in [`Family::APPLY_ORDER`]** whatever order they
+    /// were given in: the chain is put into that order before anything else happens, so a face recovery always runs
+    /// before an upscale that would move its faces, and two front ends listing one stack two ways ask for one result.
+    /// Operations of one family keep the order they were given in. An empty chain returns `source` unchanged — a
+    /// valid request, sent when a user has toggled every enhancement off.
     ///
     /// `options` is [`ProcessOptions`], or `None` for its defaults (`Auto`, 8-bit, no progress, no
     /// cancellation).

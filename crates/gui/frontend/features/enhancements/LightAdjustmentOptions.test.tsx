@@ -16,7 +16,7 @@ const light = (codename: string, precision: Operation["precision"], bias: number
     family: "light_adjustment",
     codename,
     precision,
-    bias,
+    parameters: { bias },
 });
 
 /** What the current image is set to have done to it. */

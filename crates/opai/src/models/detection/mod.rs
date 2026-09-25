@@ -59,6 +59,23 @@ impl Detection {
         super::operation::Analysis::Detection(Self::new(DetectionVariant::NewYork(precision)))
     }
 
+    /// The detection whose faces a face recovery restores: New York at FP32, **whatever the recovery model's tier**.
+    ///
+    /// The one answer every caller that feeds a face recovery shares — the autopilot's face signal, the GUI's face
+    /// picker and its enhance path, and the benchmark's auxiliary run — so the faces a suggestion found, the faces a
+    /// user picked from and the faces a restore is handed come from the same detection, and are served by the same
+    /// run-store entry rather than by a second detector build keyed a second way.
+    ///
+    /// A constant rather than a function of the recovery model's precision. The two builds are required to find the
+    /// same faces in the same order, differing at most sub-pixel, and a [`Face`](super::face::Face) is quantized to a
+    /// hundredth of a pixel on acceptance, so in the overwhelming majority of cases the two answers are the *same
+    /// value*. Following the tier would therefore buy nothing and cost a second detector on disk plus a second
+    /// run-store entry per photograph per framing, where one serves both. FP32 rather than FP16 because it is the build
+    /// every provider runs, and the one the reference detects with.
+    pub const fn for_face_recovery() -> super::operation::Analysis {
+        Self::newyork(FloatPrecision::Fp32)
+    }
+
     /// Which model this runs, and at which precision.
     pub const fn variant(self) -> DetectionVariant {
         self.variant

@@ -4,7 +4,7 @@
 use image::{DynamicImage, ImageBuffer, Rgb, Rgba};
 use imaging::tensor::Sampler;
 
-use super::pass::srgb_to_linear;
+use crate::models::colorization::srgb_to_linear;
 
 /// Applies the sRGB gamma to a linear-light channel, clamped to `[0, 1]`, at 16 bits.
 pub(super) fn encode(linear: f64) -> u16 {

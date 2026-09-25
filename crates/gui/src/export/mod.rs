@@ -16,7 +16,7 @@ use opai::Opai;
 use tauri::State;
 
 use crate::command::{Traceparent, command_span, traced, traced_sync};
-use crate::enhance::{Processor, Requested};
+use crate::enhance::{EnhanceError, Processor, Requested};
 use crate::images::{Crop, Opened};
 use crate::setup::Setup;
 use crate::stops::Stops;
@@ -29,6 +29,7 @@ mod run;
 pub(crate) mod written;
 
 use format::ExportFormat;
+pub(crate) use format::ExportFormats;
 use run::{ExportError, Exported, Request, export_with};
 pub(crate) use written::Written;
 
@@ -50,8 +51,10 @@ pub(crate) type Exports = Stops<Export>;
 /// `operations` may be empty, which writes the framed photograph as it is. `crop` is how the user has framed it, or
 /// absent to export the whole photograph.
 ///
-/// `format` decides the bytes, whatever `destination` ends in. `quality` applies to AVIF, HEIC, JPEG and WebP and is
-/// brought inside 1..=100. Without `overwrite`, a taken destination is written as `name_1.ext` and so on.
+/// `format` decides the bytes, whatever `destination` ends in. `quality` applies to the formats
+/// [`export_formats`] publishes as taking one, is brought inside 1..=100, and is absent for the rest; a lossy format sent
+/// none is written at its published default. Without `overwrite`, a taken destination is written as `name_1.ext` and so
+/// on.
 ///
 /// Answers the path actually written and the bytes written, or that the export was stopped. A path written is
 /// recorded in [`Written`], which is what lets [`reveal_export`](written::reveal_export) show it.
@@ -73,7 +76,7 @@ pub(crate) async fn export(
     crop: Option<Crop>,
     destination: std::path::PathBuf,
     format: ExportFormat,
-    quality: f64,
+    quality: Option<f64>,
     overwrite: bool,
     setup: State<'_, Setup<Opai>>,
     opened: State<'_, Opened>,
@@ -84,7 +87,7 @@ pub(crate) async fn export(
     traced(command_span!("export", traceparent, run = run), async move {
         // A clone of the handle rather than the handle, and the lock released before the export starts — see
         // `Setup::peek`.
-        let opai = setup.peek(Opai::clone).await.ok_or(ExportError::NotReady)?;
+        let opai = setup.peek(Opai::clone).await.ok_or(EnhanceError::NotReady)?;
         let reporting = progress::reporting(&app, &run);
 
         let request = Request { run, source, operations, processor, crop, destination, format, quality, overwrite };
@@ -96,6 +99,20 @@ pub(crate) async fn export(
         answer
     })
     .await
+}
+
+// The command's name is written once more, in `frontend/ipc/export.ts`.
+/// Every format an export can be written in, and what each can do: whether it takes a quality and the range and
+/// default of one, the extension it is written with, and the source extensions a Preserve export writes back as it —
+/// with what a source none of them can write is written as instead.
+///
+/// The window's format rules are read from this rather than restated there, so the chooser, the quality sliders and
+/// the name a file is written under cannot come to disagree with what this crate encodes.
+///
+/// Nothing here can fail, and the answer never changes.
+#[tauri::command]
+pub(crate) fn export_formats(traceparent: Traceparent) -> ExportFormats {
+    traced_sync(command_span!("export_formats", traceparent), format::capabilities)
 }
 
 // The command's name is written once more, in `frontend/ipc/export.ts`.

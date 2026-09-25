@@ -1,9 +1,11 @@
 //! Finding the faces in an open photograph, so a face recovery can be run over them.
 //!
-//! One command, [`detect_faces`], and the seam beneath it. It is deliberately **not** folded into `enhance`:
-//! the window has to hold the faces whatever else is true — it reports how many a photograph has, and a later
-//! slice draws a box per face and lets a user turn one off — and none of that can be done with a set that only
-//! ever existed inside one `enhance` call. See design.md D1.
+//! Two ways in. [`for_chain`] is how a chain carrying a face recovery gets its faces: `enhance` and `export` detect
+//! inside the run they were asked for, with one progress stream, and hand the recovery the faces the user's
+//! [`FaceChoice`] keeps — so the window never has to detect first and enhance second. [`detect_faces`] is the
+//! picker's: the window holds the faces too — it reports how many a photograph has and draws a box per face for a
+//! user to turn off — and it asks for them there when it has none yet. Both run the same detection, so one run-store
+//! entry serves both. See design.md D1.
 //!
 //! # Why this is its own module and not part of `enhance`
 //!
@@ -19,9 +21,10 @@
 //! serves it without transferring or opening anything — which is what makes turning a photograph to 90°, then
 //! 50°, then back to 90° cost two detections rather than three. See design.md D3.
 //!
-//! # There is no stopping a detection
+//! # There is no stopping the picker's detection
 //!
-//! No `cancel_detect`, and no slot. A window that has moved on discards the answer by run name, as it already
+//! A chain's detection stops with the chain: it runs under the chain's own cancellation. The picker's has no
+//! `cancel_detect`, and no slot. A window that has moved on discards the answer by run name, as it already
 //! discards a progress report about a run it abandoned. An abandoned detection costs one bounded run — the
 //! detector sees one fixed square whatever the photograph's size — and its result is written to the run store,
 //! where the next request for that framing is served by it. See design.md D11.
@@ -33,24 +36,14 @@
 
 use std::future::Future;
 
-use opai::{Analysis, Detection, ExecuteOptions, Executed, Face, Faces, FloatPrecision, InferenceError, Opai, Picture};
-use serde::Serialize;
+use opai::{Analysis, Detection, ExecuteOptions, Executed, Face, Faces, InferenceError, Opai, Picture};
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::command::{Answer, CommandError, Ended, Traceparent, command_span, traced};
-use crate::enhance::{Processor, Reporting, reporting};
+use crate::enhance::{Enhancer, Processor, Reporting, Requested, reporting};
 use crate::images::{Crop, Opened, load_framed};
 use crate::setup::Setup;
-
-/// The precision the detector is always run at, whatever the recovery model's tier.
-///
-/// **A constant rather than a function of the recovery model**, which is where this diverges from the
-/// reference. `face-detection` already requires that the two builds find the same faces in the same order,
-/// differing at most sub-pixel and comparing equal below a hundredth of a pixel — and a [`Face`] is quantized
-/// to a hundredth of a pixel on acceptance, so in the overwhelming majority of cases the two are the *same
-/// value*. The tier therefore buys nothing and costs a second detector build on disk plus a second run-store
-/// entry per photograph per framing, where one would serve both. See design.md D2.
-const DETECTION_PRECISION: FloatPrecision = FloatPrecision::Fp32;
 
 /// Why the faces in a photograph could not be found.
 ///
@@ -98,7 +91,165 @@ impl CommandError for DetectError {
     }
 }
 
-impl Answer for Vec<Face> {}
+/// One face found, as the window is told it: `opai`'s own [`Face`], its [`key`](face_key), and whether a recovery
+/// can restore it.
+///
+/// **The face is flattened in unchanged**, so its fields are `opai`'s own spelling. See `Face` in
+/// `frontend/ipc/faces.ts`, which explains why that spelling is kept.
+///
+/// `key` is what the window records a choice by, and what [`FaceChoice`] names a face with on the way back — written
+/// here, once, so the two ends cannot spell one face two ways.
+///
+/// `restorable` is [`Face::restorable`], published rather than restated: the window counts the faces a recovery will
+/// restore by the same rule [`FaceChoice::keeps`] applies and the autopilot suggests face recovery by.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct DetectedFace {
+    /// The face, as the detector reported it.
+    #[serde(flatten)]
+    pub(crate) face: Face,
+    /// The face's identity for a choice: see [`face_key`].
+    pub(crate) key: String,
+    /// Whether it is small enough for a recovery to give it back more detail than it holds.
+    pub(crate) restorable: bool,
+}
+
+impl From<Face> for DetectedFace {
+    fn from(face: Face) -> Self {
+        Self { face, key: face_key(&face), restorable: face.restorable() }
+    }
+}
+
+/// A face's identity, as far as a choice among faces is concerned: its four bounding-box coordinates,
+/// `min.x,min.y,max.x,max.y`.
+///
+/// **The same four numbers `Faces::write_cache_signature` folds**, for the reasons `crates/opai/src/models/face.rs`
+/// gives. *Bounding box only*, because the box uniquely identifies a deterministically detected face and the landmarks
+/// and the confidence move with it. *Nothing digested*, because a key read back out of a set does not need to be short
+/// and a legible one is legible in a debugger and a log.
+///
+/// **Stable across a re-detection**: a coordinate is quantized to a hundredth of a pixel as [`Face::new`] accepts it,
+/// so two detections of one photograph at one framing produce the same numbers. The coordinates are in the **framed**
+/// photograph's pixels, so a framing nobody has been at matches no key recorded at another, and one returned to
+/// matches every key recorded there.
+///
+/// Each number is `f32`'s shortest spelling, the one JavaScript also prints for it, with a negative zero written as
+/// `0` — so a key a debugger shows on either side reads the same.
+pub(crate) fn face_key(face: &Face) -> String {
+    let rect = face.bounding_box();
+    // `+ 0.0` turns a negative zero into a positive one and changes nothing else.
+    let number = |value: f32| (value + 0.0).to_string();
+
+    format!("{},{},{},{}", number(rect.min.x), number(rect.min.y), number(rect.max.x), number(rect.max.y))
+}
+
+/// Which of the faces found a face recovery restores, as the window sends it: the user's own exceptions to the
+/// default, by [`face_key`].
+///
+/// **The default is [`Face::restorable`]**: a face small enough for a recovery to add detail is restored, and a larger
+/// one — which a recovery can only soften — is left alone. `skipped` holds the faces the user turned off although the
+/// default would restore them, and `restored` the ones turned on although it would not. A face in neither follows the
+/// default, which is why a framing nobody has been at — every face at new coordinates — is decided by size, and one
+/// returned to finds the user's choices where they were left.
+///
+/// **Keys, not faces.** The window does not have to know the faces before it asks for a run: the run finds them, and
+/// this says which to keep.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FaceChoice {
+    /// Faces the default would restore and the user turned off.
+    #[serde(default)]
+    pub(crate) skipped: Vec<String>,
+    /// Faces the default would leave alone and the user turned on.
+    #[serde(default)]
+    pub(crate) restored: Vec<String>,
+}
+
+impl FaceChoice {
+    /// Whether a face recovery restores `face` under this choice.
+    pub(crate) fn keeps(&self, face: &Face) -> bool {
+        let key = face_key(face);
+
+        !self.skipped.contains(&key) && (self.restored.contains(&key) || face.restorable())
+    }
+}
+
+/// What finding the faces for a chain came to, for the window to record beside the result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ChainFaces {
+    /// The chain carries no face recovery, so nothing was looked for.
+    NotAsked,
+    /// Every face found in the framed photograph, in the order the detector found them — chosen or not, since the
+    /// window counts and draws them all.
+    Found(Vec<DetectedFace>),
+    /// The detection failed, and the recovery restored none. `opai`'s own sentence, untranslated.
+    Failed(String),
+}
+
+/// `operations` with every face recovery handed the faces `requested` keeps among those found in `picture`, and what
+/// was found.
+///
+/// **Inside the run, not before it.** The window used to detect, record, and only then ask for the chain; now the
+/// chain it asks for detects for itself, so a face recovery is one request with one progress stream — `on_progress`,
+/// which [`Handover`](crate::enhance::Handover) maps onto the head of the bar — and one stop. The detection is
+/// [`Detection::for_face_recovery`], the one the picker and the autopilot run too, so it is served from the run store
+/// whenever either already asked: a re-run at a framing already visited detects nothing.
+///
+/// `operations` is the chain `requested` resolved to, in the same order, with every face recovery built over an empty
+/// selection.
+///
+/// **A detection that fails does not fail the chain.** The recovery restores nothing and the rest of the chain runs:
+/// refusing it would make a failed detection also cancel an upscale asked for in the same list, a second failure
+/// caused by the first. What failed comes back as [`ChainFaces::Failed`], for the window to say so. See design.md D10.
+///
+/// # Errors
+///
+/// [`InferenceError::Cancelled`] where the run was stopped during the detection — the one outcome the chain cannot go
+/// on from.
+pub(crate) async fn for_chain<E: Enhancer>(
+    enhancer: &E,
+    picture: &Picture,
+    requested: &[Requested],
+    operations: Vec<opai::Operation>,
+    options: ExecuteOptions,
+) -> Result<(Vec<opai::Operation>, ChainFaces), InferenceError> {
+    if !operations.iter().any(|operation| matches!(operation, opai::Operation::FaceRecovery(_))) {
+        return Ok((operations, ChainFaces::NotAsked));
+    }
+
+    let found = match enhancer.detect(picture, &Detection::for_face_recovery(), options).await {
+        Ok(Executed { value, .. }) => value,
+        Err(InferenceError::Cancelled) => return Err(InferenceError::Cancelled),
+        // Recorded by `opai`, where it happened; this only notes what the chain does about it.
+        Err(error) => {
+            tracing::debug!(%error, "the faces for a face recovery could not be found; it restores none");
+
+            return Ok((operations, ChainFaces::Failed(error.to_string())));
+        }
+    };
+
+    let operations = requested
+        .iter()
+        .zip(operations)
+        .map(|(requested, operation)| match operation {
+            opai::Operation::FaceRecovery(recovery) => {
+                let choice = requested.faces.clone().unwrap_or_default();
+
+                // In the order the detector found them: `Faces` folds an order-sensitive signature into the cache tag,
+                // so the same choice asks for the same stored result every time.
+                let kept = Faces::new(found.iter().copied().filter(|face| choice.keeps(face)));
+
+                opai::Operation::FaceRecovery(recovery.with_faces(kept))
+            }
+            other => other,
+        })
+        .collect();
+
+    tracing::debug!(found = found.len(), "the faces for a face recovery were found");
+
+    Ok((operations, ChainFaces::Found(found.iter().copied().map(DetectedFace::from).collect())))
+}
+
+impl Answer for Vec<DetectedFace> {}
 
 /// What this module asks of the library, so the rules above can be tested without a real [`Opai`].
 ///
@@ -163,15 +314,14 @@ pub(crate) async fn detect_with<D: Detector>(
     opened: &Opened,
     reporting: Option<Reporting>,
     request: Request,
-) -> Result<Vec<Face>, DetectError> {
+) -> Result<Vec<DetectedFace>, DetectError> {
     let path = opened
         .resolve(&request.source)
         .ok_or_else(|| DetectError::UnknownSource { identity: request.source.clone() })?;
 
     // Not logged here, nor the detection's failure below: `opai` records each once, where it happened.
-    let picture = load_framed(path, request.crop).await.map_err(|error| DetectError::UnreadableSource {
-        identity: request.source.clone(),
-        message: error.to_string(),
+    let picture = load_framed(opened, &request.source, path, request.crop).await.map_err(|error| {
+        DetectError::UnreadableSource { identity: request.source.clone(), message: error.to_string() }
     })?;
 
     // `..Default::default()` keeps this source-compatible as `ExecuteOptions` grows. `cache` stays on, which is
@@ -182,7 +332,10 @@ pub(crate) async fn detect_with<D: Detector>(
         ..Default::default()
     };
 
-    let outcome = detector.execute(&picture, &Detection::newyork(DETECTION_PRECISION), options).await;
+    // The library's one detection for feeding a face recovery, so the faces the picker offers are the ones autopilot
+    // found and the ones a restore is handed, from one run-store entry. Its precision is a constant rather than the
+    // recovery model's tier — see `Detection::for_face_recovery` and design.md D2.
+    let outcome = detector.execute(&picture, &Detection::for_face_recovery(), options).await;
 
     // Released whatever the run did, so the window's indicator lands where the detection actually got to.
     if let Some(reporting) = &reporting {
@@ -193,7 +346,7 @@ pub(crate) async fn detect_with<D: Detector>(
         Ok(Executed { value: faces, .. }) => {
             tracing::debug!(found = faces.len(), "the faces in a photograph were detected");
 
-            Ok(faces.iter().copied().collect())
+            Ok(faces.iter().copied().map(DetectedFace::from).collect())
         }
         Err(error) => Err(DetectError::Detect { message: error.to_string() }),
     }
@@ -231,7 +384,7 @@ pub(crate) async fn detect_faces(
     setup: State<'_, Setup<Opai>>,
     opened: State<'_, Opened>,
     traceparent: Traceparent,
-) -> Result<Vec<Face>, DetectError> {
+) -> Result<Vec<DetectedFace>, DetectError> {
     traced(command_span!("detect_faces", traceparent, run = run), async move {
         // A clone of the handle rather than the handle, and the lock released before the run starts — see
         // `Setup::peek`.
@@ -366,7 +519,7 @@ mod tests {
 
     /// A request for `source`, over the whole photograph.
     fn request(source: &str) -> Request {
-        Request { source: source.to_string(), processor: Processor::Coreml, crop: None }
+        Request { source: source.to_string(), processor: Processor(opai::ExecutionProvider::CoreMl), crop: None }
     }
 
     /// A temporary directory, an empty registry, and one admitted image's identity.
@@ -381,6 +534,7 @@ mod tests {
     /// [`detect_with`] driven to completion, with no progress reporting.
     fn detect_now<D: Detector>(detector: &D, opened: &Opened, request: Request) -> Result<Vec<Face>, DetectError> {
         tauri::async_runtime::block_on(detect_with(detector, opened, None, request))
+            .map(|answered| answered.into_iter().map(|detected| detected.face).collect())
     }
 
     #[test]
@@ -466,6 +620,165 @@ mod tests {
         let answered = detect_now(&detector, &opened, request(&identity)).expect("detectable");
 
         assert_eq!(answered, found, "the faces answered are not the ones found, or not in the order they were");
+    }
+
+    #[test]
+    fn each_face_answered_says_whether_a_recovery_can_restore_it_and_is_otherwise_the_librarys_own_shape() {
+        let (_dir, opened, identity) = fixture();
+        let large = Face::new(
+            Rect::new(Point::new(0.0, 0.0), Point::new(600.0, 600.0)),
+            [Point::new(300.0, 300.0); Face::LANDMARKS],
+            Confidence::new(0.9).expect("0.9 is inside the permitted range"),
+        );
+        let detector = Recording { answers: vec![face(0.0), large], ..Recording::default() };
+
+        let answered = tauri::async_runtime::block_on(detect_with(&detector, &opened, None, request(&identity)))
+            .expect("detectable");
+
+        assert_eq!(answered.iter().map(|detected| detected.restorable).collect::<Vec<_>>(), [true, false]);
+
+        // The wire shape: `opai`'s own fields, flattened in, plus the key and the flag — and a face read back from it
+        // is the face.
+        let json = serde_json::to_value(&answered[0]).expect("a detected face serializes");
+        let mut plain = serde_json::to_value(face(0.0)).expect("a face serializes");
+        let fields = plain.as_object_mut().expect("a face is an object");
+        fields.insert("key".into(), "0,4,3,7".into());
+        fields.insert("restorable".into(), true.into());
+        assert_eq!(json, plain);
+        assert_eq!(serde_json::from_value::<Face>(json).expect("the library reads it back"), face(0.0));
+    }
+
+    // ── A key, a choice, and the faces a chain finds for itself ──────────────────────────────────────────────────────
+
+    /// A face at the given box.
+    fn boxed(min_x: f32, min_y: f32, max_x: f32, max_y: f32) -> Face {
+        Face::new(
+            Rect::new(Point::new(min_x, min_y), Point::new(max_x, max_y)),
+            [Point::new(min_x, min_y); Face::LANDMARKS],
+            Confidence::new(0.9).expect("0.9 is inside the permitted range"),
+        )
+    }
+
+    #[test]
+    fn a_key_is_the_four_coordinates_as_both_sides_print_them() {
+        assert_eq!(face_key(&boxed(10.0, 20.0, 110.0, 140.0)), "10,20,110,140");
+        assert_eq!(face_key(&boxed(10.25, 4.5, 13.0, 7.01)), "10.25,4.5,13,7.01");
+        // Quantized on acceptance, so a re-detection a sub-pixel apart is one key.
+        assert_eq!(face_key(&boxed(10.001, 4.0, 13.0, 7.0)), face_key(&boxed(10.0, 4.0, 13.0, 7.0)));
+        // A face reaching past the top-left edge, including the zero a rounding leaves negative.
+        assert_eq!(face_key(&boxed(-0.001, -12.5, 3.0, 7.0)), "0,-12.5,3,7");
+    }
+
+    #[test]
+    fn a_choice_keeps_what_the_default_keeps_except_where_the_user_said_otherwise() {
+        let small = boxed(0.0, 0.0, 100.0, 100.0);
+        let large = boxed(0.0, 0.0, 600.0, 600.0);
+        let key = |face: &Face| face_key(face);
+
+        let none = FaceChoice::default();
+        assert!(none.keeps(&small), "a restorable face is restored by default");
+        assert!(!none.keeps(&large), "a face too large to restore is left alone by default");
+
+        let turned = FaceChoice { skipped: vec![key(&small)], restored: vec![key(&large)] };
+        assert!(!turned.keeps(&small), "a face the user skipped was restored");
+        assert!(turned.keeps(&large), "a large face the user chose was left alone");
+    }
+
+    /// An enhancer whose detection finds `found`, or fails.
+    struct Finding {
+        found: Result<Vec<Face>, InferenceError>,
+    }
+
+    impl Enhancer for Finding {
+        async fn process(
+            &self,
+            _source: &Picture,
+            _operations: &[opai::Operation],
+            _options: opai::ProcessOptions,
+        ) -> Result<opai::Enhanced, InferenceError> {
+            unreachable!("finding the faces runs no chain")
+        }
+
+        async fn detect(
+            &self,
+            _source: &Picture,
+            analysis: &Analysis,
+            _options: ExecuteOptions,
+        ) -> Result<Executed<Faces>, InferenceError> {
+            assert_eq!(*analysis, Detection::for_face_recovery(), "a chain detected with another detector");
+
+            self.found.clone().map(|found| executed(Faces::new(found)))
+        }
+    }
+
+    /// `requested` resolved and handed its faces by [`for_chain`] over a small picture.
+    fn chain_over(
+        enhancer: &Finding,
+        requested: &[Requested],
+    ) -> Result<(Vec<opai::Operation>, ChainFaces), InferenceError> {
+        let operations = requested.iter().map(|requested| requested.resolve().expect("published")).collect();
+        let picture = Picture::new("/p.png", image::DynamicImage::new_rgb8(8, 8), "0123456789abcdef");
+
+        tauri::async_runtime::block_on(for_chain(enhancer, &picture, requested, operations, ExecuteOptions::default()))
+    }
+
+    fn athens(choice: Option<FaceChoice>) -> Requested {
+        Requested {
+            faces: choice,
+            ..Requested::named(opai::Family::FaceRecovery, "athens", opai::Precision::Fp32, &[("fidelity", 1.0)])
+        }
+    }
+
+    fn upscale() -> Requested {
+        Requested::named(opai::Family::Upscale, "kyoto", opai::Precision::Fp32, &[("scale", 2.0)])
+    }
+
+    #[test]
+    fn a_chain_without_a_face_recovery_looks_for_nobody() {
+        let failing = Finding { found: Err(InferenceError::Cancelled) };
+
+        let (operations, faces) = chain_over(&failing, &[upscale()]).expect("nothing was looked for");
+
+        assert_eq!(faces, ChainFaces::NotAsked);
+        assert_eq!(operations, [upscale().resolve().expect("published")]);
+    }
+
+    #[test]
+    fn a_face_recovery_is_handed_the_faces_its_choice_keeps_in_the_order_they_were_found() {
+        let small = boxed(0.0, 0.0, 100.0, 100.0);
+        let large = boxed(200.0, 0.0, 800.0, 600.0);
+        let skipped = boxed(900.0, 0.0, 1000.0, 100.0);
+        let enhancer = Finding { found: Ok(vec![small, large, skipped]) };
+        let choice = FaceChoice { skipped: vec![face_key(&skipped)], restored: Vec::new() };
+
+        let (operations, faces) = chain_over(&enhancer, &[athens(Some(choice)), upscale()]).expect("found");
+
+        assert_eq!(
+            operations,
+            [
+                opai::FaceRecovery::athens(opai::FloatPrecision::Fp32, Faces::new([small]), opai::Fidelity::MAXIMUM),
+                upscale().resolve().expect("published"),
+            ]
+        );
+        // Every face found comes back, chosen or not: the window counts and draws them all.
+        assert_eq!(faces, ChainFaces::Found([small, large, skipped].map(DetectedFace::from).to_vec()));
+    }
+
+    #[test]
+    fn a_detection_that_fails_leaves_the_recovery_restoring_nobody_and_says_why() {
+        let enhancer = Finding { found: Err(InferenceError::Untileable { width: 0, height: 0 }) };
+
+        let (operations, faces) = chain_over(&enhancer, &[athens(None)]).expect("a failure does not fail the chain");
+
+        assert_eq!(operations, [athens(None).resolve().expect("published")]);
+        assert_eq!(faces, ChainFaces::Failed(InferenceError::Untileable { width: 0, height: 0 }.to_string()));
+    }
+
+    #[test]
+    fn a_stop_during_the_detection_stops_the_chain() {
+        let enhancer = Finding { found: Err(InferenceError::Cancelled) };
+
+        assert!(matches!(chain_over(&enhancer, &[athens(None)]), Err(InferenceError::Cancelled)));
     }
 
     #[test]

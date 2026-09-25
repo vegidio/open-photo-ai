@@ -1,10 +1,16 @@
 import { act, fireEvent, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
-import { DEFAULT_QUALITY, MAX_QUALITY, MIN_QUALITY, type SettingsData, useSettingsStore } from "@/stores/settings";
-import { render } from "@/test/support";
-import { DraftHarness } from "./draft.tsx";
+import { MAX_QUALITY, MIN_QUALITY, type SettingsData, useSettingsStore } from "@/stores/settings";
+import { DraftHarness, PUBLISHED_QUALITY, render } from "@/test/support";
 import { ExportPage, parseQuality } from "./ExportPage.tsx";
+
+// Rust's format table, answered at once: the hook's own fetch is pinned by `ipc/export.test.ts`.
+vi.mock("@/hooks/useExportFormats", async () => {
+    const { EXPORT_FORMATS } = await import("@/test/support");
+
+    return { useExportFormats: () => EXPORT_FORMATS };
+});
 
 /**
  * The page, on a draft of its own - see `GeneralPage.test.tsx`. `drafted()` is what the page has
@@ -77,7 +83,8 @@ describe("the export qualities", () => {
 
         fireEvent.keyDown(slider("AVIF"), { key: "ArrowRight" });
 
-        expect(drafted().quality).toEqual({ ...DEFAULT_QUALITY, avif: DEFAULT_QUALITY.avif + 1 });
+        // Only the format moved is recorded; the rest stay at the default Rust publishes for them.
+        expect(drafted().quality).toEqual({ avif: PUBLISHED_QUALITY.avif + 1 });
     });
 
     it("update the box as the slider moves", () => {
@@ -85,11 +92,11 @@ describe("the export qualities", () => {
 
         fireEvent.keyDown(slider("WEBP"), { key: "ArrowLeft" });
 
-        expect(box("WEBP")).toHaveValue(String(DEFAULT_QUALITY.webp - 1));
+        expect(box("WEBP")).toHaveValue(String(PUBLISHED_QUALITY.webp - 1));
     });
 
     it("cannot be driven outside what the encoders accept", () => {
-        useSettingsStore.setState({ quality: { ...DEFAULT_QUALITY, jpeg: MAX_QUALITY, avif: MIN_QUALITY } });
+        useSettingsStore.setState({ quality: { ...PUBLISHED_QUALITY, jpeg: MAX_QUALITY, avif: MIN_QUALITY } });
         renderPage();
 
         fireEvent.keyDown(slider("JPEG"), { key: "ArrowRight" });
@@ -119,8 +126,8 @@ describe("typing a quality", () => {
         act(() => input.focus());
         fireEvent.change(input, { target: { value: "4" } });
 
-        // "4" on the way to "42" is not a request for 4.
-        expect(drafted().quality.jpeg).toBe(DEFAULT_QUALITY.jpeg);
+        // "4" on the way to "42" is not a request for 4: nothing is recorded, and JPEG stays at its default.
+        expect(drafted().quality.jpeg).toBeUndefined();
         expect(input).toHaveValue("4");
     });
 
@@ -134,7 +141,7 @@ describe("typing a quality", () => {
     });
 
     it("goes back to the value it held when cleared and left", () => {
-        useSettingsStore.setState({ quality: { ...DEFAULT_QUALITY, avif: 33 } });
+        useSettingsStore.setState({ quality: { ...PUBLISHED_QUALITY, avif: 33 } });
         renderPage();
 
         type("AVIF", "", "blur");
@@ -148,8 +155,8 @@ describe("typing a quality", () => {
 
         type("WEBP", "high", "Enter");
 
-        expect(drafted().quality.webp).toBe(DEFAULT_QUALITY.webp);
-        expect(box("WEBP")).toHaveValue(String(DEFAULT_QUALITY.webp));
+        expect(drafted().quality.webp).toBeUndefined();
+        expect(box("WEBP")).toHaveValue(String(PUBLISHED_QUALITY.webp));
     });
 });
 

@@ -52,16 +52,28 @@ pub fn code(phase: Phase) -> u8 {
     }
 }
 
-/// How an install code reads on a line.
+/// How the part of an install nothing here has a name for reads on a line.
+const INSTALLING_LABEL: &str = "installing";
+
+/// How `phase` reads on a line.
 ///
 /// Beside the codes rather than beside either of the two places a line is composed: both the live view and the plain
 /// startup renderer name these parts, and two transcriptions of one `#[non_exhaustive]` enum are two things to
 /// remember to extend.
+pub fn phase_label(phase: Phase) -> &'static str {
+    match phase {
+        Phase::Downloading => "downloading",
+        Phase::Extracting => "extracting",
+        _ => INSTALLING_LABEL,
+    }
+}
+
+/// How an install code reads on a line: the [`phase_label`] of the phase it was stored from.
 pub fn label(code: u8) -> &'static str {
     match code {
-        DOWNLOADING => "downloading",
-        EXTRACTING => "extracting",
-        _ => "installing",
+        DOWNLOADING => phase_label(Phase::Downloading),
+        EXTRACTING => phase_label(Phase::Extracting),
+        _ => INSTALLING_LABEL,
     }
 }
 

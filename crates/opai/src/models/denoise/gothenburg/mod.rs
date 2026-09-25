@@ -16,7 +16,7 @@
 // Both rewrites are exact in real arithmetic (1.4e-06 vs. the stock architecture on the same checkpoint).
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile};
+use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
@@ -44,10 +44,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     //
     // Re-measuring this model requires first confirming its graph is still a single CoreML partition — without the
     // two rewrites above it's 48, and every figure here would then reflect partition handoff, not compute units.
-    match precision {
-        Precision::Fp16 => EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-        _ => EpProfile::default(),
-    }
+    cpu_and_gpu_at_fp16(precision)
 }
 
 #[cfg(test)]
@@ -56,58 +53,15 @@ mod tests {
 
     use crate::models::denoise::DenoiseVariant;
     use crate::models::precision::FloatPrecision;
-    use crate::providers::profile::{CoreMlSpecialization, ExecutionMode};
-
-    // The reference's four tests on this profile, ported. Each is asked through the variant rather than of `profile`
-    // directly, because the variant's match is the half a refactor can break.
 
     #[test]
-    fn gothenburg_is_kept_off_the_neural_engine_at_fp16() {
-        // Worth 25.7% per tile, and nothing else asserts it: dropping the setting would still load the model and
-        // still return the right image, a third slower.
-        assert_eq!(
-            DenoiseVariant::Gothenburg(FloatPrecision::Fp16).profile().coreml_compute_units,
-            CoreMlComputeUnits::CpuAndGpu
-        );
-    }
-
-    #[test]
-    fn gothenburg_leaves_fp32_on_the_default_compute_units() {
-        // Not load-bearing for speed — the two compile to one session at FP32 — but load-bearing for not inviting
-        // the next editor to widen a setting that was never measured to help there.
-        assert_eq!(
-            DenoiseVariant::Gothenburg(FloatPrecision::Fp32).profile().coreml_compute_units,
-            CoreMlComputeUnits::default()
-        );
-    }
-
-    #[test]
-    fn gothenburg_does_not_ask_for_one_node_at_a_time_at_either_precision() {
-        // Sequential is the largest CoreML win on several graphs here, and this is not one of them. Pinned so a sweep
-        // of another model does not get copied onto this one.
+    fn gothenburg_declares_the_shared_fp16_profile_through_its_variant() {
+        // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
+        // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
         for precision in FloatPrecision::ALL {
             assert_eq!(
-                DenoiseVariant::Gothenburg(precision).profile().execution_mode,
-                ExecutionMode::default(),
-                "{precision:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn gothenburg_names_nothing_else() {
-        // Every other option measured inside run-to-run spread. Compared as whole profiles, so a field added to
-        // `EpProfile` later is covered by existing.
-        assert_eq!(
-            DenoiseVariant::Gothenburg(FloatPrecision::Fp16).profile(),
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() }
-        );
-        assert_eq!(DenoiseVariant::Gothenburg(FloatPrecision::Fp32).profile(), EpProfile::default());
-
-        for precision in FloatPrecision::ALL {
-            assert_eq!(
-                DenoiseVariant::Gothenburg(precision).profile().coreml_specialization,
-                CoreMlSpecialization::default(),
+                DenoiseVariant::Gothenburg(precision).profile(),
+                cpu_and_gpu_at_fp16(precision.into()),
                 "{precision:?}"
             );
         }

@@ -43,6 +43,16 @@ export const cropQuery = (crop: CropInfo) =>
     `${crop.left},${crop.top},${crop.width},${crop.height},${crop.millidegrees},${flips(crop)}`;
 
 /**
+ * A framing as a value to compare, with no framing at all as the empty string.
+ *
+ * Two framings are the same framing when every field agrees, which {@link cropQuery} already spells
+ * in full; the empty string is one it never produces. Compared by key rather than by reference, so
+ * "found at this framing" does not rest on how the crop store happens to hand its values out - a
+ * framing written again with the same fields is the same framing.
+ */
+export const cropKey = (crop: CropInfo | undefined) => (crop ? cropQuery(crop) : "");
+
+/**
  * The dimensions of a photograph as it is framed, or the file's own where it is drawn whole.
  *
  * **Read off the crop rather than off the pixels**, which is what makes it answerable before they

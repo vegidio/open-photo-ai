@@ -88,6 +88,17 @@ impl FaceRecovery {
         Operation::FaceRecovery(Self { variant: FaceRecoveryVariant::Santorini(precision), faces, fidelity: None })
     }
 
+    /// This run over `faces` instead, with the model, the precision and the fidelity left exactly as they were.
+    ///
+    /// For a caller that decides *what* to run before it can know *which faces*: a front end resolving a request, or
+    /// a benchmark selecting its rows, builds the operation first — over an empty selection — and hands it the faces
+    /// once a detection run has found them. Neither then has to match on the variant to rebuild it through the right
+    /// constructor, which is how a model added later would be rebuilt as the wrong one, or its fidelity dropped.
+    #[must_use]
+    pub fn with_faces(&self, faces: Faces) -> Self {
+        Self { faces, ..self.clone() }
+    }
+
     /// Which model this runs, and at which precision.
     pub const fn variant(&self) -> FaceRecoveryVariant {
         self.variant
@@ -237,6 +248,29 @@ mod tests {
     use crate::models::face::tests::face_at;
     use crate::models::precision::FloatPrecision;
     use crate::models::test_support::hash_of;
+
+    #[test]
+    fn with_faces_swaps_the_faces_alone() {
+        let faces = Faces::new([face_at(10.0, 20.0, 110.0, 140.0)]);
+        let fidelity = Fidelity::new(0.25).expect("in range");
+
+        for (empty, full) in [
+            (
+                FaceRecovery::athens(FloatPrecision::Fp16, Faces::empty(), fidelity),
+                FaceRecovery::athens(FloatPrecision::Fp16, faces.clone(), fidelity),
+            ),
+            (
+                FaceRecovery::santorini(FloatPrecision::Fp32, Faces::empty()),
+                FaceRecovery::santorini(FloatPrecision::Fp32, faces.clone()),
+            ),
+        ] {
+            let (Operation::FaceRecovery(empty), Operation::FaceRecovery(full)) = (empty, full) else {
+                panic!("a face recovery constructor built another family");
+            };
+
+            assert_eq!(empty.with_faces(faces.clone()), full, "{:?}", empty.variant());
+        }
+    }
 
     /// The fidelity the tests below use where the value is not what they are about.
     ///

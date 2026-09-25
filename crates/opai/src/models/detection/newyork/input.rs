@@ -17,8 +17,11 @@
 // order. They share the letters CHW and nothing else. `imaging`'s header also already states that its tiling driver
 // never resizes, and this resizes.
 
-use image::DynamicImage;
-use image::imageops::{FilterType, resize};
+use std::borrow::Cow;
+
+use image::imageops::FilterType::Lanczos3;
+use image::imageops::resize;
+use image::{DynamicImage, RgbImage};
 
 use crate::error::InferenceError;
 
@@ -82,17 +85,7 @@ pub(super) fn letterbox(source: &DynamicImage, size: u32) -> Result<Letterboxed,
     // `Lanczos3` rather than the reference's `imaging.Lanczos`. Different kernels, so boxes differ in sub-pixel
     // placement — which is the same axis the reference's own FP16/FP32 comparison found, and is expected. A
     // difference in the *count* or the *order* of the faces is a port bug and not the resampler.
-    //
-    // Flattened to three channels before the resample rather than after: the detector has no use for alpha, and
-    // resampling it would let a transparent region's colour bleed into the picture the detector is shown.
-    //
-    // Borrowed where the source already is eight-bit RGB, which is the overwhelmingly common case: `to_rgb8`
-    // always allocates and copies, and for a 24-megapixel photograph that is a 72 MB copy made only to be resampled
-    // and dropped.
-    let resized = match source {
-        DynamicImage::ImageRgb8(buffer) => resize(buffer, resized_width, resized_height, FilterType::Lanczos3),
-        other => resize(&other.to_rgb8(), resized_width, resized_height, FilterType::Lanczos3),
-    };
+    let resized = resize(&*reduced(source, (resized_width, resized_height)), resized_width, resized_height, Lanczos3);
 
     let plane = (size * size) as usize;
     let mut tensor = vec![0.0_f32; 3 * plane];
@@ -119,6 +112,39 @@ pub(super) fn letterbox(source: &DynamicImage, size: u32) -> Result<Letterboxed,
     }
 
     Ok(Letterboxed { tensor, source_width: width, source_height: height, resized_width, resized_height })
+}
+
+/// How many times the target size a large photograph is first reduced to, before the Lanczos3 pass reaches the target.
+///
+/// The factor the GUI's `bounded` prefilters its thumbnails with, and for the same measurement: close to a straight
+/// Lanczos3 pass in quality at a fraction of the cost.
+const PREFILTER_FACTOR: u32 = 3;
+
+/// `source` as eight-bit RGB, first reduced to [`PREFILTER_FACTOR`] times `target` where it is larger than that.
+///
+/// Lanczos3 is single-threaded and its cost is proportional to the *source*, so over a 24-megapixel photograph almost
+/// all of it is spent reading pixels the detector will never resolve. The prefilter is `thumbnail`'s integer box
+/// average, which is cheap and does not alias, and it leaves Lanczos3 a picture about three times the target to work
+/// on.
+///
+/// Flattened to three channels before the Lanczos3 pass rather than after: the detector has no use for alpha, and
+/// resampling it would let a transparent region's colour bleed into the picture the detector is shown. A source that
+/// is already eight-bit RGB is borrowed rather than copied, and any other is converted only after the prefilter has
+/// made it small — `to_rgb8` over the full photograph is a 72 MB copy at 24 megapixels, made only to be resampled.
+fn reduced(source: &DynamicImage, target: (u32, u32)) -> Cow<'_, RgbImage> {
+    let (width, height) = (target.0.saturating_mul(PREFILTER_FACTOR), target.1.saturating_mul(PREFILTER_FACTOR));
+
+    // Both axes, so the prefilter never enlarges one: an extreme aspect ratio whose short side is already within three
+    // times its target goes straight to Lanczos3.
+    let prefilter = width < source.width() && height < source.height();
+
+    // `DynamicImage::thumbnail_exact` keeps the source's layout, so an eight-bit RGB photograph comes out of it as one
+    // and `into_rgb8` hands that buffer over rather than copying it.
+    match source {
+        _ if prefilter => Cow::Owned(source.thumbnail_exact(width, height).into_rgb8()),
+        DynamicImage::ImageRgb8(buffer) => Cow::Borrowed(buffer),
+        other => Cow::Owned(other.to_rgb8()),
+    }
 }
 
 /// The whole-pixel dimensions a `width` by `height` image is scaled to so that its longer side is `size`.
@@ -261,6 +287,91 @@ mod tests {
             };
 
             assert_eq!((refused_width, refused_height), (width, height), "the refusal named the wrong dimensions");
+        }
+    }
+
+    /// A picture whose detail is all coarser than the detector's square, with edges as well as gradients.
+    fn smooth(width: u32, height: u32) -> DynamicImage {
+        DynamicImage::ImageRgb8(ImageBuffer::from_fn(width, height, |x, y| {
+            let (u, v) = (x as f32 / 97.0, y as f32 / 61.0);
+            let disc = if (x as f32 - 1500.0).hypot(y as f32 - 1000.0) < 400.0 { 60.0 } else { 0.0 };
+
+            Rgb([
+                (128.0 + 90.0 * u.sin() * v.cos() + disc) as u8,
+                (128.0 + 100.0 * (u + v).cos()) as u8,
+                (128.0 + 100.0 * (u * 0.5 - v).sin() - disc) as u8,
+            ])
+        }))
+    }
+
+    /// The letterbox's picture as it was resampled before the prefilter: one Lanczos3 pass over the whole source.
+    fn direct(source: &DynamicImage, size: u32) -> image::RgbImage {
+        let (width, height) = fit(source.width(), source.height(), size);
+
+        match source {
+            DynamicImage::ImageRgb8(buffer) => resize(buffer, width, height, Lanczos3),
+            other => resize(&other.to_rgb8(), width, height, Lanczos3),
+        }
+    }
+
+    /// The letterbox's picture region, read back out of its tensor as RGB.
+    fn pictured(fitted: &Letterboxed, size: u32) -> image::RgbImage {
+        let plane = (size * size) as usize;
+
+        ImageBuffer::from_fn(fitted.resized_width, fitted.resized_height, |x, y| {
+            let index = (y * size + x) as usize;
+            let bgr = [0, 1, 2].map(|channel| (fitted.tensor[channel * plane + index] + MEANS[channel]) as u8);
+
+            Rgb([bgr[2], bgr[1], bgr[0]])
+        })
+    }
+
+    #[test]
+    fn a_large_photograph_is_prefiltered_to_nearly_what_one_lanczos_pass_produces() {
+        // Large enough on both axes for the prefilter to run, and in a layout that is not borrowed as well as one that
+        // is, so the conversion after the prefilter is exercised too. Smooth at the scale the detector sees, as a
+        // photograph is: content finer than the target resolves differently under any two antialiasing filters.
+        let photograph = smooth(3001, 2003);
+
+        for source in [DynamicImage::ImageRgb8(photograph.to_rgb8()), DynamicImage::ImageRgba16(photograph.to_rgba16())]
+        {
+            let fitted = letterbox(&source, TARGET_SIZE).expect("an image with area");
+            let (prefiltered, expected) = (pictured(&fitted, TARGET_SIZE), direct(&source, TARGET_SIZE));
+
+            assert_eq!(prefiltered.dimensions(), expected.dimensions(), "the prefilter changed the fitted size");
+
+            // On average well under a level. The worst pixel sits on the disc's hard edge, where two antialiasing
+            // filters ring differently; that is the sub-pixel placement the resampler comment above accepts.
+            let deviations: Vec<u8> =
+                prefiltered.as_raw().iter().zip(expected.as_raw()).map(|(a, b)| a.abs_diff(*b)).collect();
+            let mean = deviations.iter().map(|&d| f64::from(d)).sum::<f64>() / deviations.len() as f64;
+            let worst = deviations.iter().max().copied().unwrap_or(0);
+
+            assert!(mean < 1.0, "the prefiltered picture is on average {mean} levels from one Lanczos3 pass");
+            assert!(worst <= 24, "the prefiltered picture is {worst} levels from one Lanczos3 pass at its worst");
+        }
+    }
+
+    // Timing rather than a check: `cargo test --release -p opai -- --ignored --nocapture letterbox_with_the_prefilter`.
+    #[test]
+    #[ignore = "a measurement, run by hand in release"]
+    fn letterbox_with_the_prefilter_against_one_lanczos_pass_at_24_megapixels() {
+        use std::time::Instant;
+
+        let photograph = smooth(6000, 4000);
+
+        for (name, source) in [
+            ("Rgb8", DynamicImage::ImageRgb8(photograph.to_rgb8())),
+            ("Rgba16", DynamicImage::ImageRgba16(photograph.to_rgba16())),
+        ] {
+            let started = Instant::now();
+            let _ = direct(&source, TARGET_SIZE);
+            let before = started.elapsed();
+            let started = Instant::now();
+            let _ = letterbox(&source, TARGET_SIZE).expect("an image with area");
+            let after = started.elapsed();
+
+            println!("{name:>6}: letterbox {before:>10.2?} -> {after:>10.2?}");
         }
     }
 }

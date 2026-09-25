@@ -38,11 +38,10 @@ use crate::models::ArtifactId;
 use crate::models::face::Faces;
 use crate::pipeline::Backend;
 use crate::pipeline::session::GraphShape;
-use crate::pipeline::{ImagePipeline, OnOneGraph, Shared, SingleGraph, reporter};
+use crate::pipeline::{DepthGeneric, OnOneGraph, Shared, SingleGraph, checkpoint, reporter};
 use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
-use imaging::ChannelDepth;
-use imaging::tensor::{Channel, Normalisation, Sampler};
+use imaging::tensor::{Channel, Normalisation, Sampler, flattened};
 
 // Not a tunable: the weights are exported at a static `[1, 3, 512, 512]`, and the whole of the alignment — the
 // template's scaling, the mask's extent and the composite's bound — is derived from this value.
@@ -110,38 +109,19 @@ impl OnOneGraph for Restore {
     }
 }
 
-impl<B: Backend> ImagePipeline<B> for Restore {
+impl DepthGeneric for Restore {
     /// One graph run per face, and none for an empty selection — which is what the driver's per-step record calls a
     /// model run.
     fn stages(&self) -> usize {
         self.faces.len()
     }
 
-    fn run(
-        &self,
-        input: &DynamicImage,
-        sessions: &[SessionHandle<B::Session>],
-        depth: ChannelDepth,
-        progress: Option<&dyn Fn(f64)>,
-        cancelled: &dyn Fn() -> bool,
-    ) -> Result<DynamicImage, InferenceError> {
-        // Dispatched once at the top, as `run_tiled` dispatches it, so the body below is written once and
-        // monomorphised for `u8` and `u16` rather than branching per pixel over the whole photograph.
-        match depth {
-            ChannelDepth::Eight => self.restored::<u8, B>(input, sessions, progress, cancelled).map(u8::into_dynamic),
-            ChannelDepth::Sixteen => {
-                self.restored::<u16, B>(input, sessions, progress, cancelled).map(u16::into_dynamic)
-            }
-        }
-    }
-}
-
-impl Restore {
-    /// [`ImagePipeline::run`]'s body, once, at whichever channel the caller asked for.
+    /// [`ImagePipeline::run`](crate::pipeline::ImagePipeline::run)'s body, once, at whichever channel the caller
+    /// asked for.
     ///
     /// **The photograph is carried across at the requested depth whether or not there is a face**, which is the
     /// empty-selection behaviour the spec pins.
-    fn restored<T: Channel, B: Backend>(
+    fn run_at<T: Channel, B: Backend>(
         &self,
         input: &DynamicImage,
         sessions: &[SessionHandle<B::Session>],
@@ -166,7 +146,7 @@ impl Restore {
         // image with no face in it, and would get whatever variant the decoder happened to produce rather than the RGB
         // every other operation returns. It costs one full-image conversion for a run that composites nothing.
         let sampler = Sampler::new(input);
-        let mut canvas = carried::<T>(&sampler, width, height);
+        let mut canvas = flattened::<T>(&sampler, width, height);
 
         // A legitimate request rather than an error: a chain applied across a batch meets images with no face in
         // them, and refusing one would fail an export that is otherwise correct. It reports the end of its range
@@ -219,50 +199,16 @@ impl Restore {
             ran.map_err(InferenceError::run(&self.graph.name, index))?;
 
             done += 1;
-            report(done as f64 / steps as f64);
-
-            if cancelled() {
-                return Err(InferenceError::Cancelled);
-            }
+            checkpoint(&report, cancelled, done as f64 / steps as f64)?;
 
             composite::blend(&mut canvas, &restored, &mask, transform, face.bounding_box(), TILE, RANGE);
 
             done += 1;
-            report(done as f64 / steps as f64);
-
-            if cancelled() {
-                return Err(InferenceError::Cancelled);
-            }
+            checkpoint(&report, cancelled, done as f64 / steps as f64)?;
         }
 
         Ok(canvas)
     }
-}
-
-/// The photograph's own pixels as an RGB buffer at the requested channel, with alpha composited against black on the
-/// way in, which is what every other pipeline in this crate does with it.
-fn carried<T: Channel>(sampler: &Sampler<'_>, width: u32, height: u32) -> ImageBuffer<Rgb<T>, Vec<T>>
-where
-    Rgb<T>: image::Pixel<Subpixel = T>,
-{
-    // Read through `Sampler` rather than through `DynamicImage`'s own accessor, which is typed `Rgba<u8>` and would
-    // discard the low byte of every channel of a 16-bit source.
-    //
-    // Where the source already carries this depth with no alpha to premultiply, the conversion below is the
-    // identity performed ten times a pixel — so the buffer is copied wholesale instead. For the ordinary case of
-    // an eight-bit photograph carried to an eight-bit result that is one memcpy in place of twenty-four million
-    // closure calls on a 24-megapixel source. The equality of the two paths is pinned by the test below.
-    if let Some(buffer) = T::matching(sampler) {
-        return buffer.clone();
-    }
-
-    ImageBuffer::from_fn(width, height, |x, y| {
-        let [r, g, b] = sampler.rgb(x, y);
-
-        // `to_unit` rather than the division written out three times: it is `Channel`'s own `[0, 1]` mapping, and
-        // it is exactly inverse to the `from_unit` on the other side of each of these.
-        Rgb([T::from_unit(r.to_unit()), T::from_unit(g.to_unit()), T::from_unit(b.to_unit())])
-    })
 }
 
 #[cfg(test)]
@@ -270,52 +216,8 @@ mod tests {
     use crate::pipeline::test_support::stub_backend_runs;
 
     use super::*;
-
-    /// `carried`'s converting path, with the depth-matched shortcut bypassed.
-    fn carried_converting<T: Channel>(sampler: &Sampler<'_>, width: u32, height: u32) -> ImageBuffer<Rgb<T>, Vec<T>>
-    where
-        Rgb<T>: image::Pixel<Subpixel = T>,
-    {
-        ImageBuffer::from_fn(width, height, |x, y| {
-            let [r, g, b] = sampler.rgb(x, y);
-
-            Rgb([T::from_unit(r.to_unit()), T::from_unit(g.to_unit()), T::from_unit(b.to_unit())])
-        })
-    }
-
-    #[test]
-    fn the_depth_matched_copy_carries_exactly_what_the_conversion_would_have() {
-        // Every value an eight-bit channel can hold, not a sample of them: the shortcut's whole claim is that the
-        // round trip through `widen`, a divide by 65535 and a multiply by 255 is the identity, and the only honest
-        // way to assert that is over the full domain.
-        let eight: ImageBuffer<Rgb<u8>, Vec<u8>> =
-            ImageBuffer::from_fn(256, 1, |x, _| Rgb([x as u8, 255 - x as u8, (x as u8).wrapping_mul(7)]));
-        let source = DynamicImage::ImageRgb8(eight);
-        let sampler = Sampler::new(&source);
-
-        let copied: ImageBuffer<Rgb<u8>, Vec<u8>> = carried(&sampler, 256, 1);
-        let converted: ImageBuffer<Rgb<u8>, Vec<u8>> = carried_converting(&sampler, 256, 1);
-
-        assert_eq!(copied.as_raw(), converted.as_raw(), "the eight-bit shortcut is not the conversion it replaces");
-
-        // The sixteen-bit pairing, over a spread that includes both ends and the values either side of the
-        // midpoint, where a reciprocal that was not exactly representable would show first.
-        let wide: ImageBuffer<Rgb<u16>, Vec<u16>> = ImageBuffer::from_fn(512, 1, |x, _| {
-            let value = (u32::from(x as u16) * 65535 / 511) as u16;
-            Rgb([value, 65535 - value, value ^ 0x5555])
-        });
-        let source = DynamicImage::ImageRgb16(wide);
-        let sampler = Sampler::new(&source);
-
-        let copied: ImageBuffer<Rgb<u16>, Vec<u16>> = carried(&sampler, 512, 1);
-        let converted: ImageBuffer<Rgb<u16>, Vec<u16>> = carried_converting(&sampler, 512, 1);
-
-        assert_eq!(
-            copied.as_raw(),
-            converted.as_raw(),
-            "the sixteen-bit shortcut is not the conversion it replaces"
-        );
-    }
+    use crate::pipeline::session::GraphShape;
+    use imaging::ChannelDepth;
 
     use std::sync::Mutex;
 

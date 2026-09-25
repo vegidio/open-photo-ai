@@ -4,7 +4,7 @@
 // Deleting the model is deleting this directory plus the arms in `SharpenVariant` that name it.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile};
+use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
@@ -36,10 +36,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // export is the one published. The sign is the same either way, so the setting stands. Re-measuring this model
     // requires first counting how many CoreML partitions the published graph compiles to — otherwise the figures here
     // and the new ones are not measuring the same thing.
-    match precision {
-        Precision::Fp16 => EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-        _ => EpProfile::default(),
-    }
+    cpu_and_gpu_at_fp16(precision)
 }
 
 #[cfg(test)]
@@ -48,57 +45,15 @@ mod tests {
 
     use crate::models::precision::FloatPrecision;
     use crate::models::sharpen::SharpenVariant;
-    use crate::providers::profile::{CoreMlSpecialization, ExecutionMode};
-
-    // Gothenburg's four tests on this profile, ported. Each is asked through the variant rather than of `profile`
-    // directly, because the variant's match is the half a refactor can break.
 
     #[test]
-    fn moscow_is_kept_off_the_neural_engine_at_fp16() {
-        // Nearly half the end-to-end time on the reference's measurement, and nothing else asserts it: dropping the
-        // setting would still load the model and still return the right image, slower.
-        assert_eq!(
-            SharpenVariant::Moscow(FloatPrecision::Fp16).profile().coreml_compute_units,
-            CoreMlComputeUnits::CpuAndGpu
-        );
-    }
-
-    #[test]
-    fn moscow_leaves_fp32_on_the_default_compute_units() {
-        // Not load-bearing for speed — CoreML keeps an FP32 program off the Neural Engine anyway — but load-bearing
-        // for not inviting the next editor to widen a setting that was never measured to help there.
-        assert_eq!(
-            SharpenVariant::Moscow(FloatPrecision::Fp32).profile().coreml_compute_units,
-            CoreMlComputeUnits::default()
-        );
-    }
-
-    #[test]
-    fn moscow_does_not_ask_for_one_node_at_a_time_at_either_precision() {
-        // Measured within spread. Pinned so a sweep of another model does not get copied onto this one.
+    fn moscow_declares_the_shared_fp16_profile_through_its_variant() {
+        // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
+        // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
         for precision in FloatPrecision::ALL {
             assert_eq!(
-                SharpenVariant::Moscow(precision).profile().execution_mode,
-                ExecutionMode::default(),
-                "{precision:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn moscow_names_nothing_else() {
-        // Every other option measured inside run-to-run spread. Compared as whole profiles, so a field added to
-        // `EpProfile` later is covered by existing.
-        assert_eq!(
-            SharpenVariant::Moscow(FloatPrecision::Fp16).profile(),
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() }
-        );
-        assert_eq!(SharpenVariant::Moscow(FloatPrecision::Fp32).profile(), EpProfile::default());
-
-        for precision in FloatPrecision::ALL {
-            assert_eq!(
-                SharpenVariant::Moscow(precision).profile().coreml_specialization,
-                CoreMlSpecialization::default(),
+                SharpenVariant::Moscow(precision).profile(),
+                cpu_and_gpu_at_fp16(precision.into()),
                 "{precision:?}"
             );
         }

@@ -182,13 +182,10 @@ async fn an_entry_unused_past_the_cutoff_is_released_and_one_used_since_survives
 
     assert_eq!(cache.resident(), 1, "the sweep kept the wrong number of sessions");
     assert!(
-        cache.get(&fresh, ExecutionProvider::Cpu, ExecutionProvider::Cpu).is_some(),
+        cache.get(&fresh, ExecutionProvider::Cpu).is_some(),
         "a session used since the cutoff was released"
     );
-    assert!(
-        cache.get(&stale, ExecutionProvider::Cpu, ExecutionProvider::Cpu).is_none(),
-        "a session unused past the cutoff survived"
-    );
+    assert!(cache.get(&stale, ExecutionProvider::Cpu).is_none(), "a session unused past the cutoff survived");
 }
 
 #[tokio::test]

@@ -9,19 +9,22 @@ import type { Operation } from "@/ipc/enhance";
 import { cancelExport, type Exported, type ExportRequest, exportImage } from "@/ipc/export";
 import { detectFaces, type Face } from "@/ipc/faces";
 import type { ImageRecord } from "@/ipc/images";
+import { faceKey } from "@/lib/faces";
 import { track } from "@/lib/faro";
 import { useAutopilotStore } from "@/stores/autopilot";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { type Row, useExportBatchStore } from "@/stores/exportBatch";
 import { type ExportSettingsData, exportSettingsDefaults } from "@/stores/exportSettings";
 import { useFacesStore } from "@/stores/faces";
-import { DEFAULT_QUALITY } from "@/stores/settings";
+import type { QualityChoices } from "@/stores/settings";
 import {
+    APPLY_ORDER,
     CATALOGUE,
-    FRAMING,
     frame,
+    FRAMING,
     HOLIDAY,
     openFiles,
+    PUBLISHED_QUALITY,
     resetCropStore,
     resetFileStore,
     resetSettingsStore,
@@ -38,8 +41,17 @@ vi.mock("@/lib/faro", () => ({
     traced: (_name: string, send: () => Promise<unknown>) => send(),
 }));
 
-vi.mock("@/ipc/export", () => ({ exportImage: vi.fn(), cancelExport: vi.fn(() => Promise.resolve()) }));
+vi.mock("@/ipc/export", async () => {
+    const { EXPORT_FORMATS } = await import("@/test/support");
+
+    return {
+        exportImage: vi.fn(),
+        cancelExport: vi.fn(() => Promise.resolve()),
+        exportFormats: vi.fn(() => Promise.resolve(EXPORT_FORMATS)),
+    };
+});
 vi.mock("@/ipc/autopilot", () => ({ suggest: vi.fn(), cancelSuggest: vi.fn(() => Promise.resolve()) }));
+// Mocked only to say it is never reached: an export finds its own faces.
 vi.mock("@/ipc/faces", () => ({ detectFaces: vi.fn() }));
 vi.mock("@/ipc/catalogue", () => ({ catalogue: vi.fn(() => Promise.resolve(CATALOGUE)) }));
 vi.mock("@/ipc/enhance", async (importOriginal) => ({
@@ -81,7 +93,6 @@ type Exporting = {
 
 const exporting: Exporting[] = [];
 const asking: { answer: (suggestions: Suggestion[]) => Promise<void>; fail: (e: unknown) => Promise<void> }[] = [];
-const detecting: { found: (faces: Face[]) => Promise<void>; fail: (e: unknown) => Promise<void> }[] = [];
 
 /** A third photograph, a JPEG, for the batches that need one more than the support module holds. */
 const THIRD: ImageRecord = {
@@ -91,8 +102,8 @@ const THIRD: ImageRecord = {
     extension: "jpg",
 };
 
-const upscale: Operation = { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 };
-const recovery = { family: "face_recovery", codename: "athens", precision: "fp32" } as Operation;
+const upscale: Operation = { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } };
+const recovery = { family: "face_recovery", codename: "athens", precision: "fp32", parameters: {} } as Operation;
 
 const face = (left: number, edge: number): Face => ({
     bounding_box: { min: { x: left, y: 0 }, max: { x: left + edge, y: edge } },
@@ -104,6 +115,9 @@ const face = (left: number, edge: number): Face => ({
         { x: left + 2, y: 2.5 },
     ],
     confidence: 0.9,
+    // What the backend publishes for such a box: `opai`'s `Face::restorable`, at most 512x512.
+    restorable: edge * edge <= 512 * 512,
+    key: `${left},0,${left + edge},${edge}`,
 });
 
 const settings = (changes: Partial<ExportSettingsData> = {}): ExportSettingsData => ({
@@ -115,10 +129,10 @@ const batch = () => useExportBatchStore.getState();
 const row = (file: ImageRecord): Row | undefined => batch().rows.get(file.path);
 const stages = () => batch().queue.map((path) => batch().rows.get(path)?.stage);
 const stack = (file: ImageRecord, operations: Operation[]) =>
-    useEnhancementStore.getState().addEnhancements(file.path, operations);
+    useEnhancementStore.getState().addEnhancements(file.path, operations, APPLY_ORDER);
 
 /** Opens the dialog's queue over `files` and runs it, answering the run's promise. */
-const run = (files: ImageRecord[], chosen = settings(), quality = { ...DEFAULT_QUALITY }) => {
+const run = (files: ImageRecord[], chosen = settings(), quality: QualityChoices = { ...PUBLISHED_QUALITY }) => {
     batch().open(files.map((file) => file.path));
 
     return runBatch(chosen, quality);
@@ -128,7 +142,6 @@ beforeEach(() => {
     vi.clearAllMocks();
     exporting.length = 0;
     asking.length = 0;
-    detecting.length = 0;
 
     let exports = 0;
     exported.mockImplementation(
@@ -171,22 +184,6 @@ beforeEach(() => {
         });
 
         return { run: `suggest-${++suggestions}`, done: promise };
-    });
-
-    detected.mockImplementation(() => {
-        const { promise, resolve, reject } = deferred<Face[]>();
-        detecting.push({
-            found: async (faces) => {
-                resolve(faces);
-                await settle();
-            },
-            fail: async (error) => {
-                reject(error);
-                await settle();
-            },
-        });
-
-        return { run: "detect", done: promise };
     });
 
     localStorage.clear();
@@ -327,22 +324,6 @@ describe("Abort", () => {
         expect(exporting).toHaveLength(0);
         expect(useEnhancementStore.getState().enhancements.has(SUNSET.path)).toBe(false);
     });
-
-    it("during a face detection waits for it, discards what it found and exports nothing", async () => {
-        stack(HOLIDAY, [recovery]);
-
-        const done = run([HOLIDAY, SUNSET]);
-        await settle();
-        expect(row(HOLIDAY)).toEqual({ stage: "analysing" });
-
-        batch().abort();
-        await detecting[0]?.found([face(0, 40)]);
-        await done;
-
-        expect(stages()).toEqual(["queued", "queued"]);
-        expect(exporting).toHaveLength(0);
-        expect(useFacesStore.getState().faces.has(HOLIDAY.identity ?? "")).toBe(false);
-    });
 });
 
 describe("Autopilot at export", () => {
@@ -437,56 +418,32 @@ describe("Autopilot at export", () => {
 });
 
 describe("the faces", () => {
-    it("are found where they are not known, then the chosen ones are sent", async () => {
+    it("are never detected first: the export is asked for at once, carrying the choice made among them", async () => {
+        // The export finds its own faces inside the one request, under its stop and on its bar.
+        const choice = { skipped: [faceKey(face(0, 40))], restored: [] };
+        useFacesStore.getState().setFaceChoice(HOLIDAY.identity ?? "", choice);
         stack(HOLIDAY, [upscale, recovery]);
-        const small = face(0, 40);
-        // Larger than a restoration's tile, so the size rule skips it.
-        const large = face(100, 1000);
-
-        void run([HOLIDAY]);
-        await settle();
-        expect(detected).toHaveBeenCalledOnce();
-
-        await detecting[0]?.found([small, large]);
-
-        const sent = exporting[0]?.operations.find(({ family }) => family === "face_recovery");
-        expect(sent).toEqual({ ...recovery, faces: [small] });
-    });
-
-    it("are not found again where they are known at the photograph's framing", async () => {
-        stack(HOLIDAY, [recovery]);
-        const small = face(0, 40);
-        useFacesStore.getState().setFaces(HOLIDAY.identity ?? "", undefined, [small]);
 
         void run([HOLIDAY]);
         await settle();
 
         expect(detected).not.toHaveBeenCalled();
-        expect(exporting[0]?.operations).toEqual([{ ...recovery, faces: [small] }]);
+        expect(exporting[0]?.operations).toEqual([{ ...recovery, faces: choice }, upscale]);
     });
-    it("are recorded as none where the detection fails, and the file is exported anyway without a notice", async () => {
-        stack(HOLIDAY, [upscale, recovery]);
-        const notice = vi.spyOn(toast, "error");
-        vi.spyOn(console, "error").mockImplementation(() => {});
 
-        const done = run([HOLIDAY]);
+    it("carry no choice where nobody made one, so every face follows its default", async () => {
+        stack(HOLIDAY, [recovery]);
+
+        void run([HOLIDAY]);
         await settle();
-        await detecting[0]?.fail({ kind: "detect", message: "the detector could not be loaded" });
 
-        expect(useFacesStore.getState().faces.get(HOLIDAY.identity ?? "")?.faces).toEqual([]);
-        expect(exporting[0]?.operations).toEqual([{ ...recovery, faces: [] }, upscale]);
-        expect(notice).not.toHaveBeenCalled();
-
-        await exporting[0]?.answer({ outcome: "exported", path: "/h.png", bytes: 1 });
-        await done;
-
-        expect(row(HOLIDAY)).toEqual({ stage: "done", path: "/h.png", bytes: 1 });
+        expect(exporting[0]?.operations).toEqual([recovery]);
     });
 });
 
 describe("the quality", () => {
     it("is the committed one for every file", async () => {
-        const done = run([HOLIDAY, SUNSET], settings({ format: "webp" }), { ...DEFAULT_QUALITY, webp: 70 });
+        const done = run([HOLIDAY, SUNSET], settings({ format: "webp" }), { ...PUBLISHED_QUALITY, webp: 70 });
         await settle();
         await exporting[0]?.answer({ outcome: "exported", path: "/h.webp", bytes: 1 });
         await exporting[1]?.answer({ outcome: "exported", path: "/s.webp", bytes: 1 });
@@ -496,7 +453,7 @@ describe("the quality", () => {
     });
 
     it("is each file's own format's under a mixed Preserve", async () => {
-        const quality = { ...DEFAULT_QUALITY, jpeg: 81, heic: 42 };
+        const quality = { ...PUBLISHED_QUALITY, jpeg: 81, heic: 42 };
 
         const done = run([THIRD, SUNSET], settings({ format: "preserve" }), quality);
         await settle();
@@ -506,9 +463,20 @@ describe("the quality", () => {
 
         expect(exporting.map(({ request }) => [request.format, request.quality])).toEqual([
             ["jpeg", 81],
-            // A RAW source is written as TIFF, which takes no quality; the number is only there for the wire.
-            ["tiff", DEFAULT_QUALITY.jpeg],
+            // A RAW source is written as TIFF, which takes no quality, and is sent none.
+            ["tiff", undefined],
         ]);
+        expect("quality" in (exporting[1]?.request ?? {})).toBe(false);
+    });
+
+    it("is sent for no format the user never moved, which Rust writes at its published default", async () => {
+        const done = run([HOLIDAY], settings({ format: "webp" }), {});
+        await settle();
+        await exporting[0]?.answer({ outcome: "exported", path: "/h.webp", bytes: 1 });
+        await done;
+
+        expect(exporting[0]?.request).not.toHaveProperty("quality");
+        expect(exporting[0]?.request.format).toBe("webp");
     });
 });
 

@@ -948,6 +948,8 @@ describe("the faces in the photograph on the canvas", () => {
             { x: left + 200, y: 650 },
         ],
         confidence: 0.9,
+        restorable: true,
+        key: `${left},400,${left + 300},700`,
     });
 
     const boxes = () => document.querySelectorAll("[data-slot='face-boxes']");
@@ -957,7 +959,7 @@ describe("the faces in the photograph on the canvas", () => {
 
         act(() => {
             useFacesStore.getState().setFaces(identity, undefined, [face(500), face(2000)]);
-            useFacesStore.getState().setSkippedFaces(identity, new Set([faceKey(face(500))]));
+            useFacesStore.getState().setFaceChoice(identity, { skipped: [faceKey(face(500))], restored: [] });
         });
     });
 

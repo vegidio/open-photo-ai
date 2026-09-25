@@ -75,12 +75,28 @@ pub(crate) async fn install(
     reporter: Arc<Reporter>,
     cancel: &CancellationToken,
 ) -> Result<Outcome, InitError> {
+    install_checked(dir, dependency, None, reporter, cancel).await
+}
+
+/// [`install`], taking the answer of a [`check`] already made of `dir` rather than making it again — or, given
+/// `None`, making it.
+///
+/// # Errors
+///
+/// As [`install`].
+pub(crate) async fn install_checked(
+    dir: &Path,
+    dependency: &Dependency,
+    checked: Option<Checked>,
+    reporter: Arc<Reporter>,
+    cancel: &CancellationToken,
+) -> Result<Outcome, InitError> {
     let span = unit_span!("install", dependency = dependency.name, version = dependency.version);
 
     // Wrapped so that the failure record is written once, here, whichever of the half-dozen `?`s below produced it.
     // Started before the body, so a stop or a failure says how long the install had run.
     let started = Instant::now();
-    let outcome = install_inner(dir, dependency, reporter, cancel).instrument(span.clone()).await;
+    let outcome = install_inner(dir, dependency, checked, reporter, cancel).instrument(span.clone()).await;
     let duration = started.elapsed();
 
     match &outcome {
@@ -128,49 +144,80 @@ fn record_ended(dependency: &Dependency, duration: Duration, error: &InitError) 
     );
 }
 
-/// [`install`]'s body, with the failure record left to its caller.
-async fn install_inner(
-    dir: &Path,
-    dependency: &Dependency,
-    reporter: Arc<Reporter>,
-    cancel: &CancellationToken,
-) -> Result<Outcome, InitError> {
-    // Whether this install is the trusted one: the process declared it, and **every** file backing the dependency is
-    // already on disk. Both halves, because the declaration says "what is here is what I want measured" and not
-    // "fetch me whatever is missing and ask no questions" — a partially present model is not something anyone placed
-    // by hand, and completing it from the published sources is both what the operator wants and the only safe
-    // reading.
-    let trusted = dependency.trust == ModelTrust::LocalFiles && sources_present(dir, dependency);
+/// What a dependency's directory holds, read before anything in it is changed: whether it is already current, and
+/// what an install would have to replace. See [`check`].
+#[derive(Debug)]
+pub(crate) struct Checked {
+    /// Whether this install is the trusted one.
+    trusted: bool,
+    /// The identity the dependency is compared against and recorded under.
+    want: String,
+    /// The record the previous install left, if any.
+    previous: Option<Manifest>,
+    /// Whether that record is the wanted one and still describes what is on disk.
+    current: bool,
+}
 
-    // The dependency's identity, which is the one value everything below hangs off. On the ordinary path it is the
-    // published fingerprint; on the trusted one there is no published hash to compare against, so it is stamped from
-    // the files as they sit on disk instead. The rest of this function does not branch again: the same comparison,
-    // the same emptying, the same discard of what a provider compiled, the same record.
-    let want = if trusted { stamp(dir, dependency) } else { manifest::fingerprint(dependency) };
+/// Reads whether the dependency in `dir` is already current, without changing anything.
+///
+/// Split from [`install`] so a caller with several dependencies — initialization — can run every check at once and
+/// still install serially: this is the whole of the work on a launch with nothing to install, and it is one stat per
+/// recorded file. The answer is handed back through [`install_checked`]; `dir` must not change in between, which the
+/// process's claim on the configuration directory guarantees.
+///
+/// # Errors
+///
+/// [`InitError::Cancelled`] if the runtime shut down before the blocking read could run.
+pub(crate) async fn check(dir: &Path, dependency: &Dependency) -> Result<Checked, InitError> {
+    let dir = dir.to_path_buf();
+    let dependency = dependency.clone();
 
-    // The steady-state path: the recorded identity is the pinned one and every recorded file is still there at its
-    // recorded size.
-    //
     // On a blocking thread because it is neither cheap nor rare. `intact` is one `symlink_metadata` per recorded file,
     // a CUDA or TensorRT tree is thousands of them, and this runs for every dependency on *every* launch rather than
     // only the first — so on the launch where there is nothing to do, this is the whole of the work. Left inline it
     // would be thousands of blocking syscalls on the async runtime, which in the GUI is the event loop, at exactly the
-    // moment the window is coming up.
-    //
-    // **`intact` is skipped on the trusted path**, and that is required rather than an optimisation. A trusted
-    // install records no files (below), and `Manifest::intact` reads an empty list as "not installed" — so leaving it
-    // in would report "not current" on every single launch, and the derived-cache discard the stamp exists to gate
-    // would fire every time: a multi-minute engine rebuild on every launch. The trusted comparison is therefore the
-    // fingerprint alone; the ordinary one keeps both halves.
-    let (previous, current) = {
-        let dir = dir.to_path_buf();
-        let want = want.clone();
-        spawn_blocking::<_, InitError, _>(move || {
-            let previous = manifest::read(&dir);
-            let current = previous.as_ref().is_some_and(|old| old.fingerprint == want && (trusted || old.intact(&dir)));
-            (previous, current)
-        })
-        .await?
+    // moment the window is coming up. The trust test and the stamp are stat calls too, so they come along.
+    spawn_blocking::<_, InitError, _>(move || {
+        // Whether this install is the trusted one: the process declared it, and **every** file backing the dependency
+        // is already on disk. Both halves, because the declaration says "what is here is what I want measured" and
+        // not "fetch me whatever is missing and ask no questions" — a partially present model is not something anyone
+        // placed by hand, and completing it from the published sources is both what the operator wants and the only
+        // safe reading.
+        let trusted = dependency.trust == ModelTrust::LocalFiles && sources_present(&dir, &dependency);
+
+        // The dependency's identity, which is the one value everything below hangs off. On the ordinary path it is the
+        // published fingerprint; on the trusted one there is no published hash to compare against, so it is stamped
+        // from the files as they sit on disk instead. The rest of the install does not branch again: the same
+        // comparison, the same emptying, the same discard of what a provider compiled, the same record.
+        let want = if trusted { stamp(&dir, &dependency) } else { manifest::fingerprint(&dependency) };
+
+        // The steady-state path: the recorded identity is the pinned one and every recorded file is still there at
+        // its recorded size.
+        //
+        // **`intact` is skipped on the trusted path**, and that is required rather than an optimisation. A trusted
+        // install records no files, and `Manifest::intact` reads an empty list as "not installed" — so leaving it in
+        // would report "not current" on every single launch, and the derived-cache discard the stamp exists to gate
+        // would fire every time: a multi-minute engine rebuild on every launch. The trusted comparison is therefore
+        // the fingerprint alone; the ordinary one keeps both halves.
+        let previous = manifest::read(&dir);
+        let current = previous.as_ref().is_some_and(|old| old.fingerprint == want && (trusted || old.intact(&dir)));
+
+        Checked { trusted, want, previous, current }
+    })
+    .await
+}
+
+/// [`install`]'s body, with the failure record left to its caller.
+async fn install_inner(
+    dir: &Path,
+    dependency: &Dependency,
+    checked: Option<Checked>,
+    reporter: Arc<Reporter>,
+    cancel: &CancellationToken,
+) -> Result<Outcome, InitError> {
+    let Checked { trusted, want, previous, current } = match checked {
+        Some(checked) => checked,
+        None => check(dir, dependency).await?,
     };
 
     // Every time the path is taken, not once per process, and before the early return below — a model whose
@@ -211,41 +258,55 @@ async fn install_inner(
     //
     // The manifest helpers answer in `io::Result` because they are about files and know nothing about this crate's
     // error type; the directory they were working on is named here, where it is in hand.
-    manifest::clear(dir).map_err(InitError::io(dir))?;
-
-    // The emptying is what the previous version's files are removed by, and it is exactly what the trusted path must
-    // not do: the files it is about to record are the ones already sitting in this directory, and deleting them is
-    // deleting the thing the operator put there to be measured.
-    if !trusted {
-        match &previous {
-            // Exactly the files the previous version recorded, so two versions' shared libraries never sit side by
-            // side for the loader to choose between.
-            Some(old) if !old.files.is_empty() => old.remove(dir).map_err(InitError::io(dir))?,
-            // A directory whose record describes no files was populated by something that kept none — either nothing
-            // at all, or a **trusted** install, which deliberately records an empty list so that this process does
-            // not accept its files. Either way the contents cannot be described, so extracting or downloading over
-            // them would merge two versions: the previous install's files would survive as a resume point, and the
-            // transfer would continue onto bytes it never wrote. Partial downloads survive the emptying.
-            //
-            // The same rule `Manifest::intact` already holds — a record naming no files is not an install to trust —
-            // read from the other end. Without it, "a later process reinstalls from the published sources" would be
-            // true of the request and false of the file that came back.
-            _ => manifest::empty_dir(dir).map_err(InitError::io(dir))?,
-        }
-    }
-
-    // Whatever an execution provider compiled from the version being replaced, discarded here rather than by a later
-    // step that is trusted to remember: an interruption between the two would leave new weights beside an engine
-    // built from the old ones, which is the one pairing that must never exist. Reached only on the path above — an
-    // install that is already current returned before it, so it discards nothing, which is the point when a rebuild
-    // costs minutes.
     //
-    // A directory that is not there is nothing to empty rather than a failure: only the first install of a model
-    // creates one, and this runs before that model has ever been built.
-    for derived in &dependency.derived {
-        if derived.is_dir() {
-            manifest::empty_dir(derived).map_err(InitError::io(derived))?;
-        }
+    // Everything up to the first transfer is file removal — a CUDA tree is thousands of files — so it runs on a
+    // blocking thread, as the comparison above does, rather than on the runtime that in the GUI is the event loop.
+    {
+        let dir = dir.to_path_buf();
+        let derived = dependency.derived.clone();
+
+        spawn_blocking::<_, InitError, _>(move || -> Result<(), InitError> {
+            manifest::clear(&dir).map_err(InitError::io(&dir))?;
+
+            // The emptying is what the previous version's files are removed by, and it is exactly what the trusted
+            // path must not do: the files it is about to record are the ones already sitting in this directory, and
+            // deleting them is deleting the thing the operator put there to be measured.
+            if !trusted {
+                match &previous {
+                    // Exactly the files the previous version recorded, so two versions' shared libraries never sit
+                    // side by side for the loader to choose between.
+                    Some(old) if !old.files.is_empty() => old.remove(&dir).map_err(InitError::io(&dir))?,
+                    // A directory whose record describes no files was populated by something that kept none — either
+                    // nothing at all, or a **trusted** install, which deliberately records an empty list so that this
+                    // process does not accept its files. Either way the contents cannot be described, so extracting
+                    // or downloading over them would merge two versions: the previous install's files would survive
+                    // as a resume point, and the transfer would continue onto bytes it never wrote. Partial downloads
+                    // survive the emptying.
+                    //
+                    // The same rule `Manifest::intact` already holds — a record naming no files is not an install to
+                    // trust — read from the other end. Without it, "a later process reinstalls from the published
+                    // sources" would be true of the request and false of the file that came back.
+                    _ => manifest::empty_dir(&dir).map_err(InitError::io(&dir))?,
+                }
+            }
+
+            // Whatever an execution provider compiled from the version being replaced, discarded here rather than by
+            // a later step that is trusted to remember: an interruption between the two would leave new weights
+            // beside an engine built from the old ones, which is the one pairing that must never exist. Reached only
+            // on the path above — an install that is already current returned before it, so it discards nothing,
+            // which is the point when a rebuild costs minutes.
+            //
+            // A directory that is not there is nothing to empty rather than a failure: only the first install of a
+            // model creates one, and this runs before that model has ever been built.
+            for derived in &derived {
+                if derived.is_dir() {
+                    manifest::empty_dir(derived).map_err(InitError::io(derived))?;
+                }
+            }
+
+            Ok(())
+        })
+        .await??;
     }
 
     // Nothing is transferred for a trusted model and no progress is reported for it: every file it needs is the file
@@ -259,7 +320,8 @@ async fn install_inner(
             expand(&file, dir, Arc::clone(&reporter)).await?;
 
             // Before the tree is read back, so the record never names a file this install itself removes.
-            std::fs::remove_file(&file).map_err(InitError::io(&file))?;
+            spawn_blocking::<_, InitError, _>(move || std::fs::remove_file(&file).map_err(InitError::io(&file)))
+                .await??;
         }
     }
 
@@ -273,10 +335,22 @@ async fn install_inner(
     //
     // The fingerprint written is the stamp, which is what the comparison at the top of this function reads back — so
     // a launch that changed nothing discards nothing, and a file that moved discards the engine compiled from it.
-    let files = if trusted { Vec::new() } else { manifest::record_tree(dir).map_err(InitError::io(dir))? };
-    let count = files.len();
-    manifest::write(dir, &Manifest { fingerprint: want, ..Manifest::new(dependency, files) })
-        .map_err(InitError::io(dir))?;
+    //
+    // Walking the tree is a stat per file, and so is on a blocking thread with the write that follows it.
+    let count = {
+        let dir = dir.to_path_buf();
+        let dependency = dependency.clone();
+
+        spawn_blocking::<_, InitError, _>(move || -> Result<usize, InitError> {
+            let files = if trusted { Vec::new() } else { manifest::record_tree(&dir).map_err(InitError::io(&dir))? };
+            let count = files.len();
+            manifest::write(&dir, &Manifest { fingerprint: want, ..Manifest::new(&dependency, files) })
+                .map_err(InitError::io(&dir))?;
+
+            Ok(count)
+        })
+        .await??
+    };
 
     tracing::info!(
         dependency = dependency.name,

@@ -8,6 +8,8 @@ use std::sync::Mutex;
 
 use opai::{CancellationToken, Picture};
 
+use crate::sync::lock;
+
 /// The one run this application has in flight, and the one result it has produced.
 ///
 /// ```text
@@ -45,7 +47,7 @@ pub(crate) struct Runs {
     // session whenever no next run came — a fourfold enlargement of a large scan is gigabytes of pixels.
     //
     // A `std::sync::Mutex` rather than tokio's — nothing holds a guard across an `await`. Poisoning is treated as
-    // usable, same reasoning as `images::Opened`: a panicking holder leaves a perfectly usable slot.
+    // usable, through `crate::sync::lock`: a panicking holder leaves a perfectly usable slot.
     held: Mutex<Held>,
 }
 
@@ -103,7 +105,7 @@ impl Runs {
     ///
     /// If a stop for `id` arrived before this call, the returned token is **already cancelled**.
     pub(crate) fn start(&self, id: &str, source: &str) -> CancellationToken {
-        let mut held = self.lock();
+        let mut held = lock(&self.held);
 
         // Before the write: a displaced run must stop regardless of the new run's outcome, and its pixels must
         // go the moment the next run is asked for, not when it completes — bounds resident cost to one.
@@ -141,7 +143,7 @@ impl Runs {
     /// produced pixels nobody kept, so it must be reported as stopped rather than as an address the scheme
     /// would answer `GONE` for. The identity is always remembered.
     pub(crate) fn finish(&self, id: &str, picture: Picture) -> bool {
-        let mut held = self.lock();
+        let mut held = lock(&self.held);
 
         // Always, since a displaced or released run may answer before noticing.
         held.produced.record(picture.identity());
@@ -175,7 +177,7 @@ impl Runs {
     ///
     /// **Does nothing when the slot holds another run**, which would be stopping the wrong one.
     pub(super) fn stop(&self, id: &str) -> bool {
-        let mut held = self.lock();
+        let mut held = lock(&self.held);
 
         match held.current.as_ref() {
             Some(run) if run.id == id => {
@@ -203,7 +205,7 @@ impl Runs {
     /// **A run still in flight is not stopped here**, but it is marked [`released`](Run::released), so what it
     /// hands back later is not kept.
     pub(super) fn release(&self, source: &str) -> bool {
-        let mut held = self.lock();
+        let mut held = lock(&self.held);
 
         // Named by the image rather than the result, which is what makes the race safe: closing image A while a
         // run over image B is in flight is ordinary, and a release meaning "drop whatever you hold" would throw
@@ -228,7 +230,7 @@ impl Runs {
     /// A run in flight is left exactly as [`release`](Self::release) leaves it: still in the slot and marked
     /// released, to be stopped by its own path.
     pub(super) fn release_all(&self) -> bool {
-        let mut held = self.lock();
+        let mut held = lock(&self.held);
 
         // Not taken out of the slot: that would throw away the token that stops it.
         let Some(run) = held.current.as_mut() else { return false };
@@ -243,7 +245,7 @@ impl Runs {
     /// A clone of the [`Picture`] rather than a guard, so the response can be produced with the lock released
     /// — `Picture` shares pixels via `Arc`, so this is a refcount bump.
     pub(crate) fn resolve(&self, identity: &str) -> Option<Resident> {
-        let held = self.lock();
+        let held = lock(&self.held);
 
         if let Some(picture) = held.current.as_ref().and_then(|run| run.result.as_ref())
             && picture.identity() == identity
@@ -259,12 +261,7 @@ impl Runs {
     pub(super) fn holds(&self, id: &str) -> bool {
         // A method rather than a free helper beside the tests because `Held` and `Run` are this file's own:
         // `super::run`'s tests wait on the slot without the inside of it being visible to them.
-        self.lock().current.as_ref().is_some_and(|current| current.id == id)
-    }
-
-    /// The slot, treating a poisoned lock as usable. See the comment on [`Runs`]'s field for why.
-    fn lock(&self) -> std::sync::MutexGuard<'_, Held> {
-        self.held.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        lock(&self.held).current.as_ref().is_some_and(|current| current.id == id)
     }
 }
 

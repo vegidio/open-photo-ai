@@ -8,15 +8,18 @@ use std::sync::Mutex;
 use opai::Family;
 use serde::Serialize;
 
+use crate::sync::lock;
+
 /// The event a run's reports arrive under.
 ///
 /// A global event rather than a channel (unlike `setup.rs`'s), because a run carries its own name in
 /// [`RunProgress::run`], letting a window subscribed once tell a report about its current run apart from one
 /// about a run it abandoned — a per-call channel for a displaced run would keep delivering regardless.
 ///
-/// **Two senders, one event.** A chain reports here, and so does the detection [`crate::faces`] runs for a face
-/// recovery: the window draws one indicator, every report already names its run, and a second event would be a
-/// second subscription to unregister for a chip that can only ever show one thing. The detection reports under
+/// **Two senders, one event.** A chain reports here — including the detection it makes for a face recovery, mapped
+/// onto the head of its own bar by [`Handover`] — and so does the picker's detection [`crate::faces::detect_faces`]
+/// runs: the window draws one indicator, every report already names its run, and a second event would be a second
+/// subscription to unregister for a chip that can only ever show one thing. A detection reports under
 /// [`Family::Detection`], which the frontend names Face Recovery — see design.md D8.
 ///
 /// Written once on the TypeScript side too, in `frontend/ipc/enhance.ts`.
@@ -182,7 +185,7 @@ impl Reporting {
 
             // Lock held across the thinning only, released before the send.
             let emitted = {
-                let mut thinning = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut thinning = lock(&state);
 
                 thinning.observe(wire, which, install)
             };
@@ -198,7 +201,7 @@ impl Reporting {
     /// Sends the report the run's final stage held back, if it held one.
     pub(crate) fn release(&self) {
         let last = {
-            let mut thinning = self.thinning.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut thinning = lock(&self.thinning);
 
             thinning.finish()
         };
@@ -247,6 +250,76 @@ fn emit<R: tauri::Runtime>(app: &tauri::AppHandle<R>, report: RunProgress) {
 
     if let Err(error) = app.emit(PROGRESS_EVENT, report) {
         tracing::warn!(%error, "could not report an enhancement's progress to the window");
+    }
+}
+
+// ── One bar over a detection and the chain it was run for ───────────────────────────────────────────────────────────
+
+/// How much of the bar a detection owns, before the chain that asked for it starts.
+///
+/// A chain carrying a face recovery is two runs underneath — the detection `crate::faces::for_chain` makes and the
+/// chain itself — and each reports its own `0..1` and lands on exactly 1. Drawn as they arrive that is two sweeps: the
+/// bar fills, empties and fills again, which reads as the enhancement having been applied twice. So the detection is
+/// mapped onto the head of the range and the chain onto what it leaves.
+///
+/// The figure is the reference's own `progressAfterDetect`, which reserved exactly this fifth inside its face recovery
+/// because its package acquired the detector itself.
+const DETECTION_SHARE: f64 = 0.2;
+
+/// One run's reports split over a detection and the chain after it, so the window draws one bar that moves forward
+/// once.
+///
+/// **A detection the store served owns nothing.** Nearly every chain after the first at a framing finds its faces in
+/// the run store — the analysis, the previous run or the picker already asked — and reporting that as a fifth of the
+/// bar would jump every re-run a fifth of the way in for nothing. So the detection's own reports are forwarded only
+/// once one says it is fetching or running, and the chain takes the whole bar unless one was.
+pub(crate) struct Handover {
+    /// Where every report goes in the end: the run's own [`Reporting`] callback.
+    inner: opai::OnInference,
+    /// Whether the detection reported any work, which decides the share the chain is mapped onto.
+    detected: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Handover {
+    /// Splits the reports `inner` receives.
+    pub(crate) fn new(inner: &opai::OnInference) -> Self {
+        Self { inner: std::sync::Arc::clone(inner), detected: std::sync::Arc::default() }
+    }
+
+    /// The callback for the detection: its reports mapped onto the head of the bar, and a detection served from the
+    /// store not reported at all.
+    pub(crate) fn detection(&self) -> opai::OnInference {
+        let inner = std::sync::Arc::clone(&self.inner);
+        let detected = std::sync::Arc::clone(&self.detected);
+
+        std::sync::Arc::new(move |report: &opai::InferenceProgress| {
+            if matches!(report.stage, opai::Stage::Cached) {
+                return;
+            }
+
+            detected.store(true, std::sync::atomic::Ordering::Relaxed);
+            inner(&opai::InferenceProgress {
+                chain_fraction: report.chain_fraction * DETECTION_SHARE,
+                ..report.clone()
+            });
+        })
+    }
+
+    /// The callback for the chain: what a detection that reported left of the bar, or the whole of it.
+    ///
+    /// Asked for once the detection has ended, which is when whether it reported anything is known.
+    pub(crate) fn chain(&self) -> opai::OnInference {
+        if !self.detected.load(std::sync::atomic::Ordering::Relaxed) {
+            return std::sync::Arc::clone(&self.inner);
+        }
+
+        let inner = std::sync::Arc::clone(&self.inner);
+
+        std::sync::Arc::new(move |report: &opai::InferenceProgress| {
+            let chain_fraction = DETECTION_SHARE + report.chain_fraction * (1.0 - DETECTION_SHARE);
+
+            inner(&opai::InferenceProgress { chain_fraction, ..report.clone() });
+        })
     }
 }
 
@@ -617,5 +690,49 @@ mod tests {
 
             async move { Ok(result) }
         }
+    }
+
+    // ── One bar over a detection and its chain ──────────────────────────────────────────────────────────────────
+
+    /// What a [`Handover`] forwarded, as the chain fractions it forwarded them at.
+    fn handed_over(detection: &[opai::Stage], chain: usize) -> Vec<f64> {
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let collector = Arc::clone(&sent);
+        let inner: opai::OnInference = Arc::new(move |report: &opai::InferenceProgress| {
+            collector.lock().expect("unpoisoned").push(report.chain_fraction);
+        });
+        let handover = Handover::new(&inner);
+
+        let detecting = handover.detection();
+        let subject = Arc::new(opai::Subject::Analysis(opai::Detection::for_face_recovery()));
+        for stage in detection {
+            detecting(&reported(&subject, stage.clone(), 1.0));
+        }
+
+        let chaining = handover.chain();
+        let upscale = Arc::new(opai::Subject::Enhancement(Upscale::kyoto(FloatPrecision::Fp32, Scale::clamped(2.0))));
+        for step in 0..=chain {
+            chaining(&reported(&upscale, opai::Stage::Running, step as f64 / chain as f64));
+        }
+
+        let sent = sent.lock().expect("unpoisoned");
+        sent.clone()
+    }
+
+    #[test]
+    fn a_detection_that_worked_owns_the_head_of_the_bar_and_the_chain_the_rest() {
+        let fractions = handed_over(&[opai::Stage::Running], 2);
+        let percent = fractions.iter().map(|fraction| percent(*fraction)).collect::<Vec<_>>();
+
+        assert_eq!(percent, [20, 20, 60, 100]);
+        // And lands on exactly 1, which is what the window reads as done.
+        assert_eq!(fractions.last(), Some(&1.0));
+    }
+
+    #[test]
+    fn a_detection_the_store_served_reports_nothing_and_the_chain_owns_the_whole_bar() {
+        let fractions = handed_over(&[opai::Stage::Cached], 2);
+
+        assert_eq!(fractions, [0.0, 0.5, 1.0]);
     }
 }

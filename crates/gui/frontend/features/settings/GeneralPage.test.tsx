@@ -5,8 +5,7 @@ import "@/i18n";
 import i18n from "@/i18n";
 import { LANGUAGE_NAMES, LANGUAGE_TAGS } from "@/i18n/languages";
 import { type SettingsData, useSettingsStore } from "@/stores/settings";
-import { render } from "@/test/support";
-import { DraftHarness } from "./draft.tsx";
+import { DraftHarness, render } from "@/test/support";
 import { GeneralPage } from "./GeneralPage.tsx";
 
 /**

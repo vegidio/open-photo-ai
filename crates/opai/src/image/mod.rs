@@ -82,7 +82,7 @@ pub use extensions::input_extensions;
 pub use identity::{identity, identity_blocking};
 pub use load::{load, load_blocking};
 pub use picture::Picture;
-pub use probe::{probe, probe_blocking, probe_raw, probe_raw_blocking};
+pub use probe::{identify_raw_blocking, probe, probe_blocking, probe_raw, probe_raw_blocking};
 pub use raw::is_raw;
 pub use save::{save, save_blocking};
 

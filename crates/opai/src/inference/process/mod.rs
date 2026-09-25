@@ -56,6 +56,28 @@ pub use options::ProcessOptions;
 pub(crate) use plan::{Planned, plan};
 pub use report::{Enhanced, ProviderReport, ProviderVerdict};
 
+/// `operations` in [`Family::APPLY_ORDER`](crate::models::Family::APPLY_ORDER): borrowed where they already are, and
+/// otherwise a stably sorted copy, so two operations of one family keep the order they were given in.
+///
+/// **Sorted rather than refused.** Every chain has exactly one order that is right — a face recovery's faces are in the
+/// chain input's coordinates, so it must precede an upscale, and every other pairing has a better order — and a caller
+/// that listed its stack another way asked for that result, not for an error. Putting the rule here rather than in each
+/// front end is what keeps two front ends from running one stack two ways.
+pub(crate) fn in_apply_order(operations: &[Operation]) -> std::borrow::Cow<'_, [Operation]> {
+    // `applied_at` is `Some` for every family an `Operation` can carry; the fallback sorts a family it ever missed last
+    // rather than panicking over a photograph.
+    let position = |operation: &Operation| operation.family().applied_at().unwrap_or(usize::MAX);
+
+    if operations.is_sorted_by_key(position) {
+        return std::borrow::Cow::Borrowed(operations);
+    }
+
+    let mut sorted = operations.to_vec();
+    sorted.sort_by_key(position);
+
+    std::borrow::Cow::Owned(sorted)
+}
+
 /// Runs `source` through `operations` and composes the identity of what came out.
 ///
 /// The body of [`Opai::process`](crate::Opai::process).
@@ -70,6 +92,11 @@ pub(crate) async fn process<B: Backend>(
     options: Option<ProcessOptions>,
 ) -> Result<Enhanced, InferenceError> {
     let options = options.unwrap_or_default();
+
+    // Before everything else — the plan, the identity, every cache key and every report — so all of them describe the
+    // chain that actually runs. A chain already in order is borrowed as it is, so its cache keys are the ones it has
+    // always had.
+    let operations = &*in_apply_order(operations);
 
     // Resolved **here**, once, and handed to the run, to the identity composition and to every cache key the run
     // derives. Resolving it twice — once for what runs and once for what the result is named — is two answers to one
@@ -397,8 +424,7 @@ pub(crate) async fn run<B: Backend>(
         let cancelled = cancel.clone();
         let reported = Arc::clone(&reporter);
         let wanted = progress.wanted();
-        // The write travels into the same blocking call as the run, so the encoded buffer and the result it was made
-        // from never cross a thread boundary between being produced and being stored.
+        // Handed to the store's writer from inside the blocking call, the moment the result exists.
         let writing = cache.cloned().zip(key);
 
         // **Acquire on the runtime, run off it.** In a Tauri process the async runtime *is* the window's event loop, so a
@@ -417,15 +443,20 @@ pub(crate) async fn run<B: Backend>(
             let report = wanted.then_some(&report as &dyn Fn(f64));
             let stopped = || cancelled.is_cancelled();
 
-            // One call, whatever the model is.
-            let produced = pipeline.run(&input, &sessions, depth, report, &stopped);
+            // One call, whatever the model is. Shared from here on, so the store's writer and the rest of the chain
+            // hold one buffer rather than two.
+            let produced = pipeline.run(&input, &sessions, depth, report, &stopped).map(Arc::new);
 
             // Only what actually succeeded — a cancelled or failed operation arrives as an `Err`, so nothing needs to
             // check the token a second time — and the result is handed back either way: a write that is declined or that
             // breaks is dropped where it happened, because the pixels are already computed and throwing finished work
             // away over a full disk would be the cache's problem becoming the enhancement's.
+            //
+            // **Queued, not written.** Encoding a large result as PNG and writing it is hundreds of milliseconds to
+            // seconds, and nothing in this run needs it done: the next step and the caller have the pixels. A later
+            // read of this key waits for the write rather than missing it — see `RunCache::put_later`.
             if let (Ok(image), Some((cache, key))) = (&produced, &writing) {
-                cache.put(key, image);
+                cache.put_later(key, Arc::clone(image));
             }
 
             (sessions, produced)
@@ -452,7 +483,7 @@ pub(crate) async fn run<B: Backend>(
         // The model's run alone: a first run's install and build are measured as units of their own.
         metrics::STEP_DURATION.record_with_tags(ran.as_secs_f64(), &[("model", &model), ("provider", ran_on)]);
 
-        current = Arc::new(produced);
+        current = produced;
         index += 1;
     }
 

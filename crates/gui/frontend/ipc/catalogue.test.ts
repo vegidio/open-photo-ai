@@ -24,7 +24,7 @@ const CATALOGUE: FamilyEntry[] = [
                 codename: "sh_moscow",
                 label: "Moscow",
                 precisions: ["fp32", "fp16"],
-                parameters: [{ name: "strength", kind: "range", min: 0, max: 100 }],
+                parameters: [{ name: "strength", kind: "range", min: 0, max: 100, default: 1 }],
             },
         ],
     },

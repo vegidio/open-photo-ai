@@ -22,6 +22,8 @@ use std::sync::LazyLock;
 use image::DynamicImage;
 use imaging::tensor::Sampler;
 
+use crate::models::colorization::srgb_to_linear;
+
 /// The most samples one pass reads: about a megapixel, whatever the photograph's size.
 pub(super) const MAX_SAMPLES: u64 = 1_048_576;
 
@@ -57,11 +59,6 @@ const CLIP_MARGIN: u16 = 128;
 /// Whether any channel of `rgb` is within [`CLIP_MARGIN`] of either end of its range.
 pub(super) fn clipped(rgb: [u16; 3]) -> bool {
     rgb.iter().any(|channel| *channel <= CLIP_MARGIN || *channel >= u16::MAX - CLIP_MARGIN)
-}
-
-/// Removes the sRGB gamma from a `[0, 1]` channel.
-pub(super) fn srgb_to_linear(c: f64) -> f64 {
-    if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
 }
 
 // Not colorization's table, which is kept in the exact form its bit-for-bit tests pin. This one holds only what the

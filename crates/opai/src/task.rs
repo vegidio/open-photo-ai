@@ -1,6 +1,9 @@
 //! Running blocking work without stalling the async runtime.
 
+use std::future::{Future, poll_fn};
+use std::pin::pin;
 use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::task::Poll;
 
 use thiserror::Error;
 
@@ -58,6 +61,36 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     // the next caller cannot use, and propagating the panic instead would turn one failed build — or one panicking
     // progress callback — into an application that can no longer open any model or report any progress at all.
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+// Written here rather than taken from `tokio::join!`, which needs the `macros` feature this crate's runtime dependency
+// does not enable, or from `futures`, which is not in its dependency graph.
+/// Runs `a` and `b` concurrently on the current task and returns both outputs once both have finished.
+pub(crate) async fn join<A: Future, B: Future>(a: A, b: B) -> (A::Output, B::Output) {
+    let (mut a, mut b) = (pin!(a), pin!(b));
+    let (mut first, mut second) = (None, None);
+
+    poll_fn(|cx| {
+        if first.is_none()
+            && let Poll::Ready(output) = a.as_mut().poll(cx)
+        {
+            first = Some(output);
+        }
+        if second.is_none()
+            && let Poll::Ready(output) = b.as_mut().poll(cx)
+        {
+            second = Some(output);
+        }
+
+        match (first.take(), second.take()) {
+            (Some(a), Some(b)) => Poll::Ready((a, b)),
+            (a, b) => {
+                (first, second) = (a, b);
+                Poll::Pending
+            }
+        }
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -127,5 +160,16 @@ mod tests {
         let lines = records(&log, "decoded on the blocking thread");
         assert_eq!(lines.len(), 1, "{log}");
         assert!(lines[0].contains(" picture=a.jpg"), "the record lost the span it was handed off under: {log}");
+    }
+
+    #[tokio::test]
+    async fn join_returns_both_outputs_when_the_first_finishes_last() {
+        let slow = async {
+            tokio::task::yield_now().await;
+            tokio::task::yield_now().await;
+            1
+        };
+
+        assert_eq!(join(slow, async { "b" }).await, (1, "b"));
     }
 }

@@ -1,4 +1,5 @@
 import { type ComponentProps, type ReactNode, useState } from "react";
+import type { TFunction } from "i18next";
 import { Ellipsis } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -16,6 +17,25 @@ import { FILE_MENU_GAP, FILE_MENU_GLYPH } from "@/lib/constants";
 import { report } from "@/lib/report";
 import { cn } from "@/lib/utils";
 import { useFileStore } from "@/stores/files";
+
+// The platform the label is written for, through i18next's `context` rather than by interpolating a
+// name into a sentence: word order around a product name is not universal, so the whole sentence
+// has to be one translatable unit. An undefined context falls back to the base key, so everything
+// that is neither macOS nor Windows takes the base key, which names a file manager generically, and
+// there is nothing extra to keep in sync.
+//
+// `isMacOs()` and `isWindows()` answer synchronously, which is what lets the label be right on
+// first paint rather than settling a tick later. Here rather than in `ipc/os.ts` because every
+// component test mocks that module whole, down to the two answers this reads.
+/**
+ * "Show in Finder", "Show in Explorer" or "Show in File Manager": the one name for revealing a file,
+ * which this menu and the export queue's reveal button both draw.
+ */
+export const showInLabel = (t: TFunction) => {
+    const platform = isMacOs() ? "darwin" : isWindows() ? "windows" : undefined;
+
+    return t("menu.file.showIn", { ...(platform && { context: platform }) });
+};
 
 /** Where the menu sits relative to the control that opened it. */
 type Anchor = {
@@ -149,16 +169,6 @@ export const FileOptionsMenu = ({ file, anchor, container, children }: FileOptio
             });
         });
 
-    // The platform the label is written for, through i18next's `context` rather than by interpolating a
-    // name into a sentence: word order around a product name is not universal, so the whole sentence
-    // has to be one translatable unit. An undefined context falls back to the base key, so everything
-    // that is neither macOS nor Windows takes the base key, which names a file manager generically, and
-    // there is nothing extra to keep in sync.
-    //
-    // `isMacOs()` and `isWindows()` answer synchronously, which is what lets the label be right on
-    // first paint rather than settling a tick later.
-    const platform = isMacOs() ? "darwin" : isWindows() ? "windows" : undefined;
-
     return (
         /*
          * `modal={false}`, where Radix defaults to `true`. Modal disables pointer events everywhere
@@ -205,7 +215,7 @@ export const FileOptionsMenu = ({ file, anchor, container, children }: FileOptio
                 <DropdownMenuSeparator />
 
                 <DropdownMenuItem className="text-[13px]" onSelect={reveal}>
-                    {t("menu.file.showIn", { ...(platform && { context: platform }) })}
+                    {showInLabel(t)}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

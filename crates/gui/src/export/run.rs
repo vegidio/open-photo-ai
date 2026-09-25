@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use opai::{Enhanced, InferenceError, OutputDepth, ProcessOptions};
+use opai::{Enhanced, ExecuteOptions, InferenceError, OutputDepth, ProcessOptions};
 use serde::Serialize;
 
 use super::Exports;
@@ -17,7 +17,8 @@ use super::destination;
 use super::format::{ExportFormat, encode_options};
 use super::progress::ExportReporting;
 use crate::command::{Answer, CommandError, Ended};
-use crate::enhance::{Enhancer, Processor, Requested, UnknownOperation};
+use crate::enhance::{EnhanceError, Enhancer, Handover, Processor, Requested};
+use crate::faces::for_chain;
 use crate::images::{Crop, Opened, load_framed};
 
 /// How an export ended.
@@ -49,47 +50,11 @@ impl Answer for Exported {
 /// Why an export could not be asked for, or could not finish. A stop is deliberately not among these — see
 /// [`Exported`].
 ///
-/// The first five have the shapes [`EnhanceError`](crate::enhance::EnhanceError)'s do, so the window can describe
-/// both with one formatter.
+/// Every refusal a canvas run has, carried as [`EnhanceError`] itself so the two cannot drift apart, and the two ways
+/// the file itself can fail, which a canvas run has no file to meet.
 #[derive(Debug, Clone, PartialEq, Serialize, thiserror::Error)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum ExportError {
-    /// The window asked before the application had finished starting itself.
-    #[error("the application is still starting and cannot export a photograph yet")]
-    NotReady,
-
-    /// The source names an identity this application never admitted — a bug in the interface.
-    #[error("no image with identity `{identity}` has been opened")]
-    UnknownSource {
-        /// What was asked for.
-        identity: String,
-    },
-
-    /// An operation in the chain names something this application cannot run.
-    #[error("operation {index} cannot be run: {reason}")]
-    UnknownOperation {
-        /// Which position in the chain, counted from zero.
-        index: usize,
-        /// What could not be served.
-        reason: UnknownOperation,
-    },
-
-    /// The source was admitted and could not be read: a photograph on a drive that has been ejected.
-    #[error("`{identity}` was opened and can no longer be read: {message}")]
-    UnreadableSource {
-        /// Which admitted file.
-        identity: String,
-        /// The library's own sentence, untranslated, so it can be copied into a bug report.
-        message: String,
-    },
-
-    /// The chain itself failed; `message` is [`InferenceError`]'s own sentence.
-    #[error("{message}")]
-    Enhance {
-        /// The library's own sentence, untranslated and in full.
-        message: String,
-    },
-
     /// The encoded photograph could not be saved under the name claimed for it.
     #[error("`{path}` could not be written: {message}")]
     Write {
@@ -111,19 +76,26 @@ pub(crate) enum ExportError {
         /// The reason, untranslated: what the failed row's tooltip copies to the clipboard.
         message: String,
     },
+
+    // Untagged, so it crosses as the `EnhanceError` it carries, under that error's own `kind` — the shapes the window
+    // already describes a canvas run's refusal by, which is what lets one formatter describe both. Last, because serde
+    // requires an untagged variant to follow every tagged one.
+    /// A refusal or failure a canvas run has too: not ready, an unknown source or operation, an unreadable source, or
+    /// the chain itself failing.
+    #[error(transparent)]
+    #[serde(untagged)]
+    Chain(#[from] EnhanceError),
 }
 
 impl CommandError for ExportError {
     fn ended(&self) -> Ended<'_> {
         match self {
-            // Refusals and failures this crate makes, which nothing else sees.
-            Self::NotReady | Self::UnknownSource { .. } | Self::UnknownOperation { .. } | Self::Unwritable { .. } => {
-                Ended::Failed { error: self, recorded: false }
-            }
-            // `opai` records the failed decode, the failed chain and the failed save, where each happened.
-            Self::UnreadableSource { .. } | Self::Enhance { .. } | Self::Write { .. } => {
-                Ended::Failed { error: self, recorded: true }
-            }
+            // Whoever saw it, exactly as for a canvas run.
+            Self::Chain(error) => error.ended(),
+            // A failed claim or commit, which nothing else sees.
+            Self::Unwritable { .. } => Ended::Failed { error: self, recorded: false },
+            // `opai` records the failed save, where it happened.
+            Self::Write { .. } => Ended::Failed { error: self, recorded: true },
         }
     }
 }
@@ -145,8 +117,9 @@ pub(crate) struct Request {
     pub(crate) destination: PathBuf,
     /// What to write.
     pub(crate) format: ExportFormat,
-    /// The quality, for the formats that take one. Brought inside `1..=100` rather than refused.
-    pub(crate) quality: f64,
+    /// The quality, for the formats that take one, or `None` — which a lossless format always is, and a lossy one is
+    /// written at its published default for. Brought inside `1..=100` rather than refused.
+    pub(crate) quality: Option<f64>,
     /// Whether a file already at `destination` may be replaced. Without it, a numbered name is written instead.
     pub(crate) overwrite: bool,
 }
@@ -160,7 +133,8 @@ pub(crate) struct Request {
 ///   2. resolve the source          --> refused: unknown source
 ///   3. register the export         --> a stop that arrived first answers `stopped`, nothing read
 ///   4. decode and frame it         --> refused: unreadable source
-///   5. run the chain, at the source's depth, reporting as `enhancing`
+///   5. find the faces a face recovery restores, then run the chain at the source's depth, reporting both as
+///      `enhancing`
 ///   6. release the held-back report; stopped?  --> `stopped`. The last point a stop takes effect.
 ///   7. report `writing`
 ///   8. claim the destination       --> refused: unwritable, naming it
@@ -193,12 +167,14 @@ pub(crate) async fn export_with<E: Enhancer>(
         .operations
         .iter()
         .enumerate()
-        .map(|(index, requested)| requested.resolve().map_err(|reason| ExportError::UnknownOperation { index, reason }))
+        .map(|(index, requested)| {
+            requested.resolve().map_err(|reason| EnhanceError::UnknownOperation { index, reason })
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
     let path = opened
         .resolve(&request.source)
-        .ok_or_else(|| ExportError::UnknownSource { identity: request.source.clone() })?;
+        .ok_or_else(|| EnhanceError::UnknownSource { identity: request.source.clone() })?;
 
     let Some(registration) = exports.register(&request.run) else {
         tracing::debug!("an export was stopped before it started");
@@ -207,22 +183,42 @@ pub(crate) async fn export_with<E: Enhancer>(
     };
 
     // Not logged here, nor the chain's failure or the save's below: `opai` records each once, where it happened.
-    let picture = load_framed(path, request.crop).await.map_err(|error| ExportError::UnreadableSource {
-        identity: request.source.clone(),
-        message: error.to_string(),
+    let picture = load_framed(opened, &request.source, path, request.crop).await.map_err(|error| {
+        EnhanceError::UnreadableSource { identity: request.source.clone(), message: error.to_string() }
     })?;
+
+    // A face recovery finds its own faces, inside this export and under its stop, exactly as a canvas run's does — see
+    // `for_chain`. The row reports it as the head of its `enhancing` bar.
+    let handover = reporting.as_ref().map(|reporting| Handover::new(&reporting.enhancing.on_progress));
+    let detecting = ExecuteOptions {
+        provider: request.processor.into(),
+        on_progress: handover.as_ref().map(Handover::detection),
+        cancel: registration.cancel().clone(),
+        ..Default::default()
+    };
+
+    // What was found is the canvas's to record, not an export's: a detection that failed is exported over no faces
+    // without a notice, as a file whose other enhancements still apply.
+    let operations = match for_chain(enhancer, &picture, &request.operations, operations, detecting).await {
+        Ok((operations, _)) => Some(operations),
+        Err(_) => None,
+    };
 
     // `OutputDepth::Source`, unlike the canvas's `Eight`: this result is written to a file rather than drawn, and a
     // 16-bit photograph written to a format that holds 16 bits keeps them.
     let options = ProcessOptions {
         provider: request.processor.into(),
         depth: OutputDepth::Source,
-        on_progress: reporting.as_ref().map(|reporting| std::sync::Arc::clone(&reporting.enhancing.on_progress)),
+        on_progress: handover.as_ref().map(Handover::chain),
         cancel: registration.cancel().clone(),
         ..Default::default()
     };
 
-    let outcome = enhancer.process(&picture, &operations, options).await;
+    // A stop during the detection is a stop of the chain, answered below as one.
+    let outcome = match operations {
+        Some(operations) => enhancer.process(&picture, &operations, options).await,
+        None => Err(InferenceError::Cancelled),
+    };
 
     // Released whatever the chain did, so the row lands where the chain actually got to.
     if let Some(reporting) = &reporting {
@@ -245,7 +241,7 @@ pub(crate) async fn export_with<E: Enhancer>(
 
             return Ok(Exported::Stopped);
         }
-        Err(error) => return Err(ExportError::Enhance { message: error.to_string() }),
+        Err(error) => return Err(EnhanceError::Enhance { message: error.to_string() }.into()),
     };
 
     if let Some(reporting) = &reporting {
@@ -286,6 +282,7 @@ mod tests {
     use opai::{ExecutionProvider, Opai, Picture, Precision};
 
     use super::*;
+    use crate::enhance::UnknownOperation;
     use crate::export::progress::{ExportProgress, collecting};
     use crate::test_support::admitted;
 
@@ -382,7 +379,7 @@ mod tests {
 
     /// One upscale the catalogue publishes, as the window would name it.
     fn kyoto() -> Requested {
-        Requested::Upscale { codename: "kyoto".to_string(), precision: Precision::Fp32, scale: 2.0 }
+        Requested::named(opai::Family::Upscale, "kyoto", Precision::Fp32, &[("scale", 2.0)])
     }
 
     /// The opened photograph, its identity, and an empty directory to export into.
@@ -416,11 +413,11 @@ mod tests {
                 run: run.to_string(),
                 source: self.identity.clone(),
                 operations,
-                processor: Processor::Coreml,
+                processor: Processor(opai::ExecutionProvider::CoreMl),
                 crop: None,
                 destination: self.out.path().join(name),
                 format: ExportFormat::Png,
-                quality: 90.0,
+                quality: Some(90.0),
                 overwrite: false,
             }
         }
@@ -592,7 +589,7 @@ mod tests {
                     Request {
                         source: identity.clone(),
                         format,
-                        quality,
+                        quality: Some(quality),
                         ..fixture.request("export-1", Vec::new(), name)
                     },
                 )
@@ -714,25 +711,64 @@ mod tests {
             )
             .expect_err("an unopened identity is not exportable");
 
-        assert_eq!(refused, ExportError::UnknownSource { identity: "0123456789abcdef".to_string() });
+        assert_eq!(
+            refused,
+            ExportError::Chain(EnhanceError::UnknownSource { identity: "0123456789abcdef".to_string() })
+        );
         assert!(enhancer.seen().is_empty(), "a refused request still reached the library");
         assert!(fixture.written().is_empty(), "a refused request left a file behind");
+    }
+
+    /// An enhancer whose detection is stopped, as a stop pressed while an export finds its faces would stop it.
+    struct StoppedWhileDetecting;
+
+    impl Enhancer for StoppedWhileDetecting {
+        async fn process(
+            &self,
+            _source: &Picture,
+            _operations: &[opai::Operation],
+            _options: ProcessOptions,
+        ) -> Result<Enhanced, InferenceError> {
+            unreachable!("a stop during the detection runs no chain")
+        }
+
+        async fn detect(
+            &self,
+            _source: &Picture,
+            _analysis: &opai::Analysis,
+            _options: ExecuteOptions,
+        ) -> Result<opai::Executed<opai::Faces>, InferenceError> {
+            Err(InferenceError::Cancelled)
+        }
+    }
+
+    #[test]
+    fn an_export_stopped_while_it_finds_its_faces_is_stopped_and_writes_nothing() {
+        let fixture = Fixture::new();
+        let recovery = Requested::named(opai::Family::FaceRecovery, "santorini", Precision::Fp32, &[]);
+
+        let answer = fixture
+            .export(&StoppedWhileDetecting, None, fixture.request("export-1", vec![recovery], "a.png"))
+            .expect("a stop is not a failure");
+
+        assert_eq!(answer, Exported::Stopped);
     }
 
     #[test]
     fn an_unpublished_model_is_refused_by_position_before_anything_is_fetched() {
         let fixture = Fixture::new();
         let enhancer = Recording::default();
-        let chain = vec![
-            kyoto(),
-            Requested::Upscale { codename: "berlin".to_string(), precision: Precision::Fp32, scale: 2.0 },
-        ];
+        let chain =
+            vec![kyoto(), Requested::named(opai::Family::Upscale, "berlin", Precision::Fp32, &[("scale", 2.0)])];
 
         let refused = fixture
             .export(&enhancer, None, fixture.request("export-1", chain, "a.png"))
             .expect_err("a chain naming an unpublished model is refused");
 
-        assert!(matches!(refused, ExportError::UnknownOperation { index: 1, .. }), "{refused:?}");
+        assert!(
+            matches!(refused, ExportError::Chain(EnhanceError::UnknownOperation { index: 1, .. })),
+            "{refused:?}"
+        );
         assert!(enhancer.seen().is_empty(), "a model was fetched for a refused chain");
         assert!(fixture.written().is_empty(), "a refused request left a file behind");
         assert!(fixture.exports.is_idle());
@@ -747,7 +783,9 @@ mod tests {
             .export(&Recording::default(), None, fixture.request("export-1", vec![kyoto()], "a.png"))
             .expect_err("a deleted file cannot be exported");
 
-        assert!(matches!(&refused, ExportError::UnreadableSource { identity, .. } if *identity == fixture.identity));
+        assert!(
+            matches!(&refused, ExportError::Chain(EnhanceError::UnreadableSource { identity, .. }) if *identity == fixture.identity)
+        );
         assert!(fixture.written().is_empty(), "a refused request left a file behind");
         assert!(fixture.exports.is_idle(), "a refused export left its token in the table");
     }
@@ -762,7 +800,9 @@ mod tests {
 
         assert_eq!(
             refused,
-            ExportError::Enhance { message: InferenceError::Untileable { width: 0, height: 0 }.to_string() }
+            ExportError::Chain(EnhanceError::Enhance {
+                message: InferenceError::Untileable { width: 0, height: 0 }.to_string()
+            })
         );
         assert!(fixture.written().is_empty(), "a failed export left a file behind");
     }
@@ -895,20 +935,23 @@ mod tests {
         }
 
         let refusals = [
-            (ExportError::NotReady, "notReady"),
-            (ExportError::UnknownSource { identity: "a".to_string() }, "unknownSource"),
+            (ExportError::Chain(EnhanceError::NotReady), "notReady"),
+            (ExportError::Chain(EnhanceError::UnknownSource { identity: "a".to_string() }), "unknownSource"),
             (
-                ExportError::UnknownOperation {
+                ExportError::Chain(EnhanceError::UnknownOperation {
                     index: 0,
                     reason: UnknownOperation::Model { family: opai::Family::Upscale, codename: "b".to_string() },
-                },
+                }),
                 "unknownOperation",
             ),
             (
-                ExportError::UnreadableSource { identity: "a".to_string(), message: "b".to_string() },
+                ExportError::Chain(EnhanceError::UnreadableSource {
+                    identity: "a".to_string(),
+                    message: "b".to_string(),
+                }),
                 "unreadableSource",
             ),
-            (ExportError::Enhance { message: "b".to_string() }, "enhance"),
+            (ExportError::Chain(EnhanceError::Enhance { message: "b".to_string() }), "enhance"),
             (ExportError::Write { path: "a".to_string(), message: "b".to_string() }, "write"),
             (ExportError::Unwritable { path: "a".to_string(), message: "b".to_string() }, "write"),
         ];
@@ -1089,7 +1132,7 @@ mod tests {
             let bytes = std::fs::read(&fixture).expect("the committed photograph is readable");
             let opened = Opened::default();
 
-            for processor in [Processor::Cpu, Processor::Coreml] {
+            for processor in [Processor(opai::ExecutionProvider::Cpu), Processor(opai::ExecutionProvider::CoreMl)] {
                 // The run store is on disk and outlives the process, so the committed photograph as it stands would be
                 // served from an earlier run and the check would pass having run nothing. A nonce after the JPEG's end
                 // marker makes a file the store has never seen, whose pixels are the fixture's.
@@ -1120,7 +1163,7 @@ mod tests {
                             crop: None,
                             destination: dir.path().join(format!("{processor:?}-{name}")),
                             format,
-                            quality: 90.0,
+                            quality: Some(90.0),
                             overwrite: false,
                         },
                     )
@@ -1155,12 +1198,18 @@ mod tests {
         let s = String::new;
         let reason = UnknownOperation::Model { family: opai::Family::Upscale, codename: s() };
         let cells = [
-            (ExportError::NotReady, "recorded by the wrapper"),
-            (ExportError::UnknownSource { identity: s() }, "recorded by the wrapper"),
-            (ExportError::UnknownOperation { index: 0, reason }, "recorded by the wrapper"),
+            (ExportError::Chain(EnhanceError::NotReady), "recorded by the wrapper"),
+            (ExportError::Chain(EnhanceError::UnknownSource { identity: s() }), "recorded by the wrapper"),
+            (
+                ExportError::Chain(EnhanceError::UnknownOperation { index: 0, reason }),
+                "recorded by the wrapper",
+            ),
             (ExportError::Unwritable { path: s(), message: s() }, "recorded by the wrapper"),
-            (ExportError::UnreadableSource { identity: s(), message: s() }, "recorded by opai"),
-            (ExportError::Enhance { message: s() }, "recorded by opai"),
+            (
+                ExportError::Chain(EnhanceError::UnreadableSource { identity: s(), message: s() }),
+                "recorded by opai",
+            ),
+            (ExportError::Chain(EnhanceError::Enhance { message: s() }), "recorded by opai"),
             (ExportError::Write { path: s(), message: s() }, "recorded by opai"),
         ];
         for (error, cell) in cells {
@@ -1170,6 +1219,34 @@ mod tests {
         let answer = Exported::Exported { path: s(), bytes: 1 };
         assert_eq!(Answer::ended(&answer).cell(), "finished");
         assert_eq!(Answer::ended(&Exported::Stopped).cell(), "stopped");
+    }
+
+    #[test]
+    fn a_refusal_a_canvas_run_has_too_crosses_in_exactly_the_shape_the_canvas_run_gives_it() {
+        // The window types an export's refusal as `EnhanceError | write`, so the nesting must add nothing to the
+        // wire: no `chain` tag and no wrapping object, only the canvas run's own JSON.
+        let reason = UnknownOperation::Model { family: opai::Family::Upscale, codename: "b".to_string() };
+        let refusals = [
+            EnhanceError::NotReady,
+            EnhanceError::UnknownSource { identity: "a".to_string() },
+            EnhanceError::UnknownOperation { index: 2, reason },
+            EnhanceError::UnreadableSource { identity: "a".to_string(), message: "b".to_string() },
+            EnhanceError::Enhance { message: "b".to_string() },
+        ];
+
+        for refusal in refusals {
+            let canvas = serde_json::to_value(&refusal).expect("serializable");
+            let export = ExportError::from(refusal.clone());
+
+            assert_eq!(serde_json::to_value(&export).expect("serializable"), canvas, "{refusal:?}");
+            assert_eq!(export.to_string(), refusal.to_string(), "{refusal:?} reads differently from an export");
+        }
+
+        assert_eq!(
+            serde_json::to_value(ExportError::from(EnhanceError::UnknownSource { identity: "a".to_string() }))
+                .expect("serializable"),
+            serde_json::json!({ "kind": "unknownSource", "identity": "a" })
+        );
     }
 
     #[test]
@@ -1236,7 +1313,7 @@ mod tests {
 
         let (recorded, answer) =
             traced_export(&fixture, &Recording::default(), fixture.request("export-1", vec![kyoto()], "a.png"));
-        assert!(matches!(answer, Err(ExportError::UnreadableSource { .. })), "{answer:?}");
+        assert!(matches!(answer, Err(ExportError::Chain(EnhanceError::UnreadableSource { .. }))), "{answer:?}");
 
         let wrapper: Vec<_> = recorded.events.iter().filter(|event| event.target == crate::command::TARGET).collect();
         assert!(wrapper.is_empty(), "the wrapper recorded a failure `opai` already had: {wrapper:#?}");

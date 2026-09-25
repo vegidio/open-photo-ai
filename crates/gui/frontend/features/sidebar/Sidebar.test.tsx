@@ -10,8 +10,9 @@ import { useFileStore } from "@/stores/files";
 import { type ImageViewport, useTransformStore } from "@/stores/transform";
 import {
     CATALOGUE,
-    FRAMING,
+    EXPORT_FORMATS,
     frame,
+    FRAMING,
     HOLIDAY,
     openFiles,
     render,
@@ -29,7 +30,9 @@ import { Sidebar } from "./Sidebar";
 // the window does with an answer is `hooks/useAutopilot.test.tsx`'s subject, and here only the asking is.
 vi.mock("@tauri-apps/api/core", () => ({
     convertFileSrc: vi.fn((identity: string) => `opai://localhost/${identity}`),
-    invoke: vi.fn((command: string) => Promise.resolve(command === "suggest" ? [] : CATALOGUE)),
+    invoke: vi.fn((command: string) =>
+        Promise.resolve(command === "suggest" ? [] : command === "export_formats" ? EXPORT_FORMATS : CATALOGUE),
+    ),
 }));
 
 // The export dialog subscribes to its progress event as it opens; what it does with a report is its own tests'.

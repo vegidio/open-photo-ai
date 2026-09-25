@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { clampQuality, MAX_QUALITY, MIN_QUALITY, QUALITY_FORMATS } from "@/stores/settings";
+import type { ParseKeys } from "i18next";
+import { useExportFormats } from "@/hooks/useExportFormats";
+import { clampQuality } from "@/stores/settings";
 import { useSettingsDraft } from "./draft";
 import { SettingsCard } from "./rows.tsx";
 
@@ -69,14 +71,19 @@ const QualityBox = ({
 };
 
 /**
- * Screen 16d: one encoder quality per lossy format, **four values rather than one**, each a filled
+ * Screen 16d: one encoder quality per lossy format, **one value per format rather than one**, each a filled
  * slider and a box it can be typed into. The lossless formats get no row at all.
+ *
+ * **Which formats have a row, their bounds and where each starts are Rust's**, read off `export_formats`: a
+ * format published as taking a quality gets a row, and one the user never moved shows its published default.
+ * So the rows are drawn once that answer has arrived.
  */
 export const ExportPage = () => {
     const { t } = useTranslation();
     const { values, update } = useSettingsDraft();
+    const formats = useExportFormats();
 
-    // Four because the scales are not comparable between encoders: the same number is a different
+    // One per format because the scales are not comparable between encoders: the same number is a different
     // picture in each, so one value shared across formats would be a setting that means something
     // different in every row it appeared in. The lossless formats' encoders ignore a quality, so a
     // slider for one would be a control with no effect, and there is no stored value behind it either.
@@ -85,8 +92,13 @@ export const ExportPage = () => {
     // and getting back to where a format started is now Reset to defaults on this page.
     return (
         <SettingsCard>
-            {QUALITY_FORMATS.map((format) => {
-                const name = t(`settings.export.${format}.title`);
+            {formats?.formats.map(({ format, quality: range }) => {
+                if (!range) return null;
+
+                // The name is translated where a catalogue names it - the four lossy formats all do - and a
+                // format Rust later publishes a quality for reads as its own spelling until one does.
+                const name = t(`settings.export.${format}.title` as ParseKeys, { defaultValue: format.toUpperCase() });
+                const value = values.quality[format] ?? range.default;
                 const set = (quality: number) => update({ quality: { ...values.quality, [format]: quality } });
 
                 return (
@@ -98,9 +110,9 @@ export const ExportPage = () => {
                         <span className="text-sm">{name}</span>
 
                         <Slider
-                            value={[values.quality[format]]}
-                            min={MIN_QUALITY}
-                            max={MAX_QUALITY}
+                            value={[value]}
+                            min={range.min}
+                            max={range.max}
                             step={1}
                             thumbLabel={name}
                             // The design's `--input` track rather than the generated `--muted`, which
@@ -112,7 +124,7 @@ export const ExportPage = () => {
 
                         <QualityBox
                             label={t("settings.export.valueLabel", { format: name })}
-                            value={values.quality[format]}
+                            value={value}
                             onCommit={set}
                         />
                     </div>

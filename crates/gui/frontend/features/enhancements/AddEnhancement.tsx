@@ -11,8 +11,9 @@ import {
 import { familyEntry, useCatalogue } from "@/hooks/useCatalogue";
 import type { Operation } from "@/ipc/enhance";
 import { ADD_MENU_GAP, SIDEBAR_PADDING } from "@/lib/constants";
-import { ENHANCEMENTS, newOperation } from "@/lib/enhancements";
+import { applyOrder, ENHANCEMENTS, newOperation, startingScale } from "@/lib/enhancements";
 import { track } from "@/lib/faro";
+import { useImageCrop } from "@/stores/crop";
 import { useEnhancementStore, useFileEnhancements } from "@/stores/enhancements";
 import { useCurrentFile } from "@/stores/files";
 import { useSettingsStore } from "@/stores/settings";
@@ -48,12 +49,17 @@ export const AddEnhancement = () => {
     const families = useCatalogue();
     const models = useSettingsStore((state) => state.models);
     const stack = useFileEnhancements(file?.path);
+    const crop = useImageCrop(file?.identity);
     const addEnhancement = useEnhancementStore((state) => state.addEnhancement);
 
-    const add = (family: Operation["family"]) => {
+    const add = async (family: Operation["family"]) => {
         setOpen(false);
 
         if (!file) return;
+
+        // Asked of the backend, for the photograph as it is framed now: the ladder is `opai`'s. Only an
+        // upscale reads it, so nothing else waits on the bridge.
+        const scale = family === "upscale" ? await startingScale(file, crop) : undefined;
 
         /*
          * Built here rather than in the store, because what a *new* enhancement carries is a
@@ -63,11 +69,11 @@ export const AddEnhancement = () => {
          * no model for, which is the render before the catalogue has arrived: the press adds
          * nothing rather than adding an operation naming no model.
          */
-        const operation = newOperation(family, familyEntry(families, family), models[family], file);
+        const operation = newOperation(family, familyEntry(families, family), models[family], scale);
 
         if (!operation) return;
 
-        addEnhancement(file.path, operation);
+        addEnhancement(file.path, operation, applyOrder(families));
         track("enhancement_added", { family, source: "manual" });
     };
 
@@ -105,7 +111,7 @@ export const AddEnhancement = () => {
                         // in one chain, and a menu that changed shape as a stack was built up would
                         // move the entries under the pointer.
                         disabled={stack.some((operation) => operation.family === family)}
-                        onSelect={() => add(family)}
+                        onSelect={() => void add(family)}
                     >
                         <Icon />
                         {t(nameKey)}

@@ -19,6 +19,16 @@ export const clampTo = (value: number, min?: number, max?: number) => {
 };
 
 /**
+ * A fraction of one as the interface shows it: whole percent. The wire speaks units - a strength, a
+ * bias, a run's progress - and every place that draws one speaks percent, so one rounding for all of
+ * them, and no two of them can disagree.
+ */
+export const toPercent = (unit: number) => Math.round(unit * 100);
+
+/** `1200 x 1600`, the one spelling of a pair of dimensions in this application. */
+export const formatDimensions = (width: number, height: number) => `${width} x ${height}`;
+
+/**
  * A file's size as the export queue draws it: kilobytes or megabytes, to two places, untranslated.
  *
  * Binary units, as the file managers on two of the three platforms count them, so the size a row reports is the one

@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Progress } from "@/components/ui/progress";
+import { toPercent } from "@/lib/utils";
 import { installedCount, overallFraction, type SetupRow } from "@/stores/setup";
 
 /**
@@ -9,7 +10,7 @@ import { installedCount, overallFraction, type SetupRow } from "@/stores/setup";
 export const OverallProgress = ({ rows }: { rows: SetupRow[] }) => {
     const { t } = useTranslation();
 
-    const percent = Math.round(overallFraction(rows) * 100);
+    const percent = toPercent(overallFraction(rows));
 
     return (
         <div className="mx-6 mb-4 flex flex-col gap-2">

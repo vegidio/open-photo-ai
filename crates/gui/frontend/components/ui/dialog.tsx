@@ -33,14 +33,35 @@ const DialogOverlay = ({ className, ...props }: ComponentProps<typeof DialogPrim
     );
 };
 
+/**
+ * Takes focus into the dialog itself on open, rather than letting Radix focus its first tabbable element.
+ *
+ * Radix focuses the first tabbable element when a dialog opens - and WebKit matches `:focus-visible`
+ * on that programmatic focus, so the design's flat buttons would come up wearing a focus ring.
+ * Focusing the dialog itself leaves the trap, the labelling and Tab-to-the-buttons exactly as they
+ * were, and pre-selects nothing - which is what a dialog whose every action is a real answer wants.
+ */
+const focusContent = (event: Event) => {
+    event.preventDefault();
+
+    const content = event.currentTarget;
+    if (content instanceof HTMLElement) content.focus();
+};
+
 const DialogContent = ({
     className,
     children,
     showCloseButton = true,
+    focusContentOnOpen = false,
+    onOpenAutoFocus,
     ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & {
     showCloseButton?: boolean;
+    /** Focus the dialog itself on open rather than its first control - see {@link focusContent}. */
+    focusContentOnOpen?: boolean;
 }) => {
+    const openAutoFocus = focusContentOnOpen ? focusContent : onOpenAutoFocus;
+
     return (
         <DialogPortal data-slot="dialog-portal">
             <DialogOverlay />
@@ -50,6 +71,7 @@ const DialogContent = ({
                     "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
                     className,
                 )}
+                {...(openAutoFocus && { onOpenAutoFocus: openAutoFocus })}
                 {...props}
             >
                 {children}

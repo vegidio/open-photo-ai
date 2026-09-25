@@ -54,7 +54,10 @@
 //   the lifetime, which nothing needs and which the enhancement path does not have either. Adding one is an encoding
 //   change behind `get_value` and `put_value` that nothing above them would see, so it waits for a need.
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::mpsc::{SyncSender, sync_channel};
+use std::sync::{Arc, Condvar, LazyLock, Mutex};
 use std::time::Duration;
 
 use image::DynamicImage;
@@ -257,6 +260,10 @@ impl RunCache {
     /// [`get_bytes`](Self::get_bytes)'s body, which [`get_value`](Self::get_value) reads through too without a
     /// second span.
     fn read_bytes(&self, key: &str) -> Option<Vec<u8>> {
+        // A result still queued by `put_later` is waited for rather than missed: a run repeated the moment the last
+        // one returned — the slider case this cache exists for — must be served what that run produced.
+        PENDING.wait_for(key);
+
         // Separate from `decode` because a chain reads more entries than it decodes: walking a cached prefix, every
         // step but the last is superseded by the one after it, and decoding each on the way past is a
         // several-hundred-megabyte PNG thrown away per step. What this cannot be is a cheap existence probe —
@@ -326,6 +333,43 @@ impl RunCache {
         span.in_scope(|| self.put_image(key, image));
         // Whatever became of the write: a decline or a break is discarded and warned about, and never fails the run.
         unit::mark(&span, &Outcome::Finished);
+    }
+
+    /// [`put`](Self::put), on the store's writer thread rather than the caller's, so a run does not wait for its
+    /// result to be encoded and written before handing it back.
+    ///
+    /// # What a reader sees
+    ///
+    /// A read of `key` made while the write is queued **waits for it** rather than missing, so a run repeated the
+    /// moment the last one returned is served what that run produced, exactly as when the write was synchronous. Only
+    /// a reader of the underlying [`Memo`] itself, going round this type, can see the entry absent — which is what
+    /// [`settle`] is for.
+    ///
+    /// # What it holds
+    ///
+    /// The picture, shared rather than copied, until it has been written. At most [`QUEUED_WRITES`] wait at once;
+    /// past that, the caller waits for room, which is what the write used to cost it anyway.
+    ///
+    /// A writer thread that could not be started, or has gone, is the synchronous write, on the caller's thread.
+    pub(crate) fn put_later(&self, key: &str, image: Arc<DynamicImage>) {
+        PENDING.begin(key);
+
+        let job = Write {
+            cache: self.clone(),
+            key: key.to_string(),
+            image,
+            span: tracing::Span::current(),
+            dispatch: tracing::dispatcher::get_default(tracing::Dispatch::clone),
+        };
+
+        let refused = match &*WRITER {
+            Some(queue) => queue.send(job).err().map(|refused| refused.0),
+            None => Some(job),
+        };
+
+        if let Some(job) = refused {
+            job.run();
+        }
     }
 
     /// [`put`](Self::put)'s body, inside its span.
@@ -459,6 +503,125 @@ impl RunCache {
 
         self.write(key, &bytes);
     }
+}
+
+// ── Writing off a run's critical path ──────────────────────────────────────────────────────────────────────────────
+
+/// How many results may wait to be written before a run producing another waits for room.
+///
+/// Two. Each queued result is a whole picture held in memory until it is encoded, so this bounds memory as much as
+/// lag: a slider dragged faster than PNG encodes would otherwise queue every intermediate result it passed through.
+/// Two lets one run's write overlap the next run without letting a burst pile up.
+const QUEUED_WRITES: usize = 2;
+
+/// The one thread every [`RunCache::put_later`] is written on, or `None` where it could not be started.
+///
+/// One for the process rather than one per store: writes are disk-bound and gain nothing from running side by side,
+/// and a single queue is what keeps them in the order they were produced.
+static WRITER: LazyLock<Option<SyncSender<Write>>> = LazyLock::new(|| {
+    let (queue, writes) = sync_channel::<Write>(QUEUED_WRITES);
+
+    std::thread::Builder::new()
+        .name("opai-cache-writer".to_string())
+        .spawn(move || writes.into_iter().for_each(Write::run))
+        .inspect_err(|error| tracing::warn!(%error, "the cache writer could not start; results are written in line"))
+        .ok()
+        .map(|_| queue)
+});
+
+/// Every key with a write queued or in progress.
+static PENDING: LazyLock<Pending> = LazyLock::new(Pending::default);
+
+/// One queued [`RunCache::put_later`].
+struct Write {
+    /// The store to write to.
+    cache: RunCache,
+    /// Where.
+    key: String,
+    /// What, shared with whatever else still holds it.
+    image: Arc<DynamicImage>,
+    /// The span the write was asked for in, which its own `cache_write` span is opened beneath.
+    span: tracing::Span,
+    /// The subscriber that span belongs to, which a thread of this module's own does not otherwise have.
+    dispatch: tracing::Dispatch,
+}
+
+impl Write {
+    /// Writes, and says so to anything waiting on the key — even where the write panicked, which would otherwise
+    /// leave a reader of the key waiting forever.
+    fn run(self) {
+        let Self { cache, key, image, span, dispatch } = self;
+
+        let wrote = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tracing::dispatcher::with_default(&dispatch, || span.in_scope(|| cache.put(&key, &image)));
+        }));
+
+        PENDING.end(&key);
+
+        if wrote.is_err() {
+            tracing::dispatcher::with_default(&dispatch, || {
+                tracing::warn!(source = cache.source(), key, "writing a result panicked and it was not kept");
+            });
+        }
+    }
+}
+
+/// The keys with a write outstanding, counted, and the signal that one has finished.
+///
+/// Keyed on the key alone rather than on the store as well: a key is folded from a source's content and a chain, so
+/// two stores holding the same key is two stores of the same result, and a reader of one waiting out the other's
+/// write loses at most that wait.
+#[derive(Default)]
+struct Pending {
+    keys: Mutex<HashMap<String, usize>>,
+    ended: Condvar,
+}
+
+impl Pending {
+    fn begin(&self, key: &str) {
+        *crate::task::lock(&self.keys).entry(key.to_string()).or_default() += 1;
+    }
+
+    fn end(&self, key: &str) {
+        let mut keys = crate::task::lock(&self.keys);
+
+        if let Some(count) = keys.get_mut(key) {
+            *count -= 1;
+            if *count == 0 {
+                keys.remove(key);
+            }
+        }
+
+        self.ended.notify_all();
+    }
+
+    /// Waits until nothing is queued or being written under `key`. Immediate where nothing is.
+    fn wait_for(&self, key: &str) {
+        let keys = crate::task::lock(&self.keys);
+        let _unblocked = self
+            .ended
+            .wait_while(keys, |keys| keys.contains_key(key))
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+    }
+
+    /// Waits until nothing is queued or being written at all, or `timeout` passes. Whether it got there.
+    fn settle(&self, timeout: Duration) -> bool {
+        let keys = crate::task::lock(&self.keys);
+        let (_keys, waited) = self
+            .ended
+            .wait_timeout_while(keys, timeout, |keys| !keys.is_empty())
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        !waited.timed_out()
+    }
+}
+
+/// Waits for every result [`RunCache::put_later`] has queued to be written, or for `timeout` to pass, and says which.
+///
+/// What a process calls on its way out, so the last run's results are not lost with the writer thread; and what a
+/// test reading a [`Memo`] directly calls before it looks.
+pub(crate) fn settle(timeout: Duration) -> bool {
+    PENDING.settle(timeout)
 }
 
 /// Closes a read's span, saying whether the store served it. Never failed: every way a read breaks is a miss.
@@ -630,6 +793,29 @@ mod tests {
 
         assert_eq!(served.dimensions(), original.dimensions());
         assert_eq!(served.as_bytes(), original.as_bytes());
+    }
+
+    #[test]
+    fn a_queued_write_is_waited_for_by_a_read_rather_than_missed() {
+        // The promise `put_later` makes in place of writing synchronously: a read of the key, however soon after, is
+        // served what was queued. Several in a row, so the queue's bound is reached and the caller waits for room.
+        let root = tempfile::tempdir().unwrap();
+        let run = run_cache(&Store::open(root.path()), "cafebabecafebabe");
+        let original = Arc::new(sixteen_bit(48, 32));
+
+        for step in 0..(QUEUED_WRITES * 2) {
+            run.put_later(&format!("step{step}"), Arc::clone(&original));
+        }
+
+        for step in 0..(QUEUED_WRITES * 2) {
+            let served = run.get(&format!("step{step}")).expect("a queued write is served once it lands");
+            assert_eq!(served.as_bytes(), original.as_bytes());
+        }
+
+        assert!(
+            settle(Duration::from_secs(60)),
+            "nothing should be left queued once every key has been read back"
+        );
     }
 
     #[test]

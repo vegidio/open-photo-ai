@@ -1,14 +1,14 @@
 import { useTranslation } from "react-i18next";
 import type { FamilyEntry } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
-import type { Enhancement } from "@/lib/enhancements";
+import { type Enhancement, withParameter } from "@/lib/enhancements";
 import { IntensityOptions } from "./IntensityOptions";
 
 type DenoiseOptionsProps = {
     /** The enhancement this panel is open over, which every control here reports and writes. */
     enhancement: Enhancement;
     /** The denoise itself, as the stack carries it. */
-    operation: Extract<Operation, { family: "denoise" }>;
+    operation: Operation;
     /** What the catalogue publishes for denoise: its models, their precisions and their bounds. */
     entry: FamilyEntry | undefined;
     /** Writes the enhancement back to the stack, which is what re-runs the preview. */
@@ -36,9 +36,9 @@ export const DenoiseOptions = ({ enhancement, operation, entry, onChange }: Deno
             parameter="strength"
             label={t("enhancements.strength")}
             mark={100}
-            amount={operation.strength}
+            amount={operation.parameters.strength}
             onModelChange={({ codename, precision }) => onChange({ ...operation, codename, precision })}
-            onAmountChange={(strength) => onChange({ ...operation, strength })}
+            onAmountChange={(strength) => onChange(withParameter(operation, "strength", strength))}
         />
     );
 };

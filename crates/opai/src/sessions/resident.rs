@@ -97,53 +97,18 @@ impl<S> Resident<S> {
 pub(crate) struct SessionHandle<S> {
     /// The session being held, shared with the cache and with every other handle on it.
     entry: Arc<Resident<S>>,
-    /// What *this* request asked for, which is the half of a downgrade the entry cannot know.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "read through SessionHandle::requested; see the accessor for why nothing does yet"
-        )
-    )]
-    requested: ExecutionProvider,
 }
 
 impl<S> SessionHandle<S> {
-    /// Hands out `entry` to a request that asked for `requested`, stamping the entry as used.
-    fn new(entry: Arc<Resident<S>>, requested: ExecutionProvider) -> Self {
+    /// Hands out `entry`, stamping it as used.
+    fn new(entry: Arc<Resident<S>>) -> Self {
         entry.touch();
-        Self { entry, requested }
+        Self { entry }
     }
 
     /// The execution provider this session was actually built on.
     pub(crate) fn provider(&self) -> ExecutionProvider {
         self.entry.provider
-    }
-
-    /// The execution provider this request asked for, which differs from [`provider`](Self::provider) after a
-    /// downgrade.
-    ///
-    /// **A per-*acquisition* answer, which is what this has that the run's report does not.**
-    /// [`ProviderReport`](crate::ProviderReport) now carries the downgrade out to a caller of
-    /// [`Opai::process`](crate::Opai::process), and it takes its `requested` half from the run's own argument rather
-    /// than from here — one run asks for one provider, so folding it out of the handles would be N copies of a value
-    /// the chain already has, and an empty chain has no handle to fold it out of at all. So this stays uncalled
-    /// outside the suite, and the thing it would answer that the report cannot is *which acquisition* was downgraded.
-    /// Nothing has asked for per-operation attribution; the `warn` in
-    /// [`Sessions::session`](super::Sessions::session) already carries the per-model answer for whoever is debugging
-    /// one.
-    ///
-    /// Which is why it is recorded per **handle** and not on the entry: one session is served to every request for
-    /// that artifact on that provider, and the CPU session a downgrade builds is the same session an explicit CPU
-    /// request is served. On the entry, whichever of the two arrived first would decide what the other was told it
-    /// had asked for — and a downgrade handed a CPU session that an explicit CPU request had already filed would
-    /// report `Cpu` beside `Cpu`, which is exactly the shape of an honoured request.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the run's report takes its requested half from the run itself")
-    )]
-    pub(crate) fn requested(&self) -> ExecutionProvider {
-        self.requested
     }
 
     /// A handle onto `session` as though the cache had just built it on `provider`, for a suite with no runtime.
@@ -153,7 +118,7 @@ impl<S> SessionHandle<S> {
     /// session on a runner with no ONNX Runtime, which is where all of that arithmetic is actually checked.
     #[cfg(test)]
     pub(crate) fn held(session: S, provider: ExecutionProvider) -> Self {
-        Self::new(Arc::new(Resident::new(session, provider)), provider)
+        Self::new(Arc::new(Resident::new(session, provider)))
     }
 
     /// Borrows the session for a run.
@@ -240,12 +205,8 @@ impl<S, E> SessionCache<S, E> {
     /// Called under the lock that just changed them, so two changes cannot publish out of order. Every provider is
     /// written, zeros included, so one emptied by a sweep reads `0` rather than its last count.
     fn publish_resident(&self, entries: &HashMap<Key, Arc<Resident<S>>>) {
-        for provider in ExecutionProvider::ALL {
-            // What a request asks for, never what a session is built on.
-            if provider == ExecutionProvider::Auto {
-                continue;
-            }
-
+        // Every provider a session can be built on, which leaves out `Auto`: that is what a request asks for.
+        for provider in ExecutionProvider::BUILT_ON {
             let count = entries.keys().filter(|(_, built_on)| *built_on == provider).count();
             let count = u32::try_from(count).unwrap_or(u32::MAX);
             self.resident_gauge.set_with_tags(count, &[("provider", provider.as_str())]);
@@ -260,19 +221,14 @@ impl<S, E> SessionCache<S, E> {
         lock(&self.entries).len()
     }
 
-    /// The session filed for `artifact` on `provider`, if one is, handed to a request that asked for `requested`.
+    /// The session filed for `artifact` on `provider`, if one is.
     ///
     /// One map lookup and nothing else — no filesystem work at all, which is what makes a cache hit affordable on a
     /// path the slice that runs inference will take once per tile.
-    pub(super) fn get(
-        &self,
-        artifact: &ArtifactId,
-        provider: ExecutionProvider,
-        requested: ExecutionProvider,
-    ) -> Option<SessionHandle<S>> {
+    pub(super) fn get(&self, artifact: &ArtifactId, provider: ExecutionProvider) -> Option<SessionHandle<S>> {
         lock(&self.entries)
             .get(&(artifact.clone(), provider))
-            .map(|entry| SessionHandle::new(Arc::clone(entry), requested))
+            .map(|entry| SessionHandle::new(Arc::clone(entry)))
     }
 
     /// Releases every resident session.
@@ -349,9 +305,10 @@ impl<S> SessionCache<S, SessionError> {
     /// request waiting on it rather than each of them starting its own attempt at something that has just proved
     /// impossible. A later request builds again, which is what makes a transient failure recoverable.
     ///
-    /// `requested` is not part of the key and is not recorded on the entry: what a session *is* depends on the
-    /// provider it was built on, not on what was asked for. It travels on the handle instead, so every request is
-    /// told what *it* asked rather than what the request that happened to build the session asked.
+    /// `requested` is not part of the key and is not recorded on the entry or the handle: what a session *is* depends
+    /// on the provider it was built on, not on what was asked for. It is carried only into the build's records, so a
+    /// downgrade's CPU build reads as one event with the provider that would not open the model; a caller that needs
+    /// the requested half of a downgrade takes it from its own argument, as the run's report does.
     ///
     /// # What a request's own cancellation does here
     ///
@@ -384,7 +341,7 @@ impl<S> SessionCache<S, SessionError> {
         // waited on.
         let request = Span::current();
 
-        if let Some(handle) = self.get(artifact, resolved, requested) {
+        if let Some(handle) = self.get(artifact, resolved) {
             // `debug`: a chain acquires a handle per pass, so this repeats within one run. It is the record that
             // answers "why was the second image instant" — matching the level the reference gives its own.
             tracing::debug!(%artifact, provider = %resolved, "session already resident");
@@ -543,7 +500,7 @@ impl<S> SessionCache<S, SessionError> {
             }
         }
 
-        Ok(filed?.map(|entry| SessionHandle::new(entry, requested)))
+        Ok(filed?.map(SessionHandle::new))
     }
 }
 

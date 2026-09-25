@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,12 +7,13 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { runBatch } from "@/features/export/batch";
 import { pickDirectory } from "@/ipc/export";
-import { FORMAT_CHOICES, type FormatChoice, queueQualityFormat } from "@/lib/export";
+import { useExportFormats } from "@/hooks/useExportFormats";
+import { FORMAT_CHOICES, type FormatChoice, queueQualityFor } from "@/lib/export";
 import { cn } from "@/lib/utils";
 import { useExportBatchStore } from "@/stores/exportBatch";
 import { exportSettingsData, useExportSettingsStore } from "@/stores/exportSettings";
 import { useFileStore } from "@/stores/files";
-import { MAX_QUALITY, MIN_QUALITY, useSettingsStore } from "@/stores/settings";
+import { useSettingsStore } from "@/stores/settings";
 
 /** What each format reads as in the chooser. JPEG is `JPG`, as the reference and the design spell it. */
 const FORMAT_LABELS: Record<Exclude<FormatChoice, "preserve">, string> = {
@@ -64,10 +65,18 @@ export const ExportSettingsPanel = ({ onClose }: { onClose: () => void }) => {
     // paths; the queue is fixed while the dialog is open, and the records do not change under it.
     const queue = useExportBatchStore((state) => state.queue);
     const files = useFileStore((state) => state.files);
-    const records = files.filter((file) => queue.includes(file.path));
-    const qualityFormat = queueQualityFormat(records, format);
+    const records = useMemo(() => {
+        const queued = new Set(queue);
+
+        return files.filter((file) => queued.has(file.path));
+    }, [files, queue]);
+    const formats = useExportFormats();
+    const queueQuality = formats && queueQualityFor(records, format, formats);
 
     const [draft, setDraft] = useState(() => ({ ...useSettingsStore.getState().quality }));
+
+    /** What the slider shows for the queue's format: the draft's value, or the format's published default. */
+    const shown = ({ format, range }: NonNullable<typeof queueQuality>) => draft[format] ?? range.default;
 
     const choose = async (value: string) => {
         if (value === "original") return setLocation(undefined);
@@ -82,9 +91,9 @@ export const ExportSettingsPanel = ({ onClose }: { onClose: () => void }) => {
         // Only the format the slider stands for: a draft left on another format, by moving the slider and then
         // changing the format, was never shown as what this batch writes. Through Settings' own save path, and then
         // read back, so what is written is exactly the value kept, clamping included.
-        if (qualityFormat) {
+        if (queueQuality) {
             const { quality, apply } = useSettingsStore.getState();
-            apply({ quality: { ...quality, [qualityFormat]: draft[qualityFormat] } });
+            apply({ quality: { ...quality, [queueQuality.format]: shown(queueQuality) } });
         }
 
         void runBatch(exportSettingsData(useExportSettingsStore.getState()), useSettingsStore.getState().quality);
@@ -190,25 +199,25 @@ export const ExportSettingsPanel = ({ onClose }: { onClose: () => void }) => {
                         </Select>
                     </div>
 
-                    {/* Only where one lossy format stands for the whole queue; see `queueQualityFormat`. */}
-                    {qualityFormat && (
+                    {/* Only where one lossy format stands for the whole queue; see `queueQualityFor`. */}
+                    {queueQuality && (
                         <div className="flex items-center justify-between gap-3" data-slot="export-quality">
                             <Caption>{t("export.settings.quality.title")}</Caption>
                             <div className="flex w-35 items-center gap-2.5">
                                 <Slider
-                                    value={[draft[qualityFormat]]}
-                                    min={MIN_QUALITY}
-                                    max={MAX_QUALITY}
+                                    value={[shown(queueQuality)]}
+                                    min={queueQuality.range.min}
+                                    max={queueQuality.range.max}
                                     step={1}
                                     disabled={running}
                                     thumbLabel={t("export.settings.quality.title")}
                                     className="flex-1 **:data-[slot=slider-track]:bg-input"
                                     onValueChange={([next]) =>
-                                        next !== undefined && setDraft({ ...draft, [qualityFormat]: next })
+                                        next !== undefined && setDraft({ ...draft, [queueQuality.format]: next })
                                     }
                                 />
                                 <span className="w-6 text-right font-mono text-[13px] text-muted-foreground">
-                                    {draft[qualityFormat]}
+                                    {shown(queueQuality)}
                                 </span>
                             </div>
                         </div>

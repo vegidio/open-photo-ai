@@ -108,4 +108,52 @@ mod tests {
         assert!(parameter["min"].is_number(), "a slider built from this would have no lower bound");
         assert!(parameter["max"].is_number(), "a slider built from this would have no upper bound");
     }
+
+    /// The whole of two families' entries as they cross the boundary, pinned as literals: one whose variants take
+    /// ranges and faces, and one that takes nothing. A field renamed, dropped or added shows up here as a deliberate
+    /// edit rather than as a front end silently reading `undefined`.
+    #[test]
+    fn the_wire_shape_of_a_family_entry_is_pinned() {
+        let json = serde_json::to_value(catalogue(Traceparent::default())).expect("the catalogue should serialize");
+        let entry = |family: &str| {
+            json.as_array()
+                .expect("the catalogue is a list of families")
+                .iter()
+                .find(|entry| entry["family"] == family)
+                .cloned()
+                .expect("the family is published")
+        };
+
+        assert_eq!(
+            entry("face_recovery"),
+            serde_json::json!({
+                "family": "face_recovery",
+                "order": 1,
+                "variants": [
+                    {
+                        "codename": "athens",
+                        "label": "Athens",
+                        "precisions": ["fp32", "fp16"],
+                        "parameters": [
+                            { "name": "faces", "kind": "faces" },
+                            { "name": "fidelity", "kind": "range", "min": 0.0, "max": 1.0, "default": 1.0 },
+                        ],
+                    },
+                    {
+                        "codename": "santorini",
+                        "label": "Santorini",
+                        "precisions": ["fp32", "fp16"],
+                        "parameters": [{ "name": "faces", "kind": "faces" }],
+                    },
+                ],
+            })
+        );
+        assert_eq!(entry("colorization")["order"], serde_json::json!(2));
+        // Detection is never in a chain, so it carries no place in one — absent rather than null.
+        assert!(entry("detection").get("order").is_none());
+        assert_eq!(
+            entry("colorization")["variants"][0],
+            serde_json::json!({ "codename": "delhi", "label": "Delhi", "precisions": ["fp32", "fp16"], "parameters": [] })
+        );
+    }
 }

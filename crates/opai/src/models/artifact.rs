@@ -49,6 +49,42 @@ impl Family {
         Self::Upscale,
     ];
 
+    /// The seven families whose result is an image, in the order a chain applies them.
+    ///
+    /// **The one order of a chain**, which [`Opai::process`](crate::Opai::process) puts every chain into before it
+    /// runs and the catalogue publishes, so a front end draws a stack in the order it will actually run rather than
+    /// in an order of its own. Detection is not in it: its result is not an image, so it is never in a chain.
+    ///
+    /// Why this order, family by family:
+    ///
+    /// - **Denoise first**: grain is a property of the capture, and every model after it would otherwise read the
+    ///   grain as detail — sharpen would amplify it, and face recovery would restore it into a face.
+    /// - **Face recovery before anything that moves or resizes a pixel**, and in particular before upscale: the faces
+    ///   it carries are in the coordinates of the photograph as it was detected on, which is the chain's input, and a
+    ///   face restored after an upscale would be pasted at a quarter of its size.
+    /// - **Colorization, then light, then colour**: colour is predicted from lightness, and light and colour balance
+    ///   then correct the photograph as a whole, colour cast last so it is fitted to the exposure it will be seen at.
+    /// - **Sharpen late**, over the corrected picture, and **upscale last**, so every model before it runs at the
+    ///   photograph's own resolution rather than at up to sixty-four times its pixels.
+    ///
+    /// The same order the application has always presented its enhancements in; it is [`Family::ALL`] without
+    /// detection.
+    pub const APPLY_ORDER: [Self; 7] = [
+        Self::Denoise,
+        Self::FaceRecovery,
+        Self::Colorization,
+        Self::LightAdjustment,
+        Self::ColorBalance,
+        Self::Sharpen,
+        Self::Upscale,
+    ];
+
+    /// Where this family's operation sits in a chain — its index in [`Family::APPLY_ORDER`] — or `None` for detection,
+    /// which is never in one.
+    pub fn applied_at(self) -> Option<usize> {
+        Self::APPLY_ORDER.iter().position(|family| *family == self)
+    }
+
     /// The two-letter prefix this family's artifact names begin with: `up`.
     ///
     /// Fixed by the files already published, so these are transcribed rather than derived from the variant names.
@@ -153,6 +189,23 @@ mod tests {
         assert_eq!(Family::Colorization.prefix(), "cl");
         assert_eq!(Family::Sharpen.prefix(), "sh");
         assert_eq!(Family::Upscale.prefix(), "up");
+    }
+
+    #[test]
+    fn the_apply_order_holds_every_image_family_once_and_restores_faces_before_resizing_them() {
+        for family in Family::ALL {
+            assert_eq!(
+                Family::APPLY_ORDER.iter().filter(|applied| **applied == family).count(),
+                usize::from(family != Family::Detection),
+                "{family:?} is in the apply order other than exactly when its result is an image"
+            );
+        }
+
+        // The one ordering that is a correctness rule rather than a quality one: faces are in the chain input's
+        // coordinates.
+        assert!(Family::FaceRecovery.applied_at() < Family::Upscale.applied_at());
+        assert_eq!(Family::Detection.applied_at(), None);
+        assert_eq!(Family::Upscale.applied_at(), Some(Family::APPLY_ORDER.len() - 1));
     }
 
     #[test]

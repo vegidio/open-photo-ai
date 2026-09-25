@@ -34,6 +34,8 @@ mod process;
 mod stretch;
 pub(crate) mod variant;
 
+pub(crate) use lab::srgb_to_linear;
+
 use serde::{Deserialize, Serialize};
 
 use super::artifact::{ArtifactId, Family};

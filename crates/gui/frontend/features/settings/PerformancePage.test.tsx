@@ -5,8 +5,7 @@ import i18n from "@/i18n";
 import type { SupportedProviders } from "@/ipc/setup";
 import { type SettingsData, useSettingsStore } from "@/stores/settings";
 import { useSetupStore } from "@/stores/setup";
-import { PROVIDERS, render, resetSetupStore } from "@/test/support";
-import { DraftHarness } from "./draft.tsx";
+import { DraftHarness, PROVIDERS, render, resetSetupStore } from "@/test/support";
 import { offeredProcessors, PerformancePage } from "./PerformancePage.tsx";
 
 /**

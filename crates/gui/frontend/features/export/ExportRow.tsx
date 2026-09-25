@@ -4,25 +4,23 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { showInLabel } from "@/features/files/FileOptionsMenu";
+import { useExportFormats } from "@/hooks/useExportFormats";
 import { framedDimensions } from "@/ipc/crop";
 import { revealExport } from "@/ipc/export";
 import { renditionFor } from "@/ipc/images";
-import { isMacOs, isWindows } from "@/ipc/os";
 import { upscaleFactor } from "@/lib/enhancements";
 import { exportNameFor, extensionFor } from "@/lib/export";
 import { report } from "@/lib/report";
-import { cn, formatBytes } from "@/lib/utils";
+import { cn, formatBytes, formatDimensions } from "@/lib/utils";
 import { useImageCrop } from "@/stores/crop";
 import { useFileEnhancements } from "@/stores/enhancements";
 import { type Row, useExportBatchStore } from "@/stores/exportBatch";
 import { useExportSettingsStore } from "@/stores/exportSettings";
-import { useFileStore } from "@/stores/files";
+import { useFileByPath } from "@/stores/files";
 
 // The design's thumbnail is 48px, drawn at twice that so it stays sharp on a Retina display.
 const ROW_THUMBNAIL_BOUND = 96;
-
-/** `1200 x 1600`, as `NavbarDimensions` spells a pair of dimensions. */
-const spell = (width: number, height: number) => `${width} x ${height}`;
 
 const QUEUED: Row = { stage: "queued" };
 
@@ -107,7 +105,6 @@ const StagePill = ({ row }: { row: Row }) => {
 /** The control that shows a written file in the file manager, named as the drawer's menu names the same act. */
 const RevealButton = ({ path }: { path: string }) => {
     const { t } = useTranslation();
-    const platform = isMacOs() ? "darwin" : isWindows() ? "windows" : undefined;
 
     // A rejection is either a file manager that would not open or a file since moved; both leave the file where the
     // export wrote it, which is what the notice says.
@@ -121,7 +118,7 @@ const RevealButton = ({ path }: { path: string }) => {
         <button
             type="button"
             onClick={() => void reveal()}
-            aria-label={t("menu.file.showIn", { ...(platform && { context: platform }) })}
+            aria-label={showInLabel(t)}
             className="flex size-7 flex-none items-center justify-center rounded-md bg-secondary text-muted-foreground transition-colors hover:bg-input hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
         >
             <Folder className="size-4" aria-hidden="true" />
@@ -141,7 +138,7 @@ const RevealButton = ({ path }: { path: string }) => {
  * holds, the row being worked on also keeps itself in view.
  */
 export const ExportRow = ({ path, follow = false }: { path: string; follow?: boolean }) => {
-    const file = useFileStore((state) => state.files.find((open) => open.path === path));
+    const file = useFileByPath(path);
     const row = useExportBatchStore((state) => state.rows.get(path)) ?? QUEUED;
     const current = useExportBatchStore((state) => state.current?.path === path);
     const stack = useFileEnhancements(path);
@@ -149,6 +146,7 @@ export const ExportRow = ({ path, follow = false }: { path: string; follow?: boo
     const prefix = useExportSettingsStore((state) => state.prefix);
     const suffix = useExportSettingsStore((state) => state.suffix);
     const format = useExportSettingsStore((state) => state.format);
+    const formats = useExportFormats();
     const rowRef = useRef<HTMLDivElement>(null);
 
     // The row being worked on is kept in view, so a batch longer than the queue's height never runs out of sight.
@@ -156,13 +154,15 @@ export const ExportRow = ({ path, follow = false }: { path: string; follow?: boo
         if (current && follow) rowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }, [current, follow]);
 
-    // Closing a photograph is not reachable behind the dialog; a record gone anyway has nothing to describe.
-    if (!file) return;
+    // Closing a photograph is not reachable behind the dialog; a record gone anyway has nothing to describe. The
+    // formats' rules are Rust's and arrive once, a moment after the dialog opens; a row waits for them rather than
+    // naming a file by a rule of its own.
+    if (!file || !formats) return;
 
-    const name = exportNameFor(file, { prefix, suffix }, format);
+    const name = exportNameFor(file, { prefix, suffix }, format, formats);
     const { width, height } = framedDimensions(file, crop);
     const scale = upscaleFactor(stack);
-    const types = `${file.extension.toUpperCase()} → ${extensionFor(file, format).toUpperCase()}`;
+    const types = `${file.extension.toUpperCase()} → ${extensionFor(file, format, formats).toUpperCase()}`;
     const fraction = row.stage === "enhancing" ? row.fraction : row.stage === "writing" ? 1 : 0;
 
     return (
@@ -190,10 +190,10 @@ export const ExportRow = ({ path, follow = false }: { path: string; follow?: boo
                     <span className="flex items-center gap-2 text-foreground-dim text-xs">
                         {width !== undefined && height !== undefined && (
                             <>
-                                {spell(width, height)}
+                                {formatDimensions(width, height)}
                                 <ArrowRight className="size-3" strokeWidth={2} aria-hidden="true" />
                                 <span className="text-zinc-200">
-                                    {spell(Math.round(width * scale), Math.round(height * scale))}
+                                    {formatDimensions(Math.round(width * scale), Math.round(height * scale))}
                                 </span>
                                 <span className="text-input">·</span>
                             </>

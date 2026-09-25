@@ -2,7 +2,7 @@ import { createContext, type ReactNode, use, useMemo, useState } from "react";
 import { type SettingsData, settingsData, useSettingsStore } from "@/stores/settings";
 
 /** The preferences as the dialog currently has them, and the way a row changes one. */
-type SettingsDraft = {
+export type SettingsDraft = {
     /** What every row reads. Seeded from the store when the dialog opens, and discarded if it cancels. */
     values: SettingsData;
     /** Writes one or more preferences into the draft. Never reaches the store, and never reaches disk. */
@@ -46,16 +46,24 @@ export const useSettingsDraft = (): SettingsDraft => {
     return draft;
 };
 
-/** The draft the dialog owns: what the rows write, seeded from what is in force and re-seeded by `reopen`. */
-export const useDraftState = () => {
+/**
+ * The draft the dialog owns: what the rows write, seeded from what is in force and re-seeded by `reopen`.
+ *
+ * `seed` overrides preferences in the first snapshot only, for a test that wants a row to open on a
+ * value the store does not hold; the dialog passes none, and `reopen` re-seeds from the store alone.
+ */
+export const useDraftState = (seed?: Partial<SettingsData>) => {
     // Seeded through `settingsData` so the copy carries the preferences and none of the store's
     // actions, and re-seeded by `reopen` rather than by an effect - the snapshot has to be taken before
     // anything on the surface is touched, and an effect would also re-run on a remount and quietly
     // re-baseline a dialog the user had already edited.
-    const [values, setValues] = useState<SettingsData>(() => settingsData(useSettingsStore.getState()));
+    const [values, setValues] = useState<SettingsData>(() => ({
+        ...settingsData(useSettingsStore.getState()),
+        ...seed,
+    }));
 
     return useMemo(
-        () => ({
+        (): { draft: SettingsDraft; reopen: () => void } => ({
             draft: {
                 values,
                 update: (patch: Partial<SettingsData>) => setValues((current) => ({ ...current, ...patch })),
@@ -63,38 +71,5 @@ export const useDraftState = () => {
             reopen: () => setValues(settingsData(useSettingsStore.getState())),
         }),
         [values],
-    );
-};
-
-/**
- * A draft standing on its own, for a test that mounts one row rather than the whole dialog.
- *
- * This gives the row the same thing the dialog gives it, and hands the test back the values so it
- * can assert on what a control wrote.
- */
-export const DraftHarness = ({
-    seed,
-    onDraft,
-    children,
-}: {
-    seed?: Partial<SettingsData>;
-    onDraft?: (values: SettingsData) => void;
-    children: ReactNode;
-}) => {
-    // A row mounted without a draft throws, which is the point, and not something a test should work
-    // around by reaching into the store.
-    const [values, setValues] = useState<SettingsData>(() => ({
-        ...settingsData(useSettingsStore.getState()),
-        ...seed,
-    }));
-
-    onDraft?.(values);
-
-    return (
-        <SettingsDraftProvider
-            draft={{ values, update: (patch) => setValues((current) => ({ ...current, ...patch })) }}
-        >
-            {children}
-        </SettingsDraftProvider>
     );
 };

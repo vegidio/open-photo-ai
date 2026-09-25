@@ -32,7 +32,7 @@ use crate::models::ArtifactId;
 use crate::models::face::Faces;
 use crate::pipeline::Backend;
 use crate::pipeline::session::{GraphShape, NamedOutput};
-use crate::pipeline::{DataPipeline, OnOneGraph, SharedData, SingleGraph, reporter};
+use crate::pipeline::{DataPipeline, OnOneGraph, SharedData, SingleGraph, checkpoint, reporter};
 use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
 
@@ -106,10 +106,7 @@ impl<B: Backend> DataPipeline<B> for NewYork {
         // which keeps the two coupled rather than agreeing by coincidence.
         let priors = anchors::generate(TARGET_SIZE);
 
-        report(AFTER_INPUT);
-        if cancelled() {
-            return Err(InferenceError::Cancelled);
-        }
+        checkpoint(&report, cancelled, AFTER_INPUT)?;
 
         let mut buffers: [Vec<f32>; 3] = WIDTHS.map(|width| vec![0.0_f32; priors.len() * width]);
         let [loc, conf, landmarks] = &mut buffers;
@@ -127,10 +124,7 @@ impl<B: Backend> DataPipeline<B> for NewYork {
         B::run_named_outputs(&sessions[0], &fitted.tensor, shape, &mut outputs)
             .map_err(InferenceError::run(&self.graph.name, 0))?;
 
-        report(AFTER_GRAPH);
-        if cancelled() {
-            return Err(InferenceError::Cancelled);
-        }
+        checkpoint(&report, cancelled, AFTER_GRAPH)?;
 
         let [loc, conf, landmarks] = &buffers;
         let found = filter::faces(loc, conf, landmarks, &priors, &fitted, TARGET_SIZE);

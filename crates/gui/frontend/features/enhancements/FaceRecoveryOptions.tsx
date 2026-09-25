@@ -3,14 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { FamilyEntry } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
-import { type Enhancement, modelValue, optionFor } from "@/lib/enhancements";
+import { type Enhancement, modelValue, withModel } from "@/lib/enhancements";
 import { ModelTray } from "./ModelTray";
 
 type FaceRecoveryOptionsProps = {
     /** The enhancement this panel is open over, which the tray reports and writes. */
     enhancement: Enhancement;
     /** The face recovery itself, as the stack carries it. */
-    operation: Extract<Operation, { family: "face_recovery" }>;
+    operation: Operation;
     /** What the catalogue publishes for face recovery: its models and their precisions. */
     entry: FamilyEntry | undefined;
     /**
@@ -49,24 +49,22 @@ export const FaceRecoveryOptions = ({
     onChange,
 }: FaceRecoveryOptionsProps) => {
     /*
-     * **The fidelity is not among the options, deliberately.** It is fixed at maximum and offered
-     * nowhere: that is what the reference hard-codes for every run and what an untouched control would
-     * carry, so drawing one would be a slider with a single legal position. It does not even cross the
-     * wire - see `crates/gui/src/enhance/operation.rs`.
+     * **The fidelity is not among the options, deliberately.** It is left at the catalogue's published
+     * default - maximum, which is what the reference hard-codes for every run - and offered nowhere, so
+     * drawing one would be a slider with a single legal position. It crosses the wire as the operation
+     * carries it, which `newOperation` started at that default.
      */
     const { t } = useTranslation();
 
     /*
-     * Resolved rather than parsed, as `UpscaleOptions`' `chooseModel` explains.
+     * Resolved rather than parsed - see `withModel`.
      *
-     * The faces are left exactly as they are - they belong to the pixels, not to the model, and the
-     * stack's copy carries none in any case. `useEnhancementRun` puts them in on the way to the run.
+     * The choice among faces is left exactly as it is - it belongs to the pixels, not to the model, and
+     * the stack's copy carries none in any case. `withChoice` puts it in on the way to the run.
      */
     const chooseModel = (value: string) => {
-        const option = optionFor(entry, value);
-        if (!option) return;
-
-        onChange({ ...operation, codename: option.codename, precision: option.precision });
+        const updated = withModel(operation, entry, value);
+        if (updated) onChange(updated);
     };
 
     return (

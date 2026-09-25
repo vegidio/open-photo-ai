@@ -6,12 +6,9 @@ import { Separator } from "@/components/ui/separator";
 import { framedDimensions } from "@/ipc/crop";
 import type { ImageRecord } from "@/ipc/images";
 import { upscaleFactor } from "@/lib/enhancements";
-import { cn } from "@/lib/utils";
+import { cn, formatDimensions } from "@/lib/utils";
 import { useImageCrop } from "@/stores/crop";
 import { useFileEnhancements } from "@/stores/enhancements";
-
-/** `1200 x 1600`, the one spelling of a pair of dimensions in this application. */
-const spell = (width: number, height: number) => `${width} x ${height}`;
 
 /** One labelled row of the comparison, which the panel draws two or three of. */
 const Row = ({ label, dimensions }: { label: string; dimensions: string }) => (
@@ -55,9 +52,10 @@ export const NavbarDimensions = ({ file }: { file: ImageRecord }) => {
     // a framing Rust will describe, so a crop always has both.
     if (width === undefined || height === undefined) return;
 
-    const original = file.width !== undefined && file.height !== undefined ? spell(file.width, file.height) : undefined;
-    const framing = crop ? spell(width, height) : undefined;
-    const output = spell(Math.round(width * scale), Math.round(height * scale));
+    const original =
+        file.width !== undefined && file.height !== undefined ? formatDimensions(file.width, file.height) : undefined;
+    const framing = crop ? formatDimensions(width, height) : undefined;
+    const output = formatDimensions(Math.round(width * scale), Math.round(height * scale));
 
     return (
         /*
@@ -97,7 +95,7 @@ export const NavbarDimensions = ({ file }: { file: ImageRecord }) => {
                              * branches, because it is one rule, the reference's own: report the size of the
                              * thing the user is working towards.
                              */}
-                            {scale > 1 ? output : (framing ?? spell(width, height))}
+                            {scale > 1 ? output : (framing ?? formatDimensions(width, height))}
                         </span>
                     </PopoverTrigger>
 

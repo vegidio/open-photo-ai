@@ -7,6 +7,10 @@
 
 use std::collections::BTreeMap;
 
+// A precision is not a model: it is the one piece of model vocabulary every profile is declared against, which is why
+// importing it here does not break the rule above.
+use crate::models::precision::Precision;
+
 /// The per-model tuning applied on top of an execution provider's defaults.
 ///
 /// A variant declares its own, per precision, in the file that names the graph it was measured against. The default
@@ -130,6 +134,21 @@ pub(crate) struct EpProfile {
 /// then fails as though nothing had been disabled.
 pub(crate) const DISABLED_OPTIMIZER_SEPARATOR: &str = ";";
 
+// Written once rather than in each model's file, because eight models reached this same answer and a copy each is
+// eight places for one of them to drift. Each model still declares its own `profile` beside the measurement that
+// justifies it, and calls this: the reasoning is per model even where the setting is shared.
+/// CoreML kept off the Neural Engine at FP16, and the provider defaults at every other precision.
+///
+/// The profile of a graph whose op mix the Neural Engine handles badly: at FP16 CoreML routes it there by default and
+/// pays for it in transitions, and at FP32 CoreML bars the program from the Neural Engine anyway, so a setting there
+/// would restate a choice it has already made.
+pub(crate) fn cpu_and_gpu_at_fp16(precision: Precision) -> EpProfile {
+    match precision {
+        Precision::Fp16 => EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
+        _ => EpProfile::default(),
+    }
+}
+
 /// The set of engines CoreML may dispatch a model to.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum CoreMlComputeUnits {
@@ -142,13 +161,6 @@ pub(crate) enum CoreMlComputeUnits {
     CpuAndGpu,
     /// Keeps a model off the GPU, leaving it for other work.
     CpuAndNeuralEngine,
-    /// Runs the CoreML partition on the CPU. A diagnostic: it isolates whether a wrong result came from the GPU's or
-    /// the Neural Engine's reduced precision.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the first model to measure it arrives with its family's pipeline")
-    )]
-    CpuOnly,
 }
 
 impl CoreMlComputeUnits {
@@ -158,7 +170,6 @@ impl CoreMlComputeUnits {
             Self::All => "ALL",
             Self::CpuAndGpu => "CPUAndGPU",
             Self::CpuAndNeuralEngine => "CPUAndNeuralEngine",
-            Self::CpuOnly => "CPUOnly",
         }
     }
 }
@@ -216,13 +227,29 @@ mod tests {
     }
 
     #[test]
+    fn the_shared_fp16_profile_keeps_coreml_off_the_neural_engine_and_names_nothing_else() {
+        // Compared as whole profiles, so a field added to `EpProfile` later is covered by existing: every model that
+        // declares this was measured with every other option inside run-to-run spread.
+        assert_eq!(
+            cpu_and_gpu_at_fp16(Precision::Fp16),
+            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
+            "FP16 is not kept off the Neural Engine"
+        );
+
+        // Not load-bearing for speed — CoreML keeps an FP32 program off the Neural Engine anyway — but load-bearing
+        // for not inviting the next editor to widen a setting that was never measured to help there.
+        for precision in [Precision::Fp32, Precision::Int8] {
+            assert_eq!(cpu_and_gpu_at_fp16(precision), EpProfile::default(), "{precision:?} declared a setting");
+        }
+    }
+
+    #[test]
     fn each_coreml_compute_unit_renders_the_value_the_runtime_takes() {
         // These strings are ONNX Runtime's own, not ours: a fourth spelling of any of them makes the runtime reject
         // the whole option update, which costs the provider rather than the setting.
         assert_eq!(CoreMlComputeUnits::All.as_str(), "ALL");
         assert_eq!(CoreMlComputeUnits::CpuAndGpu.as_str(), "CPUAndGPU");
         assert_eq!(CoreMlComputeUnits::CpuAndNeuralEngine.as_str(), "CPUAndNeuralEngine");
-        assert_eq!(CoreMlComputeUnits::CpuOnly.as_str(), "CPUOnly");
     }
 
     #[test]

@@ -236,6 +236,7 @@ async fn a_stored_result_that_will_not_decode_says_what_it_cost() {
     // Only the first prefix is corrupted, so the walk takes it as a hit and discovers it at the decode.
     let first = identity_after(source.identity(), &chain[..1], ChannelDepth::Eight);
     let last = identity_after(source.identity(), &chain, ChannelDepth::Eight);
+    settled();
     cache.set_bytes(&first, b"\x89PNG\r\n\x1a\n and then nothing", ENTRY_TTL).unwrap();
     cache.set_bytes(&last, b"\x89PNG\r\n\x1a\n and then nothing", ENTRY_TTL).unwrap();
 

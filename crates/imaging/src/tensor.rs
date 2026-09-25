@@ -124,6 +124,81 @@ impl Sampler<'_> {
             }
         }
     }
+
+    /// Row `y`'s first `out.len()` pixels, exactly as [`rgb`](Self::rgb) returns each of them.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `y` or `out.len()` is past the image, as `rgb` would.
+    pub fn row(&self, y: u32, out: &mut [[u16; 3]]) {
+        self.read_row(y, None, out);
+    }
+
+    /// Row `y`'s pixels at `columns`, in that order, exactly as [`rgb`](Self::rgb) returns each of them.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `y` or any column is past the image, as `rgb` would, or when `columns` and `out` differ in length.
+    pub fn row_at(&self, y: u32, columns: &[u32], out: &mut [[u16; 3]]) {
+        assert_eq!(columns.len(), out.len(), "one output slot per column");
+        self.read_row(y, Some(columns), out);
+    }
+
+    // The full-resolution loops read through these rather than through `rgb`, which matches on the variant and
+    // bounds-checks `(x, y)` once per pixel — twenty-four million times over a 24-megapixel photograph. Here the match
+    // happens once per row and each arm walks the row's own storage, so the per-pixel work is the conversion alone.
+    // The conversions are `rgb_and_alpha`'s, and a test pins the two paths to the same bits for every variant.
+    fn read_row(&self, y: u32, columns: Option<&[u32]>, out: &mut [[u16; 3]]) {
+        match self {
+            Sampler::Rgb8(buffer) => {
+                decode_row(row_of(buffer, y), columns, out, |[r, g, b]: [u8; 3]| [widen(r), widen(g), widen(b)]);
+            }
+            Sampler::Rgba8(buffer) => decode_row(row_of(buffer, y), columns, out, |[r, g, b, a]: [u8; 4]| {
+                premultiply([widen(r), widen(g), widen(b)], widen(a))
+            }),
+            Sampler::Rgb16(buffer) => decode_row(row_of(buffer, y), columns, out, |rgb: [u16; 3]| rgb),
+            Sampler::Rgba16(buffer) => {
+                decode_row(row_of(buffer, y), columns, out, |[r, g, b, a]: [u16; 4]| premultiply([r, g, b], a));
+            }
+            Sampler::Owned(buffer) => {
+                decode_row(row_of(buffer, y), columns, out, |[r, g, b, a]: [u16; 4]| premultiply([r, g, b], a));
+            }
+        }
+    }
+}
+
+/// Row `y` of `buffer`'s storage, every channel of every pixel in it.
+fn row_of<P: image::Pixel>(buffer: &ImageBuffer<P, Vec<P::Subpixel>>, y: u32) -> &[P::Subpixel] {
+    assert!(y < buffer.height(), "row {y} is outside an image {} rows high", buffer.height());
+
+    let stride = buffer.width() as usize * usize::from(P::CHANNEL_COUNT);
+    &buffer.as_raw()[y as usize * stride..][..stride]
+}
+
+/// `row`'s pixels — the first `out.len()` of them, or those at `columns` — through `decode` into `out`.
+#[inline]
+fn decode_row<S: Copy, const C: usize>(
+    row: &[S],
+    columns: Option<&[u32]>,
+    out: &mut [[u16; 3]],
+    decode: impl Fn([S; C]) -> [u16; 3],
+) {
+    let pixels = row.as_chunks::<C>().0;
+
+    match columns {
+        None => {
+            let pixels = &pixels[..out.len()];
+
+            for (slot, pixel) in out.iter_mut().zip(pixels) {
+                *slot = decode(*pixel);
+            }
+        }
+        Some(columns) => {
+            for (slot, &x) in out.iter_mut().zip(columns) {
+                *slot = decode(pixels[x as usize]);
+            }
+        }
+    }
 }
 
 // Its own error rather than a partial write or a panic: a short buffer means a caller's scratch and the shape it
@@ -222,26 +297,31 @@ fn extend_to_chw(
         return Err(TensorShape { expected, actual: dest.len(), width, height });
     }
 
-    let (green, blue) = (plane, 2 * plane);
+    // Nothing to write, and `chunks_exact_mut` below refuses a zero-width row.
+    if plane == 0 {
+        return Ok(());
+    }
 
     // Tabulated once rather than evaluated per pixel, as `blend::blend_tile` does with its ramp weights and for the
     // same reason: the horizontal source offset depends only on the column, so evaluating it inside the inner loop
     // would repeat every mirror — and its bounds assertion — on each of `height` rows, over an extent that at 4x is
     // nine figures of them.
     let columns: Vec<u32> = (0..width).map(|column| origin_x + pad::source_offset(column, source_width)).collect();
+    let mut pixels = vec![[0_u16; 3]; width as usize];
 
-    for row in 0..height {
-        let y = origin_y + pad::source_offset(row, source_height);
-        let base = (row as usize) * (width as usize);
+    let (red, rest) = dest.split_at_mut(plane);
+    let (green, blue) = rest.split_at_mut(plane);
+    let rows = red.chunks_exact_mut(width as usize).zip(green.chunks_exact_mut(width as usize));
 
-        for column in 0..width {
-            let x = columns[column as usize];
-            let [r, g, b] = sampler.rgb(x, y);
-            let index = base + column as usize;
+    for (row, ((red, green), blue)) in rows.zip(blue.chunks_exact_mut(width as usize)).enumerate() {
+        let y = origin_y + pad::source_offset(row as u32, source_height);
+        sampler.row_at(y, &columns, &mut pixels);
 
-            dest[index] = norm.encode(r);
-            dest[green + index] = norm.encode(g);
-            dest[blue + index] = norm.encode(b);
+        for (((red, green), blue), &[r, g, b]) in red.iter_mut().zip(green.iter_mut()).zip(blue.iter_mut()).zip(&pixels)
+        {
+            *red = norm.encode(r);
+            *green = norm.encode(g);
+            *blue = norm.encode(b);
         }
     }
 
@@ -341,6 +421,39 @@ impl Channel for u16 {
     fn into_dynamic(buffer: ImageBuffer<Rgb<Self>, Vec<Self>>) -> DynamicImage {
         DynamicImage::ImageRgb16(buffer)
     }
+}
+
+// One definition for every pipeline that needs the photograph itself as an RGB buffer — face recovery's canvas, and
+// colorization's pre-stretch flatten — rather than a copy each whose rounding could drift from the other's.
+/// `sampler`'s pixels as an RGB buffer of `width` by `height` at `T`'s depth, with any alpha composited against black
+/// on the way in.
+///
+/// Read through [`Sampler`] rather than through `DynamicImage`'s own accessor, which is typed `Rgba<u8>` and would
+/// discard the low byte of every channel of a 16-bit source.
+pub fn flattened<T: Channel>(sampler: &Sampler<'_>, width: u32, height: u32) -> ImageBuffer<Rgb<T>, Vec<T>>
+where
+    Rgb<T>: image::Pixel<Subpixel = T>,
+{
+    // Where the source already carries this depth with no alpha to premultiply, the conversion below is the identity
+    // performed ten times a pixel — so the buffer is copied wholesale instead. For the ordinary case of an eight-bit
+    // photograph carried to an eight-bit result that is one memcpy in place of twenty-four million closure calls on a
+    // 24-megapixel source. The equality of the two paths is pinned by the test below.
+    if let Some(buffer) = T::matching(sampler) {
+        return buffer.clone();
+    }
+
+    // Through the unit float and this crate's rounding, which at 8 bits is the nearest byte to `v / 257`: an opaque
+    // 8-bit channel arrives as `v * 257` and leaves as `v`. `to_unit` rather than the division written out: it is
+    // `Channel`'s own `[0, 1]` mapping, and it is exactly inverse to the `from_unit` on the other side of it.
+    let mut raw = Vec::with_capacity(3 * width as usize * height as usize);
+    let mut pixels = vec![[0_u16; 3]; width as usize];
+
+    for y in 0..height {
+        sampler.row(y, &mut pixels);
+        raw.extend(pixels.iter().flatten().map(|value| T::from_unit(value.to_unit())));
+    }
+
+    ImageBuffer::from_raw(width, height, raw).expect("three channels for every pixel of every row")
 }
 
 /// Writes a model's planar CHW output into `dest`, reversing the normalisation it was produced under.
@@ -489,6 +602,52 @@ fn premultiply(channels: [u16; 3], alpha: u16) -> [u16; 3] {
 mod tests {
     use super::*;
     use crate::test_support::gradient;
+
+    /// [`flattened`]'s converting path, with the depth-matched shortcut bypassed.
+    fn flattened_converting<T: Channel>(sampler: &Sampler<'_>, width: u32, height: u32) -> ImageBuffer<Rgb<T>, Vec<T>>
+    where
+        Rgb<T>: image::Pixel<Subpixel = T>,
+    {
+        ImageBuffer::from_fn(width, height, |x, y| {
+            let [r, g, b] = sampler.rgb(x, y);
+
+            Rgb([T::from_unit(r.to_unit()), T::from_unit(g.to_unit()), T::from_unit(b.to_unit())])
+        })
+    }
+
+    #[test]
+    fn the_depth_matched_copy_carries_exactly_what_the_conversion_would_have() {
+        // Every value an eight-bit channel can hold, not a sample of them: the shortcut's whole claim is that the
+        // round trip through `widen`, a divide by 65535 and a multiply by 255 is the identity, and the only honest
+        // way to assert that is over the full domain.
+        let eight: ImageBuffer<Rgb<u8>, Vec<u8>> =
+            ImageBuffer::from_fn(256, 1, |x, _| Rgb([x as u8, 255 - x as u8, (x as u8).wrapping_mul(7)]));
+        let source = DynamicImage::ImageRgb8(eight);
+        let sampler = Sampler::new(&source);
+
+        let copied: ImageBuffer<Rgb<u8>, Vec<u8>> = flattened(&sampler, 256, 1);
+        let converted: ImageBuffer<Rgb<u8>, Vec<u8>> = flattened_converting(&sampler, 256, 1);
+
+        assert_eq!(copied.as_raw(), converted.as_raw(), "the eight-bit shortcut is not the conversion it replaces");
+
+        // The sixteen-bit pairing, over a spread that includes both ends and the values either side of the
+        // midpoint, where a reciprocal that was not exactly representable would show first.
+        let wide: ImageBuffer<Rgb<u16>, Vec<u16>> = ImageBuffer::from_fn(512, 1, |x, _| {
+            let value = (u32::from(x as u16) * 65535 / 511) as u16;
+            Rgb([value, 65535 - value, value ^ 0x5555])
+        });
+        let source = DynamicImage::ImageRgb16(wide);
+        let sampler = Sampler::new(&source);
+
+        let copied: ImageBuffer<Rgb<u16>, Vec<u16>> = flattened(&sampler, 512, 1);
+        let converted: ImageBuffer<Rgb<u16>, Vec<u16>> = flattened_converting(&sampler, 512, 1);
+
+        assert_eq!(
+            copied.as_raw(),
+            converted.as_raw(),
+            "the sixteen-bit shortcut is not the conversion it replaces"
+        );
+    }
 
     #[test]
     fn a_sixteen_bit_source_keeps_the_precision_the_eight_bit_accessor_would_have_narrowed() {
@@ -982,6 +1141,165 @@ mod tests {
                 assert_eq!(read, alpha, "{name}: the alpha at {x} is not the source's own");
                 assert_eq!(colour, sampler.rgb(x, 0), "{name}: the colour beside the alpha is not the one `rgb` gives");
             }
+        }
+    }
+
+    /// [`extend_to_chw`] as it was written before it read by rows: one [`Sampler::rgb`] per pixel.
+    fn extend_to_chw_per_pixel(
+        sampler: &Sampler<'_>,
+        origin: (u32, u32),
+        source: (u32, u32),
+        extent: (u32, u32),
+        norm: Normalisation,
+    ) -> Vec<f32> {
+        let mut dest = vec![0.0_f32; 3 * (extent.0 * extent.1) as usize];
+        extend_to_chw_reference(&mut dest, sampler, origin, source, extent, norm);
+
+        dest
+    }
+
+    fn extend_to_chw_reference(
+        dest: &mut [f32],
+        sampler: &Sampler<'_>,
+        origin: (u32, u32),
+        source: (u32, u32),
+        extent: (u32, u32),
+        norm: Normalisation,
+    ) {
+        let plane = (extent.0 * extent.1) as usize;
+
+        for row in 0..extent.1 {
+            let y = origin.1 + pad::source_offset(row, source.1);
+
+            for column in 0..extent.0 {
+                let x = origin.0 + pad::source_offset(column, source.0);
+                let index = (row * extent.0 + column) as usize;
+                let [r, g, b] = sampler.rgb(x, y);
+
+                dest[index] = norm.encode(r);
+                dest[plane + index] = norm.encode(g);
+                dest[2 * plane + index] = norm.encode(b);
+            }
+        }
+    }
+
+    /// Every variant a source can reach the sampler as, at an odd size, with every channel — alpha included — spread
+    /// over its whole range, so partial transparency is everywhere rather than at a hand-picked pixel.
+    fn every_variant(width: u32, height: u32) -> Vec<(&'static str, DynamicImage)> {
+        let mut state = 0x2545_f491_u32;
+        let wide = DynamicImage::ImageRgba16(ImageBuffer::from_fn(width, height, |_, _| {
+            Rgba([(); 4].map(|()| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 16) as u16
+            }))
+        }));
+
+        vec![
+            ("Rgb8", DynamicImage::ImageRgb8(wide.to_rgb8())),
+            ("Rgba8", DynamicImage::ImageRgba8(wide.to_rgba8())),
+            ("Rgb16", DynamicImage::ImageRgb16(wide.to_rgb16())),
+            ("Rgba16", wide.clone()),
+            ("Luma8", DynamicImage::ImageLuma8(wide.to_luma8())),
+            ("LumaA8", DynamicImage::ImageLumaA8(wide.to_luma_alpha8())),
+            ("Luma16", DynamicImage::ImageLuma16(wide.to_luma16())),
+            ("LumaA16", DynamicImage::ImageLumaA16(wide.to_luma_alpha16())),
+            ("Rgb32F", DynamicImage::ImageRgb32F(wide.to_rgb32f())),
+            ("Rgba32F", DynamicImage::ImageRgba32F(wide.to_rgba32f())),
+        ]
+    }
+
+    #[test]
+    fn reading_by_rows_is_bit_identical_to_reading_pixel_by_pixel_for_every_variant() {
+        let (width, height) = (37, 23);
+
+        for (name, source) in every_variant(width, height) {
+            let sampler = Sampler::new(&source);
+
+            // The row accessors against `rgb`, contiguous and gathered through a mirrored column table.
+            let mut row = vec![[0_u16; 3]; width as usize];
+            let columns: Vec<u32> = (0..width + 9).map(|column| pad::source_offset(column, width)).collect();
+            let mut gathered = vec![[0_u16; 3]; columns.len()];
+
+            for y in 0..height {
+                sampler.row(y, &mut row);
+                sampler.row_at(y, &columns, &mut gathered);
+
+                let expected: Vec<[u16; 3]> = (0..width).map(|x| sampler.rgb(x, y)).collect();
+                assert_eq!(row, expected, "{name}: row {y} differs from its pixels");
+
+                let expected: Vec<[u16; 3]> = columns.iter().map(|&x| sampler.rgb(x, y)).collect();
+                assert_eq!(gathered, expected, "{name}: gathered row {y} differs from its pixels");
+            }
+
+            // The two tensor conversions, under both normalisations, compared as bits rather than as floats.
+            for norm in [Normalisation::Unit, Normalisation::Signed] {
+                let extent = (width + 8, height + 5);
+                let mut padded = vec![0.0_f32; 3 * (extent.0 * extent.1) as usize];
+                padded_to_chw(&mut padded, &sampler, (width, height), extent, norm).expect("an exact buffer");
+                let expected = extend_to_chw_per_pixel(&sampler, (0, 0), (width, height), extent, norm);
+                assert!(
+                    padded.iter().map(|v| v.to_bits()).eq(expected.iter().map(|v| v.to_bits())),
+                    "{name}: the padded tensor differs under {norm:?}"
+                );
+
+                let region = Tile { x: 5, y: 3, width: 11, height: 7 };
+                let mut tile = vec![0.0_f32; 3 * 13 * 13];
+                image_to_chw(&mut tile, &sampler, region, 13, norm).expect("an exact buffer");
+                let expected = extend_to_chw_per_pixel(&sampler, (5, 3), (11, 7), (13, 13), norm);
+                assert!(
+                    tile.iter().map(|v| v.to_bits()).eq(expected.iter().map(|v| v.to_bits())),
+                    "{name}: the tile tensor differs under {norm:?}"
+                );
+            }
+
+            // And the flatten at both depths.
+            let fast: ImageBuffer<Rgb<u8>, Vec<u8>> = flattened(&sampler, width, height);
+            let slow = flattened_converting::<u8>(&sampler, width, height);
+            assert!(fast == slow, "{name}: the 8-bit flatten differs");
+
+            let fast: ImageBuffer<Rgb<u16>, Vec<u16>> = flattened(&sampler, width, height);
+            let slow = flattened_converting::<u16>(&sampler, width, height);
+            assert!(fast == slow, "{name}: the 16-bit flatten differs");
+        }
+    }
+
+    // Timing rather than a check: `cargo test --release -p imaging -- --ignored --nocapture row_reads_against`.
+    #[test]
+    #[ignore = "a measurement, run by hand in release"]
+    fn row_reads_against_per_pixel_reads_at_24_megapixels() {
+        use std::time::Instant;
+
+        let (width, height) = (6000, 4000);
+
+        for (name, source) in every_variant(width, height).into_iter().take(4) {
+            let sampler = Sampler::new(&source);
+            let extent = (width + 1, height + 1);
+            let mut dest = vec![0.0_f32; 3 * (extent.0 * extent.1) as usize];
+
+            // Both into a buffer already allocated and faulted in, so neither is charged for the other's allocation.
+            let old = extend_to_chw_per_pixel(&sampler, (0, 0), (width, height), extent, Normalisation::Unit);
+            padded_to_chw(&mut dest, &sampler, (width, height), extent, Normalisation::Unit).expect("exact");
+
+            let started = Instant::now();
+            extend_to_chw_reference(&mut dest, &sampler, (0, 0), (width, height), extent, Normalisation::Unit);
+            let per_pixel = started.elapsed();
+            let started = Instant::now();
+            padded_to_chw(&mut dest, &sampler, (width, height), extent, Normalisation::Unit).expect("exact");
+            let by_rows = started.elapsed();
+            assert!(old == dest, "{name}: the tensors differ");
+
+            let started = Instant::now();
+            let old = flattened_converting::<u16>(&sampler, width, height);
+            let flatten_per_pixel = started.elapsed();
+            let started = Instant::now();
+            let new = flattened::<u16>(&sampler, width, height);
+            let flatten_by_rows = started.elapsed();
+            assert!(old == new, "{name}: the flattens differ");
+
+            println!(
+                "{name:>6}: to_chw {per_pixel:>10.2?} -> {by_rows:>10.2?}   flattened<u16> {flatten_per_pixel:>10.2?} -> \
+                 {flatten_by_rows:>10.2?}"
+            );
         }
     }
 }

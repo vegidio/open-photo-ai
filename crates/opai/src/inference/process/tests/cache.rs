@@ -216,6 +216,7 @@ async fn a_chain_stored_end_to_end_decodes_one_entry_rather_than_every_prefix() 
     let keys: Vec<String> = (0..chain.len())
         .map(|end| identity_after(source.identity(), &chain[..=end], ChannelDepth::Eight))
         .collect();
+    settled();
     for key in &keys {
         assert!(cache.get_bytes(key).unwrap().is_some(), "the first run stored no entry for a prefix");
     }
@@ -248,6 +249,7 @@ async fn a_stored_prefix_that_will_not_decode_runs_the_operations_it_had_skipped
 
     // The *last* prefix is the corrupt one, so the walk skips both operations and then finds it will not decode.
     let last = identity_after(source.identity(), &chain, ChannelDepth::Eight);
+    settled();
     cache.set_bytes(&last, b"\x89PNG\r\n\x1a\n and then nothing", ENTRY_TTL).unwrap();
 
     let backend = Fake::new();

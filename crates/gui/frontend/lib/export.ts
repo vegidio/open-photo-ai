@@ -1,9 +1,8 @@
 import type { TFunction } from "i18next";
 import type { Operation } from "@/ipc/enhance";
-import type { ExportFormat } from "@/ipc/export";
+import type { ExportFormat, ExportFormats, QualityRange } from "@/ipc/export";
 import type { ImageRecord } from "@/ipc/images";
 import { directoryOf, fileName } from "@/lib/paths";
-import { QUALITY_FORMATS, type QualityFormat } from "@/stores/settings";
 
 /** What the user picks as the format: the source's own where it can be written, or one format for every file. */
 export type FormatChoice = "preserve" | ExportFormat;
@@ -32,62 +31,40 @@ export type NamingChoices = {
     location?: string;
 };
 
-// The source extensions a format can be written back as, and what each one is written as. The aliases collapse here,
-// as the reference's `IMAGE_FORMAT_BY_EXT` collapses them: `jpg` and `jpeg` are one format, as are `heic` and `heif`.
-const WRITABLE: Record<string, ExportFormat> = {
-    avif: "avif",
-    bmp: "bmp",
-    gif: "gif",
-    heic: "heic",
-    heif: "heic",
-    jpeg: "jpeg",
-    jpg: "jpeg",
-    png: "png",
-    tif: "tiff",
-    tiff: "tiff",
-    webp: "webp",
-};
+/** What `formats` publishes about `format`, or `undefined` where it publishes nothing. */
+const capabilityOf = (formats: ExportFormats, format: ExportFormat) =>
+    formats.formats.find((published) => published.format === format);
 
-// A chosen format's own extension. `jpg` is what the reference's `jpg` value wrote, and what a user expects to see.
-const EXTENSION: Record<ExportFormat, string> = {
-    avif: "avif",
-    bmp: "bmp",
-    gif: "gif",
-    heic: "heic",
-    jpeg: "jpg",
-    png: "png",
-    tiff: "tiff",
-    webp: "webp",
-};
-
-// TIFF because it holds everything a RAW source decodes to, depth included, which is the reference's own fallback.
-/** What a source that cannot be written back as itself - a camera RAW file - is written as under Preserve. */
-const FALLBACK: ExportFormat = "tiff";
-
-/** Whether the source's own extension names a format that can be written. */
-const preservable = (file: ImageRecord) => Object.hasOwn(WRITABLE, file.extension);
+/** The format a Preserve export writes `file` back as, keeping its own extension, or `undefined` where none does. */
+const preservedAs = (file: ImageRecord, formats: ExportFormats) =>
+    formats.formats.find((published) => published.preserves.includes(file.extension));
 
 /**
  * The format `file` is written as under `choice`.
  *
- * Preserve keeps the source's own format where it can be written, and writes TIFF otherwise.
+ * Preserve keeps the source's own format where one is published as writing it back, and writes the published
+ * fallback - TIFF, for a camera RAW file - otherwise. **The rules are Rust's**, read off `formats`: which extensions a
+ * format writes back is `export_formats`' answer, so this names no format of its own.
  */
-export const formatFor = (file: ImageRecord, choice: FormatChoice): ExportFormat => {
+export const formatFor = (file: ImageRecord, choice: FormatChoice, formats: ExportFormats): ExportFormat => {
     if (choice !== "preserve") return choice;
 
-    return preservable(file) ? (WRITABLE[file.extension] ?? FALLBACK) : FALLBACK;
+    return preservedAs(file, formats)?.format ?? formats.fallback;
 };
 
 /**
  * The extension `file` is written with under `choice`, without its dot.
  *
- * Preserve keeps the source's own extension where its format can be written, `heif` staying `heif`, and a RAW source
- * is written `tiff`. A chosen format writes its canonical extension: `jpg` for JPEG, the format's own name for the rest.
+ * Preserve keeps the source's own extension where its format is written back, `heif` staying `heif`, and a source
+ * written as the fallback gets the fallback's extension. A chosen format writes its published extension: `jpg` for
+ * JPEG, the format's own name for the rest.
  */
-export const extensionFor = (file: ImageRecord, choice: FormatChoice): string => {
-    if (choice === "preserve") return preservable(file) ? file.extension : FALLBACK;
+export const extensionFor = (file: ImageRecord, choice: FormatChoice, formats: ExportFormats): string => {
+    if (choice === "preserve" && preservedAs(file, formats)) return file.extension;
 
-    return EXTENSION[choice];
+    const format = formatFor(file, choice, formats);
+
+    return capabilityOf(formats, format)?.extension ?? format;
 };
 
 /** The source's name without its extension. */
@@ -111,8 +88,12 @@ const join = (folder: string, name: string) => {
 };
 
 /** The name of the file written for `file`: the prefix, the source's name, the suffix and the extension. */
-export const exportNameFor = (file: ImageRecord, choices: NamingChoices, choice: FormatChoice) =>
-    `${choices.prefix}${stemOf(file)}${choices.suffix}.${extensionFor(file, choice)}`;
+export const exportNameFor = (
+    file: ImageRecord,
+    choices: NamingChoices,
+    choice: FormatChoice,
+    formats: ExportFormats,
+) => `${choices.prefix}${stemOf(file)}${choices.suffix}.${extensionFor(file, choice, formats)}`;
 
 /**
  * The path the export of `file` asks to write: {@link exportNameFor} inside the chosen folder, or inside the source's
@@ -121,8 +102,12 @@ export const exportNameFor = (file: ImageRecord, choices: NamingChoices, choice:
  * What is asked for, not necessarily what is written: without overwriting, a taken name is written numbered, and the
  * export answers that name.
  */
-export const destinationFor = (file: ImageRecord, choices: NamingChoices, choice: FormatChoice) =>
-    join(choices.location ?? directoryOf(file.path), exportNameFor(file, choices, choice));
+export const destinationFor = (
+    file: ImageRecord,
+    choices: NamingChoices,
+    choice: FormatChoice,
+    formats: ExportFormats,
+) => join(choices.location ?? directoryOf(file.path), exportNameFor(file, choices, choice, formats));
 
 /**
  * The paths reordered so those whose stacks run the same enhancements, in the same order, are exported back to back.
@@ -149,28 +134,40 @@ export const groupByChain = (paths: readonly string[], stackOf: (path: string) =
     return [...groups.values()].flat();
 };
 
-/** The format whose quality `file` is written at under `choice`, or `undefined` where that format takes none. */
-export const qualityFormatFor = (file: ImageRecord, choice: FormatChoice): QualityFormat | undefined => {
-    const format = formatFor(file, choice);
+/**
+ * The format whose quality `file` is written at under `choice`, and the range that quality takes - or `undefined`
+ * where that format takes none, as `formats` publishes it.
+ */
+export const qualityFor = (
+    file: ImageRecord,
+    choice: FormatChoice,
+    formats: ExportFormats,
+): { format: ExportFormat; range: QualityRange } | undefined => {
+    const format = formatFor(file, choice, formats);
+    const range = capabilityOf(formats, format)?.quality;
 
-    return (QUALITY_FORMATS as readonly string[]).includes(format) ? (format as QualityFormat) : undefined;
+    return range ? { format, range } : undefined;
 };
 
 /**
- * The one lossy format every queued file is written in, or `undefined` where there is none.
+ * The one lossy format every queued file is written in, and its range, or `undefined` where there is none.
  *
  * One slider cannot honestly stand for two formats, whose scales are not comparable, so under a mixed Preserve it is
  * hidden and each file is written at its own format's quality. A lossless format, and an empty queue, have nothing to
  * show either.
  */
-export const queueQualityFormat = (files: Iterable<ImageRecord>, choice: FormatChoice): QualityFormat | undefined => {
-    let common: QualityFormat | undefined;
+export const queueQualityFor = (
+    files: Iterable<ImageRecord>,
+    choice: FormatChoice,
+    formats: ExportFormats,
+): { format: ExportFormat; range: QualityRange } | undefined => {
+    let common: { format: ExportFormat; range: QualityRange } | undefined;
 
     for (const file of files) {
-        const format = qualityFormatFor(file, choice);
+        const quality = qualityFor(file, choice, formats);
 
-        if (format === undefined || (common !== undefined && format !== common)) return undefined;
-        common = format;
+        if (quality === undefined || (common !== undefined && quality.format !== common.format)) return undefined;
+        common = quality;
     }
 
     return common;

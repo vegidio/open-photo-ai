@@ -5,6 +5,7 @@ import type { CropInfo } from "@/ipc/crop";
 import { renditionFor } from "@/ipc/images";
 import { CROP_DIALOG_BOUND, MIN_CROP_SIZE } from "@/lib/constants";
 import { track } from "@/lib/faro";
+import { clampTo } from "@/lib/utils";
 import { useCropStore, useImageCrop } from "@/stores/crop";
 import { useCurrentFile } from "@/stores/files";
 import { FITTED, useTransformStore } from "@/stores/transform";
@@ -45,10 +46,10 @@ const FULL_TURN = 360;
 const ROTATE_STEP = 90;
 
 /** An angle wrapped into `[0, 360)`, which is the range the quarter turns are held in. */
-export const normalizeAngle = (degrees: number) => ((degrees % FULL_TURN) + FULL_TURN) % FULL_TURN;
+const normalizeAngle = (degrees: number) => ((degrees % FULL_TURN) + FULL_TURN) % FULL_TURN;
 
 /** An angle wrapped into `(-180, 180]`, which is the range `CropInfo` records a turn in. */
-export const signedAngle = (degrees: number) => {
+const signedAngle = (degrees: number) => {
     // **Signed rather than `[0, 360)`, because the sign is the user's and is not recoverable once it
     // is gone.** A photograph levelled by -45 degrees and one turned three quarters and then +45 are
     // the same picture and both normalise to 315, so a recording in `[0, 360)` cannot be split back
@@ -80,7 +81,7 @@ const snapToStep = (degrees: number) => Math.floor(degrees / ROTATE_STEP) * ROTA
  * every angle {@link signedAngle} produces. `base` is normalised into `[0, 360)`, the range the
  * quarter turns are held in everywhere else.
  */
-export const splitAngle = (degrees: number) => {
+const splitAngle = (degrees: number) => {
     // Truncated **towards zero** rather than floored, which is the half of this that carries the sign:
     // -45 degrees is no quarter turn and a slider at -45, where flooring calls it a quarter turn back
     // and a slider at +45 - the same picture, described by controls that disagree with it. A truncated
@@ -494,8 +495,7 @@ export const useCropController = (open: boolean, onClose: () => void) => {
             if (!instance || !state) return;
 
             const extent = extentOf(state);
-            const clamp = (length: number, limit: number) =>
-                Math.max(MIN_CROP_SIZE, Math.min(limit, Math.round(length)));
+            const clamp = (length: number, limit: number) => clampTo(Math.round(length), MIN_CROP_SIZE, limit);
 
             const wanted = clamp(toWidget(value), axis === "width" ? extent.width : extent.height);
 

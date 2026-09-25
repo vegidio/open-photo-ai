@@ -13,10 +13,8 @@
 use std::fmt::Write as _;
 
 use opai::{
-    Bias, ColorBalance, ColorBalanceVariant, Colorization, ColorizationVariant, Denoise, DenoiseVariant, FaceRecovery,
-    FaceRecoveryVariant, Faces, Family, FamilyEntry, Fidelity, FloatPrecision, LightAdjustment, LightAdjustmentVariant,
-    Operation, ParameterEntry, ParameterKind, Precision, Scale, Sharpen, SharpenVariant, Strength, Upscale,
-    UpscaleVariant, VariantEntry, catalogue,
+    Family, FamilyEntry, Operation, ParameterEntry, ParameterKind, ParameterValues, Precision, Subject, VariantEntry,
+    catalogue,
 };
 
 use crate::cli::{Options, UnknownParameter};
@@ -171,7 +169,7 @@ fn select(entry: &FamilyEntry, variant: &VariantEntry, options: &Options) -> Res
         return Err(SelectionError::NotAnEnhancement { codename: variant.codename });
     }
 
-    let operation = build(entry.family, variant.codename, precision, variant.parameters, options)?
+    let operation = build(variant, precision, options)?
         .ok_or(SelectionError::Unpublished { codename: variant.codename, precision })?;
 
     Ok(Selected { codename: variant.codename, family: entry.family, operation, blocked: None })
@@ -188,27 +186,12 @@ pub fn needs_faces(selection: &[Selected]) -> bool {
     selection.iter().any(|selected| matches!(selected.operation, Operation::FaceRecovery(_)))
 }
 
-/// The precision the auxiliary detection run is made at: **the sweep's own**, read off the row that needs the faces.
+/// `selection` with every face-recovery row handed `faces`, or blocked with the reason there are none.
 ///
-/// `None` where no row needs faces, which is the same condition [`needs_faces`] answers.
-pub fn detection_precision(selection: &[Selected]) -> Option<FloatPrecision> {
-    // Rather than pinned: a run that restores at FP16 detects at FP16, which is what the application does, and pinning
-    // would measure a tier combination it never produces. Every row of a sweep carries the one precision the flag
-    // named, so the first is the answer.
-    selection.iter().find_map(|selected| match &selected.operation {
-        Operation::FaceRecovery(recovery) => Some(match recovery.variant() {
-            FaceRecoveryVariant::Athens(precision) | FaceRecoveryVariant::Santorini(precision) => precision,
-        }),
-        _ => None,
-    })
-}
-
-/// `selection` with every face-recovery row rebuilt over `faces`, or blocked with the reason there are none.
-///
-/// The rebuild goes through the family's **own constructors**, carrying the values the row was already selected
-/// with — the variant, its precision and its fidelity — so a row measures the operation a caller would have built,
-/// and nothing here reaches inside the operation to swap a field. That is the reference harness's `faceEntry`, using
-/// only the public API.
+/// Through [`opai::FaceRecovery::with_faces`], which swaps the faces and nothing else — the variant, its precision and its
+/// fidelity are the ones the row was selected with — so a row measures the operation a caller would have built, and
+/// nothing here matches on a model to rebuild it. That is the reference harness's `faceEntry`, using only the public
+/// API.
 ///
 /// Where the pass found nothing to work with, the rows it was made for are **blocked rather than rebuilt**: a sweep
 /// of a photograph with no face in it has nothing to say about a face-recovery model, and saying it quickly is the
@@ -225,16 +208,7 @@ pub fn with_faces(selection: Vec<Selected>, detected: &Detected) -> Vec<Selected
             match detected.usable() {
                 Err(reason) => Selected { blocked: Some(reason), ..selected },
                 Ok(faces) => {
-                    let operation = match recovery.variant() {
-                        // The fidelity the row was selected with, and `Fidelity::MAX` where the operation carries
-                        // none — which is what the library itself binds for one that reaches a pipeline empty.
-                        FaceRecoveryVariant::Athens(precision) => {
-                            let fidelity = recovery.fidelity().unwrap_or(Fidelity::MAXIMUM);
-
-                            FaceRecovery::athens(precision, faces.clone(), fidelity)
-                        }
-                        FaceRecoveryVariant::Santorini(precision) => FaceRecovery::santorini(precision, faces.clone()),
-                    };
+                    let operation = Operation::FaceRecovery(recovery.with_faces(faces.clone()));
 
                     Selected { operation, ..selected }
                 }
@@ -249,13 +223,8 @@ pub fn with_faces(selection: Vec<Selected>, detected: &Detected) -> Vec<Selected
 /// different parameters — Athens publishes a fidelity and Santorini does not, so a value read per family could only
 /// have been right about one of them.
 ///
-/// The whole list is asked, not just the entries the arm below reads, so that a parameter the catalogue publishes
-/// and this binary cannot supply is a loud failure rather than something passed over because the arm that would have
-/// used it did not ask.
-///
-/// Returning what it resolved is what lets [`parameter`] be infallible: the only thing that can produce a
-/// [`SelectionError::Parameter`] is this call, and an arm cannot reach a value without holding its answer, so the
-/// ordering is the type rather than a sentence asking the next reader to preserve it.
+/// The whole list is asked, so that a parameter the catalogue publishes and this binary cannot supply is a loud
+/// failure rather than something passed over.
 fn checked<'a>(parameters: &'a [ParameterEntry], options: &Options) -> Result<Resolved<'a>, SelectionError> {
     parameters
         .iter()
@@ -267,98 +236,45 @@ fn checked<'a>(parameters: &'a [ParameterEntry], options: &Options) -> Result<Re
 /// none. A list rather than a map because a variant publishes at most a handful.
 type Resolved<'a> = Vec<(&'a str, Option<f64>)>;
 
-/// The resolved value published under `name`, or `None` where this variant publishes none.
-fn parameter(resolved: &Resolved<'_>, name: &str) -> Option<f64> {
-    resolved.iter().find(|(published, _)| *published == name).and_then(|(_, value)| *value)
-}
-
-/// The operation a catalogue row names, built through the model's own constructor.
+/// The operation a catalogue row names, built through the library's own seam: each flag's value handed over by the
+/// name the row publishes it under ([`ParameterValues::set`]), and the row built at `precision`
+/// ([`VariantEntry::build`]).
 ///
-/// The library's inverse is each family's `from_codename`, which resolves a codename and a precision to that
-/// family's variant; what follows is a match over that variant calling the model's constructor with the values the
-/// row published. One arm per model, which is what a consumer of this library writes — there is no
-/// `Operation::from_catalogue` to route around it any more, and nothing left for a second entry point to be the
-/// other of.
+/// **No model and no parameter is named here.** The name-keyed match from a published parameter to its bounded type
+/// is the library's, in `set`, and the match from a codename to a constructor is the library's, in `build` — so a
+/// model or a parameter the catalogue publishes is measurable by being published, and this binary's one table is the
+/// flag each published name reads, in [`Options::parameter`].
 ///
-/// `Ok(None)` where the pairing names nothing: a codename the family does not publish, or a precision it is not
-/// published at.
+/// `Ok(None)` where the row is not published at `precision`.
 ///
 /// **Face recovery is built over an empty selection here, and does not stay that way.** The catalogue publishes its
 /// faces as a parameter whose kind says another operation's result supplies them, and no command line can hold a set
 /// of detected boxes — and this runs before the runtime exists, so there is nothing to detect with yet. The sweep
-/// makes one detection pass once the picture is loaded and [`with_faces`] rebuilds these rows over what it found. A
-/// selection reaches the operation through [`FaceRecovery::athens`] exactly as a caller's would.
+/// makes one detection pass once the picture is loaded and [`with_faces`] hands the rows what it found.
 ///
 /// # Errors
 ///
 /// [`SelectionError::Parameter`] where the row publishes a range this binary has no flag for.
-fn build(
-    family: Family,
-    codename: &str,
-    precision: Precision,
-    parameters: &[ParameterEntry],
-    options: &Options,
-) -> Result<Option<Operation>, SelectionError> {
-    let resolved = checked(parameters, options)?;
+fn build(variant: &VariantEntry, precision: Precision, options: &Options) -> Result<Option<Operation>, SelectionError> {
+    let mut values = ParameterValues::new();
 
-    let strength = || parameter(&resolved, Strength::NAME).and_then(|value| Strength::new(value).ok());
-    let bias = || parameter(&resolved, Bias::NAME).and_then(|value| Bias::new(value).ok());
-
-    let built = match family {
-        // Its result is a set of faces rather than a picture, so it is not carried in what this harness runs — see
-        // `SelectionError::NotAnEnhancement`, which is reported before this is reached.
-        Family::Detection => None,
-        Family::Denoise => {
-            let Some(strength) = strength() else { return Ok(None) };
-
-            DenoiseVariant::from_codename(codename, precision)
-                .map(|variant| Operation::Denoise(Denoise::new(variant, strength)))
+    for (name, value) in checked(variant.parameters, options)? {
+        // Every flag value was already refused out of range by the parse, through the same constructor `set` clamps
+        // with, so nothing is clamped here. A name `set` does not know is one `checked` already refused as having no
+        // flag, so it cannot reach this.
+        if let Some(value) = value
+            && values.set(name, value).is_err()
+        {
+            return Err(SelectionError::Parameter(UnknownParameter { name: name.to_string() }));
         }
-        Family::Sharpen => {
-            let Some(strength) = strength() else { return Ok(None) };
+    }
 
-            SharpenVariant::from_codename(codename, precision)
-                .map(|variant| Operation::Sharpen(Sharpen::new(variant, strength)))
-        }
-        Family::LightAdjustment => {
-            let Some(bias) = bias() else { return Ok(None) };
-
-            LightAdjustmentVariant::from_codename(codename, precision)
-                .map(|variant| Operation::LightAdjustment(LightAdjustment::new(variant, bias)))
-        }
-        Family::ColorBalance => {
-            let Some(bias) = bias() else { return Ok(None) };
-
-            ColorBalanceVariant::from_codename(codename, precision)
-                .map(|variant| Operation::ColorBalance(ColorBalance::new(variant, bias)))
-        }
-        Family::Colorization => ColorizationVariant::from_codename(codename, precision)
-            .map(|variant| Operation::Colorization(Colorization::new(variant))),
-        Family::FaceRecovery => {
-            let Some(variant) = FaceRecoveryVariant::from_codename(codename, precision) else {
-                return Ok(None);
-            };
-
-            match variant {
-                FaceRecoveryVariant::Athens(precision) => {
-                    let Some(value) = parameter(&resolved, Fidelity::NAME) else { return Ok(None) };
-                    let Ok(fidelity) = Fidelity::new(value) else { return Ok(None) };
-
-                    Some(FaceRecovery::athens(precision, Faces::empty(), fidelity))
-                }
-                FaceRecoveryVariant::Santorini(precision) => Some(FaceRecovery::santorini(precision, Faces::empty())),
-            }
-        }
-        Family::Upscale => {
-            let Some(value) = parameter(&resolved, Scale::NAME) else { return Ok(None) };
-            let Ok(scale) = Scale::new(value) else { return Ok(None) };
-
-            UpscaleVariant::from_codename(codename, precision)
-                .map(|variant| Operation::Upscale(Upscale::new(variant, scale)))
-        }
-    };
-
-    Ok(built)
+    Ok(match variant.build(precision, &values) {
+        Ok(Subject::Enhancement(operation)) => Some(operation),
+        // Detection is refused before this is reached — see `SelectionError::NotAnEnhancement` — and a row can only
+        // be refused for the precision, which is the pairing that names nothing.
+        Ok(Subject::Analysis(_)) | Err(_) => None,
+    })
 }
 
 /// The catalogue as `perftest list` prints it.
@@ -383,7 +299,7 @@ pub fn listing() -> String {
                 .parameters
                 .iter()
                 .map(|parameter| match parameter.kind {
-                    ParameterKind::Range { min, max } => format!("--{} {min}..{max}", parameter.name),
+                    ParameterKind::Range { min, max, .. } => format!("--{} {min}..{max}", parameter.name),
                     ParameterKind::Faces => format!("{} (from a detection run)", parameter.name),
                 })
                 .collect();
@@ -404,6 +320,7 @@ mod tests {
     use super::*;
     use crate::cli::Cli;
     use clap::Parser;
+    use opai::{FaceRecoveryVariant, Faces, Fidelity, FloatPrecision};
 
     /// A face at a plausible box, with landmarks a detector could have reported.
     fn face(min_x: f32, min_y: f32, max_x: f32, max_y: f32) -> opai::Face {
@@ -433,7 +350,6 @@ mod tests {
         // off a flag, because it is a property of what was selected.
         let upscalers = resolve(&options(&["kyoto", "tokyo"])).expect("two upscalers resolve");
         assert!(!needs_faces(&upscalers), "a sweep of upscalers wanted a detection pass");
-        assert_eq!(detection_precision(&upscalers), None);
 
         let mixed = resolve(&options(&["kyoto", "athens"])).expect("an upscaler and a restorer resolve");
         assert!(needs_faces(&mixed), "a sweep including a restorer made no detection pass");
@@ -466,17 +382,6 @@ mod tests {
                     variant.codename
                 );
             }
-        }
-    }
-
-    #[test]
-    fn the_auxiliary_run_is_made_at_the_precision_the_rows_were_selected_at() {
-        // A run that restores at FP16 detects at FP16, which is what the application does. Pinning it would
-        // benchmark a tier combination the application never produces.
-        for (flag, expected) in [("fp32", FloatPrecision::Fp32), ("fp16", FloatPrecision::Fp16)] {
-            let selection = resolve(&options(&["athens", "--precision", flag])).expect("Athens resolves");
-
-            assert_eq!(detection_precision(&selection), Some(expected), "the pass would be made at {flag}");
         }
     }
 

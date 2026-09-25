@@ -7,11 +7,26 @@ import { useEnhancementStore } from "@/stores/enhancements";
 import { useExportBatchStore } from "@/stores/exportBatch";
 import { useExportSettingsStore } from "@/stores/exportSettings";
 import { useFileStore } from "@/stores/files";
-import { DEFAULT_QUALITY, useSettingsStore } from "@/stores/settings";
-import { HOLIDAY, openFiles, render, resetFileStore, resetSettingsStore, SUNSET } from "@/test/support";
+import { useSettingsStore } from "@/stores/settings";
+import {
+    APPLY_ORDER,
+    HOLIDAY,
+    openFiles,
+    PUBLISHED_QUALITY,
+    render,
+    resetFileStore,
+    resetSettingsStore,
+    SUNSET,
+} from "@/test/support";
 import { runBatch } from "./batch";
 import { ExportDialog } from "./ExportDialog";
 
+// Rust's format table, answered at once: the hook's own fetch is pinned by `ipc/export.test.ts`.
+vi.mock("@/hooks/useExportFormats", async () => {
+    const { EXPORT_FORMATS } = await import("@/test/support");
+
+    return { useExportFormats: () => EXPORT_FORMATS };
+});
 vi.mock("@tauri-apps/api/core", () => ({
     convertFileSrc: vi.fn((identity: string) => `opai://localhost/${identity}`),
 }));
@@ -67,9 +82,9 @@ beforeEach(() => {
 
 describe("the queue it opens with", () => {
     it("is the picked photographs, in drawer order grouped by chain, and nothing else", () => {
-        const upscale = { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 } as const;
-        useEnhancementStore.getState().addEnhancement(SUNSET.path, upscale);
-        useEnhancementStore.getState().addEnhancement(LANDSCAPE.path, upscale);
+        const upscale = { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } } as const;
+        useEnhancementStore.getState().addEnhancement(SUNSET.path, upscale, APPLY_ORDER);
+        useEnhancementStore.getState().addEnhancement(LANDSCAPE.path, upscale, APPLY_ORDER);
         pick(HOLIDAY, SUNSET, PORTRAIT, LANDSCAPE);
 
         mount();
@@ -296,7 +311,7 @@ describe("Save to", () => {
 
 describe("the quality", () => {
     it("is shown for one lossy format, at that format's quality from Settings", () => {
-        useSettingsStore.getState().apply({ quality: { ...DEFAULT_QUALITY, webp: 64 } });
+        useSettingsStore.getState().apply({ quality: { ...PUBLISHED_QUALITY, webp: 64 } });
         useExportSettingsStore.getState().setFormat("webp");
         pick(HOLIDAY, SUNSET);
         mount();
@@ -309,7 +324,7 @@ describe("the quality", () => {
         pick(PORTRAIT, LANDSCAPE);
         mount();
 
-        expect(quality()).toHaveAttribute("aria-valuenow", String(DEFAULT_QUALITY.jpeg));
+        expect(quality()).toHaveAttribute("aria-valuenow", String(PUBLISHED_QUALITY.jpeg));
     });
 
     it("is hidden under a mixed Preserve and for a lossless format", async () => {
@@ -328,11 +343,12 @@ describe("the quality", () => {
         mount();
 
         fireEvent.keyDown(quality() as HTMLElement, { key: "ArrowRight" });
-        expect(quality()).toHaveAttribute("aria-valuenow", String(DEFAULT_QUALITY.webp + 1));
+        expect(quality()).toHaveAttribute("aria-valuenow", String(PUBLISHED_QUALITY.webp + 1));
 
         fireEvent.click(button("Cancel"));
 
-        expect(useSettingsStore.getState().quality.webp).toBe(DEFAULT_QUALITY.webp);
+        // Never moved in Settings, so still at the default Rust publishes for it.
+        expect(useSettingsStore.getState().quality.webp).toBeUndefined();
         expect(ran).not.toHaveBeenCalled();
     });
 
@@ -345,7 +361,7 @@ describe("the quality", () => {
         fireEvent.keyDown(quality() as HTMLElement, { key: "ArrowLeft" });
         fireEvent.click(button("Save"));
 
-        const committed = { ...DEFAULT_QUALITY, webp: DEFAULT_QUALITY.webp - 1 };
+        const committed = { webp: PUBLISHED_QUALITY.webp - 1 };
         expect(useSettingsStore.getState().quality).toEqual(committed);
         expect(ran).toHaveBeenCalledExactlyOnceWith(
             { prefix: "", suffix: "-opai", overwrite: false, format: "webp" },
@@ -363,7 +379,7 @@ describe("the quality", () => {
         fireEvent.keyDown(quality() as HTMLElement, { key: "ArrowRight" });
         fireEvent.click(button("Save"));
 
-        const committed = { ...DEFAULT_QUALITY, jpeg: DEFAULT_QUALITY.jpeg + 1 };
+        const committed = { jpeg: PUBLISHED_QUALITY.jpeg + 1 };
         expect(useSettingsStore.getState().quality).toEqual(committed);
         expect(ran).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ format: "jpeg" }), committed);
     });

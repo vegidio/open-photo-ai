@@ -1,18 +1,16 @@
 import { awaitAnalysis } from "@/hooks/useAutopilot";
 import i18n from "@/i18n";
-import { type ExportProgress, exportImage } from "@/ipc/export";
-import { detectFaces, type Face } from "@/ipc/faces";
-import { describeExportError, destinationFor, type ExportFailure, formatFor, qualityFormatFor } from "@/lib/export";
-import { enabledFaces, withFaces } from "@/lib/faces";
+import { type ExportFormats, type ExportProgress, exportFormats, exportImage } from "@/ipc/export";
+import { describeExportError, destinationFor, type ExportFailure, formatFor, qualityFor } from "@/lib/export";
+import { withChoice } from "@/lib/faces";
 import { track } from "@/lib/faro";
-import { report } from "@/lib/report";
 import { useCropStore } from "@/stores/crop";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { batchSummary, useExportBatchStore } from "@/stores/exportBatch";
 import type { ExportSettingsData } from "@/stores/exportSettings";
 import { useFacesStore } from "@/stores/faces";
 import { useFileStore } from "@/stores/files";
-import { DEFAULT_QUALITY, type QualityFormat, useSettingsStore } from "@/stores/settings";
+import { type QualityChoices, useSettingsStore } from "@/stores/settings";
 
 const batch = () => useExportBatchStore.getState();
 
@@ -23,17 +21,18 @@ type Next = "next" | "stop";
  * Exports one queued file, moving its row through its stages, and answers whether the batch goes on.
  *
  * Everything it runs is read at the moment its turn comes, not when the batch started: the stack, which an Autopilot
- * analysis may just have written, the crop, the faces and the processor. `settings` and `quality` are what Save was
- * pressed with. See design.md D1 and D2.
+ * analysis may just have written, the crop, the choice among faces and the processor. `settings` and `quality` are
+ * what Save was pressed with, and `formats` is Rust's table of what each format can do. See design.md D1 and D2.
  */
 const exportOne = async (
     path: string,
     settings: ExportSettingsData,
-    quality: Record<QualityFormat, number>,
+    quality: QualityChoices,
+    formats: ExportFormats,
 ): Promise<Next> => {
     const { setStage, setCurrent } = batch();
     const file = useFileStore.getState().files.find((open) => open.path === path);
-    const destination = file ? destinationFor(file, settings, settings.format) : path;
+    const destination = file ? destinationFor(file, settings, settings.format, formats) : path;
 
     const fail = (failure: ExportFailure) =>
         setStage(path, { stage: "failed", reason: describeExportError(i18n.t, failure, destination) });
@@ -77,47 +76,25 @@ const exportOne = async (
     const operations = stackOf() ?? [];
     const { processor } = useSettingsStore.getState();
 
-    let faces: Face[] = [];
-    if (operations.some((operation) => operation.family === "face_recovery")) {
-        const known = useFacesStore.getState().faces.get(identity);
+    /*
+     * The choice among faces, not the faces: a face recovery in the chain finds its own inside the export, under
+     * its stop and on its bar - Rust's `for_chain` - and restores the ones this keeps. A detection that fails is
+     * exported over no faces without a notice, as a file whose other enhancements still apply.
+     */
+    const choice = useFacesStore.getState().choices.get(identity);
 
-        // By reference, as `useImageFaces` compares the framing: faces found at another framing are not these.
-        if (known && known.crop === crop) {
-            faces = known.faces;
-        } else {
-            setStage(path, { stage: "analysing" });
-
-            let found: Face[];
-            try {
-                found = await detectFaces(identity, processor, crop).done;
-            } catch (error) {
-                // Recorded as no faces and exported anyway, as the canvas's run does: refusing the file would make a
-                // failed detection cost the rest of its enhancements too.
-                report("detecting the faces for an export failed", error);
-                found = [];
-            }
-
-            // What an aborted detection found is discarded; it has no stop, so this is where the abort lands.
-            if (halted()) return "stop";
-
-            useFacesStore.getState().setFaces(identity, crop, found);
-            faces = found;
-        }
-    }
-
-    // Read after `setFaces`, which decides the default among faces nothing has decided about yet.
-    const chosen = enabledFaces(faces, useFacesStore.getState().skipped.get(identity));
-
-    // A lossless format takes no quality; the number is sent only because the wire takes one.
-    const qualityFormat = qualityFormatFor(file, settings.format);
+    // A lossless format takes no quality, and is sent none. A lossy one the user never moved is sent none either, and
+    // Rust writes it at the default it publishes.
+    const qualityFormat = qualityFor(file, settings.format, formats)?.format;
+    const chosenQuality = qualityFormat && quality[qualityFormat];
     const request = {
         destination,
-        format: formatFor(file, settings.format),
-        quality: qualityFormat ? quality[qualityFormat] : DEFAULT_QUALITY.jpeg,
+        format: formatFor(file, settings.format, formats),
+        ...(chosenQuality !== undefined && { quality: chosenQuality }),
         overwrite: settings.overwrite,
     };
 
-    const { run, done } = exportImage(identity, withFaces(operations, chosen), processor, request, crop);
+    const { run, done } = exportImage(identity, withChoice(operations, choice), processor, request, crop);
     setCurrent({ path, run });
     setStage(path, { stage: "enhancing", fraction: 0 });
 
@@ -153,7 +130,7 @@ const exportOne = async (
  * A plain function rather than a hook, as `analyse` is: it outlives any one render and awaits across steps, reading
  * every store through `getState()` at the step that needs it.
  */
-export const runBatch = async (settings: ExportSettingsData, quality: Record<QualityFormat, number>) => {
+export const runBatch = async (settings: ExportSettingsData, quality: QualityChoices) => {
     const { queue, start } = batch();
     const fileCount = queue.length;
 
@@ -167,9 +144,25 @@ export const runBatch = async (settings: ExportSettingsData, quality: Record<Qua
 
     /** Whether the queue was worked through to its end, rather than aborted or stopped. */
     const ranToEnd = async () => {
+        // Asked once, and kept by `exportFormats` for the life of the process: the answer cannot change. A bridge that
+        // cannot answer it fails every file, as it would fail each of their exports.
+        let formats: ExportFormats;
+        try {
+            formats = await exportFormats();
+        } catch (error) {
+            for (const path of queue) {
+                batch().setStage(path, {
+                    stage: "failed",
+                    reason: describeExportError(i18n.t, { cause: "export", error }, path),
+                });
+            }
+
+            return false;
+        }
+
         for (const path of queue) {
             if (batch().aborted) return false;
-            if ((await exportOne(path, settings, quality)) === "stop") return false;
+            if ((await exportOne(path, settings, quality, formats)) === "stop") return false;
         }
 
         return true;

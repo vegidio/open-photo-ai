@@ -1,11 +1,9 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import { Particles } from "@/components/ui/particles";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { isLanguage, LANGUAGE_NAMES, LANGUAGE_TAGS } from "@/i18n/languages";
-import { revealLog } from "@/ipc/logs";
-import { report } from "@/lib/report";
+import { showLogs } from "@/lib/logs";
 import { cn } from "@/lib/utils";
 import { BACKGROUNDS, type Background } from "@/stores/settings";
 import { useSettingsDraft } from "./draft";
@@ -184,28 +182,11 @@ const BackgroundCard = () => {
 const LogsRow = () => {
     const { t } = useTranslation();
 
-    const showLogs = async () => {
-        try {
-            // One command: `revealLog` resolves the path in Rust, so nothing this side sends decides
-            // which file is shown and there is no path to resolve here first.
-            await revealLog();
-        } catch (error) {
-            // Reported rather than passed over - this is the one control in the dialog whose whole
-            // purpose is to help someone file a report about something else, and a button that quietly
-            // does nothing leaves them with neither the file nor a reason. The reason in full is
-            // reported rather than put into the toast: `errors.showLogsFailed` already tells the user
-            // where to look in words, and a toast is a notice that fades before anyone copies a path
-            // out of it.
-            report("showing the log file failed", error);
-            toast.error(t("errors.showLogsFailed"));
-        }
-    };
-
     return (
         <SettingsRow
             label={t("settings.app.logs.title")}
             description={t("settings.app.logs.description")}
-            control={<SettingsButton onPress={showLogs}>{t("settings.app.logs.button")}</SettingsButton>}
+            control={<SettingsButton onPress={() => void showLogs(t)}>{t("settings.app.logs.button")}</SettingsButton>}
         />
     );
 };

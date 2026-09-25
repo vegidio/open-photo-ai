@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { type Operation, releaseAllEnhanced, releaseEnhanced } from "@/ipc/enhance";
 import type { ImageRecord } from "@/ipc/images";
-import { HOLIDAY, openFiles, resetFileStore, SUNSET } from "@/test/support";
+import { APPLY_ORDER, HOLIDAY, openFiles, resetFileStore, SUNSET } from "@/test/support";
 import { useEnhancementStore } from "./enhancements";
 import { useFileStore } from "./files";
 
@@ -53,7 +53,7 @@ const upscale = (codename: string, scale: number): Operation => ({
     family: "upscale",
     codename,
     precision: "fp32",
-    scale,
+    parameters: { scale },
 });
 
 /** What one image is set to have done to it, read straight off the store. */
@@ -71,7 +71,7 @@ describe("the per-image enhancement stack", () => {
     });
 
     it("adds an enhancement to the image it names", () => {
-        useEnhancementStore.getState().addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
+        useEnhancementStore.getState().addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
 
         expect(stackOf(HOLIDAY.path)).toEqual([upscale("kyoto", 2)]);
     });
@@ -79,18 +79,36 @@ describe("the per-image enhancement stack", () => {
     it("keeps the stack in the order the enhancements are applied", () => {
         const { addEnhancement } = useEnhancementStore.getState();
 
-        // Upscale added first, and `ENHANCEMENTS` runs it last of the seven - so the order the user
+        // Upscale added first, and the library's apply order runs it last of the seven - so the order the user
         // added them in is not the order the chain runs in, and the list is the chain.
-        addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
-        addEnhancement(HOLIDAY.path, { family: "face_recovery", codename: "athens", precision: "fp32", faces: [] });
+        addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
+        addEnhancement(
+            HOLIDAY.path,
+            { family: "face_recovery", codename: "athens", precision: "fp32", parameters: {} },
+            APPLY_ORDER,
+        );
 
         expect(stackOf(HOLIDAY.path)?.map((operation) => operation.family)).toEqual(["face_recovery", "upscale"]);
+    });
+
+    it("sorts by the order it is handed, which is the catalogue's rather than one of its own", () => {
+        const { addEnhancement } = useEnhancementStore.getState();
+        const reversed = [...APPLY_ORDER].reverse();
+
+        addEnhancement(
+            HOLIDAY.path,
+            { family: "face_recovery", codename: "athens", precision: "fp32", parameters: {} },
+            reversed,
+        );
+        addEnhancement(HOLIDAY.path, upscale("kyoto", 2), reversed);
+
+        expect(stackOf(HOLIDAY.path)?.map((operation) => operation.family)).toEqual(["upscale", "face_recovery"]);
     });
 
     it("replaces the enhancement of that family and leaves the array's length alone", () => {
         const { addEnhancement, replaceEnhancement } = useEnhancementStore.getState();
 
-        addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
+        addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
         replaceEnhancement(HOLIDAY.path, upscale("osaka", 4));
 
         expect(stackOf(HOLIDAY.path)).toEqual([upscale("osaka", 4)]);
@@ -105,7 +123,7 @@ describe("the per-image enhancement stack", () => {
     it("removes the enhancement of that family", () => {
         const { addEnhancement, removeEnhancement } = useEnhancementStore.getState();
 
-        addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
+        addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
         removeEnhancement(HOLIDAY.path, "upscale");
 
         expect(stackOf(HOLIDAY.path)).toEqual([]);
@@ -114,8 +132,8 @@ describe("the per-image enhancement stack", () => {
     it("gives two images stacks of their own", () => {
         const { addEnhancement } = useEnhancementStore.getState();
 
-        addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
-        addEnhancement(SUNSET.path, upscale("tokyo", 1));
+        addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
+        addEnhancement(SUNSET.path, upscale("tokyo", 1), APPLY_ORDER);
 
         expect(stackOf(HOLIDAY.path)).toEqual([upscale("kyoto", 2)]);
         expect(stackOf(SUNSET.path)).toEqual([upscale("tokyo", 1)]);
@@ -125,8 +143,8 @@ describe("the per-image enhancement stack", () => {
         openFiles(HOLIDAY, SUNSET);
 
         const { addEnhancement } = useEnhancementStore.getState();
-        addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
-        addEnhancement(SUNSET.path, upscale("tokyo", 1));
+        addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
+        addEnhancement(SUNSET.path, upscale("tokyo", 1), APPLY_ORDER);
 
         useFileStore.getState().closeFile(HOLIDAY.path);
 
@@ -140,8 +158,8 @@ describe("the per-image enhancement stack", () => {
         openFiles(HOLIDAY, SUNSET);
 
         const { addEnhancement } = useEnhancementStore.getState();
-        addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
-        addEnhancement(SUNSET.path, upscale("tokyo", 1));
+        addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
+        addEnhancement(SUNSET.path, upscale("tokyo", 1), APPLY_ORDER);
 
         useFileStore.getState().closeAll();
 
@@ -151,13 +169,13 @@ describe("the per-image enhancement stack", () => {
     it("replaces the Map rather than mutating it, so a subscriber sees the write", () => {
         const before = useEnhancementStore.getState().enhancements;
 
-        useEnhancementStore.getState().addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
+        useEnhancementStore.getState().addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
 
         expect(useEnhancementStore.getState().enhancements).not.toBe(before);
     });
 
     it("persists autopilot and nothing else", () => {
-        useEnhancementStore.getState().addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
+        useEnhancementStore.getState().addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
 
         const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as { state?: object };
 
@@ -166,15 +184,27 @@ describe("the per-image enhancement stack", () => {
 });
 
 describe("a batch of enhancements", () => {
-    const light: Operation = { family: "light_adjustment", codename: "paris", precision: "fp32", bias: 0.5 };
-    const recovery: Operation = { family: "face_recovery", codename: "athens", precision: "fp32", faces: [] };
+    const light: Operation = {
+        family: "light_adjustment",
+        codename: "paris",
+        precision: "fp32",
+        parameters: { bias: 0.5 },
+    };
+    const recovery: Operation = {
+        family: "face_recovery",
+        codename: "athens",
+        precision: "fp32",
+        parameters: {},
+    };
 
     beforeEach(() => {
         useEnhancementStore.setState({ autopilot: true, enhancements: new Map() });
     });
 
     it("lands in the order the enhancements are applied", () => {
-        useEnhancementStore.getState().addEnhancements(HOLIDAY.path, [upscale("kyoto", 4), light, recovery]);
+        useEnhancementStore
+            .getState()
+            .addEnhancements(HOLIDAY.path, [upscale("kyoto", 4), light, recovery], APPLY_ORDER);
 
         expect(stackOf(HOLIDAY.path)?.map((operation) => operation.family)).toEqual([
             "face_recovery",
@@ -187,14 +217,14 @@ describe("a batch of enhancements", () => {
         const { addEnhancement, addEnhancements } = useEnhancementStore.getState();
 
         // Added by hand while the analysis ran: the user's is the later word.
-        addEnhancement(HOLIDAY.path, upscale("kyoto", 2));
-        addEnhancements(HOLIDAY.path, [light, upscale("tokyo", 4)]);
+        addEnhancement(HOLIDAY.path, upscale("kyoto", 2), APPLY_ORDER);
+        addEnhancements(HOLIDAY.path, [light, upscale("tokyo", 4)], APPLY_ORDER);
 
         expect(stackOf(HOLIDAY.path)).toEqual([light, upscale("kyoto", 2)]);
     });
 
     it("gives an image a stack even when the batch is empty", () => {
-        useEnhancementStore.getState().addEnhancements(HOLIDAY.path, []);
+        useEnhancementStore.getState().addEnhancements(HOLIDAY.path, [], APPLY_ORDER);
 
         // Which is what makes an analysis that answered nothing mean "analysed".
         expect(useEnhancementStore.getState().enhancements.has(HOLIDAY.path)).toBe(true);
@@ -205,7 +235,9 @@ describe("a batch of enhancements", () => {
         const heard = vi.fn();
         const unsubscribe = useEnhancementStore.subscribe(heard);
 
-        useEnhancementStore.getState().addEnhancements(HOLIDAY.path, [upscale("kyoto", 4), light, recovery]);
+        useEnhancementStore
+            .getState()
+            .addEnhancements(HOLIDAY.path, [upscale("kyoto", 4), light, recovery], APPLY_ORDER);
         unsubscribe();
 
         expect(heard).toHaveBeenCalledTimes(1);

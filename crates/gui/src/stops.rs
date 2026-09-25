@@ -14,6 +14,8 @@ use std::sync::Mutex;
 
 use opai::CancellationToken;
 
+use crate::sync::lock;
+
 /// How many stops that arrived ahead of their job are remembered. See [`Stops`] for why a handful is enough.
 const EARLY_STOPS: usize = 16;
 
@@ -41,7 +43,7 @@ const EARLY_STOPS: usize = 16;
 /// one kind — `cancel_suggest`, say — can never reach a job of another, even though run names cannot collide.
 pub(crate) struct Stops<Of> {
     // A `std::sync::Mutex` rather than tokio's — nothing holds a guard across an `await`. Poisoning is treated as
-    // usable, same reasoning as `Runs` and `images::Opened`: a panicking holder leaves a perfectly usable table.
+    // usable, through `crate::sync::lock`: a panicking holder leaves a perfectly usable table.
     held: Mutex<Held>,
     // `fn() -> Of` rather than `Of`, so the table is `Send` and `Sync` whatever the marker is.
     of: PhantomData<fn() -> Of>,
@@ -79,7 +81,7 @@ impl<Of> Stops<Of> {
     /// An early stop is **consumed** by this, so it is matched once. The registration deregisters itself when it
     /// is dropped — however the job ends, a panic included — so a finished job never leaves a token behind.
     pub(crate) fn register(&self, run: &str) -> Option<Registration<'_, Of>> {
-        let mut held = self.lock();
+        let mut held = lock(&self.held);
 
         if let Some(position) = held.stopped.iter().position(|stopped| stopped == run) {
             held.stopped.remove(position);
@@ -97,7 +99,7 @@ impl<Of> Stops<Of> {
     ///
     /// Answers whether anything was stopped. **Touches no other job.**
     pub(crate) fn stop(&self, run: &str) -> bool {
-        let mut held = self.lock();
+        let mut held = lock(&self.held);
 
         if let Some(cancel) = held.running.remove(run) {
             cancel.cancel();
@@ -121,12 +123,7 @@ impl<Of> Stops<Of> {
     /// Whether no job is registered, so a caller's tests can check a finished or refused job left nothing behind.
     #[cfg(test)]
     pub(crate) fn is_idle(&self) -> bool {
-        self.lock().running.is_empty()
-    }
-
-    /// The table, treating a poisoned lock as usable. See the comment on [`Stops`]'s field for why.
-    fn lock(&self) -> std::sync::MutexGuard<'_, Held> {
-        self.held.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        lock(&self.held).running.is_empty()
     }
 }
 
@@ -150,7 +147,7 @@ impl<Of> Registration<'_, Of> {
 
 impl<Of> Drop for Registration<'_, Of> {
     fn drop(&mut self) {
-        self.stops.lock().running.remove(&self.run);
+        lock(&self.stops.held).running.remove(&self.run);
     }
 }
 
@@ -223,7 +220,7 @@ mod tests {
             stops.stop(&format!("finished-{index}"));
         }
 
-        assert_eq!(stops.lock().stopped.len(), EARLY_STOPS, "the record of early stops grew past its bound");
+        assert_eq!(lock(&stops.held).stopped.len(), EARLY_STOPS, "the record of early stops grew past its bound");
 
         // The most recent is still remembered, the oldest is not.
         assert!(stops.register(&format!("finished-{}", EARLY_STOPS * 3 - 1)).is_none());

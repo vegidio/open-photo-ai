@@ -7,7 +7,7 @@ import { registerFileOwner } from "@/stores/files";
 /** One analysis in flight: the name it was asked under, and the framing it was asked at. */
 type Analysis = {
     run: string;
-    /** Absent where the photograph was analysed whole. Compared **by reference**, as the crop store hands it. */
+    /** Absent where the photograph was analysed whole. Compared **by value**, through `cropKey`. */
     crop?: CropInfo;
 };
 

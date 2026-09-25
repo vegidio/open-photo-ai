@@ -1,13 +1,13 @@
 import type { FamilyEntry } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
-import { type Enhancement, modelValue, optionFor } from "@/lib/enhancements";
+import { type Enhancement, modelValue, withModel } from "@/lib/enhancements";
 import { ModelTray } from "./ModelTray";
 
 type ColorizationOptionsProps = {
     /** The enhancement this panel is open over, which the tray reports and writes. */
     enhancement: Enhancement;
     /** The colorization itself, as the stack carries it. */
-    operation: Extract<Operation, { family: "colorization" }>;
+    operation: Operation;
     /** What the catalogue publishes for colorization: its models and their precisions. */
     entry: FamilyEntry | undefined;
     /** Writes the enhancement back to the stack, which is what re-runs the preview. */
@@ -27,12 +27,10 @@ type ColorizationOptionsProps = {
  * which model is in use never cancels the run in flight.
  */
 export const ColorizationOptions = ({ enhancement, operation, entry, onChange }: ColorizationOptionsProps) => {
-    // Resolved rather than parsed, as `UpscaleOptions`' `chooseModel` explains.
+    // Resolved rather than parsed - see `withModel`.
     const chooseModel = (value: string) => {
-        const option = optionFor(entry, value);
-        if (!option) return;
-
-        onChange({ ...operation, codename: option.codename, precision: option.precision });
+        const updated = withModel(operation, entry, value);
+        if (updated) onChange(updated);
     };
 
     return <ModelTray enhancement={enhancement} entry={entry} value={modelValue(operation)} onChange={chooseModel} />;

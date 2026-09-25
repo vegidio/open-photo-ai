@@ -16,6 +16,7 @@ const colorization = (codename: string, precision: Operation["precision"]): Oper
     family: "colorization",
     codename,
     precision,
+    parameters: {},
 });
 
 /** What the current image is set to have done to it. */

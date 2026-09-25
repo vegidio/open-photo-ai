@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { ZOOM_MAX, ZOOM_MIN } from "@/lib/constants";
+import { clampTo } from "@/lib/utils";
 import { registerFileOwner } from "@/stores/files";
 
 /**
@@ -42,7 +43,7 @@ export const FITTED: ImageTransform = { scale: ZOOM_MIN, x: 0, y: 0 };
  *
  * {@link TransformStore.setTransform} applies this to everything written, so no caller has to.
  */
-export const clampScale = (scale: number) => Math.min(Math.max(scale, ZOOM_MIN), ZOOM_MAX);
+export const clampScale = (scale: number) => clampTo(scale, ZOOM_MIN, ZOOM_MAX);
 
 type TransformStore = {
     // **Keyed by identity where the selection is keyed by path**, and the two are different on

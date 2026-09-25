@@ -32,8 +32,7 @@ use super::{ab, jaipur::rgb};
 use crate::error::InferenceError;
 use crate::models::ArtifactId;
 use crate::pipeline::Backend;
-use crate::pipeline::session::GraphShape;
-use crate::pipeline::{ImagePipeline, OnOneGraph, Shared, SingleGraph, checkpoint, reporter};
+use crate::pipeline::{ImagePipeline, OnOneGraph, Ran, Shared, SingleGraph, Square, reporter};
 use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
 use imaging::ChannelDepth;
@@ -150,7 +149,8 @@ impl<B: Backend> ImagePipeline<B> for Colorize {
         cancelled: &dyn Fn() -> bool,
     ) -> Result<DynamicImage, InferenceError> {
         // Dispatched once at the top, so the full-resolution compose is compiled per channel type rather than
-        // branching per pixel.
+        // branching per pixel. Written out rather than through `DepthGeneric`, whose body is generic over any
+        // `Channel`: the compose needs `Encoded`, the gamma encoding this family alone defines per depth.
         match depth {
             ChannelDepth::Eight => self.colorized::<u8, B>(input, sessions, progress, cancelled).map(u8::into_dynamic),
             ChannelDepth::Sixteen => {
@@ -172,39 +172,24 @@ impl Colorize {
     where
         Rgb<T>: image::Pixel<Subpixel = T>,
     {
-        let (width, height) = (input.width(), input.height());
-
-        // Before anything is allocated. An empty photograph cannot be stretched onto a square, there is no lightness
-        // to keep, and the compose's axis tables panic on a zero-length axis.
-        if width == 0 || height == 0 {
-            return Err(InferenceError::Untileable { width, height });
-        }
-
         let report = reporter(progress);
-        let side = self.contract.side() as usize;
+        let square = Square { side: self.contract.side(), planes: self.contract.channels(), steps: STEPS };
 
+        // Before anything is allocated, an empty photograph is refused: it cannot be stretched onto a square, there is
+        // no lightness to keep, and the compose's axis tables panic on a zero-length axis.
+        //
         // Checked where the reference checks its context: before the stretch, after the input is built, and after the
         // graph run. Nothing is checked after the compose, because the image is finished by then. A cancelled run
         // returns no image at all.
-        if cancelled() {
-            return Err(InferenceError::Cancelled);
-        }
-
-        let tensor = self.contract.input(input);
-
-        checkpoint(&report, cancelled, 1.0 / STEPS as f64)?;
-
-        let output_shape = GraphShape::new(self.contract.channels(), side, side);
-        let mut output = vec![0.0_f32; output_shape.len()];
-        B::run_graph(&sessions[0], &tensor, GraphShape::new(3, side, side), &mut output, output_shape)
-            .map_err(InferenceError::run(&self.graph.name, 0))?;
-
-        checkpoint(&report, cancelled, 2.0 / STEPS as f64)?;
+        let Ran { output, .. } =
+            self.graph.present_and_run::<B, _>(&sessions[0], input, square, &report, cancelled, |input| {
+                (self.contract.input(input), ())
+            })?;
 
         // Built here rather than before the graph run. For a layout it cannot borrow, it is an owned 16-bit copy of
         // the photograph, which would otherwise be held across the graph run for nothing.
         let sampler = Sampler::new(input);
-        let composed = self.contract.composed::<T>(&sampler, &output, (width, height));
+        let composed = self.contract.composed::<T>(&sampler, &output, (input.width(), input.height()));
 
         report(1.0);
 
@@ -220,6 +205,7 @@ mod tests {
     use image::{GenericImageView as _, Rgba};
 
     use super::*;
+    use crate::pipeline::session::GraphShape;
 
     use crate::error::SessionError;
     use crate::models::colorization::variant::tests::every_variant;

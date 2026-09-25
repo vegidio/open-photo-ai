@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import { forgetCatalogue } from "@/ipc/catalogue";
@@ -11,8 +12,17 @@ import { useFacesStore } from "@/stores/faces";
 import { CATALOGUE, FRAMING, HOLIDAY, openFiles, render, resetFileStore } from "@/test/support";
 import { EnhancementList } from "./EnhancementList";
 
+// The picker's detection is an `invoke` too, answered by hand: see `answerDetection`.
+let answerDetection: (faces: Face[]) => void = () => {};
+
 vi.mock("@tauri-apps/api/core", () => ({
-    invoke: vi.fn(() => Promise.resolve(CATALOGUE)),
+    invoke: vi.fn((command: string) =>
+        command === "detect_faces"
+            ? new Promise((resolve) => {
+                  answerDetection = resolve;
+              })
+            : Promise.resolve(CATALOGUE),
+    ),
     convertFileSrc: vi.fn((identity: string) => `opai://localhost/${identity}`),
 }));
 
@@ -20,7 +30,7 @@ const recovery = (codename: string, precision: Operation["precision"]): Operatio
     family: "face_recovery",
     codename,
     precision,
-    faces: [],
+    parameters: {},
 });
 
 const face = (left: number): Face => ({
@@ -33,6 +43,8 @@ const face = (left: number): Face => ({
         { x: left + 2, y: 6.5 },
     ],
     confidence: 0.9,
+    restorable: true,
+    key: `${left},4,${left + 3},7`,
 });
 
 const identity = HOLIDAY.identity ?? "";
@@ -71,7 +83,7 @@ const found = (faces: Face[], crop?: typeof FRAMING | undefined) =>
 
 /** Records which of them the user has skipped, as applying a choice in the dialog would. */
 const skip = (...faces: Face[]) =>
-    act(() => useFacesStore.getState().setSkippedFaces(identity, new Set(faces.map(faceKey))));
+    act(() => useFacesStore.getState().setFaceChoice(identity, { skipped: faces.map(faceKey), restored: [] }));
 
 /** The way into the chooser, drawn in the options panel. */
 const selectFaces = () => screen.getByRole("button", { name: /Select faces/ });
@@ -79,6 +91,7 @@ const selectFaces = () => screen.getByRole("button", { name: /Select faces/ });
 const chooser = () => screen.queryByRole("dialog", { name: "Select faces" });
 
 beforeEach(() => {
+    vi.mocked(invoke).mockClear();
     localStorage.clear();
     forgetCatalogue();
     resetFileStore();
@@ -255,6 +268,27 @@ describe("the way into the Select faces chooser", () => {
         expect(selectFaces()).toBeDisabled();
     });
 
+    it("asks for the faces when it is opened over a photograph whose faces are not known, and offers them", async () => {
+        // The picker's own detection, so Select faces does not wait for the whole chain to answer.
+        await mount();
+        await open();
+
+        expect(invoke).toHaveBeenCalledWith("detect_faces", expect.objectContaining({ source: identity }));
+
+        act(() => answerDetection([face(0), face(20)]));
+
+        await waitFor(() => expect(selectFaces()).toBeEnabled());
+        expect(useFacesStore.getState().faces.get(identity)).toEqual({ faces: [face(0), face(20)] });
+    });
+
+    it("asks for nothing when the faces at the framing in force are already known", async () => {
+        found([face(0)]);
+        await mount();
+        await open();
+
+        expect(invoke).not.toHaveBeenCalledWith("detect_faces", expect.anything());
+    });
+
     it("is available for a photograph with faces in it", async () => {
         found([face(0)]);
         await mount();
@@ -278,7 +312,7 @@ describe("the way into the Select faces chooser", () => {
 
         expect(chooser()).not.toBeNull();
         expect(stack()).toBe(before);
-        expect(useFacesStore.getState().skipped.size).toBe(0);
+        expect(useFacesStore.getState().choices.size).toBe(0);
     });
 });
 

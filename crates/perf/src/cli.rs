@@ -244,7 +244,7 @@ mod tests {
             .flat_map(|variant| variant.parameters)
             .find(|parameter| parameter.name == name)
             .and_then(|parameter| match parameter.kind {
-                ParameterKind::Range { min, max } => Some((min, max)),
+                ParameterKind::Range { min, max, .. } => Some((min, max)),
                 ParameterKind::Faces => None,
             })
     }
@@ -358,7 +358,10 @@ mod tests {
     fn the_parameter_value_is_chosen_by_the_published_name_rather_than_by_the_family() {
         let options = options(&["--scale", "2", "--strength", "1.5", "--bias", "-0.5"]);
 
-        let entry = |name: &'static str| ParameterEntry { name, kind: ParameterKind::Range { min: 0.0, max: 0.0 } };
+        let entry = |name: &'static str| ParameterEntry {
+            name,
+            kind: ParameterKind::Range { min: 0.0, max: 0.0, default: 0.0 },
+        };
 
         assert_eq!(options.parameter(&entry(Scale::NAME)), Ok(Some(2.0)));
         assert_eq!(options.parameter(&entry(Strength::NAME)), Ok(Some(1.5)));
@@ -378,7 +381,7 @@ mod tests {
 
     #[test]
     fn a_published_parameter_this_harness_has_no_flag_for_fails_loudly() {
-        let radius = ParameterEntry { name: "radius", kind: ParameterKind::Range { min: 0.0, max: 1.0 } };
+        let radius = ParameterEntry { name: "radius", kind: ParameterKind::Range { min: 0.0, max: 1.0, default: 0.0 } };
 
         let error = options(&[]).parameter(&radius).expect_err("a parameter with no flag is not silently defaulted");
 

@@ -18,7 +18,7 @@
 // tie, and is kept only because `profile`'s figures were measured against it.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile};
+use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
@@ -42,10 +42,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     //
     // Re-measuring this model requires first confirming its graph is still a single CoreML partition — without the
     // two rewrites above it's 92, and every figure here would then reflect partition handoff, not compute units.
-    match precision {
-        Precision::Fp16 => EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-        _ => EpProfile::default(),
-    }
+    cpu_and_gpu_at_fp16(precision)
 }
 
 #[cfg(test)]
@@ -54,51 +51,15 @@ mod tests {
 
     use crate::models::denoise::DenoiseVariant;
     use crate::models::precision::FloatPrecision;
-    use crate::providers::profile::{CoreMlSpecialization, ExecutionMode};
-
-    // Gothenburg's four, held separately here. The reference pinned only Gothenburg's, but the two profiles are the
-    // same claim, and an unpinned copy is the one a sweep of another model would overwrite.
 
     #[test]
-    fn malmo_is_kept_off_the_neural_engine_at_fp16() {
-        // Worth 29.9% per tile, and nothing else asserts it.
-        assert_eq!(
-            DenoiseVariant::Malmo(FloatPrecision::Fp16).profile().coreml_compute_units,
-            CoreMlComputeUnits::CpuAndGpu
-        );
-    }
-
-    #[test]
-    fn malmo_leaves_fp32_on_the_default_compute_units() {
-        assert_eq!(
-            DenoiseVariant::Malmo(FloatPrecision::Fp32).profile().coreml_compute_units,
-            CoreMlComputeUnits::default()
-        );
-    }
-
-    #[test]
-    fn malmo_does_not_ask_for_one_node_at_a_time_at_either_precision() {
+    fn malmo_declares_the_shared_fp16_profile_through_its_variant() {
+        // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
+        // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
         for precision in FloatPrecision::ALL {
             assert_eq!(
-                DenoiseVariant::Malmo(precision).profile().execution_mode,
-                ExecutionMode::default(),
-                "{precision:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn malmo_names_nothing_else() {
-        assert_eq!(
-            DenoiseVariant::Malmo(FloatPrecision::Fp16).profile(),
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() }
-        );
-        assert_eq!(DenoiseVariant::Malmo(FloatPrecision::Fp32).profile(), EpProfile::default());
-
-        for precision in FloatPrecision::ALL {
-            assert_eq!(
-                DenoiseVariant::Malmo(precision).profile().coreml_specialization,
-                CoreMlSpecialization::default(),
+                DenoiseVariant::Malmo(precision).profile(),
+                cpu_and_gpu_at_fp16(precision.into()),
                 "{precision:?}"
             );
         }

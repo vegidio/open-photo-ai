@@ -26,10 +26,10 @@
 // 16 bits would instead stretch an opaque `Rgba8` PNG and an `Rgb8` JPEG of one picture at different precisions, for
 // no reason a user could see.
 
+use image::DynamicImage;
 use image::imageops::FilterType;
-use image::{DynamicImage, ImageBuffer, Rgb};
 
-use imaging::tensor::{Channel, Sampler};
+use imaging::tensor::{Sampler, flattened};
 
 /// `source` stretched to the `side` square through `filter`, with any alpha composited against black first.
 ///
@@ -41,9 +41,11 @@ pub(super) fn stretched(source: &DynamicImage, side: u32, filter: FilterType) ->
         // 72 MB.
         DynamicImage::ImageRgb8(_) | DynamicImage::ImageRgb16(_) => source.resize_exact(side, side, filter),
         DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_) => {
-            DynamicImage::ImageRgb8(flattened::<u8>(source)).resize_exact(side, side, filter)
+            DynamicImage::ImageRgb8(flattened::<u8>(&Sampler::new(source), source.width(), source.height()))
+                .resize_exact(side, side, filter)
         }
-        _ => DynamicImage::ImageRgb16(flattened::<u16>(source)).resize_exact(side, side, filter),
+        _ => { DynamicImage::ImageRgb16(flattened::<u16>(&Sampler::new(source), source.width(), source.height())) }
+            .resize_exact(side, side, filter),
     }
 }
 
@@ -76,23 +78,9 @@ pub(super) fn gray_tensor(
     tensor
 }
 
-/// `source` composited against black, at `T`'s depth.
-fn flattened<T: Channel>(source: &DynamicImage) -> ImageBuffer<Rgb<T>, Vec<T>>
-where
-    Rgb<T>: image::Pixel<Subpixel = T>,
-{
-    let sampler = Sampler::new(source);
-
-    // Through the unit float and this crate's rounding, which at 8 bits is the nearest byte to `v / 257`: an opaque
-    // 8-bit channel arrives as `v * 257` and leaves as `v`.
-    ImageBuffer::from_fn(source.width(), source.height(), |x, y| {
-        Rgb(sampler.rgb(x, y).map(|value| T::from_unit(value.to_unit())))
-    })
-}
-
 #[cfg(test)]
 mod tests {
-    use image::{GenericImageView as _, ImageBuffer, Luma, Rgba};
+    use image::{GenericImageView as _, ImageBuffer, Luma, Rgb, Rgba};
 
     use super::*;
 
@@ -227,6 +215,8 @@ mod tests {
             Rgba([r, g, b, 255])
         });
 
-        assert_eq!(flattened::<u8>(&DynamicImage::ImageRgba8(with_alpha)), opaque);
+        let source = DynamicImage::ImageRgba8(with_alpha);
+
+        assert_eq!(flattened::<u8>(&Sampler::new(&source), 23, 19), opaque);
     }
 }

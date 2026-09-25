@@ -5,8 +5,7 @@ import "@/i18n";
 import i18n from "@/i18n";
 import { forgetCatalogue } from "@/ipc/catalogue";
 import { type SettingsData, useSettingsStore } from "@/stores/settings";
-import { CATALOGUE, render } from "@/test/support";
-import { DraftHarness } from "./draft.tsx";
+import { CATALOGUE, DraftHarness, render } from "@/test/support";
 import { EnhancementsPage } from "./EnhancementsPage.tsx";
 
 /**

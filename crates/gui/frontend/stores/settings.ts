@@ -2,8 +2,11 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { DEFAULT_LANGUAGE, detectLanguage, isLanguage, type Language } from "@/i18n/languages";
 import type { Family } from "@/ipc/catalogue";
+import type { ExportFormat } from "@/ipc/export";
 import type { SupportedProviders } from "@/ipc/setup";
 import { familiesWhere } from "@/lib/enhancements";
+import { isFormatChoice } from "@/lib/export";
+import { clampTo } from "@/lib/utils";
 
 // `"auto"` plus the wire's own field names rather than a list of five strings written out here: the
 // four are `keyof SupportedProviders`, so a provider the library adds and `ipc/setup.ts` names
@@ -46,32 +49,25 @@ export const BACKGROUNDS = ["particles", "dotted"] as const satisfies readonly B
 const isBackground = (value: unknown): value is Background =>
     typeof value === "string" && (BACKGROUNDS as readonly string[]).includes(value);
 
-// The four names are this frontend's own, and unlike the model vocabulary that is correct: `opai`
-// re-exports `rust_sak::image::ImageFormat`, but nothing puts it on the wire and no command takes
-// one yet, so there is nothing to read them from. `heic` is the container the user picks, spelled
-// as the reference and the design both spell it, where the library's own variant is `Heif`.
+// **Which formats take a quality, and what each starts at, are Rust's** - `export_formats` publishes both, beside
+// the range - so this store names no format and restates no default. What it keeps is only what a user moved: a
+// format with no entry is written at its published default, which is also what a first launch and Reset to defaults
+// leave every format at. A record written before the defaults moved - every lossy format at its then default - reads
+// the same, entry by entry.
 /**
- * The export formats whose encoders take a quality.
- *
- * The lossless formats (BMP, GIF, PNG, TIFF) ignore a quality, so they get no row and no stored value.
+ * The quality a user chose for each lossy format, where they chose one. **Per format rather than one shared number**:
+ * the scales are not comparable across encoders, so one value would be a setting that meant something different in
+ * every row it appeared in.
  */
-export const QUALITY_FORMATS = ["avif", "heic", "jpeg", "webp"] as const;
+export type QualityChoices = Partial<Record<ExportFormat, number>>;
 
-export type QualityFormat = (typeof QUALITY_FORMATS)[number];
-
+// The bound every lossy format publishes today, kept here too because the store clamps a value on the way in - the
+// one field handed straight to the native encoders - and it rehydrates synchronously, before any answer from Rust.
 export const MIN_QUALITY = 1;
 export const MAX_QUALITY = 100;
 
-// **Deliberately not one shared number.** The scales are not comparable across encoders - 60 in
-// libheif is a very different picture to 60 in libjpeg - and these are exactly what the reference's
-// `utils.EncodeImage` hardcodes, so a user who never moves a slider gets the output the reference
-// produces. The design's screens show 50/80/90/80; those are the mock's illustrative numbers, and
-// its own note claims only that each format keeps its own.
-/** What each format starts at. */
-export const DEFAULT_QUALITY: Record<QualityFormat, number> = { avif: 60, heic: 60, jpeg: 90, webp: 75 };
-
 /** A quality brought inside what the encoders accept, which is what a control is allowed to write. */
-export const clampQuality = (value: number) => Math.min(MAX_QUALITY, Math.max(MIN_QUALITY, Math.round(value)));
+export const clampQuality = (value: number) => clampTo(Math.round(value), MIN_QUALITY, MAX_QUALITY);
 
 // Partial rather than defaulted here, which is what keeps the catalogue out of this store: the
 // catalogue is an `invoke` and this store rehydrates synchronously at import, so a stored model
@@ -109,7 +105,7 @@ export type SettingsData = {
      * library's family filter, read at the moment it is asked for - see `hooks/useAutopilot.ts`.
      */
     autopilotExcluded: Family[];
-    quality: Record<QualityFormat, number>;
+    quality: QualityChoices;
 };
 
 // Beside the preferences rather than among them: `SettingsData` is what the settings dialog drafts,
@@ -163,16 +159,17 @@ export const settingsDefaults = (): SettingsData => ({
     processor: "auto",
     models: {},
     autopilotExcluded: [],
-    quality: { ...DEFAULT_QUALITY },
+    // No choice for any format: each is written at the default Rust publishes for it.
+    quality: {},
 });
 
 /**
  * A stored quality record, repaired.
  *
- * A missing format, a zero, a NaN or a value outside the bounds reads as that format's starting
- * value.
+ * A format this application has no name for, a zero, a NaN or a value outside the bounds is dropped, which reads as
+ * that format's published starting value.
  */
-const repairQuality = (value: unknown): Record<QualityFormat, number> => {
+const repairQuality = (value: unknown): QualityChoices => {
     // The stakes are the ones `apply`'s clamp states: the record is handed straight to the native
     // encoders.
     //
@@ -180,17 +177,21 @@ const repairQuality = (value: unknown): Record<QualityFormat, number> => {
     // reference. It is what the requirement asks for - a remembered value outside those bounds is
     // replaced with the format's starting value - and it is the more conservative reading: a 4000
     // persisted by something that was not this application is not evidence that the user wanted 100.
-    const stored = (value ?? {}) as Partial<Record<QualityFormat, unknown>>;
-    const repaired = { ...DEFAULT_QUALITY };
+    if (value === null || typeof value !== "object") return {};
 
-    for (const format of QUALITY_FORMATS) {
-        const quality = Number(stored[format]);
-        if (Number.isFinite(quality) && quality >= MIN_QUALITY && quality <= MAX_QUALITY) {
-            repaired[format] = Math.round(quality);
-        }
-    }
+    return Object.fromEntries(
+        Object.entries(value).flatMap(([format, stored]) => {
+            const quality = Number(stored);
 
-    return repaired;
+            return isFormatChoice(format) &&
+                format !== "preserve" &&
+                Number.isFinite(quality) &&
+                quality >= MIN_QUALITY &&
+                quality <= MAX_QUALITY
+                ? [[format, Math.round(quality)]]
+                : [];
+        }),
+    );
 };
 
 /** A stored model record, kept only where it names something - the shape, not the models themselves. */
@@ -260,11 +261,8 @@ export const useSettingsStore = create<SettingsStore>()(
                     ...values,
                     ...(values.quality && {
                         quality: Object.fromEntries(
-                            QUALITY_FORMATS.map((format) => [
-                                format,
-                                clampQuality(values.quality?.[format] ?? DEFAULT_QUALITY[format]),
-                            ]),
-                        ) as Record<QualityFormat, number>,
+                            Object.entries(values.quality).map(([format, quality]) => [format, clampQuality(quality)]),
+                        ),
                     }),
                 })),
 

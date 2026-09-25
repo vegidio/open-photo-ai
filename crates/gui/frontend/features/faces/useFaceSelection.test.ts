@@ -18,18 +18,32 @@ const face = (left: number): Face => ({
         { x: left + 2, y: 6.5 },
     ],
     confidence: 0.9,
+    restorable: true,
+    key: `${left},4,${left + 3},7`,
 });
 
 const FIRST = face(0);
 const SECOND = face(20);
 const THIRD = face(40);
 
+/** A face too large to restore, which the default leaves alone. */
+const LARGE: Face = { ...face(60), restorable: false, key: "60,4,63,7" };
+
+const FACES = [FIRST, SECOND, THIRD, LARGE];
+
 /** What the store holds for the photograph, which is what only Apply is allowed to change. */
-const stored = () => useFacesStore.getState().skipped.get(identity);
+const stored = () => useFacesStore.getState().choices.get(identity);
+
+const choose = (skipped: Face[], restored: Face[] = []) =>
+    act(() =>
+        useFacesStore
+            .getState()
+            .setFaceChoice(identity, { skipped: skipped.map(faceKey), restored: restored.map(faceKey) }),
+    );
 
 /** The dialog, opened over `who`. `open` is re-rendered so a test can close and re-open it. */
 const mountOver = (who: string | undefined) =>
-    renderHook(({ open }) => useFaceSelection(who, open), { initialProps: { open: true } });
+    renderHook(({ open }) => useFaceSelection(who, FACES, open), { initialProps: { open: true } });
 
 /** The dialog, opened over the photograph every test but one is about. */
 const mount = () => mountOver(identity);
@@ -39,14 +53,15 @@ beforeEach(() => {
 });
 
 describe("the choice the Select faces dialog is editing", () => {
-    it("starts from nothing for a photograph nothing has been skipped in", () => {
+    it("starts from each face's default for a photograph nobody has chosen in", () => {
         const { result } = mount();
 
-        expect(result.current.skipped).toEqual(new Set());
+        // Every restorable face chosen, and the one too large to restore left alone.
+        expect(result.current.skipped).toEqual(new Set([faceKey(LARGE)]));
     });
 
     it("seeds the working copy from what is committed", () => {
-        act(() => useFacesStore.getState().setSkippedFaces(identity, new Set([faceKey(FIRST)])));
+        choose([FIRST], [LARGE]);
 
         const { result } = mount();
 
@@ -57,66 +72,74 @@ describe("the choice the Select faces dialog is editing", () => {
         const { result } = mount();
 
         act(() => result.current.toggle(FIRST));
-        expect(result.current.skipped).toEqual(new Set([faceKey(FIRST)]));
+        expect(result.current.skipped).toEqual(new Set([faceKey(LARGE), faceKey(FIRST)]));
         expect(stored()).toBeUndefined();
 
         act(() => result.current.toggle(FIRST));
-        expect(result.current.skipped).toEqual(new Set());
+        expect(result.current.skipped).toEqual(new Set([faceKey(LARGE)]));
         expect(stored()).toBeUndefined();
     });
 
-    it("commits the working copy when it is applied", () => {
+    it("commits only the exceptions to each face's default when it is applied", () => {
         const { result } = mount();
 
         act(() => result.current.toggle(SECOND));
+        act(() => result.current.toggle(LARGE));
         act(() => result.current.apply());
 
-        expect(stored()).toEqual(new Set([faceKey(SECOND)]));
+        // A restorable face turned off, and a large one turned on: the two things the default would not do.
+        expect(stored()).toEqual({ skipped: [faceKey(SECOND)], restored: [faceKey(LARGE)] });
     });
 
     it("commits several toggles as one write", () => {
         // What the working copy is for: a write per box would be an inference run per box.
         const { result } = mount();
 
-        act(() => {
-            result.current.toggle(FIRST);
-        });
-        act(() => {
-            result.current.toggle(SECOND);
-        });
-        act(() => {
-            result.current.toggle(THIRD);
-        });
+        act(() => result.current.toggle(FIRST));
+        act(() => result.current.toggle(SECOND));
+        act(() => result.current.toggle(THIRD));
 
-        const before = useFacesStore.getState().skipped;
+        const before = useFacesStore.getState().choices;
         act(() => result.current.apply());
 
-        expect(useFacesStore.getState().skipped).not.toBe(before);
-        expect(stored()).toEqual(new Set([FIRST, SECOND, THIRD].map(faceKey)));
+        expect(useFacesStore.getState().choices).not.toBe(before);
+        expect(stored()).toEqual({ skipped: [FIRST, SECOND, THIRD].map(faceKey), restored: [] });
     });
 
     it("writes nothing when what is applied is what was already committed", () => {
         // Opening the dialog to read the selection and applying it must leave the run in flight alone.
-        act(() => useFacesStore.getState().setSkippedFaces(identity, new Set([faceKey(FIRST)])));
+        choose([FIRST]);
 
         const { result } = mount();
-        const before = useFacesStore.getState().skipped;
+        const before = useFacesStore.getState().choices;
 
         act(() => result.current.apply());
 
-        expect(useFacesStore.getState().skipped).toBe(before);
+        expect(useFacesStore.getState().choices).toBe(before);
     });
 
-    it("writes nothing when a face is turned off and on again before applying", () => {
+    it("writes nothing when the faces are left at their defaults", () => {
         const { result } = mount();
 
         act(() => result.current.toggle(FIRST));
         act(() => result.current.toggle(FIRST));
 
-        const before = useFacesStore.getState().skipped;
+        const before = useFacesStore.getState().choices;
         act(() => result.current.apply());
 
-        expect(useFacesStore.getState().skipped).toBe(before);
+        expect(useFacesStore.getState().choices).toBe(before);
+    });
+
+    it("keeps what was chosen at another framing when this one is applied", () => {
+        // A face at a framing the user is not at: its key matches none shown here, and a framing returned to must
+        // find it where it was left.
+        act(() => useFacesStore.getState().setFaceChoice(identity, { skipped: ["900,4,903,7"], restored: [] }));
+
+        const { result } = mount();
+        act(() => result.current.toggle(FIRST));
+        act(() => result.current.apply());
+
+        expect(stored()).toEqual({ skipped: ["900,4,903,7", faceKey(FIRST)], restored: [] });
     });
 
     it("leaves the store as it was when the dialog is dismissed rather than applied", () => {
@@ -136,17 +159,17 @@ describe("the choice the Select faces dialog is editing", () => {
         rerender({ open: false });
         rerender({ open: true });
 
-        expect(result.current.skipped).toEqual(new Set());
+        expect(result.current.skipped).toEqual(new Set([faceKey(LARGE)]));
     });
 
     it("re-seeds from a choice committed while it was closed", () => {
         const { result, rerender } = mount();
 
         rerender({ open: false });
-        act(() => useFacesStore.getState().setSkippedFaces(identity, new Set([faceKey(THIRD)])));
+        choose([THIRD]);
         rerender({ open: true });
 
-        expect(result.current.skipped).toEqual(new Set([faceKey(THIRD)]));
+        expect(result.current.skipped).toEqual(new Set([faceKey(THIRD), faceKey(LARGE)]));
     });
 
     it("writes nothing for a photograph whose bytes could not be read", () => {
@@ -156,6 +179,6 @@ describe("the choice the Select faces dialog is editing", () => {
         act(() => result.current.toggle(FIRST));
         act(() => result.current.apply());
 
-        expect(useFacesStore.getState().skipped.size).toBe(0);
+        expect(useFacesStore.getState().choices.size).toBe(0);
     });
 });

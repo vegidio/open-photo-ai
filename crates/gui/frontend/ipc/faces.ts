@@ -22,12 +22,10 @@ export type Rect = { min: Point; max: Point };
  */
 export type Face = {
     // **`bounding_box` is snake_case on a camelCase wire, deliberately.** Every other shape crossing this
-    // boundary is renamed by `serde` because this crate defines it; `Face` is `opai`'s own value and its
-    // `Deserialize` accepts exactly what its `Serialize` produces. So a face handed back to `enhance` is
-    // byte-for-byte the face it was given, which is what makes the run cache signature `Faces` folds from
-    // the bounding boxes survive the round trip - and what makes a face the user deselected, recorded by
-    // value, compare correctly. The alternative is a mirror of thirteen coordinates whose only job is
-    // casing, and a place for the landmark order to be transposed in silence. **Do not "fix" it.**
+    // boundary is renamed by `serde` because this crate defines it; `Face` is `opai`'s own value, flattened
+    // into the answer unchanged. The alternative is a mirror of thirteen coordinates whose only job is
+    // casing, and a place for the landmark order to be transposed in silence. **Do not "fix" it.** A face
+    // is never sent back: a run finds its own faces, and a choice names them by `key`.
     bounding_box: Rect;
     /**
      * Read positionally: left eye, right eye, nose, left mouth corner, right mouth corner. A **fixed-length
@@ -37,6 +35,19 @@ export type Face = {
     landmarks: [Point, Point, Point, Point, Point];
     /** `0..1`. */
     confidence: number;
+    /**
+     * The face's identity for a choice among faces: `face_key` in `crates/gui/src/faces.rs`, the four
+     * bounding-box coordinates. Rust writes it and reads it back, so this side never composes one.
+     */
+    key: string;
+    /**
+     * Whether a face recovery can restore this face: its box covers at most the 512x512 square the recovery
+     * models restore at. `opai`'s `Face::restorable`, published by `crates/gui/src/faces.rs` beside the face
+     * rather than restated here, so the default among a set of faces and the Autopilot suggestion are one rule.
+     *
+     * Like `key`, this crate's rather than `opai`'s: the face itself is `opai`'s, flattened in unchanged.
+     */
+    restorable: boolean;
 };
 
 /**

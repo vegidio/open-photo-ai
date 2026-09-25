@@ -74,10 +74,10 @@
 //!   or an explicit release. A sweep that found nothing writes nothing: it runs every few minutes for the life of the
 //!   process.
 //!
-//! Each of those facts is *also* still carried as data, and that is not redundancy. The handle reports
-//! [`requested`](SessionHandle::requested) beside [`provider`](SessionHandle::provider) and residency is observable
-//! through [`SessionCache::resident`], because the log answers a bug report after the fact and a front end has to be
-//! able to tell a user something while it is happening.
+//! Each of those facts is *also* still carried as data, and that is not redundancy. The handle reports the
+//! [`provider`](SessionHandle::provider) it was built on, the run's [`ProviderReport`](crate::ProviderReport) pairs it
+//! with what was requested, and residency is observable through [`SessionCache::resident`], because the log answers a
+//! bug report after the fact and a front end has to be able to tell a user something while it is happening.
 //!
 //! What has **no** record is the memory budget: `internal/budget.go` and `internal/registry.go` emit twelve about
 //! per-pool budgets, leases and admission, and this project has not built that mechanism. They arrive with it.
@@ -330,10 +330,10 @@ impl<S: Send + 'static> Sessions<S> {
         }
     }
 
-    /// The session for `artifact` under the plan `plan_from` resolves to, reporting `requested` on the handle.
+    /// The session for `artifact` under the plan `plan_from` resolves to, recording `requested` beside it.
     ///
-    /// The two providers are separate because they differ on the retry: the handle still reports what the *caller*
-    /// asked for, while the plan — and therefore the key — is built from the CPU.
+    /// The two providers are separate because they differ on the retry: the build's records still name what the
+    /// *caller* asked for, while the plan — and therefore the key — is built from the CPU.
     async fn build_on(
         &self,
         artifact: &ArtifactId,

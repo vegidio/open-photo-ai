@@ -123,9 +123,8 @@ async fn a_downgrade_is_recorded_as_a_pair_naming_what_was_asked_for_and_what_ra
     })
     .await;
 
-    // The handle still reports both, unchanged: the log is a second reader, not a replacement.
+    // The handle still reports what ran, unchanged: the log is a second reader, not a replacement.
     assert_eq!(handle.provider(), ExecutionProvider::Cpu);
-    assert_eq!(handle.requested(), ExecutionProvider::Cuda);
 
     let downgraded =
         records(&log, "the requested execution provider could not open this model; falling back to the CPU");

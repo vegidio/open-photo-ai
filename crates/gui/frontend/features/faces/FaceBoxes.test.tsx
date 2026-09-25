@@ -17,10 +17,16 @@ const TENTH: Face = {
         { x: 500, y: 350 },
     ],
     confidence: 0.9,
+    restorable: true,
+    key: "300,200,600,400",
 };
 
 /** A second face, so a test can tell one box from another. */
-const OTHER: Face = { ...TENTH, bounding_box: { min: { x: 1500, y: 1000 }, max: { x: 1800, y: 1200 } } };
+const OTHER: Face = {
+    ...TENTH,
+    bounding_box: { min: { x: 1500, y: 1000 }, max: { x: 1800, y: 1200 } },
+    key: "1500,1000,1800,1200",
+};
 
 const toggled = vi.fn();
 

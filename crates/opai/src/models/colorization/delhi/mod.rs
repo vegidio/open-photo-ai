@@ -4,7 +4,7 @@
 // Deleting the model is deleting this directory plus the arms in `ColorizationVariant` that name it.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile};
+use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
 
 /// The execution-provider tuning declared for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
@@ -19,10 +19,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // the setting is not the default. It is kept rather than dropped for the same reason: the reference ships it, and
     // parity is the target. Re-measuring Delhi is how to confirm or revise it. A wrong CoreML-only, FP16-only setting
     // costs speed, never a wrong image.
-    match precision {
-        Precision::Fp16 => EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-        _ => EpProfile::default(),
-    }
+    cpu_and_gpu_at_fp16(precision)
 }
 
 #[cfg(test)]
@@ -33,22 +30,15 @@ mod tests {
     use crate::models::precision::FloatPrecision;
 
     #[test]
-    fn delhi_is_kept_off_the_neural_engine_at_fp16_and_nothing_else() {
+    fn delhi_declares_the_shared_fp16_profile_through_its_variant() {
         // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
-        // refactor can break.
-        assert_eq!(
-            ColorizationVariant::Delhi(FloatPrecision::Fp16).profile(),
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-            "Delhi at FP16 is not the setting the reference declares for it"
-        );
-    }
-
-    #[test]
-    fn delhi_declares_nothing_at_fp32() {
-        assert_eq!(
-            ColorizationVariant::Delhi(FloatPrecision::Fp32).profile(),
-            EpProfile::default(),
-            "Delhi at FP32 declared a setting nothing measured"
-        );
+        // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
+        for precision in FloatPrecision::ALL {
+            assert_eq!(
+                ColorizationVariant::Delhi(precision).profile(),
+                cpu_and_gpu_at_fp16(precision.into()),
+                "{precision:?}"
+            );
+        }
     }
 }

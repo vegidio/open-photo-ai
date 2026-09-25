@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { type Event, listen } from "@tauri-apps/api/event";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { CropInfo } from "./crop";
+import { EXPORT_FORMATS } from "@/test/support";
 import { mintRun, type Operation } from "./enhance";
 import {
     cancelExport,
@@ -9,7 +10,9 @@ import {
     type Exported,
     type ExportProgress,
     type ExportRequest,
+    exportFormats,
     exportImage,
+    forgetExportFormats,
     onExportProgress,
     pickDirectory,
     revealExport,
@@ -34,7 +37,7 @@ const listened = listen as unknown as Mock;
 const minted = mintRun as unknown as Mock;
 
 /** One upscale, as the window would name it. */
-const kyoto: Operation = { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 };
+const kyoto: Operation = { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } };
 
 /** One framing, as the Crop/Rotate dialog hands it over. */
 const framing: CropInfo = {
@@ -134,6 +137,27 @@ describe("exportImage", () => {
         invoked.mockRejectedValue(refused);
 
         await expect(exportImage("0123456789abcdef", [kyoto], "cpu", request).done).rejects.toEqual(refused);
+    });
+});
+
+describe("exportFormats", () => {
+    it("calls the command Rust registers, by name, once however often it is asked", async () => {
+        forgetExportFormats();
+        invoked.mockResolvedValue(EXPORT_FORMATS);
+
+        await expect(exportFormats()).resolves.toEqual(EXPORT_FORMATS);
+        await exportFormats();
+
+        expect(invoked).toHaveBeenCalledExactlyOnceWith("export_formats");
+    });
+});
+
+describe("exportImage and a format that takes no quality", () => {
+    it("sends no quality where the request carries none", () => {
+        const { destination, format, overwrite } = request;
+        const { run } = exportImage("0123456789abcdef", [], "cpu", { destination, format, overwrite });
+
+        expect(invoked).toHaveBeenCalledWith("export", expect.objectContaining({ run, quality: undefined }));
     });
 });
 

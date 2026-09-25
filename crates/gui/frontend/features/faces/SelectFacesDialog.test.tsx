@@ -24,6 +24,8 @@ const face = (left: number): Face => ({
         { x: left + 2, y: 6.5 },
     ],
     confidence: 0.9,
+    restorable: true,
+    key: `${left},4,${left + 3},7`,
 });
 
 const FIRST = face(0);
@@ -40,7 +42,7 @@ const box = (number: number) => screen.getByRole("button", { name: `Toggle face 
 const applyButton = () => screen.getByRole("button", { name: /Apply to/ });
 
 /** What the store holds for the photograph, which only Apply is allowed to change. */
-const stored = () => useFacesStore.getState().skipped.get(identity);
+const stored = () => useFacesStore.getState().choices.get(identity);
 
 const picture = () => document.querySelector("[data-slot='faces-picture']") as HTMLElement;
 
@@ -157,7 +159,7 @@ describe("the Select faces dialog", () => {
         fireEvent.click(box(2));
         fireEvent.click(applyButton());
 
-        expect(stored()).toEqual(new Set([faceKey(SECOND)]));
+        expect(stored()).toEqual({ skipped: [faceKey(SECOND)], restored: [] });
         expect(closed).toHaveBeenCalledOnce();
     });
 

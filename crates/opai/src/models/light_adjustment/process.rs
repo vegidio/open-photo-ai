@@ -34,13 +34,12 @@ use super::LightAdjustmentParams;
 use crate::error::InferenceError;
 use crate::models::ArtifactId;
 use crate::pipeline::Backend;
-use crate::pipeline::session::GraphShape;
-use crate::pipeline::{ImagePipeline, OnOneGraph, Shared, SingleGraph, checkpoint, reporter};
+use crate::pipeline::{
+    DepthGeneric, OnOneGraph, Ran, Shared, Shown, SingleGraph, Square, checkpoint, reflected, reporter,
+};
 use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
-use imaging::ChannelDepth;
 use imaging::mix::blended;
-use imaging::present::{plan, presented};
 use imaging::tensor::{self, Channel, Normalisation, Sampler};
 
 // `[0, 1]` is the reference's `standardize: false` on **both** halves of its conversion — against the `[-1, 1]` face
@@ -59,7 +58,7 @@ const EPS: f32 = 1e-3;
 
 /// The photograph's own pixels, corrected by the ratio between what the model produced and what it was shown.
 ///
-/// `shown` is the resampled photograph [`presented`] handed back, `produced` is the model's output with its
+/// `shown` is the resampled photograph [`presented`](imaging::present::presented) handed back, `produced` is the model's output with its
 /// extension already dropped, and both are at the planned low resolution. Both are upsampled to the photograph's own
 /// size and the ratio is taken **per pixel at full resolution**:
 ///
@@ -97,19 +96,49 @@ where
         (shown.join().expect("a resample does not panic"), produced)
     });
 
-    let (shown, produced) = (Sampler::new(&shown), Sampler::new(&produced));
+    gained(source, &Sampler::new(&shown), &Sampler::new(&produced), extent)
+}
 
-    ImageBuffer::from_fn(width, height, |x, y| {
-        let full = source.rgb(x, y);
-        let before = shown.rgb(x, y);
-        let after = produced.rgb(x, y);
+/// `source` through [`gain`] against `shown` and `produced`, which are already at `extent`, pixel by pixel.
+fn gained<T: Channel>(
+    source: &Sampler<'_>,
+    shown: &Sampler<'_>,
+    produced: &Sampler<'_>,
+    extent: (u32, u32),
+) -> ImageBuffer<Rgb<T>, Vec<T>>
+where
+    Rgb<T>: image::Pixel<Subpixel = T>,
+{
+    let (width, height) = extent;
+    let mut result = ImageBuffer::<Rgb<T>, Vec<T>>::new(width, height);
 
-        // `from_unit` bounds each channel to the range it can carry, which is the other half of the near-black
-        // guard: `EPS` keeps the gain finite and this keeps the product inside the channel.
-        Rgb([0, 1, 2].map(|channel| {
-            T::from_unit(gain(full[channel].to_unit(), before[channel].to_unit(), after[channel].to_unit()))
-        }))
-    })
+    // Nothing to correct, and `chunks_exact_mut` below refuses a zero-width row.
+    if width == 0 || height == 0 {
+        return result;
+    }
+
+    // Read a row at a time through `Sampler::row`, which matches on each sampler's variant once per row rather than
+    // three times per pixel, into three row-sized scratches that stay in cache.
+    let mut rows = [(); 3].map(|()| vec![[0_u16; 3]; width as usize]);
+
+    for (y, out) in result.chunks_exact_mut(3 * width as usize).enumerate() {
+        let [full, before, after] = &mut rows;
+        source.row(y as u32, full);
+        shown.row(y as u32, before);
+        produced.row(y as u32, after);
+
+        let pixels = full.iter().zip(before.iter()).zip(after.iter());
+
+        for (out, ((full, before), after)) in out.as_chunks_mut::<3>().0.iter_mut().zip(pixels) {
+            // `from_unit` bounds each channel to the range it can carry, which is the other half of the near-black
+            // guard: `EPS` keeps the gain finite and this keeps the product inside the channel.
+            *out = [0, 1, 2].map(|channel| {
+                T::from_unit(gain(full[channel].to_unit(), before[channel].to_unit(), after[channel].to_unit()))
+            });
+        }
+    }
+
+    result
 }
 
 /// One channel through the gain: `full * produced / (shown + EPS)`, in `[0, 1]` unit space.
@@ -166,7 +195,7 @@ impl OnOneGraph for Adjust {
     }
 }
 
-impl<B: Backend> ImagePipeline<B> for Adjust {
+impl DepthGeneric for Adjust {
     /// One graph run, whatever the photograph is.
     fn stages(&self) -> usize {
         // The fixed square is the whole of why this is a constant rather than something derived from the image: a
@@ -174,28 +203,9 @@ impl<B: Backend> ImagePipeline<B> for Adjust {
         1
     }
 
-    fn run(
-        &self,
-        input: &DynamicImage,
-        sessions: &[SessionHandle<B::Session>],
-        depth: ChannelDepth,
-        progress: Option<&dyn Fn(f64)>,
-        cancelled: &dyn Fn() -> bool,
-    ) -> Result<DynamicImage, InferenceError> {
-        // Dispatched once at the top, as `restore` dispatches it, so the two full-resolution loops below are
-        // compiled per channel type rather than branching per pixel over twenty-four million of them.
-        match depth {
-            ChannelDepth::Eight => self.adjusted::<u8, B>(input, sessions, progress, cancelled).map(u8::into_dynamic),
-            ChannelDepth::Sixteen => {
-                self.adjusted::<u16, B>(input, sessions, progress, cancelled).map(u16::into_dynamic)
-            }
-        }
-    }
-}
-
-impl Adjust {
-    /// [`ImagePipeline::run`]'s body, once, at whichever channel the caller asked for.
-    fn adjusted<T: Channel, B: Backend>(
+    // Generic over the channel so the two full-resolution loops below are compiled per channel type rather than
+    // branching per pixel over twenty-four million of them.
+    fn run_at<T: Channel, B: Backend>(
         &self,
         input: &DynamicImage,
         sessions: &[SessionHandle<B::Session>],
@@ -205,39 +215,19 @@ impl Adjust {
     where
         Rgb<T>: image::Pixel<Subpixel = T>,
     {
-        let (width, height) = (input.width(), input.height());
-
-        // Before anything is allocated. There is no scaling of an empty photograph onto the square, and a graph run
-        // over a square holding nothing but a reflection of nothing is not an adjustment of anything.
-        if width == 0 || height == 0 {
-            return Err(InferenceError::Untileable { width, height });
-        }
-
         let report = reporter(progress);
-        let planned = plan(width, height, self.canvas);
-        let shape = GraphShape::new(3, self.canvas as usize, self.canvas as usize);
+        let square = Square { side: self.canvas, planes: 3, steps: STEPS };
 
-        // Checked at each of the four step boundaries, which is the only schedule a four-step run offers. A
-        // cancelled run returns no image at all — not the photograph, and not the partly corrected buffer the
-        // cancellation landed in, which a caller has no way to tell from a finished adjustment.
-        if cancelled() {
-            return Err(InferenceError::Cancelled);
-        }
-
-        let mut tensor = vec![0.0_f32; shape.len()];
-        // `expect` rather than a folded error, as `run_tiled` does with its own conversion and for the same reason:
-        // the scratch is allocated here at exactly the shape the graph is run at, so a disagreement is this
-        // function contradicting itself rather than anything a caller could have caused or acted on.
-        let shown = presented(input, planned, RANGE, &mut tensor)
-            .expect("the scratch is allocated at the square the graph accepts");
-
-        checkpoint(&report, cancelled, 1.0 / STEPS as f64)?;
-
-        let mut output = vec![0.0_f32; shape.len()];
-        B::run_graph(&sessions[0], &tensor, shape, &mut output, shape)
-            .map_err(InferenceError::run(&self.graph.name, 0))?;
-
-        checkpoint(&report, cancelled, 2.0 / STEPS as f64)?;
+        // Checked at each of the four step boundaries, which is the only schedule a four-step run offers; the first
+        // two are the presentation's and the graph run's.
+        let Ran { output, presented: Shown { planned, resampled: shown }, .. } = self.graph.present_and_run::<B, _>(
+            &sessions[0],
+            input,
+            square,
+            &report,
+            cancelled,
+            reflected(self.canvas, RANGE),
+        )?;
 
         // The extension dropped **here**, before the upsample: cropping afterwards would mean resampling the mirror
         // of the photograph's own edge into the pixels that are kept, at an aspect ratio that is the canvas's.
@@ -247,7 +237,7 @@ impl Adjust {
 
         let produced = T::into_dynamic(low);
         let sampler = Sampler::new(input);
-        let corrected = corrected::<T>(&sampler, &shown, &produced, (width, height));
+        let corrected = corrected::<T>(&sampler, &shown, &produced, (input.width(), input.height()));
 
         checkpoint(&report, cancelled, 3.0 / STEPS as f64)?;
 
@@ -262,6 +252,10 @@ impl Adjust {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pipeline::ImagePipeline;
+    use crate::pipeline::session::GraphShape;
+    use imaging::ChannelDepth;
+    use imaging::present::{plan, presented};
 
     use imaging::test_support::photograph;
 
@@ -298,6 +292,93 @@ mod tests {
         }));
 
         corrected(&Sampler::new(source), shown, &produced, (source.width(), source.height()))
+    }
+
+    /// [`gained`] as it was written before it read by rows: three [`Sampler::rgb`] calls per pixel.
+    fn gained_per_pixel<T: Channel>(
+        source: &Sampler<'_>,
+        shown: &Sampler<'_>,
+        produced: &Sampler<'_>,
+        (width, height): (u32, u32),
+    ) -> ImageBuffer<Rgb<T>, Vec<T>>
+    where
+        Rgb<T>: image::Pixel<Subpixel = T>,
+    {
+        ImageBuffer::from_fn(width, height, |x, y| {
+            let (full, before, after) = (source.rgb(x, y), shown.rgb(x, y), produced.rgb(x, y));
+
+            Rgb([0, 1, 2].map(|channel| {
+                T::from_unit(gain(full[channel].to_unit(), before[channel].to_unit(), after[channel].to_unit()))
+            }))
+        })
+    }
+
+    /// `picture` as each variant a sampler can borrow, and one it has to convert.
+    fn variants(picture: &DynamicImage) -> [DynamicImage; 5] {
+        [
+            DynamicImage::ImageRgb8(picture.to_rgb8()),
+            DynamicImage::ImageRgba8(picture.to_rgba8()),
+            DynamicImage::ImageRgb16(picture.to_rgb16()),
+            DynamicImage::ImageRgba16(picture.to_rgba16()),
+            DynamicImage::ImageLumaA16(picture.to_luma_alpha16()),
+        ]
+    }
+
+    #[test]
+    fn the_gain_read_by_rows_is_bit_identical_to_the_gain_read_pixel_by_pixel() {
+        let (width, height) = (37, 23);
+        // Semi-transparent, so the alpha variants premultiply rather than pass through.
+        let mut picture = photograph(width, height).to_rgba16();
+        picture
+            .pixels_mut()
+            .enumerate()
+            .for_each(|(index, pixel)| pixel.0[3] = (index as u16).wrapping_mul(4099));
+        let picture = DynamicImage::ImageRgba16(picture);
+        let shown = photograph(width + 3, height + 5).crop_imm(2, 1, width, height);
+        let produced = shown.brighten(17);
+
+        for source in variants(&picture) {
+            for (shown, produced) in variants(&shown).iter().zip(variants(&produced).iter().rev()) {
+                let (source, shown, produced) = (Sampler::new(&source), Sampler::new(shown), Sampler::new(produced));
+
+                assert!(
+                    gained::<u8>(&source, &shown, &produced, (width, height))
+                        == gained_per_pixel::<u8>(&source, &shown, &produced, (width, height)),
+                    "the 8-bit gain differs"
+                );
+                assert!(
+                    gained::<u16>(&source, &shown, &produced, (width, height))
+                        == gained_per_pixel::<u16>(&source, &shown, &produced, (width, height)),
+                    "the 16-bit gain differs"
+                );
+            }
+        }
+    }
+
+    // Timing rather than a check: `cargo test --release -p opai -- --ignored --nocapture gain_by_rows_against`.
+    #[test]
+    #[ignore = "a measurement, run by hand in release"]
+    fn gain_by_rows_against_gain_per_pixel_at_24_megapixels() {
+        use std::time::Instant;
+
+        let extent = (6000, 4000);
+        let picture = photograph(extent.0, extent.1);
+
+        for (name, source) in ["Rgb8", "Rgba8", "Rgb16", "Rgba16"].into_iter().zip(variants(&picture)) {
+            let shown = source.brighten(3);
+            let produced = source.brighten(11);
+            let (source, shown, produced) = (Sampler::new(&source), Sampler::new(&shown), Sampler::new(&produced));
+
+            let started = Instant::now();
+            let old = gained_per_pixel::<u8>(&source, &shown, &produced, extent);
+            let per_pixel = started.elapsed();
+            let started = Instant::now();
+            let new = gained::<u8>(&source, &shown, &produced, extent);
+            let by_rows = started.elapsed();
+            assert!(old == new, "{name}: the gains differ");
+
+            println!("{name:>6}: gain<u8> {per_pixel:>10.2?} -> {by_rows:>10.2?}");
+        }
     }
 
     #[test]

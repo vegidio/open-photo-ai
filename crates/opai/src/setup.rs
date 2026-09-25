@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use rust_sak::sysinfo::GpuInfo;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
 
 use crate::cache::{self, CacheMode, Store};
 use crate::deps::artifact::{CUDA, CUDNN, ONNX_RUNTIME, TENSORRT};
@@ -175,40 +176,67 @@ impl Opai {
     ) -> Result<(Self, Installed), InitError> {
         let providers = plan.providers();
 
+        // Opened while the dependencies install rather than after them: the two share nothing, and a disk store's
+        // open can wait out a stale lock and sweep yesterday's expired entries. Spawned so it starts now rather than
+        // when it is first awaited, and on a blocking thread for the same reason. A cache that won't open still never
+        // fails an otherwise-healthy launch — it degrades to memory, then to none, never an error — and one whose
+        // installs fail is simply dropped.
+        let cache_root = app_dir.clone();
+        let opening =
+            tokio::spawn(spawn_blocking::<_, InitError, _>(move || Store::open(&cache_root)).in_current_span());
+
         // Each dependency installs into the directory its own row names — never a shared directory that a
         // later bump could delete out from under another dependency.
-        let install_one = async |descriptor: &Descriptor| -> Result<PathBuf, InitError> {
-            let dir = config::sub_dir(&app_dir, name, &descriptor.dir)?;
+        let dirs = plan
+            .all()
+            .map(|descriptor| config::sub_dir(&app_dir, name, &descriptor.dir))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Whether each is already current, asked of every dependency at once: on a launch with nothing to install
+        // this is the whole of the work, a stat per recorded file of a CUDA or TensorRT tree, and the answers do not
+        // depend on one another. The installs themselves stay serial below, in plan order — cuDNN links against the
+        // CUDA runtime, and progress is reported in the order the plan announced.
+        let checks: Vec<_> = plan
+            .all()
+            .zip(&dirs)
+            .map(|(descriptor, dir)| {
+                let (descriptor, dir) = (descriptor.clone(), dir.clone());
+                tokio::spawn(async move { deps::install::check(&dir, &descriptor).await }.in_current_span())
+            })
+            .collect();
+
+        let mut installed = Vec::with_capacity(dirs.len());
+        for ((descriptor, dir), check) in plan.all().zip(dirs).zip(checks) {
+            let checked = joined(check.await)?;
 
             // One reporter per dependency, so each ends cleanly on `1.0` rather than one composite figure.
             let reporter = Arc::new(Reporter::for_dependency(descriptor, on_progress.clone()));
 
             // The one terminal report for a dependency with nothing to do, emitted at the point it would
             // otherwise install — so observed order matches install order regardless. Never cancelled: nothing
-            // stops initialization today, only a run's own model install.
-            if deps::install::install(&dir, descriptor, Arc::clone(&reporter), &CancellationToken::new()).await?
-                == deps::install::Outcome::AlreadyCurrent
-            {
+            // stops initialization today, only a run's own model install. Runtime first, since the plan lists it
+            // first — the GPU libraries are useless without it.
+            let outcome = deps::install::install_checked(
+                &dir,
+                descriptor,
+                Some(checked),
+                Arc::clone(&reporter),
+                &CancellationToken::new(),
+            )
+            .await?;
+
+            if outcome == deps::install::Outcome::AlreadyCurrent {
                 reporter.already_installed();
             }
 
-            Ok(dir)
-        };
-
-        // Runtime first — the GPU libraries are useless without it.
-        let runtime_dir = install_one(&plan.runtime).await?;
-
-        let mut gpu_dirs = Vec::with_capacity(plan.gpu.len());
-        for descriptor in &plan.gpu {
-            gpu_dirs.push(install_one(descriptor).await?);
+            installed.push(dir);
         }
 
-        // Last, after every required dependency is on disk — a cache that won't open must never fail an
-        // otherwise-healthy launch, and it doesn't: it degrades to memory, then to none, never an error.
-        //
-        // On a blocking thread: opening can wait out a stale lock for up to 50ms.
-        let cache_root = app_dir.clone();
-        let cache = spawn_blocking::<_, InitError, _>(move || Store::open(&cache_root)).await?;
+        let mut installed = installed.into_iter();
+        let runtime_dir = installed.next().expect("the plan always carries the runtime");
+        let gpu_dirs: Vec<PathBuf> = installed.collect();
+
+        let cache = joined(opening.await)?;
 
         // Logged here (not inside `Store::open`) because the level depends on the outcome: disk is ordinary,
         // anything else is a slowdown nobody at the keyboard can see otherwise.
@@ -238,5 +266,15 @@ impl Opai {
         let installed = Installed { runtime: runtime_dir, gpu: gpu_dirs };
 
         Ok((opai, installed))
+    }
+}
+
+/// The answer of a task spawned while [`Opai`] installs its dependencies, with its panic resumed and a runtime that
+/// shut down under it reported as the cancellation it is.
+fn joined<T>(joined: Result<Result<T, InitError>, tokio::task::JoinError>) -> Result<T, InitError> {
+    match joined {
+        Ok(answer) => answer,
+        Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+        Err(_) => Err(InitError::from(crate::task::Cancelled)),
     }
 }

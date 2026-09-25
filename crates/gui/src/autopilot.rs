@@ -239,9 +239,8 @@ pub(crate) async fn suggest_with<A: Analyser>(
 
     // Not logged here, nor the analysis's failure or incompleteness below: `opai` records each once, where it
     // happened.
-    let picture = load_framed(path, request.crop).await.map_err(|error| SuggestError::UnreadableSource {
-        identity: request.source.clone(),
-        message: error.to_string(),
+    let picture = load_framed(opened, &request.source, path, request.crop).await.map_err(|error| {
+        SuggestError::UnreadableSource { identity: request.source.clone(), message: error.to_string() }
     })?;
 
     // A decode is not cancellable, so a stop that landed during it is noticed here rather than after an analysis
@@ -347,8 +346,39 @@ pub(crate) fn cancel_suggest(run: String, analyses: State<'_, Analyses>, tracepa
     });
 }
 
+/// The scale an upscale added by hand arrives at, for a photograph framed to `width` x `height`: `opai`'s ladder, with
+/// the neutral 1x where the photograph is already big enough.
+///
+/// **The ladder is the library's**, [`opai::suggested_scale`], and the same one an analysis suggests an upscale by —
+/// so the add menu and Autopilot cannot disagree about what the same photograph calls for, and the window restates
+/// neither threshold. The window asks with the **framed** dimensions, the size that will actually be upscaled.
+///
+/// 1x rather than "nothing" above the ladder, because the question here is not *whether* to upscale — the user has
+/// already added one — but what it should start at, and a factor that changes nothing is the conservative start.
+fn default_scale(width: u32, height: u32) -> f64 {
+    opai::suggested_scale(width, height).map_or(Scale::MIN, Scale::get)
+}
+
+/// The scale a newly added upscale starts at, for a photograph framed to `width` x `height`.
+///
+/// Synchronous and infallible: two integers in, one factor out. The command's name is written once more, in
+/// `frontend/ipc/autopilot.ts`.
+#[tauri::command]
+pub(crate) fn suggested_scale(width: u32, height: u32, traceparent: Traceparent) -> f64 {
+    traced_sync(command_span!("suggested_scale", traceparent), || default_scale(width, height))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_hand_added_upscale_starts_on_the_librarys_ladder_and_at_1x_above_it() {
+        assert_eq!(default_scale(1024, 1024), 4.0);
+        assert_eq!(default_scale(2048, 2048), 2.0);
+        assert_eq!(default_scale(6000, 4000), 1.0);
+        // The framed size is what the window asks with, so a cut of a large photograph gets the small one's answer.
+        assert_eq!(default_scale(800, 600), 4.0);
+    }
+
     use std::sync::Mutex;
 
     use super::*;
@@ -418,7 +448,7 @@ mod tests {
         Request {
             run: run.to_string(),
             source: source.to_string(),
-            processor: Processor::Coreml,
+            processor: Processor(opai::ExecutionProvider::CoreMl),
             crop: None,
             families: vec![Family::Upscale, Family::Colorization],
         }
@@ -598,7 +628,11 @@ mod tests {
             &analyser,
             &opened,
             &analyses,
-            Request { families: named.clone(), processor: Processor::Cpu, ..request("run-1", &identity) },
+            Request {
+                families: named.clone(),
+                processor: Processor(opai::ExecutionProvider::Cpu),
+                ..request("run-1", &identity)
+            },
         )
         .expect("the fixture is analysable");
 
@@ -609,9 +643,13 @@ mod tests {
         let seen = analyser.seen();
 
         assert_eq!(seen[0].families, named, "the families named were reordered or narrowed on the way");
-        assert_eq!(seen[0].provider, Processor::Cpu.into(), "the analysis ran on a processor nobody named");
+        assert_eq!(
+            seen[0].provider,
+            Processor(opai::ExecutionProvider::Cpu).into(),
+            "the analysis ran on a processor nobody named"
+        );
         assert!(seen[1].families.is_empty(), "an empty set of families was widened on the way");
-        assert_eq!(seen[1].provider, Processor::Coreml.into());
+        assert_eq!(seen[1].provider, Processor(opai::ExecutionProvider::CoreMl).into());
     }
 
     #[test]
@@ -777,7 +815,7 @@ mod tests {
             let bytes = std::fs::read(&fixture).expect("the committed photograph is readable");
             let opened = Opened::default();
 
-            for processor in [Processor::Cpu, Processor::Coreml] {
+            for processor in [Processor(opai::ExecutionProvider::Cpu), Processor(opai::ExecutionProvider::CoreMl)] {
                 // The run store is on disk and outlives the process, and it keys on the picture rather than the
                 // provider. So the committed photograph as it stands would be served from an earlier run — or the
                 // other provider's pass — and the check would pass having run nothing. A nonce after the JPEG's end

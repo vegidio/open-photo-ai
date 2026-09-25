@@ -10,7 +10,7 @@
 pub(in crate::models::colorization) mod rgb;
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile};
+use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
@@ -43,10 +43,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // that one is not comparable. fastai's PixelShuffle_ICNR blurs with a ReplicationPad2d, and MLProgram supports only
     // `constant` and `reflect` padding, so those five Pads have to be rewritten as a Slice+Concat of the border row and
     // column BEFORE tracing to get one CoreML partition. It is the same trap as Mumbai's.
-    match precision {
-        Precision::Fp16 => EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-        _ => EpProfile::default(),
-    }
+    cpu_and_gpu_at_fp16(precision)
 }
 
 #[cfg(test)]
@@ -57,22 +54,15 @@ mod tests {
     use crate::models::precision::FloatPrecision;
 
     #[test]
-    fn jaipur_is_kept_off_the_neural_engine_at_fp16_and_nothing_else() {
+    fn jaipur_declares_the_shared_fp16_profile_through_its_variant() {
         // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
-        // refactor can break, and a profile left at the default would cost this graph 4.5x on CoreML.
-        assert_eq!(
-            ColorizationVariant::Jaipur(FloatPrecision::Fp16).profile(),
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
-            "Jaipur at FP16 is not the setting measured for it"
-        );
-    }
-
-    #[test]
-    fn jaipur_declares_nothing_at_fp32() {
-        assert_eq!(
-            ColorizationVariant::Jaipur(FloatPrecision::Fp32).profile(),
-            EpProfile::default(),
-            "Jaipur at FP32 declared a setting nothing measured"
-        );
+        // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
+        for precision in FloatPrecision::ALL {
+            assert_eq!(
+                ColorizationVariant::Jaipur(precision).profile(),
+                cpu_and_gpu_at_fp16(precision.into()),
+                "{precision:?}"
+            );
+        }
     }
 }

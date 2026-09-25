@@ -7,7 +7,7 @@ import { track } from "@/lib/faro";
 import { useAutopilotStore } from "@/stores/autopilot";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { useFileStore } from "@/stores/files";
-import { CATALOGUE, HOLIDAY, openFiles, render, resetFileStore, SUNSET } from "@/test/support";
+import { APPLY_ORDER, CATALOGUE, HOLIDAY, openFiles, render, resetFileStore, SUNSET } from "@/test/support";
 import { EnhancementList } from "./EnhancementList";
 
 // Mocked at `lib/faro.ts`'s own boundary: what `track` does with an event is pinned by `faro.test.ts`.
@@ -39,7 +39,7 @@ const upscale = (codename: string, precision: Operation["precision"], scale: num
     family: "upscale",
     codename,
     precision,
-    scale,
+    parameters: { scale },
 });
 
 /** A light adjustment carrying whichever model, precision and bias a case is about. */
@@ -47,7 +47,7 @@ const light = (codename: string, precision: Operation["precision"], bias: number
     family: "light_adjustment",
     codename,
     precision,
-    bias,
+    parameters: { bias },
 });
 
 /** A colour balance carrying whichever model, precision and bias a case is about. */
@@ -55,7 +55,7 @@ const balance = (codename: string, precision: Operation["precision"], bias: numb
     family: "color_balance",
     codename,
     precision,
-    bias,
+    parameters: { bias },
 });
 
 /** A denoise carrying whichever model, precision and strength a case is about. */
@@ -63,7 +63,7 @@ const denoise = (codename: string, precision: Operation["precision"], strength: 
     family: "denoise",
     codename,
     precision,
-    strength,
+    parameters: { strength },
 });
 
 /** A sharpen carrying whichever model, precision and strength a case is about. */
@@ -71,7 +71,7 @@ const sharpen = (codename: string, precision: Operation["precision"], strength: 
     family: "sharpen",
     codename,
     precision,
-    strength,
+    parameters: { strength },
 });
 
 /** A colorization carrying whichever model and precision a case is about. */
@@ -79,6 +79,7 @@ const colorization = (codename: string, precision: Operation["precision"]): Oper
     family: "colorization",
     codename,
     precision,
+    parameters: {},
 });
 
 /** Puts a stack on the current image, which is what this list draws. */
@@ -141,14 +142,18 @@ describe("the enhancements on the current image", () => {
 
     it("shows a light adjustment between a face recovery and an upscale, whatever order they were added in", async () => {
         const store = useEnhancementStore.getState();
-        store.addEnhancement(HOLIDAY.path, upscale("kyoto", "fp32", 2));
-        store.addEnhancement(HOLIDAY.path, {
-            family: "face_recovery",
-            codename: "athens",
-            precision: "fp32",
-            faces: [],
-        });
-        store.addEnhancement(HOLIDAY.path, light("paris", "fp32", 0.5));
+        store.addEnhancement(HOLIDAY.path, upscale("kyoto", "fp32", 2), APPLY_ORDER);
+        store.addEnhancement(
+            HOLIDAY.path,
+            {
+                family: "face_recovery",
+                codename: "athens",
+                precision: "fp32",
+                parameters: { fidelity: 1 },
+            },
+            APPLY_ORDER,
+        );
+        store.addEnhancement(HOLIDAY.path, light("paris", "fp32", 0.5), APPLY_ORDER);
         await mount();
 
         const names = [...document.querySelectorAll("[data-slot='enhancement-row'] button span span:first-child")].map(
@@ -173,9 +178,9 @@ describe("the enhancements on the current image", () => {
 
     it("shows a colour balance between a light adjustment and an upscale, whatever order they were added in", async () => {
         const store = useEnhancementStore.getState();
-        store.addEnhancement(HOLIDAY.path, upscale("kyoto", "fp32", 2));
-        store.addEnhancement(HOLIDAY.path, balance("rio", "fp32", 0.5));
-        store.addEnhancement(HOLIDAY.path, light("paris", "fp32", 0.5));
+        store.addEnhancement(HOLIDAY.path, upscale("kyoto", "fp32", 2), APPLY_ORDER);
+        store.addEnhancement(HOLIDAY.path, balance("rio", "fp32", 0.5), APPLY_ORDER);
+        store.addEnhancement(HOLIDAY.path, light("paris", "fp32", 0.5), APPLY_ORDER);
         await mount();
 
         const names = [...document.querySelectorAll("[data-slot='enhancement-row'] button span span:first-child")].map(
@@ -200,14 +205,18 @@ describe("the enhancements on the current image", () => {
 
     it("shows a denoise above a face recovery and an upscale, whatever order they were added in", async () => {
         const store = useEnhancementStore.getState();
-        store.addEnhancement(HOLIDAY.path, upscale("kyoto", "fp32", 2));
-        store.addEnhancement(HOLIDAY.path, {
-            family: "face_recovery",
-            codename: "athens",
-            precision: "fp32",
-            faces: [],
-        });
-        store.addEnhancement(HOLIDAY.path, denoise("stockholm", "fp32", 1));
+        store.addEnhancement(HOLIDAY.path, upscale("kyoto", "fp32", 2), APPLY_ORDER);
+        store.addEnhancement(
+            HOLIDAY.path,
+            {
+                family: "face_recovery",
+                codename: "athens",
+                precision: "fp32",
+                parameters: { fidelity: 1 },
+            },
+            APPLY_ORDER,
+        );
+        store.addEnhancement(HOLIDAY.path, denoise("stockholm", "fp32", 1), APPLY_ORDER);
         await mount();
 
         const names = [...document.querySelectorAll("[data-slot='enhancement-row'] button span span:first-child")].map(
@@ -232,9 +241,9 @@ describe("the enhancements on the current image", () => {
 
     it("shows a sharpen between a colour balance and an upscale, whatever order they were added in", async () => {
         const store = useEnhancementStore.getState();
-        store.addEnhancement(HOLIDAY.path, upscale("kyoto", "fp32", 2));
-        store.addEnhancement(HOLIDAY.path, balance("rio", "fp32", 0.5));
-        store.addEnhancement(HOLIDAY.path, sharpen("moscow", "fp32", 1));
+        store.addEnhancement(HOLIDAY.path, upscale("kyoto", "fp32", 2), APPLY_ORDER);
+        store.addEnhancement(HOLIDAY.path, balance("rio", "fp32", 0.5), APPLY_ORDER);
+        store.addEnhancement(HOLIDAY.path, sharpen("moscow", "fp32", 1), APPLY_ORDER);
         await mount();
 
         const names = [...document.querySelectorAll("[data-slot='enhancement-row'] button span span:first-child")].map(
@@ -261,14 +270,18 @@ describe("the enhancements on the current image", () => {
 
     it("shows a colorization between a face recovery and a light adjustment, whatever order they were added in", async () => {
         const store = useEnhancementStore.getState();
-        store.addEnhancement(HOLIDAY.path, light("paris", "fp32", 0.5));
-        store.addEnhancement(HOLIDAY.path, {
-            family: "face_recovery",
-            codename: "athens",
-            precision: "fp32",
-            faces: [],
-        });
-        store.addEnhancement(HOLIDAY.path, colorization("delhi", "fp32"));
+        store.addEnhancement(HOLIDAY.path, light("paris", "fp32", 0.5), APPLY_ORDER);
+        store.addEnhancement(
+            HOLIDAY.path,
+            {
+                family: "face_recovery",
+                codename: "athens",
+                precision: "fp32",
+                parameters: { fidelity: 1 },
+            },
+            APPLY_ORDER,
+        );
+        store.addEnhancement(HOLIDAY.path, colorization("delhi", "fp32"), APPLY_ORDER);
         await mount();
 
         const names = [...document.querySelectorAll("[data-slot='enhancement-row'] button span span:first-child")].map(
@@ -406,7 +419,7 @@ describe("a photograph being analysed", () => {
         render(<EnhancementList />);
 
         act(() => {
-            useEnhancementStore.getState().addEnhancements(HOLIDAY.path, [light("paris", "fp32", 0.5)]);
+            useEnhancementStore.getState().addEnhancements(HOLIDAY.path, [light("paris", "fp32", 0.5)], APPLY_ORDER);
             useAutopilotStore.getState().end(HOLIDAY.path, "suggest-1");
         });
 

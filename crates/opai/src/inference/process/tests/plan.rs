@@ -267,3 +267,23 @@ fn every_scale_a_user_can_ask_for_is_covered_by_a_pass_sequence() {
 fn an_empty_chain_plans_nothing_rather_than_being_refused() {
     assert!(plan::<Fake>(&[]).unwrap().is_empty());
 }
+
+#[test]
+fn a_chain_is_put_into_the_apply_order_before_it_is_planned() {
+    // Out of order: the upscale would move the faces a recovery after it restores. The run order is the family's,
+    // not the caller's, so both listings ask for one result.
+    let recovery = crate::models::FaceRecovery::santorini(FloatPrecision::Fp32, crate::models::Faces::empty());
+    let denoise = crate::models::Denoise::stockholm(FloatPrecision::Fp32, crate::models::Strength::clamped(1.0));
+
+    let given = [kyoto(2.0), recovery.clone(), denoise.clone()];
+    assert_eq!(&*in_apply_order(&given), [denoise.clone(), recovery.clone(), kyoto(2.0)]);
+
+    // A chain already in order is borrowed rather than copied, which is what keeps its cache keys the ones it has
+    // always had.
+    let ordered = [denoise, recovery, kyoto(2.0)];
+    assert!(matches!(in_apply_order(&ordered), std::borrow::Cow::Borrowed(_)));
+
+    // Operations of one family keep the order they were given in.
+    let two = [kyoto(4.0), kyoto(2.0)];
+    assert_eq!(&*in_apply_order(&two), two);
+}

@@ -1,10 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { RotateCcw, TriangleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { revealLog } from "@/ipc/logs";
-import { report, reportCrash } from "@/lib/report";
+import { showLogs } from "@/lib/logs";
+import { reportCrash } from "@/lib/report";
 
 type State = {
     /** What was thrown, once something has been. Boxed so that a thrown `undefined` still counts. */
@@ -49,18 +48,8 @@ const describe = (error: unknown) => (error instanceof Error ? `${error.name}: $
  * What the window shows once it could not draw itself: what happened, the error's text, Reload, and
  * Show logs - the crash has just been written there.
  */
-export const RecoveryScreen = ({ error }: { error: unknown }) => {
+const RecoveryScreen = ({ error }: { error: unknown }) => {
     const { t } = useTranslation();
-
-    const showLogs = async () => {
-        try {
-            await revealLog();
-        } catch (failure) {
-            // As the settings dialog's Show logs does: the reason to the log, a sentence to the user.
-            report("showing the log file failed", failure);
-            toast.error(t("errors.showLogsFailed"));
-        }
-    };
 
     return (
         // A drag region, because the title bar is overlaid on the content and the navbar that is the
@@ -96,7 +85,7 @@ export const RecoveryScreen = ({ error }: { error: unknown }) => {
                 <div className="mt-5 flex items-center gap-3 border-t px-4 py-3">
                     <div className="flex-1" />
 
-                    <Button variant="secondary" onClick={() => void showLogs()}>
+                    <Button variant="secondary" onClick={() => void showLogs(t)}>
                         {t("settings.app.logs.button")}
                     </Button>
 

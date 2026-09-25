@@ -9,6 +9,7 @@
 // it. So the commands are named through their own module there — `images::files::open_images` — and everything else
 // through the re-exports below.
 mod crop;
+mod decoded;
 pub(crate) mod files;
 mod renditions;
 mod serve;

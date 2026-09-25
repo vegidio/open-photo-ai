@@ -119,6 +119,7 @@ pub(crate) mod filter;
 pub(crate) mod light_adjustment;
 pub(crate) mod operation;
 pub(crate) mod precision;
+mod quantized;
 pub(crate) mod scale;
 pub(crate) mod sharpen;
 pub(crate) mod simple;
@@ -197,5 +198,95 @@ mod tests {
             assert!(!tag.contains('_'), "the cache tag {tag} is spelled the way an artifact name is");
             assert!(!names.contains(&tag), "the cache tag {tag} is also a published artifact name");
         }
+    }
+
+    #[test]
+    fn the_quantized_parameters_keep_their_rendered_and_serialized_spellings() {
+        // Pinned as literals across all four bounded parameters: the rendering is what every cache tag carrying one
+        // spells, and the serialized number is what a front end and a persisted setting read back, so a change to
+        // either invalidates cached images or saved settings rather than failing loudly.
+        fn json(value: &impl serde::Serialize) -> String {
+            serde_json::to_string(value).expect("a bounded parameter serializes")
+        }
+
+        let pins = |display: String, json: String, expected: (&str, &str)| {
+            assert_eq!((display.as_str(), json.as_str()), expected);
+        };
+
+        for (value, expected) in [
+            (1.0, ("1", "1.0")),
+            (1.5, ("1.5", "1.5")),
+            (1.25, ("1.25", "1.25")),
+            (1.666_61, ("1.667", "1.667")),
+            (2.05, ("2.05", "2.05")),
+            (8.0, ("8", "8.0")),
+        ] {
+            let scale = Scale::new(value).expect("in range");
+            pins(scale.to_string(), json(&scale), expected);
+        }
+
+        for (value, expected) in [
+            (0.0, ("0", "0.0")),
+            (0.001, ("0.001", "0.001")),
+            (0.5, ("0.5", "0.5")),
+            (1.0, ("1", "1.0")),
+            (2.25, ("2.25", "2.25")),
+            (1.234_56, ("1.235", "1.235")),
+            (3.0, ("3", "3.0")),
+        ] {
+            let strength = Strength::new(value).expect("in range");
+            pins(strength.to_string(), json(&strength), expected);
+        }
+
+        for (value, expected) in [
+            (-1.0, ("-1", "-1.0")),
+            (-0.5, ("-0.5", "-0.5")),
+            (-0.35, ("-0.35", "-0.35")),
+            (-0.001, ("-0.001", "-0.001")),
+            (-0.0, ("0", "0.0")),
+            (0.0, ("0", "0.0")),
+            (0.123_41, ("0.123", "0.123")),
+            (0.1, ("0.1", "0.1")),
+            (1.0, ("1", "1.0")),
+        ] {
+            let bias = Bias::new(value).expect("in range");
+            pins(bias.to_string(), json(&bias), expected);
+        }
+
+        for (value, expected) in [
+            (0.0, ("0.000", "0.0")),
+            (0.05, ("0.050", "0.05")),
+            (0.5, ("0.500", "0.5")),
+            (0.123_456, ("0.123", "0.123")),
+            (1.0, ("1.000", "1.0")),
+        ] {
+            let fidelity = Fidelity::new(value).expect("in range");
+            pins(fidelity.to_string(), json(&fidelity), expected);
+        }
+
+        // And as the cache tags they end up in, one per parameter letter.
+        let strength = Strength::new(0.25).expect("in range");
+        let bias = Bias::new(-0.35).expect("in range");
+        let tags = [
+            Upscale::tokyo(FloatPrecision::Fp32, Scale::new(2.5).expect("in range")).cache_tag(),
+            Denoise::stockholm(FloatPrecision::Fp16, strength).cache_tag(),
+            Sharpen::moscow(FloatPrecision::Fp32, strength).cache_tag(),
+            LightAdjustment::paris(FloatPrecision::Fp32, bias).cache_tag(),
+            ColorBalance::rio(FloatPrecision::Fp16, bias).cache_tag(),
+            FaceRecovery::athens(FloatPrecision::Fp32, Faces::empty(), Fidelity::new(0.05).expect("in range"))
+                .cache_tag(),
+        ];
+
+        assert_eq!(
+            tags,
+            [
+                "up-tokyo-fp32-s2.5",
+                "dn-stockholm-fp16-t0.25",
+                "sh-moscow-fp32-t0.25",
+                "la-paris-fp32-b-0.35",
+                "cb-rio-fp16-b-0.35",
+                "fr-athens-fp32-w0.050-f0",
+            ]
+        );
     }
 }

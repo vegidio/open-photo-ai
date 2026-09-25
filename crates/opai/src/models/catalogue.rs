@@ -72,6 +72,14 @@ pub enum ParameterKind {
         min: f64,
         /// The highest value that will be accepted.
         max: f64,
+        /// The value a newly added enhancement starts at, before a user touches the control. Always inside
+        /// `min..=max`.
+        ///
+        /// Published rather than left to each front end, so two front ends start one enhancement at one value and
+        /// neither restates a number of its own beside the bounds it already reads from here. Not what
+        /// [`ParameterValues::new`](super::build::ParameterValues::new) holds: that one is the *neutral* value a
+        /// caller that forgot a parameter falls back to, and a newly added enhancement is meant to do something.
+        default: f64,
     },
     /// A set of faces, supplied by the result of a detection run rather than by a control.
     ///
@@ -99,22 +107,57 @@ pub struct ParameterEntry {
 pub struct FamilyEntry {
     /// Which family this describes.
     pub family: Family,
+    /// Where this family's operation sits in a chain — its index in [`Family::APPLY_ORDER`] — or `None` for
+    /// detection, which is never in one. **Not serialized at all** where it is `None`.
+    ///
+    /// Published so a front end draws a stack in the order it will run rather than in an order of its own:
+    /// [`Opai::process`](crate::Opai::process) puts every chain into this order whatever order it is given, and a list
+    /// that disagreed with it would show a user one sequence while another ran. It is **not** the order entries are
+    /// listed in here, which is a presentation decision of its own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<usize>,
     /// The variants available, in the order a chooser should offer them, each with the parameters it takes.
     pub variants: Vec<VariantEntry>,
 }
 
+// The four starting values, each the reference's own. They are presentation defaults the library publishes so no front
+// end holds a copy: `defaultAmount` is 1 for denoise and sharpen and 0.5 for light adjustment and colour balance, and
+// the reference's `athens.go` fixes the fidelity at its maximum.
+
+/// What a new denoise or sharpen starts at: the model's own output, neither weakened nor amplified.
+const STRENGTH_DEFAULT: f64 = 1.0;
+
+/// What a new light adjustment or colour balance starts at: halfway to the model's own output, in the positive
+/// direction.
+const BIAS_DEFAULT: f64 = 0.5;
+
+/// What a new upscale starts at **before the photograph is measured**: no enlargement. A front end asks
+/// [`suggested_scale`](crate::suggested_scale) for the photograph's own starting scale; this is the value for a
+/// photograph nothing is known about, where enlarging it at all would be a guess.
+const SCALE_DEFAULT: f64 = Scale::MIN;
+
+/// What a new Athens starts at: maximum fidelity, the value the reference fixes and the one this library's own
+/// [`Fidelity::MAXIMUM`] names.
+const FIDELITY_DEFAULT: f64 = Fidelity::MAX;
+
 /// The strength denoise and sharpen take, from the same constants `Strength::new` enforces.
-pub(crate) const STRENGTH_PARAMETER: [ParameterEntry; 1] =
-    [ParameterEntry { name: Strength::NAME, kind: ParameterKind::Range { min: Strength::MIN, max: Strength::MAX } }];
+pub(crate) const STRENGTH_PARAMETER: [ParameterEntry; 1] = [ParameterEntry {
+    name: Strength::NAME,
+    kind: ParameterKind::Range { min: Strength::MIN, max: Strength::MAX, default: STRENGTH_DEFAULT },
+}];
 
 /// The bias light adjustment and colour balance take, from the same constants `Bias::new` enforces.
-pub(crate) const BIAS_PARAMETER: [ParameterEntry; 1] =
-    [ParameterEntry { name: Bias::NAME, kind: ParameterKind::Range { min: Bias::MIN, max: Bias::MAX } }];
+pub(crate) const BIAS_PARAMETER: [ParameterEntry; 1] = [ParameterEntry {
+    name: Bias::NAME,
+    kind: ParameterKind::Range { min: Bias::MIN, max: Bias::MAX, default: BIAS_DEFAULT },
+}];
 
 /// The scale upscale takes, from the same constants `Scale::new` enforces, so a control built from this cannot offer
 /// a scale that constructing one would refuse.
-pub(crate) const SCALE_PARAMETER: [ParameterEntry; 1] =
-    [ParameterEntry { name: Scale::NAME, kind: ParameterKind::Range { min: Scale::MIN, max: Scale::MAX } }];
+pub(crate) const SCALE_PARAMETER: [ParameterEntry; 1] = [ParameterEntry {
+    name: Scale::NAME,
+    kind: ParameterKind::Range { min: Scale::MIN, max: Scale::MAX, default: SCALE_DEFAULT },
+}];
 
 /// What Santorini takes: the faces, and nothing a control can set.
 pub(crate) const FACES_PARAMETER: [ParameterEntry; 1] =
@@ -124,7 +167,10 @@ pub(crate) const FACES_PARAMETER: [ParameterEntry; 1] =
 /// in the library, and the reason `parameters` sits on the variant rather than on the family.
 pub(crate) const FACES_AND_FIDELITY_PARAMETERS: [ParameterEntry; 2] = [
     ParameterEntry { name: FACES_PARAMETER_NAME, kind: ParameterKind::Faces },
-    ParameterEntry { name: Fidelity::NAME, kind: ParameterKind::Range { min: Fidelity::MIN, max: Fidelity::MAX } },
+    ParameterEntry {
+        name: Fidelity::NAME,
+        kind: ParameterKind::Range { min: Fidelity::MIN, max: Fidelity::MAX, default: FIDELITY_DEFAULT },
+    },
 ];
 
 /// How the set of faces a face-recovery run takes is named.
@@ -172,6 +218,7 @@ pub fn catalogue() -> &'static [FamilyEntry] {
 fn simple_family(family: Family, rows: &[SimpleVariant]) -> FamilyEntry {
     FamilyEntry {
         family,
+        order: family.applied_at(),
         variants: rows
             .iter()
             .map(|row| VariantEntry {
@@ -194,6 +241,7 @@ fn simple_family(family: Family, rows: &[SimpleVariant]) -> FamilyEntry {
 fn upscale_family() -> FamilyEntry {
     FamilyEntry {
         family: Family::Upscale,
+        order: Family::Upscale.applied_at(),
         variants: upscale::MODELS
             .iter()
             .map(|model| VariantEntry {
@@ -274,7 +322,7 @@ mod tests {
             .parameters
             .iter()
             .map(|entry| match entry.kind {
-                ParameterKind::Range { min, max } => (entry.name, min, max),
+                ParameterKind::Range { min, max, .. } => (entry.name, min, max),
                 ParameterKind::Faces => panic!("{} is not a range", entry.name),
             })
             .collect()
@@ -290,6 +338,18 @@ mod tests {
                 })
             })
             .collect()
+    }
+
+    #[test]
+    fn every_family_publishes_where_it_sits_in_a_chain_and_detection_publishes_nothing() {
+        for entry in catalogue() {
+            assert_eq!(entry.order, entry.family.applied_at(), "{:?}", entry.family);
+        }
+
+        let mut ordered: Vec<_> = catalogue().iter().filter_map(|entry| Some((entry.order?, entry.family))).collect();
+        ordered.sort_unstable_by_key(|(order, _)| *order);
+
+        assert_eq!(ordered.into_iter().map(|(_, family)| family).collect::<Vec<_>>(), Family::APPLY_ORDER);
     }
 
     #[test]
@@ -335,7 +395,7 @@ mod tests {
         for (family, codename, parameter) in every_published_parameter() {
             // A parameter that is not a control has no range to check, and nothing enforces one: what it publishes
             // is that another operation's output supplies it. See `ParameterKind::Faces`.
-            let ParameterKind::Range { min: published_min, max: published_max } = parameter.kind else {
+            let ParameterKind::Range { min: published_min, max: published_max, .. } = parameter.kind else {
                 continue;
             };
 
@@ -561,7 +621,10 @@ mod tests {
         // 1, from the same constants `Fidelity::new` enforces.
         assert_eq!(
             variant_parameters(Family::FaceRecovery, "athens"),
-            vec![("faces", ParameterKind::Faces), ("fidelity", ParameterKind::Range { min: 0.0, max: 1.0 }),]
+            vec![
+                ("faces", ParameterKind::Faces),
+                ("fidelity", ParameterKind::Range { min: 0.0, max: 1.0, default: 1.0 }),
+            ]
         );
         assert_eq!(variant_parameters(Family::FaceRecovery, "santorini"), vec![("faces", ParameterKind::Faces)]);
 
@@ -579,7 +642,7 @@ mod tests {
         // not a range at all — which is what `ParameterKind` exists to say.
         for (family, codename, parameter) in every_published_parameter() {
             match parameter.kind {
-                ParameterKind::Range { min, max } => {
+                ParameterKind::Range { min, max, .. } => {
                     assert!(min < max, "{family:?}'s {codename} published an empty range for {}", parameter.name)
                 }
                 ParameterKind::Faces => assert_eq!(
@@ -589,6 +652,35 @@ mod tests {
                 ),
             }
         }
+    }
+
+    #[test]
+    fn every_published_default_is_a_value_the_range_accepts_and_the_one_the_reference_starts_at() {
+        for (family, codename, parameter) in every_published_parameter() {
+            if let ParameterKind::Range { min, max, default } = parameter.kind {
+                assert!(
+                    (min..=max).contains(&default),
+                    "{family:?}'s {codename} starts {} outside its range",
+                    parameter.name
+                );
+            }
+        }
+
+        // Pinned as literals: these are what a new enhancement starts at in every front end.
+        let defaults: Vec<(&str, f64)> = [Family::Denoise, Family::Sharpen, Family::LightAdjustment, Family::Upscale]
+            .into_iter()
+            .chain([Family::FaceRecovery])
+            .flat_map(|family| family_entry(family).variants[0].parameters.iter())
+            .filter_map(|parameter| match parameter.kind {
+                ParameterKind::Range { default, .. } => Some((parameter.name, default)),
+                ParameterKind::Faces => None,
+            })
+            .collect();
+
+        assert_eq!(
+            defaults,
+            [("strength", 1.0), ("strength", 1.0), ("bias", 0.5), ("scale", 1.0), ("fidelity", 1.0)]
+        );
     }
 
     #[test]

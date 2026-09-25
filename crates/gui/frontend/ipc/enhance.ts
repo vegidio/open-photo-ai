@@ -47,11 +47,14 @@ const PROGRESS_EVENT = "enhance:progress";
 export type Processor = "auto" | keyof SupportedProviders;
 
 /**
- * One operation to run, as the window names it.
+ * One operation to run, as the window names it: a catalogue row, a precision, and the values of the row's
+ * parameters.
  *
- * Discriminated by `family`, spelled as Rust's `Family` spells it, carrying the model's codename and
- * the precision to run it at - both of which come straight from the `catalogue` command, so a chooser
- * built from the catalogue sends back exactly what it was given.
+ * **Spelled in the catalogue's own vocabulary**, so a chooser and a control built from the catalogue send
+ * back exactly what they read: `family` as Rust's `Family` spells it, `codename` and `precision` as
+ * `VariantEntry` publishes them, and each range parameter under the `ParameterEntry.name` it is published
+ * with. Rust matches a name onto the library's own bounded type (`ParameterValues::set`), so neither side
+ * keeps a table of which family takes which parameter - the row says so.
  *
  * **Not a composed string.** The Wails application builds `up_kyoto_2x_fp32` here and parses it back
  * in Go, and its own comment records the cost: the string is a contract in three places at once. None
@@ -59,122 +62,54 @@ export type Processor = "auto" | keyof SupportedProviders;
  * itself, and the pixels travel over the `opai://` scheme rather than through a cache of this side's
  * own.
  *
- * **A union, one member per enhancement the window presents**, rather than one shape with optional
- * properties: each family's own parameters sit inside its member, which is why the scale is part of
- * `upscale` and the faces part of `face_recovery` rather than both hanging off `codename`. Detection has
- * no member: the window asks for faces through its own command, never as an operation in a chain.
+ * Detection is not a family an operation can name: the window asks for faces through its own command,
+ * never as an operation in a chain.
  */
-export type Operation =
-    | {
-          family: "upscale";
-          /** Which model, as `VariantEntry.codename` publishes it. */
-          codename: string;
-          /** Which build of it, as `VariantEntry.precisions` publishes them. */
-          precision: Precision;
-          /**
-           * How much larger the result is.
-           *
-           * Brought inside the range the catalogue publishes rather than refused: the control that
-           * drives it is bounded to the same range, so a value outside it can only arrive through a
-           * fault, and a refused enhancement is not what a user should see for one. The fault stays
-           * in the Rust log.
-           */
-          scale: number;
-      }
-    | {
-          family: "denoise";
-          /** Which model, as `VariantEntry.codename` publishes it. */
-          codename: string;
-          /** Which build of it, as `VariantEntry.precisions` publishes them. */
-          precision: Precision;
-          /**
-           * How strongly the model's output is applied: the library's unit value, 0..3, where 0 leaves the
-           * photograph unchanged, 1 is the model's own output and above 1 amplifies it - not the percentage
-           * the window shows. Converted and clamped as a bias is.
-           */
-          strength: number;
-      }
-    | {
-          family: "face_recovery";
-          /** Which model, as `VariantEntry.codename` publishes it. */
-          codename: string;
-          /** Which build of it, as `VariantEntry.precisions` publishes them. */
-          precision: Precision;
-          /**
-           * The faces to restore, as the detector found them in the photograph **as it is framed**.
-           *
-           * **Empty in the stack, filled at the boundary.** `stores/enhancements.ts` holds what the
-           * user chose, and a user chooses a model rather than a set of faces: the faces are a
-           * property of the pixels and change when the framing does, so putting them in the stack
-           * would mean every framing change rewrote every photograph's stack. `useEnhancementRun`
-           * puts them in on the way to {@link enhance}, which is the one place they are resolved.
-           *
-           * **The order matters.** Rust's `Faces` keeps the order it is given and folds an
-           * order-sensitive signature of the bounding boxes into the run cache tag, so a reordered
-           * selection asks for a different result rather than the same one.
-           *
-           * **There is no fidelity beside this.** The window runs every face recovery at maximum
-           * fidelity and offers no control for it, so a field here would describe a choice the user
-           * cannot make. It is fixed in `crates/gui/src/enhance/operation.rs`.
-           */
-          faces: Face[];
-      }
-    | {
-          family: "light_adjustment";
-          /** Which model, as `VariantEntry.codename` publishes it. */
-          codename: string;
-          /** Which build of it, as `VariantEntry.precisions` publishes them. */
-          precision: Precision;
-          /**
-           * Which way, and how far, the photograph is shifted: the library's unit value, -1..1 about a
-           * neutral 0, not the percentage the window shows.
-           *
-           * Unit rather than percent so the catalogue's published range and the range the wire accepts are
-           * the same numbers; the percentage is the options panel's presentation, converted there. Brought
-           * inside the range rather than refused, for the reason the scale is.
-           */
-          bias: number;
-      }
-    | {
-          family: "color_balance";
-          /** Which model, as `VariantEntry.codename` publishes it. */
-          codename: string;
-          /** Which build of it, as `VariantEntry.precisions` publishes them. */
-          precision: Precision;
-          /**
-           * Which way, and how far, the photograph's colours are shifted: the library's unit value, -1..1
-           * about a neutral 0, not the percentage the window shows - the same `opai::Bias` a light
-           * adjustment carries, converted and clamped the same way.
-           */
-          bias: number;
-      }
-    | {
-          family: "sharpen";
-          /** Which model, as `VariantEntry.codename` publishes it. */
-          codename: string;
-          /** Which build of it, as `VariantEntry.precisions` publishes them. */
-          precision: Precision;
-          /**
-           * How strongly the model's output is applied: the library's unit value, 0..3, where 0 leaves the
-           * photograph unchanged, 1 is the model's own output and above 1 amplifies it - the same
-           * `opai::Strength` a denoise carries, converted and clamped the same way.
-           */
-          strength: number;
-      }
-    | {
-          /**
-           * Carries no value: colorization takes no parameter, so a field here would describe a choice the
-           * user cannot make.
-           */
-          family: "colorization";
-          /** Which model, as `VariantEntry.codename` publishes it. */
-          codename: string;
-          /** Which build of it, as `VariantEntry.precisions` publishes them. */
-          precision: Precision;
-      };
+export type Operation = {
+    family: Exclude<Family, "detection">;
+    /** Which model, as `VariantEntry.codename` publishes it. */
+    codename: string;
+    /** Which build of it, as `VariantEntry.precisions` publishes them. */
+    precision: Precision;
+    /**
+     * Each range parameter's value, by the name the catalogue publishes it under - `scale`, `strength`,
+     * `bias`, `fidelity` - in the library's own unit rather than the percentage a control shows.
+     *
+     * **Starts at the catalogue's published defaults** (`newOperation` in `lib/enhancements.ts`), and an
+     * upscale's scale at the photograph's own. Brought inside the published range rather than refused on
+     * the Rust side: the control that drives a value is bounded to the same range, so one outside it can
+     * only arrive through a fault, and a refused enhancement is not what a user should see for one. The
+     * fault stays in the Rust log.
+     *
+     * Empty for a family that takes none.
+     */
+    parameters: Record<string, number>;
+    /**
+     * Which of the faces the run finds a face recovery restores - a face recovery's only.
+     *
+     * **Not the faces.** Rust finds them inside the run it is asked for, so a face recovery is one
+     * request with one progress stream and one stop; this says which of them to keep. **Absent in the
+     * stack, filled at the boundary**: the stack holds what the user chose about the enhancement, and the
+     * choice among faces is kept beside the faces in `stores/faces.ts`. `withChoice` in `lib/faces.ts` puts
+     * it in on the way to {@link enhance}. A recovery that carries none restores every face the default
+     * restores.
+     */
+    faces?: FaceChoice;
+};
+
+/**
+ * Which of the faces found a face recovery restores: the user's own exceptions to the default, by the key
+ * Rust publishes on each face.
+ *
+ * The default is the face's own `restorable`. `skipped` holds the faces the user turned off although the
+ * default would restore them, and `restored` the ones turned on although it would not. A face in neither
+ * follows the default - which is why a framing nobody has been at is decided by size, and one returned to
+ * finds the user's choices where they were left. Rust's `FaceChoice` in `crates/gui/src/faces.rs`.
+ */
+export type FaceChoice = { skipped: string[]; restored: string[] };
 
 /** What a report says is happening, as Rust's `Stage` spells it. */
-export type Stage = "installing" | "running";
+type Stage = "installing" | "running";
 
 /**
  * One report about a run in flight.
@@ -243,6 +178,17 @@ export type Enhancement =
           identity: string;
           width: number;
           height: number;
+          /**
+           * Every face found in the photograph as it is framed, for a chain carrying a face recovery - the
+           * run finds them itself. What the window counts and offers the picker over, chosen or not.
+           * Absent for a chain that looked for none, and for one whose detection failed.
+           */
+          faces?: Face[];
+          /**
+           * Why the faces could not be found, where they could not: the core library's own sentence,
+           * untranslated. The recovery then restored none and the rest of the chain ran anyway.
+           */
+          facesError?: string;
       }
     /**
      * The run was stopped - by {@link cancelEnhance}, or by a later run displacing it.
@@ -255,9 +201,10 @@ export type Enhancement =
     | { outcome: "stopped" };
 
 /** Why an operation could not be run, as Rust's `UnknownOperation` tags it. */
-export type UnknownOperation =
+type UnknownOperation =
     | { kind: "model"; family: string; codename: string }
-    | { kind: "precision"; codename: string; precision: Precision };
+    | { kind: "precision"; codename: string; precision: Precision }
+    | { kind: "parameter"; name: string };
 
 /**
  * Why the `enhance` command rejected.

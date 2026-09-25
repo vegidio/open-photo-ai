@@ -6,7 +6,7 @@
 //! Opai::suggest(&Picture, Option<&[Family]>, Option<ExecuteOptions>) -> Suggestions
 //!   |
 //!   +-- suggest::<B>()        this module's body, not a recursion:
-//!         |                   area -> scope -> geometry -> pixels -> face, then Family::ALL order
+//!         |                   area -> scope -> geometry -> pixels -> face, then Family::APPLY_ORDER
 //!         +-- Scope           the families asked for, and so which of the reads below run
 //!         +-- geometry()      two integers; installs nothing
 //!         +-- pixels()        two bounded passes in one blocking task; installs nothing
@@ -17,7 +17,7 @@
 //!         |     +-- blocks    at most 256 full-resolution 64x64 blocks, any touching transparency skipped
 //!         |           +-- noise      Immerkaer's estimate over the flattest blocks -> one score
 //!         |           +-- sharpness  the Crete-Roffet blur effect at the sharpest blocks -> one score
-//!         +-- face()          Opai::execute(Detection::newyork(Fp32)) -> Faces
+//!         +-- face()          Opai::execute(Detection::for_face_recovery()) -> Faces
 //! ```
 
 // An analysis is the first thing that happens to a picture a user just opened, and it happens unprompted. That shapes
@@ -66,7 +66,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::InferenceError;
 use crate::image::Picture;
 use crate::inference::execute::{ExecuteOptions, Executed, execute};
-use crate::models::{Analysis, Detection, Family, FloatPrecision, Scale};
+use crate::models::{Analysis, Detection, Face, Family, Scale};
 use crate::pipeline::Backend;
 use crate::task::spawn_blocking;
 use crate::telemetry::unit::{self, Outcome, Unit, unit_span};
@@ -107,7 +107,9 @@ pub enum Suggestion {
     /// The photograph shows visible grain, in its brightness or in its colour.
     Denoise,
 
-    /// The photograph has at least one detectable face in it.
+    /// The photograph has at least one face in it that a face recovery can restore — see [`Face::restorable`].
+    ///
+    /// [`Face::restorable`]: crate::models::Face::restorable
     FaceRecovery,
 
     /// The photograph carries no colour at all: it is a grayscale image.
@@ -168,7 +170,7 @@ pub struct Suggestions {
     // Deliberately not `#[non_exhaustive]`, for the reason `Executed` is not: the attribute would bar an external crate
     // from destructuring this at all, including the `let Suggestions { suggested, .. } = ..` form that is how a caller
     // takes the half it wants.
-    /// What the photograph calls for, in [`Family::ALL`] order — the one order of families this library names.
+    /// What the photograph calls for, in [`Family::APPLY_ORDER`] — the order a chain applies them in.
     ///
     /// Empty is a legitimate answer rather than a refusal: a photograph that needs no work is the conclusion, not
     /// the absence of one.
@@ -190,13 +192,18 @@ const UPSCALE_4X_MAX_PIXELS: u64 = 1_048_576;
 /// The largest image an analysis suggests enlarging **twofold**: 4 MP, inclusive. Above it, nothing.
 const UPSCALE_2X_MAX_PIXELS: u64 = 4_194_304;
 
-/// What the image's size alone says about enlarging it, or `None` where it is already big enough.
+/// The factor a photograph of `width` x `height` is worth enlarging by, or `None` where it is already big enough.
 ///
-/// The cheapest signal there is: it reads two integers and installs nothing.
+/// **4x up to 1 MP, 2x up to 4 MP, and nothing above** — both bounds inclusive. The one ladder a front end reads,
+/// both through an analysis's [`Suggestion::Upscale`] and directly, for the scale an upscale the user adds by hand
+/// arrives at: the two then cannot disagree about what the same photograph calls for.
 ///
-/// An image with no area is **not** this function's to refuse: the analysis returns before reaching it. See
-/// [`suggest`].
-fn geometry(width: u32, height: u32) -> Option<Suggestion> {
+/// Measured on whatever size the caller will actually upscale, which for a framed photograph is the **cut**, not the
+/// file: the analysis measures the framed picture it was handed, and a front end asks with the framed dimensions.
+///
+/// The cheapest question there is: it reads two integers and installs nothing. A size with no area answers 4x, the
+/// smallest bucket; an analysis never asks about one, because it returns before reaching this — see [`suggest`].
+pub fn suggested_scale(width: u32, height: u32) -> Option<Scale> {
     // Widened before multiplying: two `u32` extents multiply past `u32` at 65,536 x 65,536 — well inside what a
     // stitched panorama reaches — and a pixel count that wrapped would tell a very large photograph it was very small.
     let pixels = u64::from(width) * u64::from(height);
@@ -205,7 +212,8 @@ fn geometry(width: u32, height: u32) -> Option<Suggestion> {
     // upscale, against one bound of 4 MP; TypeScript's `defaultUpscaleScale` decides *how much*, against 1 MP and then
     // 4 MP, and returns a scale of 1 above the second — the same "no" the Go half already said, spelled as a factor
     // that changes nothing. It is one decision read off one number, and a second front end that had to restate the
-    // TypeScript half is exactly how two front ends come to disagree about what the same photograph needs.
+    // TypeScript half is exactly how two front ends come to disagree about what the same photograph needs. So it is
+    // public, and this application's front end asks it rather than restating it.
     let scale = if pixels <= UPSCALE_4X_MAX_PIXELS {
         4.0
     } else if pixels <= UPSCALE_2X_MAX_PIXELS {
@@ -216,7 +224,16 @@ fn geometry(width: u32, height: u32) -> Option<Suggestion> {
 
     // `clamped` rather than `new`: both factors are literals well inside `Scale`'s range, so the constructor that
     // returns a `Result` would hand back an error this function has nothing to do with and no caller could act on.
-    Some(Suggestion::Upscale { scale: Scale::clamped(scale) })
+    Some(Scale::clamped(scale))
+}
+
+/// What the image's size alone says about enlarging it, or `None` where it is already big enough: the analysis's
+/// reading of [`suggested_scale`].
+///
+/// An image with no area is **not** this function's to refuse: the analysis returns before reaching it. See
+/// [`suggest`].
+fn geometry(width: u32, height: u32) -> Option<Suggestion> {
+    suggested_scale(width, height).map(|scale| Suggestion::Upscale { scale })
 }
 
 /// What the two pixel passes measured, and so what the light, colour, monochrome, noise and sharpness signals conclude.
@@ -250,11 +267,19 @@ impl PixelSignals {
         let sampler = Sampler::new(source);
         let (width, height) = (source.width(), source.height());
 
-        Self::of(
-            scope.needs_pass().then(|| pass::read_from(&sampler, width, height)).as_ref(),
-            scope.needs_blocks().then(|| blocks::read_from(&sampler, width, height)).as_ref(),
-            u64::from(width) * u64::from(height),
-        )
+        // The two passes share nothing but the sampler they read, so the block pass runs on a scoped thread beside the
+        // strided one.
+        let (pass, blocks) = std::thread::scope(|threads| {
+            let blocks = scope.needs_blocks().then(|| threads.spawn(|| blocks::read_from(&sampler, width, height)));
+            let pass = scope.needs_pass().then(|| pass::read_from(&sampler, width, height));
+
+            (
+                pass,
+                blocks.map(|handle| handle.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))),
+            )
+        });
+
+        Self::of(pass.as_ref(), blocks.as_ref(), u64::from(width) * u64::from(height))
     }
 
     fn of(pass: Option<&Pass>, blocks: Option<&Blocks>, pixels: u64) -> Self {
@@ -346,7 +371,11 @@ enum Unread {
     Reported(InferenceError),
 }
 
-/// Whether the photograph has anyone in it, by detecting the faces in it.
+/// Whether the photograph has anyone in it worth restoring, by detecting the faces in it.
+///
+/// A face too large to restore — see [`Face::restorable`](crate::models::Face::restorable) — does not count: a face
+/// recovery over only such faces would restore nothing by default, and suggesting one would add a row that does
+/// nothing. The rule lives here rather than in a front end, so every front end's suggestion means the same thing.
 ///
 /// `options` is the caller's, passed through unchanged: the provider to detect on, progress for the one run this
 /// makes, the cancellation the classification below rests on, and the cache flag a benchmark needs to defeat.
@@ -368,16 +397,16 @@ async fn face<B: Backend>(
     // and drops it before returning, so `Opai::release_sessions` has nothing outstanding from an analysis and an
     // analysis cannot outlive the session it ran on.
     //
-    // FP32, as the reference chooses: there is no caller's precision here, because autopilot runs before any
-    // face-recovery operation exists to take one from. It is the precision the operation this suggestion turns into
-    // will be built at, since a suggested enhancement is added at its model's HD tier; detecting at anything else would
-    // download a second detection graph to answer a question the first one already answered.
-    let detection: Analysis = Detection::newyork(FloatPrecision::Fp32);
+    // The detection every face-recovery caller shares, rather than a precision chosen here: autopilot runs before any
+    // face-recovery operation exists to take one from, and detecting with anything else would download a second
+    // detection graph to answer a question the first one already answered. See `Detection::for_face_recovery`.
+    let detection: Analysis = Detection::for_face_recovery();
 
     // An empty set is a legitimate finding rather than a signal that could not be read — which is exactly the
-    // distinction `execute` keeps by refusing to stand an empty `Faces` in for an error.
+    // distinction `execute` keeps by refusing to stand an empty `Faces` in for an error. So is a set of faces that are
+    // all too large to restore.
     match execute::<B, Analysis>(backend, cache, source, &detection, Some(options)).await {
-        Ok(Executed { value: faces, .. }) => Ok((!faces.is_empty()).then_some(Suggestion::FaceRecovery)),
+        Ok(Executed { value: faces, .. }) => Ok(faces.iter().any(Face::restorable).then_some(Suggestion::FaceRecovery)),
         Err(error @ (InferenceError::Cancelled | InferenceError::Shutdown)) => Err(Unread::Withdrawn(error)),
         Err(error) => Err(Unread::Reported(error)),
     }
@@ -386,7 +415,7 @@ async fn face<B: Backend>(
 /// Analyses `source` and hands back what it calls for: the body of [`Opai::suggest`](crate::Opai::suggest).
 ///
 /// An image with no area is told it needs nothing, and nothing is installed for it. The suggestions are emitted in
-/// [`Family::ALL`] order, the one order of families this library names.
+/// [`Family::APPLY_ORDER`], the order a chain applies them in.
 ///
 /// `families` narrows the analysis: see [`Scope`]. A read no family in it needs is not made, a family outside it is
 /// never suggested, and a signal that was not read never makes the analysis incomplete.
@@ -474,21 +503,34 @@ async fn suggest_inner<B: Backend>(
     let mut suggested = Vec::new();
     let mut incomplete = None;
 
-    // Cheapest first: two integers and no installation. Then the pixels, which cost two bounded passes and install
-    // nothing, and only then the one signal that may have to download a model. Each runs only where the scope holds a
-    // family it serves.
+    // Cheapest first: two integers and no installation. The pixels, which cost two bounded passes and install nothing,
+    // and the face signal, which may have to download a model, then run side by side: they read the same photograph
+    // and neither waits on the other. Each runs only where the scope holds a family it serves.
     if scope.needs_geometry() {
         suggested.extend(geometry(width, height));
     }
 
-    if scope.needs_pass() || scope.needs_blocks() {
-        let signals = pixels(source, scope, &options.cancel).await?;
+    let cancel = options.cancel.clone();
+    let (signals, faced) = crate::task::join(
+        async {
+            if scope.needs_pass() || scope.needs_blocks() {
+                Some(pixels(source, scope, &cancel).await)
+            } else {
+                None
+            }
+        },
+        async { if scope.needs_face() { Some(face(backend, cache, source, options).await) } else { None } },
+    )
+    .await;
+
+    if let Some(signals) = signals {
+        let signals = signals?;
         record_measurements(source, &signals);
         suggested.extend(signals.suggestions());
     }
 
-    if scope.needs_face() {
-        match face(backend, cache, source, options).await {
+    if let Some(faced) = faced {
+        match faced {
             Ok(read) => suggested.extend(read),
             // The question was withdrawn, so nothing comes back — not the geometry suggestion already determined
             // above. The reference's `shouldFaceRecovery` turns a cancelled context into `false` and returns that
@@ -506,19 +548,14 @@ async fn suggest_inner<B: Backend>(
     suggested.retain(|suggestion| scope.includes(suggestion.family()));
 
     // The ordering is a property of the **family**, not of the sequence the signals happen to be read in. Sorting
-    // against `Family::ALL` — the one order of families this library names — is what places a signal added later
-    // without anyone having to remember where its push belongs, and the evaluation order above is a cost decision,
-    // which is a different question entirely. That this order agrees with the reference's is pinned by
-    // `the_order_suggestions_come_back_in_agrees_with_the_reference`.
+    // against `Family::APPLY_ORDER` — the order a chain runs them in, and so the order a stack built from these is
+    // drawn in — is what places a signal added later without anyone having to remember where its push belongs, and
+    // the evaluation order above is a cost decision, which is a different question entirely. That this order agrees
+    // with the reference's is pinned by `the_order_suggestions_come_back_in_agrees_with_the_reference`.
     //
-    // `position` cannot miss: `Family::ALL` is every family the library names, and `Suggestion::family` returns one
-    // of them. The fallback is written rather than an `expect` so that a sort cannot panic on a photograph.
-    suggested.sort_by_key(|suggestion| {
-        Family::ALL
-            .iter()
-            .position(|family| *family == suggestion.family())
-            .unwrap_or(Family::ALL.len())
-    });
+    // `applied_at` cannot miss: every suggestion names a family whose result is an image. The fallback is written
+    // rather than an `expect` so that a sort cannot panic on a photograph.
+    suggested.sort_by_key(|suggestion| suggestion.family().applied_at().unwrap_or(usize::MAX));
 
     Ok(Suggestions { suggested, incomplete })
 }
@@ -699,7 +736,7 @@ mod tests {
     /// never reached is the assertion, not a limitation.
     fn store_holding(source: &Picture, faces: &Faces) -> Memo {
         let memo = Memo::memory(CacheOpts::new()).expect("a memory store");
-        let detection: Analysis = Detection::newyork(FloatPrecision::Fp32);
+        let detection: Analysis = Detection::for_face_recovery();
         // Derived by the same function the read and the write both call, so a hit here is a hit for the reason a
         // repeated analysis in production is one rather than because the suite arranged a special case.
         let key = identity_of_data(source.identity(), &Subject::Analysis(detection));
@@ -817,6 +854,25 @@ mod tests {
         let read = face_signal_over(&source, &a_face()).await;
 
         assert!(matches!(read, Ok(Some(Suggestion::FaceRecovery))));
+    }
+
+    /// A group photograph whose only face fills the frame: found, and too large for a recovery to do anything but
+    /// soften, so nothing is suggested — the same answer the front end's default skip would have reached.
+    #[tokio::test]
+    async fn a_photograph_whose_every_face_is_too_large_to_restore_does_not_call_for_face_recovery() {
+        let source = picture(64, 48);
+        let large = Faces::new([Face::new(
+            Rect::new(Point::new(0.0, 0.0), Point::new(600.0, 600.0)),
+            [Point::new(0.0, 0.0); Face::LANDMARKS],
+            Confidence::new(0.97).expect("a confidence in range"),
+        )]);
+        assert!(!large.as_slice()[0].restorable(), "the fixture is meant to be too large to restore");
+
+        assert!(matches!(face_signal_over(&source, &large).await, Ok(None)));
+
+        // One restorable face among large ones is enough.
+        let mixed = Faces::new(large.iter().copied().chain(a_face().iter().copied()));
+        assert!(matches!(face_signal_over(&source, &mixed).await, Ok(Some(Suggestion::FaceRecovery))));
     }
 
     /// The spec's **"A landscape with nobody in it"** — and that the absence is a conclusion rather than a failure,
@@ -971,7 +1027,7 @@ mod tests {
         assert_eq!(backend.acquired(), ["dt_newyork_fp32"]);
 
         // Exactly what the analysis asked, asked again by the caller accepting its answer.
-        let detection: Analysis = Detection::newyork(FloatPrecision::Fp32);
+        let detection: Analysis = Detection::for_face_recovery();
         let Executed { value: faces, .. } = execute::<Fake, Analysis>(&backend, Some(&memo), &source, &detection, None)
             .await
             .expect("the faces the analysis already found");
@@ -1025,7 +1081,7 @@ mod tests {
 
     /// The spec's **"Several suggestions at once"**, pinned as an *ordering rule* rather than as a transcribed pair.
     ///
-    /// The expectation is computed by sorting the families that came back against their position in `Family::ALL`
+    /// The expectation is computed by sorting the families that came back against their `Family::APPLY_ORDER` position
     /// and comparing that with the order they actually arrived in. Written this way because the ordering is a
     /// property of the family: a signal added later is placed by the one list rather than by where its push happened
     /// to be written, and a test asserting the literal pair `[FaceRecovery, Upscale]` would keep passing while that
@@ -1041,14 +1097,9 @@ mod tests {
         assert_eq!(produced.len(), 2, "both signals should have concluded: {:?}", concluded.suggested);
 
         let mut expected = produced.clone();
-        expected.sort_by_key(|family| {
-            Family::ALL
-                .iter()
-                .position(|candidate| candidate == family)
-                .expect("every family is in the one list")
-        });
+        expected.sort_by_key(|family| family.applied_at().expect("every suggested family is applied in a chain"));
 
-        assert_eq!(produced, expected, "the suggestions did not come back in `Family::ALL` order");
+        assert_eq!(produced, expected, "the suggestions did not come back in `Family::APPLY_ORDER`");
 
         // And that the order this fixture actually exercises is a non-trivial one — the signals are evaluated
         // geometry first, so an implementation that emitted them in evaluation order would fail here.
@@ -1066,7 +1117,7 @@ mod tests {
         fixtures::grainy(&fixtures::rendered(&blurred, -2.0, fixtures::warm(1.0)), 5.0, 9)
     }
 
-    /// The pixel signals' arms are placed by the same one list: all six families come back, in `Family::ALL` order.
+    /// The pixel signals' arms are placed by the same one list: all six families come back, in `Family::APPLY_ORDER`.
     #[tokio::test]
     async fn the_pixel_signals_come_back_in_family_order_beside_the_others() {
         let source = picture_of(everything_wrong(512, 384));
@@ -1083,7 +1134,7 @@ mod tests {
                 Suggestion::Sharpen,
                 Suggestion::Upscale { scale: Scale::clamped(4.0) }
             ],
-            "the six signals did not all conclude, in `Family::ALL` order"
+            "the six signals did not all conclude, in `Family::APPLY_ORDER`"
         );
         assert!(concluded.incomplete.is_none());
     }
@@ -1309,10 +1360,8 @@ mod tests {
     /// the reference's present-and-apply order, as a checked fact.
     #[test]
     fn the_order_suggestions_come_back_in_agrees_with_the_reference() {
-        // `Family::ALL` is a *declaration* order, and its own documentation says it is deliberately not a presentation
-        // order; the chain the enhancement path runs applies operations in whatever order its caller supplies them and
-        // imposes no family order either. So there is no "the order the enhancement path applies families" in this
-        // crate to defer to — `Family::ALL` is simply the only canonical list there is, which is why the sort uses it.
+        // `Family::APPLY_ORDER` is the order the enhancement path applies families in — `Opai::process` puts every
+        // chain into it — and so the order suggestions come back in and a stack built from them is drawn in.
         //
         // The reference does have one list that is both presented and applied, because an add menu offering families
         // in one order while the pipeline ran them in another is a silent inconsistency. Its reason holds on its own
@@ -1322,7 +1371,7 @@ mod tests {
         //
         // `['dn', 'fr', 'cl', 'la', 'cb', 'sh', 'up']` in the reference's
         // `cmd/gui/frontend/src/utils/enhancement.ts`, transcribed as families. Detection is absent from it because
-        // it is not an enhancement a user adds, which is also why it is dropped from ours below.
+        // it is not an enhancement a user adds, which is also why the apply order leaves it out.
         const REFERENCE: [Family; 7] = [
             Family::Denoise,
             Family::FaceRecovery,
@@ -1333,9 +1382,11 @@ mod tests {
             Family::Upscale,
         ];
 
-        let ours: Vec<_> = Family::ALL.into_iter().filter(|family| *family != Family::Detection).collect();
-
-        assert_eq!(ours, REFERENCE, "the order suggestions come back in disagrees with the reference's");
+        assert_eq!(
+            Family::APPLY_ORDER,
+            REFERENCE,
+            "the order suggestions come back in disagrees with the reference's"
+        );
     }
 
     /// The spec's **"An analysis completes"**: the conclusion is at the default verbosity and names the families.
@@ -1911,6 +1962,20 @@ mod tests {
     #[test]
     fn one_pixel_above_four_megapixels_is_told_it_needs_nothing() {
         assert_eq!(scale_for(4_194_305), None);
+    }
+
+    #[test]
+    fn the_published_ladder_is_the_one_the_analysis_suggests_by() {
+        // A front end asks `suggested_scale` for an upscale added by hand, and reads `Suggestion::Upscale` for one the
+        // analysis added: the two must be the same answer for the same size.
+        for (width, height) in [(1, 1), (1024, 1024), (1025, 1024), (2048, 2048), (2049, 2048), (6000, 4000)] {
+            assert_eq!(
+                geometry(width, height),
+                suggested_scale(width, height).map(|scale| Suggestion::Upscale { scale }),
+                "{width}x{height}"
+            );
+        }
+        assert_eq!(suggested_scale(6000, 4000), None);
     }
 
     #[test]

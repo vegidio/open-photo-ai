@@ -26,7 +26,7 @@ const invoked = invoke as unknown as Mock;
 const listened = listen as unknown as Mock;
 
 /** One upscale, as a chooser built from the catalogue would hand it over. */
-const kyoto: Operation = { family: "upscale", codename: "kyoto", precision: "fp32", scale: 2 };
+const kyoto: Operation = { family: "upscale", codename: "kyoto", precision: "fp32", parameters: { scale: 2 } };
 
 /**
  * One framing, as the Crop/Rotate dialog will hand it over.

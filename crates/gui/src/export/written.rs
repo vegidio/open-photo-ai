@@ -9,6 +9,7 @@ use tauri::{AppHandle, State};
 
 use super::run::{ExportError, Exported};
 use crate::command::{CommandError, Ended, Traceparent, command_span, traced};
+use crate::sync::lock;
 
 /// Every path an export of this session wrote — the only files [`reveal_export`] will show.
 ///
@@ -26,19 +27,14 @@ impl Written {
     /// The path recorded is the one the answer names — the numbered name where the destination asked for was taken.
     pub(crate) fn keep(&self, answer: &Result<Exported, ExportError>) {
         if let Ok(Exported::Exported { path, .. }) = answer {
-            self.lock().insert(PathBuf::from(path));
+            lock(&self.0).insert(PathBuf::from(path));
         }
     }
 
     /// Whether an export of this session wrote this path. Compared verbatim, not canonicalized: both sides come from
     /// the same string, the one [`Exported::Exported`] answered.
     fn holds(&self, path: &Path) -> bool {
-        self.lock().contains(path)
-    }
-
-    /// What has been recorded, treating a poisoned lock as readable, for the reason `Opened::lock` gives.
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashSet<PathBuf>> {
-        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        lock(&self.0).contains(path)
     }
 }
 
@@ -104,6 +100,7 @@ mod tests {
     use tauri::Manager;
 
     use super::*;
+    use crate::enhance::EnhanceError;
 
     fn exported(path: &str) -> Result<Exported, ExportError> {
         Ok(Exported::Exported { path: path.to_string(), bytes: 42 })
@@ -129,9 +126,9 @@ mod tests {
             path: "/exports/beach-opai.png".to_string(),
             message: "permission denied".to_string(),
         }));
-        written.keep(&Err(ExportError::Enhance { message: "the chain failed".to_string() }));
+        written.keep(&Err(EnhanceError::Enhance { message: "the chain failed".to_string() }.into()));
 
-        assert!(written.lock().is_empty(), "an export that wrote nothing was recorded");
+        assert!(lock(&written.0).is_empty(), "an export that wrote nothing was recorded");
     }
 
     #[test]

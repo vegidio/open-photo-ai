@@ -417,6 +417,14 @@ async fn run_chain(
         .map_err(|failure| failure.error)
 }
 
+/// Waits for every result a run has queued for the store to be written.
+///
+/// A run hands its result back before its writes land, and a read through `RunCache` waits for them — but a test
+/// reading or overwriting the `Memo` directly goes round that, so it settles first.
+fn settled() {
+    assert!(crate::cache::settle(std::time::Duration::from_secs(60)), "the run cache's writes never landed");
+}
+
 /// A store held in memory for one test, which every cached run below shares.
 ///
 /// Memory rather than disk not to avoid the disk tier — `cache.rs` opens a real one in a temporary directory —
