@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/vegidio/go-sak/sysinfo"
-
 	"github.com/vegidio/open-photo-ai/types"
 )
 
@@ -152,5 +151,76 @@ func TestPoolOf(t *testing.T) {
 		if got := PoolOf(types.ExecutionProviderAuto); got != types.MemoryPoolHost {
 			t.Errorf("PoolOf(Auto) on darwin = %s, want host (unified memory)", got)
 		}
+	}
+}
+
+// Auto is charged to the device pool only where a device-pool provider could take it, and that is decided by the
+// GPU's vendor, not by whether it reports memory: an integrated Radeon reports its carve-out as VRAM and would
+// otherwise put a CPU-only machine on a 1 GiB device budget.
+func TestAutoIsChargedToTheDevicePoolOnlyWithAnNvidiaGPU(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("Auto is always the host pool on darwin")
+	}
+
+	tests := []struct {
+		name string
+		gpus []sysinfo.GPUInfo
+		want types.MemoryPool
+	}{
+		{"an NVIDIA card with VRAM", []sysinfo.GPUInfo{{Name: "RTX 4080", Vendor: "NVIDIA", Memory: 16384}},
+			types.MemoryPoolDevice},
+		{"an NVIDIA card identified only by name",
+			[]sysinfo.GPUInfo{{Name: "NVIDIA GeForce RTX 3060", Memory: 12288}}, types.MemoryPoolDevice},
+		{"an NVIDIA card as the Windows CIM fallback reports it: no vendor, no memory",
+			[]sysinfo.GPUInfo{{Name: "NVIDIA GeForce RTX 3060", Memory: 0}}, types.MemoryPoolHost},
+		{"an integrated Radeon beside an NVIDIA card",
+			[]sysinfo.GPUInfo{{Name: "AMD Radeon 780M", Vendor: "AMD", Memory: 16384},
+				{Name: "RTX 3050", Vendor: "NVIDIA", Memory: 6144}}, types.MemoryPoolDevice},
+		{"an integrated Radeon reporting its 1 GiB carve-out",
+			[]sysinfo.GPUInfo{{Name: "PCI GPU (0x1002 0x1681)", Vendor: "AMD", Memory: 1024}}, types.MemoryPoolHost},
+		{"an Intel integrated GPU", []sysinfo.GPUInfo{{Name: "Intel Iris Xe", Vendor: "Intel", Memory: 2048}},
+			types.MemoryPoolHost},
+		{"an NVIDIA card whose memory could not be read",
+			[]sysinfo.GPUInfo{{Name: "NVIDIA GeForce GTX 1660", Vendor: "NVIDIA", Memory: 0}}, types.MemoryPoolHost},
+		{"no GPU at all", nil, types.MemoryPoolHost},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubGPUInfo(t, tt.gpus, nil)
+
+			if got := PoolOf(types.ExecutionProviderAuto); got != tt.want {
+				t.Errorf("PoolOf(Auto) = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// The device pool is sized from the same card that decides Auto goes there. An APU's carve-out can be the larger
+// figure - some BIOSes allow 16 GiB - and sizing the pool from it would let models overflow the real card, which on
+// Windows pages them to system RAM without an error.
+func TestDeviceBudgetFollowsTheNvidiaCard(t *testing.T) {
+	const mib = int64(1) << 20
+
+	tests := []struct {
+		name string
+		gpus []sysinfo.GPUInfo
+		want int64
+	}{
+		{"an integrated Radeon with a larger carve-out beside an NVIDIA card",
+			[]sysinfo.GPUInfo{{Name: "AMD Radeon 780M", Vendor: "AMD", Memory: 16384},
+				{Name: "RTX 3050", Vendor: "NVIDIA", Memory: 6144}}, deviceBudgetFor(6144 * mib)},
+		{"an integrated Radeon alone gets the unknown-VRAM default",
+			[]sysinfo.GPUInfo{{Name: "AMD Radeon 680M", Vendor: "AMD", Memory: 1024}}, unknownVramBudget},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubGPUInfo(t, tt.gpus, nil)
+
+			if got := defaultDeviceBudget(); got != tt.want {
+				t.Errorf("defaultDeviceBudget() = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }

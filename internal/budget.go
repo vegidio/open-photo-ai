@@ -92,10 +92,20 @@ func PoolOf(ep types.ExecutionProvider) types.MemoryPool {
 	}
 }
 
-// hasDiscreteGPU reports whether the machine has a GPU that reports its own VRAM. A card that reports none is either
-// integrated or unqueryable, and in both cases the host pool is the safer place to charge it.
+// hasDiscreteGPU reports whether the machine has a GPU that a device-pool provider could run on - which today means
+// an NVIDIA card, since CUDA and TensorRT are the only providers PoolOf charges to the device pool.
+//
+// It used to ask whether any GPU reported VRAM, and that is the wrong question on Linux: an AMD or Intel integrated
+// GPU reports the BIOS carve-out - 512 MiB to 2 GiB of system RAM set aside for it - as VRAM, and the driver reports
+// it whether or not anything can use it. The Radeon 680M in a Ryzen 7 7735U says 1 GiB. That made Auto on such a
+// machine charge every model to a 1 GiB "device" pool, with the 50% overhead surcharge on top, on a run that was
+// going to the CPU all along: the budget evicted models that would have fit comfortably in host memory, for a GPU
+// no provider in the chain could reach.
+//
+// It shares largestNvidiaVRAMBytes with defaultDeviceBudget, so the decision to use the device pool and the size of
+// that pool cannot disagree about which card they describe.
 func hasDiscreteGPU() bool {
-	_, ok := LargestVRAMBytes()
+	_, ok := largestNvidiaVRAMBytes()
 	return ok
 }
 
@@ -154,11 +164,11 @@ func envInt64(name string) (int64, bool) {
 	return value, true
 }
 
-// defaultDeviceBudget takes a fraction of the largest GPU's VRAM.
+// defaultDeviceBudget takes a fraction of the largest NVIDIA GPU's VRAM - the only card a device-pool provider runs on.
 func defaultDeviceBudget() int64 {
-	vram, ok := LargestVRAMBytes()
+	vram, ok := largestNvidiaVRAMBytes()
 	if !ok {
-		Log().Warn("could not determine GPU memory; using the default device budget")
+		Log().Info("no NVIDIA GPU memory reported; using the default device budget")
 	}
 
 	return deviceBudgetFor(vram)

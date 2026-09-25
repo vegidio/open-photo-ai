@@ -3,7 +3,6 @@ package utils
 import (
 	"context"
 	"path"
-	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/vegidio/go-sak/os"
@@ -54,7 +53,7 @@ func hasGpuMeetingFloor(dep string) bool {
 	floor, hasFloor := internal.MinComputeCapability(dep)
 
 	for _, gpu := range gpus {
-		if !isNvidia(gpu) {
+		if !internal.IsNvidia(gpu) {
 			continue
 		}
 
@@ -87,12 +86,6 @@ func canTarget(capability, floor sysinfo.ComputeCapability) bool {
 	}
 
 	return capability.AtLeast(floor.Major, floor.Minor)
-}
-
-// isNvidia reports whether a GPU is an NVIDIA card, checking the product name as well as the vendor because the
-// Windows CIM fallback fills the vendor in from the driver's own description and does not always say "NVIDIA".
-func isNvidia(gpu sysinfo.GPUInfo) bool {
-	return strings.ToLower(gpu.Vendor) == "nvidia" || strings.Contains(strings.ToLower(gpu.Name), "nvidia")
 }
 
 // InitializeNvidiaLib downloads an NVIDIA library (libName being "cuda", "cudnn" or "tensorrt") into the user's config

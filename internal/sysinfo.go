@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/vegidio/go-sak/sysinfo"
@@ -72,14 +73,29 @@ func TotalRAMBytes() int64 {
 	return int64(info.Total)
 }
 
-// LargestVRAMBytes returns the memory of the machine's largest GPU, in bytes, and whether any GPU reported a figure at
-// all.
+// IsNvidia reports whether a GPU is an NVIDIA card, checking the product name as well as the vendor because the
+// Windows CIM fallback fills the vendor in from the driver's own description and does not always say "NVIDIA".
+//
+// It lives here, rather than beside the CUDA probes in utils that also use it, so that the budget code - which utils
+// imports - asks the same question with the same answer.
+func IsNvidia(gpu sysinfo.GPUInfo) bool {
+	return strings.EqualFold(gpu.Vendor, "nvidia") || strings.Contains(strings.ToLower(gpu.Name), "nvidia")
+}
+
+// largestNvidiaVRAMBytes returns the memory of the machine's largest NVIDIA GPU, in bytes, and whether any NVIDIA GPU
+// reported a figure at all.
+//
+// NVIDIA only, because CUDA and TensorRT are the only providers charged to the device pool, so an NVIDIA card is the
+// only one whose memory that pool describes. Counting every GPU sized the pool from an AMD or Intel integrated GPU's
+// BIOS carve-out - reported as VRAM, though it is system RAM - whenever it was the larger figure: an APU with a 16 GiB
+// carve-out beside a 6 GiB card got a budget of about 11 GiB for the card, and on Windows the models that don't fit
+// are paged to system RAM without an error, 10-60x slower.
 //
 // The largest, not the sum: a model is built on one device, so what matters is the card it will land on rather than
-// the machine's total. A card that reports 0 is either integrated or unqueryable - go-sak deliberately reports 0 on
-// the Windows CIM path, because AdapterRAM is unreliable on modern cards - so "none reported" is a real answer that
-// callers have to handle rather than an error.
-func LargestVRAMBytes() (bytes int64, ok bool) {
+// the machine's total. A card that reports 0 is unqueryable - go-sak deliberately reports 0 on the Windows CIM path,
+// because AdapterRAM is unreliable on modern cards - so "none reported" is a real answer that callers have to handle
+// rather than an error.
+func largestNvidiaVRAMBytes() (bytes int64, ok bool) {
 	gpus, err := GPUInfo()
 	if err != nil {
 		return 0, false
@@ -87,7 +103,9 @@ func LargestVRAMBytes() (bytes int64, ok bool) {
 
 	var largest int64
 	for _, gpu := range gpus {
-		largest = max(largest, int64(gpu.Memory)*bytesPerReportedVramUnit)
+		if IsNvidia(gpu) {
+			largest = max(largest, int64(gpu.Memory)*bytesPerReportedVramUnit)
+		}
 	}
 
 	return largest, largest > 0
