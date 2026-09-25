@@ -2654,7 +2654,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -4095,7 +4095,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
 dependencies = [
- "proc-macro-crate 3.5.0",
+ "proc-macro-crate 1.3.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -4118,8 +4118,8 @@ checksum = "6aa2c4e539b869820a2b82e1aef6ff40aa85e65decdd5185e83fb4b1249cd00f"
 
 [[package]]
 name = "o11y-macros"
-version = "26.9.10"
-source = "git+https://github.com/vegidio/rust-sak?tag=26.9.10#769dde23b9fdf33f385e9709e5d23be038975656"
+version = "26.9.11"
+source = "git+https://github.com/vegidio/rust-sak?tag=26.9.11#271454cdd291c6647470119eb35ba1e1dcf41a7d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5592,8 +5592,8 @@ checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rust-sak"
-version = "26.9.10"
-source = "git+https://github.com/vegidio/rust-sak?tag=26.9.10#769dde23b9fdf33f385e9709e5d23be038975656"
+version = "26.9.11"
+source = "git+https://github.com/vegidio/rust-sak?tag=26.9.11#271454cdd291c6647470119eb35ba1e1dcf41a7d"
 dependencies = [
  "avif-rs",
  "cap-std",
@@ -5604,6 +5604,7 @@ dependencies = [
  "hex",
  "hmac",
  "image",
+ "libloading 0.8.9",
  "liblzma",
  "machine-uid",
  "moka",

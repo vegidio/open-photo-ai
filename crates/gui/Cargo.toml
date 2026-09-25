@@ -121,7 +121,7 @@ opai = { path = "../opai" }
 # ⚠️ ALL THREE TAGS MUST MOVE TOGETHER: two tags of one git source resolve to two entries in `Cargo.lock`, and
 # then `rust-sak`'s `image` module and `opai`'s are built against two copies of the `image` crate — making
 # `DynamicImage` two unrelated types, for an error message that names one type twice.
-rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.9.10", features = ["crypto", "fs", "github", "image"] }
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.9.11", features = ["crypto", "fs", "github", "image"] }
 
 # `src/images/serve.rs` scales an opened photograph down to the size the window is drawing it at, which means naming
 # `DynamicImage` and a `FilterType`.
