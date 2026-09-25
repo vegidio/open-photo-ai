@@ -42,8 +42,8 @@ _check-suite suite:
 
 _compile triple:
     rustup target add {{ triple }}
-    cd crates/gui && pnpm install --frozen-lockfile
-    cd crates/gui && pnpm tauri build --target {{ triple }} {{ bundle_flags }}
+    pnpm --dir crates/gui install --frozen-lockfile
+    pnpm --dir crates/gui tauri build --target {{ triple }} {{ bundle_flags }}
     @just _stage {{ triple }}
 
 [macos]
