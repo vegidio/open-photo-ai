@@ -1,0 +1,219 @@
+name: build
+
+# Runs only on a tag: the tests gate the builds, and the builds gate the release, so nothing is published unless the
+# whole suite passed on the tagged commit.
+on:
+  push:
+    tags:
+      - '*'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      VERSION: ${{ steps.vars.outputs.VERSION }}
+    steps:
+      - name: Set version
+        id: vars
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=${VERSION#v}" >> "$GITHUB_OUTPUT"
+
+  test-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v5
+
+      # pnpm's version comes from `packageManager` in the GUI's package.json, so CI and local builds use the same one.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: crates/gui/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: crates/gui/pnpm-lock.yaml
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Just
+        uses: extractions/setup-just@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+
+      # `tauri::generate_context!` embeds crates/gui/dist at compile time, and dist is not committed, so the frontend
+      # has to be built before the gui crate's tests will compile.
+      - name: Build frontend
+        run: |
+          pnpm --dir crates/gui install --frozen-lockfile
+          pnpm --dir crates/gui build
+
+      - name: Run Rust tests
+        run: just test rust
+
+  test-node:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v5
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: crates/gui/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: crates/gui/pnpm-lock.yaml
+
+      - name: Set up Just
+        uses: extractions/setup-just@v3
+
+      - name: Run frontend tests
+        run: just test node
+
+  build:
+    needs: [version, test-rust, test-node]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+          - runner: macos-latest
+            arch: arm64
+          - runner: windows-latest
+            arch: amd64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      OPAI_OTEL_ENDPOINT: ${{ secrets.OPAI_OTEL_ENDPOINT }}
+      OPAI_OTEL_AUTH: ${{ secrets.OPAI_OTEL_AUTH }}
+      VITE_FARO_URL: ${{ secrets.VITE_FARO_URL }}
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v5
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: crates/gui/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: crates/gui/pnpm-lock.yaml
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
+
+      - name: Set up Just
+        uses: extractions/setup-just@v3
+
+      # patchelf and file are for the AppImage bundler; the rest is what Tauri needs to compile on Linux.
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf file
+
+      # The crates inherit `[workspace.package]`'s version, but tauri.conf.json holds its own literal that Tauri reads
+      # directly, so both are stamped. Node rather than sed so one step works on every runner.
+      - name: Set app version
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.VERSION }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const v = process.env.VERSION;
+            const stamp = (file, pattern) => {
+              const before = fs.readFileSync(file, "utf8");
+              const after = before.replace(pattern, (_, head, tail) => head + v + tail);
+              if (after === before && !before.match(pattern)) throw new Error(`no version found in ${file}`);
+              fs.writeFileSync(file, after);
+            };
+            stamp("Cargo.toml", /(\[workspace\.package\][^\[]*?^version = ")[^"]*(")/m);
+            stamp("crates/gui/tauri.conf.json", /("version": ")[^"]*(")/);
+          '
+          grep -n '^version = ' Cargo.toml
+          grep -n '"version"' crates/gui/tauri.conf.json
+
+      - name: Build and package
+        run: just package ${{ matrix.arch }}
+
+      - name: Save artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ runner.os }}-${{ matrix.arch }}
+          path: build/*.zip
+          if-no-files-found: error
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [version, build]
+    permissions:
+      contents: write
+    steps:
+      # The `fetch-depth: 0` is important to fetch all the tags
+      - name: Code checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Fetch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries
+          merge-multiple: true
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: crates/gui/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Create the changelog
+        run: |
+          pnpm add -g release-it @release-it/conventional-changelog@10.0.1
+          release-it --ci
+
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          name: ${{ needs.version.outputs.VERSION }}
+          tag: ${{ github.ref_name }}
+          bodyFile: CHANGELOG.md
+          replacesArtifacts: true
+          artifacts: binaries/*.zip
