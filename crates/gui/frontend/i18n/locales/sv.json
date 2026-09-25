@@ -76,10 +76,14 @@
                 "coreml": {
                     "description": "Kör modellerna på Apple Neural Engine och GPU:n. Mycket snabbare än CPU:n, men alla modeller kan inte använda den."
                 },
+                "webgpu": {
+                    "description": "Kör modellerna på valfri modern GPU, oavsett tillverkare. Mycket snabbare än CPU:n, men oftast långsammare än ett tillverkarspecifikt alternativ."
+                },
                 "cpu": {
                     "description": "Fungerar på alla datorer utan en GPU som stöds. Räkna med att förbättringar tar betydligt längre tid."
                 }
             },
+            "experimental": "Experimentell",
             "recommended": "Rekommenderas"
         },
         "export": {

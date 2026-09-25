@@ -138,6 +138,12 @@ To bypass this, open the Terminal and run one of the commands below (depending o
 - Windows: `Unblock-File -Path <path-to-app>`
 - macOS: `xattr -d com.apple.quarantine <path-to-app>`
 
+### "Trojan:XXXXXX" detected (Windows only)
+
+This is a false positive. It isn't a specific virus, but a generic label Windows Defender uses when something _behaves_ suspiciously. The installer downloads the app, unpacks it, creates a Start Menu shortcut and adds it to your PATH; normal installer steps that, combined in a small unsigned script, match a pattern Defender is cautious about.
+
+I suggest to upload the app binary to [VirusTotal](https://www.virustotal.com) and you'll get a clean report. You can also read the source or build the binary yourself, but if you're still uneasy, don't disable your antivirus; just wait until the detection clears.
+
 ### The app is taking too long to download dependencies
 
 This app has some important dependencies that can't be bundled with the app itself because they are rather big, like ONNX Runtime, CUDA and TensorRT (if supported by your system). They are hosted on Github and the app will download them the first time it opens.

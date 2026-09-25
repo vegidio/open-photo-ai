@@ -272,7 +272,7 @@ async fn a_bumped_pin_deletes_only_that_dependencys_files() {
     assert_eq!(deps::manifest::read(&cuda_dir).unwrap().version, "cuda/13.4.0");
 
     for (dir, version) in [
-        ("runtime", "runtime/1.26.0"),
+        ("runtime", "runtime/1.30.0"),
         ("libs/cudnn", "cudnn/9.23.1"),
         ("libs/tensorrt", "tensorrt/10.14.1"),
     ] {

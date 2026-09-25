@@ -2,7 +2,7 @@
 //!
 //! [`SupportedProviders`] is what the *machine* can offer — a report initialization folds out of the GPU install
 //! plan. [`ExecutionProvider`] is what a *user* asked for, which a front end offers in a settings pane and hands back.
-//! `Accelerator` is the narrower thing a session actually attaches and configures: the three hardware providers,
+//! `Accelerator` is the narrower thing a session actually attaches and configures: the hardware providers,
 //! without the request (`Auto`) or the fallback that takes no configuration (the CPU). [`options`] puts the request
 //! and the machine together into the plan a session is built from, and [`profile::EpProfile`] carries everything a
 //! measurement changes, declared by the variant it was measured against.
@@ -23,10 +23,9 @@ use crate::error::InitError;
 /// accepts — so they are stable, and both [`Display`](std::fmt::Display) and the serialized form render them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ExecutionProvider {
-    // Five choices rather than the reference implementation's six. It additionally names OpenVINO, whose appender
-    // returns *"the OpenVINO provider is disabled in this build"* on every platform — so a machine resolving to it runs
-    // on CPU kernels and logs a decline, every time. A provider that exists only to fail is not published here; a
-    // sixth arm belongs here once one is actually built.
+    // No OpenVINO, which the reference implementation names: its appender returns *"the OpenVINO provider is disabled
+    // in this build"* on every platform — so a machine resolving to it runs on CPU kernels and logs a decline, every
+    // time. A provider that exists only to fail is not published here; an arm belongs here once one is actually built.
     /// Whichever of the providers below this machine supports, best first.
     Auto,
     /// The CPU. Always available, takes no configuration, and what every other provider falls back to.
@@ -41,17 +40,20 @@ pub enum ExecutionProvider {
     /// NVIDIA's TensorRT provider, which compiles an engine from the graph.
     #[serde(rename = "TensorRT")]
     TensorRt,
+    /// The WebGPU plugin provider: any GPU the platform's native graphics API (Metal, D3D12, Vulkan) reaches.
+    #[serde(rename = "WebGPU")]
+    WebGpu,
 }
 
 impl ExecutionProvider {
     // The one source for anything that has to enumerate them — a settings pane, a CLI flag's help text, the parse
     // below — so a sixth arm is reachable everywhere by adding it here.
     /// Every published provider, in the order a user is most likely to reach for one.
-    pub const ALL: [Self; 5] = [Self::Auto, Self::Cpu, Self::CoreMl, Self::Cuda, Self::TensorRt];
+    pub const ALL: [Self; 6] = [Self::Auto, Self::Cpu, Self::CoreMl, Self::Cuda, Self::TensorRt, Self::WebGpu];
 
     /// Every provider a session can be **built on**, in [`ALL`](Self::ALL) order: the CPU and each accelerator.
     /// [`Auto`](Self::Auto) is a request — "pick for me" — rather than something anything runs on.
-    pub(crate) const BUILT_ON: [Self; 4] = [Self::Cpu, Self::CoreMl, Self::Cuda, Self::TensorRt];
+    pub(crate) const BUILT_ON: [Self; 5] = [Self::Cpu, Self::CoreMl, Self::Cuda, Self::TensorRt, Self::WebGpu];
 
     /// The accelerator this names, or `None` for the two that are not one: [`Auto`](Self::Auto), which is a request,
     /// and [`Cpu`](Self::Cpu), which is attached by nobody and configured with nothing — it is what the runtime falls
@@ -66,10 +68,11 @@ impl ExecutionProvider {
             Self::CoreMl => Some(Accelerator::CoreMl),
             Self::Cuda => Some(Accelerator::Cuda),
             Self::TensorRt => Some(Accelerator::TensorRt),
+            Self::WebGpu => Some(Accelerator::WebGpu),
         }
     }
 
-    /// The user-facing spelling: `Auto`, `CPU`, `CoreML`, `CUDA`, `TensorRT`.
+    /// The user-facing spelling: `Auto`, `CPU`, `CoreML`, `CUDA`, `TensorRT`, `WebGPU`.
     pub const fn as_str(self) -> &'static str {
         // Written once, here, and matched by the `serde` renames on the arms above, so a stored choice and a displayed
         // one cannot drift into two spellings.
@@ -79,6 +82,7 @@ impl ExecutionProvider {
             Self::CoreMl => "CoreML",
             Self::Cuda => "CUDA",
             Self::TensorRt => "TensorRT",
+            Self::WebGpu => "WebGPU",
         }
     }
 }
@@ -88,7 +92,7 @@ impl ExecutionProvider {
 /// Crate-internal, and deliberately not a replacement for [`ExecutionProvider`]: that is the public vocabulary a user
 /// chooses from and a settings file stores, and it has to be able to say "pick for me" and "the CPU". This is what
 /// the resolution narrows a request to, so the attach list, the options a provider is configured with and the builder
-/// dispatch each match three arms rather than five with two that must never happen.
+/// dispatch each match only the hardware arms rather than two more that must never happen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Accelerator {
     /// Apple's CoreML.
@@ -97,6 +101,8 @@ pub(crate) enum Accelerator {
     Cuda,
     /// NVIDIA's TensorRT provider.
     TensorRt,
+    /// The WebGPU plugin provider, attached through its devices rather than by name.
+    WebGpu,
 }
 
 impl From<Accelerator> for ExecutionProvider {
@@ -105,12 +111,13 @@ impl From<Accelerator> for ExecutionProvider {
             Accelerator::CoreMl => Self::CoreMl,
             Accelerator::Cuda => Self::Cuda,
             Accelerator::TensorRt => Self::TensorRt,
+            Accelerator::WebGpu => Self::WebGpu,
         }
     }
 }
 
 impl std::fmt::Display for Accelerator {
-    /// The user-facing spelling of the provider it is: `CoreML`, `CUDA`, `TensorRT`.
+    /// The user-facing spelling of the provider it is: `CoreML`, `CUDA`, `TensorRT`, `WebGPU`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(ExecutionProvider::from(*self).as_str())
     }
@@ -151,7 +158,7 @@ impl FromStr for ExecutionProvider {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[non_exhaustive]
 pub struct SupportedProviders {
-    // Four booleans rather than a set of `ExecutionProvider`, which is what `supports` reads them as.
+    // Booleans rather than a set of `ExecutionProvider`, which is what `supports` reads them as.
     //
     // `Serialize` and not `Deserialize`, on the same reasoning the catalogue's entries carry it: these four fields are
     // what a front end builds its provider list from, and this crate publishes the report rather than accepting one
@@ -168,6 +175,8 @@ pub struct SupportedProviders {
     pub cuda: bool,
     /// An RTX-branded NVIDIA adapter was detected *and* TensorRT was installed for this platform.
     pub tensorrt: bool,
+    /// The WebGPU plugin installed with the runtime registered *and* offered at least one device.
+    pub webgpu: bool,
 }
 
 /// The execution provider that installing one GPU library unlocks.
@@ -184,7 +193,7 @@ impl SupportedProviders {
     /// The providers available before any GPU library is considered: the CPU, and CoreML where the operating system
     /// is new enough. Both GPU providers start false and are set only once their library is actually on disk.
     pub(crate) fn detect() -> Self {
-        Self { cpu: true, coreml: is_coreml_supported(), cuda: false, tensorrt: false }
+        Self { cpu: true, coreml: is_coreml_supported(), cuda: false, tensorrt: false, webgpu: false }
     }
 
     /// Whether this machine supports `provider`.
@@ -202,6 +211,7 @@ impl SupportedProviders {
             Accelerator::CoreMl => self.coreml,
             Accelerator::Cuda => self.cuda,
             Accelerator::TensorRt => self.tensorrt,
+            Accelerator::WebGpu => self.webgpu,
         }
     }
 
@@ -214,6 +224,15 @@ impl SupportedProviders {
         // Beside `supports` so a front end gets the list without writing a filter of its own — the same reasoning
         // `cpu` is a field for, one level up.
         ExecutionProvider::BUILT_ON.into_iter().filter(|provider| self.supports(*provider)).collect()
+    }
+
+    /// This report with WebGPU claimed or not, as the runtime's start found its plugin.
+    ///
+    /// Separate from [`with`](Self::with) because nothing is installed for it: the plugin arrives inside the runtime's
+    /// own archive, and whether it works is only known once that runtime has loaded it.
+    pub(crate) const fn with_webgpu(mut self, webgpu: bool) -> Self {
+        self.webgpu = webgpu;
+        self
     }
 
     /// This report with `provider` additionally claimed.
@@ -253,9 +272,9 @@ pub(crate) mod tests {
 
     /// A machine reporting exactly the providers named, whatever the machine running the test actually is.
     pub(crate) fn machine_supporting(coreml: bool, cuda: bool, tensorrt: bool) -> SupportedProviders {
-        // The whole reason the resolution needs no platform seam: a report is four booleans, so a Mac, an NVIDIA
+        // The whole reason the resolution needs no platform seam: a report is a handful of booleans, so a Mac, an NVIDIA
         // workstation and a machine with no accelerator are three values a test writes down on any CI runner.
-        SupportedProviders { cpu: true, coreml, cuda, tensorrt }
+        SupportedProviders { cpu: true, coreml, cuda, tensorrt, webgpu: false }
     }
 
     /// A machine with no accelerator: the CPU and nothing else.
@@ -383,11 +402,11 @@ pub(crate) mod tests {
         // spelling a settings file has stored.
         assert_eq!(
             ExecutionProvider::ALL.map(ExecutionProvider::as_str),
-            ["Auto", "CPU", "CoreML", "CUDA", "TensorRT"]
+            ["Auto", "CPU", "CoreML", "CUDA", "TensorRT", "WebGPU"]
         );
         assert_eq!(
             serde_json::to_string(&ExecutionProvider::ALL).expect("the providers serialize"),
-            r#"["Auto","CPU","CoreML","CUDA","TensorRT"]"#
+            r#"["Auto","CPU","CoreML","CUDA","TensorRT","WebGPU"]"#
         );
     }
 

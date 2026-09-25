@@ -184,7 +184,7 @@ crash inside ONNX Runtime cannot leave the shell without an echo.
 | `[MODEL...]`       | every one  | Which models to measure, by codename. See `perftest list`.          |
 | `-n`, `--runs`     | `5`        | Timed runs per model. At least one.                                 |
 | `-w`, `--warmup`   | `1`        | Untimed warm-up runs. Zero is allowed; the report warns.            |
-| `-p`, `--provider` | `auto`     | `auto`, `cpu`, `coreml`, `cuda` or `tensorrt`.                      |
+| `-p`, `--provider` | `auto`     | `auto`, `cpu`, `coreml`, `cuda`, `tensorrt` or `webgpu`.            |
 | `--precision`      | `fp32`     | `fp32`, `fp16` or `int8`. Not every variant publishes every one.    |
 | `-s`, `--scale`    | `4`        | For the families whose published parameter is the scale.            |
 | `--strength`       | `1`        | For the families whose published parameter is the strength.         |

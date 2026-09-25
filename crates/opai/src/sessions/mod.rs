@@ -200,6 +200,12 @@ impl<S: Send + 'static> Sessions<S> {
         Self { cache, app_dir, name, supported, trust, models, build }
     }
 
+    /// Records whether WebGPU is usable, once the runtime has loaded its plugin — which is after these sessions were
+    /// built from the install plan, since nothing the plan installs decides it.
+    pub(crate) const fn set_webgpu(&mut self, webgpu: bool) {
+        self.supported = self.supported.with_webgpu(webgpu);
+    }
+
     /// Sessions installing from `base_url` against `listing` and building through `build`, for a suite above this
     /// layer that needs the real request, flight and install around a fake session.
     #[cfg(test)]

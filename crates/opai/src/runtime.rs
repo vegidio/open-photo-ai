@@ -8,7 +8,7 @@
 //! cannot be reached without a real ~175 MB library and is covered only where it fails.
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use ort::environment::Environment;
 use ort::logging::LogLevel;
@@ -28,6 +28,26 @@ use crate::telemetry::unit::{self, Outcome, Unit, unit_span};
 /// Recording the first failure here is what makes a retry — which is exactly what the GUI's error boundary performs —
 /// report [`InitError::RuntimeUnavailable`] instead of succeeding against a runtime that was never opened.
 static FAILED_LOAD: Mutex<Option<Failure>> = Mutex::new(None);
+
+/// The WebGPU plugin's file name, as every `runtime/` archive from `runtime/1.26.1` on ships it beside the runtime.
+#[cfg(target_os = "macos")]
+const WEBGPU_LIB: &str = "libonnxruntime_providers_webgpu.dylib";
+#[cfg(target_os = "windows")]
+const WEBGPU_LIB: &str = "onnxruntime_providers_webgpu.dll";
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+const WEBGPU_LIB: &str = "libonnxruntime_providers_webgpu.so";
+
+/// The name the WebGPU plugin registers its devices under — what [`ort::device::Device::ep`] reports for them.
+pub(crate) const WEBGPU_EP: &str = "WebGpuExecutionProvider";
+
+/// Whether the WebGPU plugin was registered and offered a device, decided once per process.
+///
+/// Once, because the registration belongs to the process-global environment: a second initialization would be refused
+/// by the runtime for registering the same name twice, and has the first one's answer to reuse anyway.
+static WEBGPU: OnceLock<bool> = OnceLock::new();
+
+/// The environment the exit hook silences, held weakly so the hook never extends its life — see [`silence_on_exit`].
+static EXITING_ENVIRONMENT: OnceLock<Weak<Environment>> = OnceLock::new();
 
 /// What the first failed load in this process was, and what it said.
 #[derive(Debug)]
@@ -74,7 +94,9 @@ pub(crate) fn library_path(dir: &Path, lib: &str) -> PathBuf {
 /// process — see [`FAILED_LOAD`], which is also why the lock is held across the load rather than only around the
 /// check: two threads loading at once reach the same defect, since the one that does not run the closure sees a
 /// completed `Once` and gets the same uninitialized handle.
-pub(crate) fn start(name: &str, library: &Path) -> Result<(), InitError> {
+///
+/// On success, says whether the WebGPU plugin execution provider is usable — see [`register_webgpu`].
+pub(crate) fn start(name: &str, library: &Path) -> Result<bool, InitError> {
     let span = unit_span!("runtime_load", library = %library.display());
 
     // Started before the `dlopen`, so the record below says what the load and the environment together cost: the
@@ -85,7 +107,7 @@ pub(crate) fn start(name: &str, library: &Path) -> Result<(), InitError> {
 
     // A failure's record is `initialize`'s, which the error is returned to. The span ends here either way.
     match &outcome {
-        Ok(()) => unit::ended(Unit::RuntimeLoad, &span, duration, Outcome::Finished),
+        Ok(_) => unit::ended(Unit::RuntimeLoad, &span, duration, Outcome::Finished),
         Err(error) => unit::ended(Unit::RuntimeLoad, &span, duration, Outcome::Failed { kind: error.kind(), error }),
     }
 
@@ -93,7 +115,7 @@ pub(crate) fn start(name: &str, library: &Path) -> Result<(), InitError> {
 }
 
 /// [`start`]'s body, inside its span. `started` is when the load began, for the record that closes it.
-fn load(name: &str, library: &Path, started: std::time::Instant) -> Result<(), InitError> {
+fn load(name: &str, library: &Path, started: std::time::Instant) -> Result<bool, InitError> {
     // A poisoned lock means a previous caller panicked between the check and the record. The state behind it is still
     // readable and is what the next caller has to see, so the guard is taken rather than the panic propagated.
     let mut failed = crate::task::lock(&FAILED_LOAD);
@@ -150,6 +172,7 @@ fn load(name: &str, library: &Path, started: std::time::Instant) -> Result<(), I
     // Note the window this leaves: `ort` creates the environment at `ORT_LOGGING_LEVEL_VERBOSE` and this clamps it
     // immediately afterwards. It is inside this one function, and it is covered by the subscriber's floor.
     environment.set_log_level(LogLevel::Warning);
+    silence_on_exit(&environment);
 
     // The library this process is actually running on, by path. It is the single most useful line in a bug report
     // about inference: it says which install was loaded, and — because a process uses the first runtime it loads —
@@ -157,7 +180,71 @@ fn load(name: &str, library: &Path, started: std::time::Instant) -> Result<(), I
     let duration = started.elapsed();
     tracing::info!(name, library = %library.display(), ?duration, "ONNX Runtime started");
 
-    Ok(())
+    let webgpu = *WEBGPU.get_or_init(|| register_webgpu(&environment, library));
+
+    Ok(webgpu)
+}
+
+/// Arranges for the runtime to stop logging just before `ort` releases `environment` at process exit.
+///
+/// `ort` releases the environment from an exit handler of its own (`release_env_on_exit`), and by then this thread's
+/// thread-locals are gone. Any record the runtime produces during that release reaches `ort`'s `tracing` bridge, whose
+/// subscriber touches a destroyed thread-local, panics inside an `extern "C"` callback, and aborts the process — after
+/// the work is done, but with a SIGABRT a caller reads as a crash. Runtime 1.30.0 made this reachable: its WebGPU
+/// plugin's `ReleaseEpFactory` throws during teardown, and the runtime logs that at `ERROR` while unloading it.
+///
+/// The hook is registered after the environment exists, so it runs *before* `ort`'s: exit handlers run in reverse
+/// order of registration, and on Linux and Windows `ort`'s release runs later still, from `.fini_array` and a TLS
+/// callback. Raising the floor to `Fatal` stops the records being produced at all — the runtime checks the severity
+/// before it builds a message — so there is nothing left for the bridge to forward. What is lost is a report of a
+/// factory the process is about to reclaim anyway.
+///
+/// Registered once per process, like the environment itself.
+fn silence_on_exit(environment: &Arc<Environment>) {
+    unsafe extern "C" {
+        fn atexit(callback: extern "C" fn()) -> std::ffi::c_int;
+    }
+
+    extern "C" fn silence() {
+        // Weak, so the hook never becomes the last owner: dropping the last `Arc` here would release the environment
+        // from this hook, while it is still logging.
+        if let Some(environment) = EXITING_ENVIRONMENT.get().and_then(Weak::upgrade) {
+            environment.set_log_level(LogLevel::Fatal);
+        }
+    }
+
+    if EXITING_ENVIRONMENT.set(Arc::downgrade(environment)).is_ok() {
+        // SAFETY: `silence` is a plain `extern "C"` function with no arguments, as `atexit` requires, and it touches
+        // no thread-local — only a process-global `OnceLock` and the runtime's C API.
+        unsafe { atexit(silence) };
+    }
+}
+
+/// Registers the WebGPU plugin execution provider installed beside `library`, and says whether it offers a device.
+///
+/// WebGPU ships as a *plugin* rather than being built into the runtime: the library exports `CreateEpFactories`, so it
+/// is attached through `RegisterExecutionProviderLibrary` and its devices, never through the named
+/// `AppendExecutionProvider("WebGPU")` the `ort::ep::WebGPU` type calls — which this runtime does not know.
+///
+/// Nothing here is an error. A missing file, a refused registration or no adapter each leaves WebGPU unsupported and
+/// the rest of the runtime untouched, which is the same place a machine without the plugin is in.
+fn register_webgpu(environment: &Arc<Environment>, library: &Path) -> bool {
+    let plugin = library.with_file_name(WEBGPU_LIB);
+    if !plugin.is_file() {
+        tracing::info!(plugin = %plugin.display(), "WebGPU plugin not installed");
+        return false;
+    }
+
+    // The handle only unregisters on request, so dropping it keeps the library registered for the process.
+    if let Err(error) = environment.register_ep_library("WebGPU", &plugin) {
+        tracing::warn!(plugin = %plugin.display(), %error, "WebGPU plugin could not be registered");
+        return false;
+    }
+
+    let devices = environment.devices().filter(|device| device.ep().is_ok_and(|ep| ep == WEBGPU_EP)).count();
+    tracing::info!(plugin = %plugin.display(), devices, "WebGPU plugin registered");
+
+    devices > 0
 }
 
 #[cfg(test)]
@@ -182,11 +269,11 @@ mod tests {
     #[test]
     fn every_published_runtime_platform_resolves_to_its_own_library() {
         let cases = [
-            ("macos", "aarch64", "onnxruntime.1.26.0.dylib"),
-            ("linux", "x86_64", "onnxruntime.so.1.26.0"),
-            ("linux", "aarch64", "onnxruntime.so.1.26.0"),
-            ("windows", "x86_64", "onnxruntime-1.26.0.dll"),
-            ("windows", "aarch64", "onnxruntime-1.26.0.dll"),
+            ("macos", "aarch64", "libonnxruntime.1.30.0.dylib"),
+            ("linux", "x86_64", "libonnxruntime.so.1.30.0"),
+            ("linux", "aarch64", "libonnxruntime.so.1.30.0"),
+            ("windows", "x86_64", "onnxruntime.dll"),
+            ("windows", "aarch64", "onnxruntime.dll"),
         ];
 
         let dir = Path::new("/somewhere/opai/runtime");
@@ -277,7 +364,7 @@ mod tests {
 
     child_test! {
         fn a_library_that_is_not_there_is_reported_against_the_path_it_was_attempted_against() {
-            let missing = Path::new("/no/such/directory/onnxruntime.1.26.0.dylib");
+            let missing = Path::new("/no/such/directory/libonnxruntime.1.30.0.dylib");
             let error = start("opai-test", missing).unwrap_err();
 
             match error {
@@ -293,7 +380,7 @@ mod tests {
             // or corrupted install produces — distinct from the missing-file case only in what the loader says
             // about it.
             let dir = tempfile::tempdir().unwrap();
-            let not_a_library = dir.path().join("onnxruntime.1.26.0.dylib");
+            let not_a_library = dir.path().join("libonnxruntime.1.30.0.dylib");
             std::fs::write(&not_a_library, b"this is not a shared library").unwrap();
 
             let error = start("opai-test", &not_a_library).unwrap_err();

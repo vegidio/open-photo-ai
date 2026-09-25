@@ -125,12 +125,24 @@ fn open(artifact: &ArtifactId, plan: &SessionPlan, model: &Path) -> Result<Sessi
 
     // In the plan's own order, so that one provider declining a node at session-build time leaves the next to run
     // the graph. Empty for a CPU run, which attaches nothing.
-    let dispatches: Vec<ExecutionProviderDispatch> = plan.providers.iter().map(dispatch).collect();
+    //
+    // WebGPU is held back: it is a plugin, attached through its devices below rather than by name. It is last in every
+    // chain it appears in, so attaching it after the rest keeps the plan's order.
+    let dispatches: Vec<ExecutionProviderDispatch> = plan
+        .providers
+        .iter()
+        .filter(|options| options.provider != Accelerator::WebGpu)
+        .map(dispatch)
+        .collect();
 
     let mut builder = Session::builder()
         .map_err(failed)?
         .with_execution_providers(&dispatches)
         .map_err(|err| failed(err.into()))?;
+
+    if let Some(webgpu) = plan.providers.iter().find(|options| options.provider == Accelerator::WebGpu) {
+        builder = attach_webgpu(builder, &webgpu.options).map_err(failed)?;
+    }
     builder = BuilderSettings::of(&plan.settings).apply(builder).map_err(failed)?;
 
     builder.commit_from_file(model).map_err(failed)
@@ -146,9 +158,39 @@ fn dispatch(options: &ProviderOptions) -> ExecutionProviderDispatch {
         Accelerator::TensorRt => configure(ort::ep::TensorRT::default(), &options.options).build(),
         Accelerator::Cuda => configure(ort::ep::CUDA::default(), &options.options).build(),
         Accelerator::CoreMl => configure(ort::ep::CoreML::default(), &options.options).build(),
+        Accelerator::WebGpu => unreachable!("WebGPU is attached through its devices, never dispatched by name"),
     };
 
     dispatch.error_on_failure()
+}
+
+/// Attaches the WebGPU plugin's devices to `builder`, configured with `options`.
+///
+/// Through `SessionOptionsAppendExecutionProvider_V2`, which is the only way a plugin registered with
+/// `RegisterExecutionProviderLibrary` (see `runtime::register_webgpu`) can be attached. It takes its options prefixed
+/// with the provider's name, which is how one call can carry several providers' options apart.
+///
+/// # Errors
+///
+/// Fails where the environment cannot be reached, no WebGPU device is registered, or the runtime refuses the options.
+/// No device is an error rather than a silent CPU run so the fallback reports it, the same as a provider that declined.
+fn attach_webgpu(builder: SessionBuilder, options: &BTreeMap<String, String>) -> Result<SessionBuilder, ort::Error> {
+    let environment = ort::environment::Environment::current()?;
+
+    // One device, the first the plugin offers. The plugin can report several (one per adapter, each from its own
+    // factory), and the runtime refuses a single append whose devices come from different factories — *"All
+    // OrtEpDevice values in ep_devices must have the same execution provider"*.
+    let device = environment
+        .devices()
+        .find(|device| device.ep().is_ok_and(|ep| ep == crate::runtime::WEBGPU_EP))
+        .ok_or_else(|| ort::Error::new("the WebGPU plugin offers no device"))?;
+
+    let options: Vec<(String, String)> = options
+        .iter()
+        .map(|(key, value)| (format!("{}.{key}", crate::runtime::WEBGPU_EP), value.clone()))
+        .collect();
+
+    builder.with_devices([device], Some(&options)).map_err(Into::into)
 }
 
 /// Applies every entry of `options` to `provider`.

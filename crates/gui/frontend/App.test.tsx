@@ -345,7 +345,7 @@ describe("App", () => {
 
 describe("App, on a machine that supports TensorRT", () => {
     /** What an RTX card's launch reports: both NVIDIA providers, on top of the CPU. */
-    const RTX: SupportedProviders = { cpu: true, coreml: false, cuda: true, tensorrt: true };
+    const RTX: SupportedProviders = { cpu: true, coreml: false, cuda: true, tensorrt: true, webgpu: false };
 
     const question = () => screen.queryByRole("dialog", { name: "TensorRT Detected" });
 

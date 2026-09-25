@@ -563,7 +563,7 @@ impl Opai {
         // Taken by name before the plan moves into install, so this can't disagree with what actually installs.
         let lib = plan.runtime.lib.expect("every platform the runtime is published for names its library");
 
-        let (opai, installed) = Self::install(name, app_dir, claim, plan, models, on_progress).await?;
+        let (mut opai, installed) = Self::install(name, app_dir, claim, plan, models, on_progress).await?;
 
         // After install (the pinned tag only applies once the runtime is on disk) and before anything can build
         // a session: a compiled provider artifact is only valid for the runtime that built it.
@@ -584,7 +584,13 @@ impl Opai {
         // `dlopen` of a ~175 MB library plus environment creation is blocking and syscall-heavy, so it runs on
         // a blocking thread.
         let app_name = name.to_string();
-        spawn_blocking::<_, InitError, _>(move || runtime::start(&app_name, &library)).await??;
+        let webgpu = spawn_blocking::<_, InitError, _>(move || runtime::start(&app_name, &library)).await??;
+
+        // WebGPU is the one provider the install plan cannot decide: its plugin ships inside the runtime's archive, and
+        // whether it offers a device is only known once that runtime has loaded it. The handle has not been shared yet.
+        let inner = Arc::get_mut(&mut opai.inner).expect("the handle is not shared before initialization returns");
+        inner.providers = inner.providers.with_webgpu(webgpu);
+        inner.sessions.set_webgpu(webgpu);
 
         Ok(opai)
     }

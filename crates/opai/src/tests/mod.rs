@@ -73,13 +73,13 @@ fn fixture(server: &TestServer, release: &'static deps::artifact::Release, versi
 
 /// The runtime alone, as a machine with no NVIDIA adapter installs it.
 fn runtime_only(server: &TestServer) -> Plan {
-    Plan { runtime: fixture(server, &ONNX_RUNTIME, "runtime/1.26.0"), gpu: Vec::new() }
+    Plan { runtime: fixture(server, &ONNX_RUNTIME, "runtime/1.30.0"), gpu: Vec::new() }
 }
 
 /// All four, as a machine with an RTX card installs them.
 fn every_dependency(server: &TestServer) -> Plan {
     Plan {
-        runtime: fixture(server, &ONNX_RUNTIME, "runtime/1.26.0"),
+        runtime: fixture(server, &ONNX_RUNTIME, "runtime/1.30.0"),
         gpu: vec![
             fixture(server, &CUDA, "cuda/13.3.0"),
             fixture(server, &CUDNN, "cudnn/9.23.1"),

@@ -76,10 +76,14 @@
                 "coreml": {
                     "description": "Exécute les modèles sur l'Apple Neural Engine et le GPU. Bien plus rapide que le CPU, mais tous les modèles ne peuvent pas l'utiliser."
                 },
+                "webgpu": {
+                    "description": "Exécute les modèles sur n'importe quel GPU moderne, quel que soit le fabricant. Bien plus rapide que le CPU, mais généralement plus lent qu'une option propre au fabricant."
+                },
                 "cpu": {
                     "description": "Fonctionne sur toute machine sans GPU pris en charge. Les améliorations prendront beaucoup plus de temps."
                 }
             },
+            "experimental": "Expérimental",
             "recommended": "Recommandé"
         },
         "export": {

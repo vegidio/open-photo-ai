@@ -84,7 +84,7 @@ describe("initialize", () => {
         // from the other side: the four keys the processor list is built from, spelled as `serde`
         // emits them. Nothing maps or defaults them on the way in, for the same reason nothing maps
         // the events.
-        const report: SupportedProviders = { cpu: true, coreml: true, cuda: false, tensorrt: false };
+        const report: SupportedProviders = { cpu: true, coreml: true, cuda: false, tensorrt: false, webgpu: false };
         invoked.mockResolvedValueOnce(report);
 
         await expect(initialize(() => {})).resolves.toEqual(report);

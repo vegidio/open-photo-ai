@@ -30,7 +30,14 @@ export type Processor = "auto" | keyof SupportedProviders;
  * **Which** of these a machine is actually offered is not decided here: that is the report's answer,
  * read by the row that draws the choice.
  */
-export const PROCESSORS = ["auto", "tensorrt", "cuda", "coreml", "cpu"] as const satisfies readonly Processor[];
+export const PROCESSORS = [
+    "auto",
+    "tensorrt",
+    "cuda",
+    "coreml",
+    "webgpu",
+    "cpu",
+] as const satisfies readonly Processor[];
 
 const isProcessor = (value: unknown): value is Processor =>
     typeof value === "string" && (PROCESSORS as readonly string[]).includes(value);

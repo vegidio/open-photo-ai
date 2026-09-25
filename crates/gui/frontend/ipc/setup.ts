@@ -65,11 +65,11 @@ export type SetupError = {
  * Which execution providers this machine turned out to offer, as Rust's `SupportedProviders` spells
  * it. `cpu` is among them rather than an implied truth.
  *
- * The Rust struct is `#[non_exhaustive]`, so a provider added later arrives as a fifth key this type
+ * The Rust struct is `#[non_exhaustive]`, so a provider added later arrives as a new key this type
  * says nothing about. A provider the frontend does not know is one it does not offer.
  */
 export type SupportedProviders = {
-    // The four the library publishes today, named so the settings pane's processor list is built from
+    // The ones the library publishes today, named so the settings pane's processor list is built from
     // them rather than from a list of provider names written here - and with `cpu` among them, that list
     // is drawn without a special case for the one that is always there.
     //
@@ -80,6 +80,7 @@ export type SupportedProviders = {
     coreml: boolean;
     cuda: boolean;
     tensorrt: boolean;
+    webgpu: boolean;
 };
 
 /**

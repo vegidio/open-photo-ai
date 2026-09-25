@@ -11,13 +11,14 @@ import { RADIO_FILL } from "./rows.tsx";
 // frontend still carries no list of provider names of its own in the sense that matters: **which**
 // providers exist is the report's answer, and a provider the report names that this map does not is
 // one that is not offered - exactly as `ipc/setup.ts` documents for the `#[non_exhaustive]` struct
-// behind it. What this adds is how four names the frontend already spells are shown, which is
+// behind it. What this adds is how the names the frontend already spells are shown, which is
 // presentation.
 /** The product names, which are not translatable. */
 const PROCESSOR_LABELS: Record<Exclude<Processor, "auto">, string> = {
     tensorrt: "TensorRT",
     cuda: "CUDA",
     coreml: "CoreML",
+    webgpu: "WebGPU",
     cpu: "CPU",
 };
 
@@ -113,6 +114,12 @@ export const PerformancePage = () => {
                                 {processor === "auto" && (
                                     <span className="flex h-5 items-center rounded-full bg-primary/14 px-1.75 font-medium text-[#7cc7ff] text-[11px]">
                                         {t("settings.performance.recommended")}
+                                    </span>
+                                )}
+
+                                {processor === "webgpu" && (
+                                    <span className="flex h-5 items-center rounded-full bg-warning/14 px-1.75 font-medium text-warning text-[11px]">
+                                        {t("settings.performance.experimental")}
                                     </span>
                                 )}
                             </span>

@@ -76,10 +76,14 @@
                 "coreml": {
                     "description": "Menjalankan model di Apple Neural Engine dan GPU. Jauh lebih cepat daripada CPU, meski tidak semua model dapat menggunakannya."
                 },
+                "webgpu": {
+                    "description": "Menjalankan model di GPU modern apa pun, dari produsen mana pun. Jauh lebih cepat daripada CPU, meski biasanya lebih lambat daripada opsi khusus produsen."
+                },
                 "cpu": {
                     "description": "Berfungsi di mesin apa pun tanpa GPU yang didukung. Peningkatan akan memakan waktu jauh lebih lama."
                 }
             },
+            "experimental": "Eksperimental",
             "recommended": "Disarankan"
         },
         "export": {

@@ -76,10 +76,14 @@
                 "coreml": {
                     "description": "在 Apple 神经网络引擎和 GPU 上运行模型。比 CPU 快得多，但并非所有模型都能使用。"
                 },
+                "webgpu": {
+                    "description": "在任何厂商的现代 GPU 上运行模型。比 CPU 快得多，但通常比厂商专用选项慢。"
+                },
                 "cpu": {
                     "description": "适用于任何没有受支持 GPU 的机器。增强所需时间会长得多。"
                 }
             },
+            "experimental": "实验性",
             "recommended": "推荐"
         },
         "export": {

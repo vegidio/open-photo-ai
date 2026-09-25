@@ -2,7 +2,7 @@
 //!
 //! Nothing here calls the ONNX Runtime.
 
-// The resolution reads four booleans and the configuration writes maps of strings, so every decision in this file is
+// The resolution reads a handful of booleans and the configuration writes maps of strings, so every decision in this file is
 // made before a runtime is loaded — which is what lets all of it be tested on a CI runner with no GPU, no Mac and no
 // runtime installed.
 
@@ -14,13 +14,17 @@ use super::{Accelerator, ExecutionProvider, SupportedProviders};
 
 // A property of the providers rather than of the operating system, which is why there is no per-platform table
 // anywhere in this crate: CoreML is already unsupported off macOS and the two NVIDIA providers are unsupported until
-// their libraries are on disk, so filtering this one order by the machine's report reproduces every platform's chain —
+// their libraries are on disk, and WebGPU is unsupported until its plugin has registered with a device, so filtering
+// this one order by the machine's report reproduces every platform's chain —
 // and additionally stops offering a provider whose library failed to install, which a platform table cannot know about.
 //
 // The CPU is deliberately absent, as it is in the reference implementation's chains. It takes no configuration, and it
 // is what the runtime falls back to on its own once every provider above it has declined a node.
 /// The order [`ExecutionProvider::Auto`] prefers accelerators in, best first.
-const AUTO_ORDER: [Accelerator; 3] = [Accelerator::TensorRt, Accelerator::Cuda, Accelerator::CoreMl];
+///
+/// WebGPU is last on every platform: it reaches the widest range of GPUs, and is the slowest of them where a
+/// vendor's own provider is available.
+const AUTO_ORDER: [Accelerator; 4] = [Accelerator::TensorRt, Accelerator::Cuda, Accelerator::CoreMl, Accelerator::WebGpu];
 
 /// What a request resolved to on this machine: which providers to attach, in order, and what was asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -309,6 +313,8 @@ pub(crate) fn resolve(
                 Accelerator::TensorRt => tensorrt_options(paths, profile),
                 Accelerator::Cuda => cuda_options(profile),
                 Accelerator::CoreMl => coreml_options(paths, profile),
+                // Nothing pinned yet: the plugin's own defaults are what it was measured with.
+                Accelerator::WebGpu => BTreeMap::new(),
             };
 
             ProviderOptions { provider, options }

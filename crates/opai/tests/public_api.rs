@@ -946,7 +946,7 @@ fn the_provider_choice_is_reachable_from_the_crate_root() {
     assert!(matches!(error, InitError::UnknownProvider { .. }), "{error}");
 
     // Every choice a chooser would offer, from the one list the crate publishes.
-    assert_eq!(ExecutionProvider::ALL.len(), 5);
+    assert_eq!(ExecutionProvider::ALL.len(), 6);
     assert!(ExecutionProvider::ALL.contains(&ExecutionProvider::Auto));
 }
 

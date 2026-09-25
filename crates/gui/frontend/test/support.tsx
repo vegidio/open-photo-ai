@@ -136,7 +136,7 @@ export const REJECTION: SetupError = { kind: "initialize", failure: "transfer", 
  * into several files is several things that can quietly stop agreeing about which providers a
  * machine offers.
  */
-export const PROVIDERS: SupportedProviders = { cpu: true, coreml: true, cuda: false, tensorrt: false };
+export const PROVIDERS: SupportedProviders = { cpu: true, coreml: true, cuda: false, tensorrt: false, webgpu: false };
 
 /**
  * The state column of each row, in order - of whichever of the two dialogs is rendered.

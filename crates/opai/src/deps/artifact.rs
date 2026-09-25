@@ -132,53 +132,58 @@ pub(crate) struct Release {
     pub(crate) archives: &'static [Artifact],
 }
 
-/// The ONNX Runtime, pinned to `runtime/1.26.0`.
+/// The ONNX Runtime, pinned to `runtime/1.30.0`.
+///
+/// Ships the WebGPU plugin execution provider (`[lib]onnxruntime_providers_webgpu`) beside the runtime on every
+/// platform — and, on Windows, the `dxcompiler.dll`/`dxil.dll` pair that plugin compiles its shaders with. From this
+/// release on the libraries keep upstream's file names (`libonnxruntime.1.30.0.dylib`, `onnxruntime.dll`) rather than
+/// the renamed ones earlier tags carried.
 pub(crate) const ONNX_RUNTIME: Release = Release {
     name: "onnx-runtime",
     prefix: "onnx",
-    // One thing outside this file has to move with the tag: the `api-26` feature on `ort` in `crates/opai/Cargo.toml`.
+    // One thing outside this file has to move with the tag: the `api-28` feature on `ort` in `crates/opai/Cargo.toml`.
     // `ort` refuses to load a runtime older than the minor version that feature names, so bumping this tag without
     // bumping the feature leaves the two disagreeing — and the disagreement is a startup error on every machine, not a
     // compile failure here.
-    tag: "runtime/1.26.0",
+    tag: "runtime/1.30.0",
     dir: "runtime",
     progress: Dependency::Runtime,
     // The runtime is what an execution provider runs on, not one of them.
     provides: None,
     // Re-derivable with:
     //
-    //     gh api repos/vegidio/open-photo-ai/releases/tags/runtime%2F1.26.0 \
+    //     gh api repos/vegidio/open-photo-ai/releases/tags/runtime%2F1.30.0 \
     //       --jq '.assets[] | "\(.name) \(.size) \(.digest)"'
     archives: &[
         Artifact {
             platform: Platform::new(Os::Darwin, Arch::Arm64),
-            hash: "5cafbaaef5eb43142499fc4ef1087024b6b33a6bd17d4183da6f4cb6079fcb47",
-            size: 6_417_404,
-            lib: Some("onnxruntime.1.26.0.dylib"),
+            hash: "f58971f0f556567e9b7fcce6a0110c5072ff003d9a1bb1214060b188f5d11178",
+            size: 10_043_605,
+            lib: Some("libonnxruntime.1.30.0.dylib"),
         },
         Artifact {
             platform: Platform::new(Os::Linux, Arch::Amd64),
-            hash: "e2062cdc87ab593bcd541d2b5fbad6771e726aed6a4375352b98578ecb747236",
-            size: 174_834_737,
-            lib: Some("onnxruntime.so.1.26.0"),
+            hash: "2a9fadb295f66fca1480bad457355c7044bf14ca06927468b991996764ad5d37",
+            size: 190_133_628,
+            lib: Some("libonnxruntime.so.1.30.0"),
         },
         Artifact {
             platform: Platform::new(Os::Linux, Arch::Arm64),
-            hash: "1e7e96f673874f7216b4736a65b8967e129189f24da11c797432d1cd2e33761a",
-            size: 4_879_338,
-            lib: Some("onnxruntime.so.1.26.0"),
+            hash: "50c3dc45b758105bec33f640c3db9f4efad97c99b3f99c2be52e00cfe89b6811",
+            size: 9_702_215,
+            lib: Some("libonnxruntime.so.1.30.0"),
         },
         Artifact {
             platform: Platform::new(Os::Windows, Arch::Amd64),
-            hash: "2aa448485be581d211a53023520785af13443a31c3f82e44b9f01a2ff457b22d",
-            size: 172_592_865,
-            lib: Some("onnxruntime-1.26.0.dll"),
+            hash: "cc13165ce3df6747a561db8bc06ebdd05bf21135808171a5f76245d8bdb10a63",
+            size: 144_411_038,
+            lib: Some("onnxruntime.dll"),
         },
         Artifact {
             platform: Platform::new(Os::Windows, Arch::Arm64),
-            hash: "d4a62a7dcfe10872f67135be34e49bf1714d041e3cd81816666a503f53dbd327",
-            size: 3_444_425,
-            lib: Some("onnxruntime-1.26.0.dll"),
+            hash: "07d64750a60aee7e84443e21471a9811fb8114f50b26e19f8daf336b84028327",
+            size: 12_250_575,
+            lib: Some("onnxruntime.dll"),
         },
     ],
 };
@@ -299,7 +304,7 @@ pub(crate) const ALL: &[&Release] = &[&ONNX_RUNTIME, &CUDA, &CUDNN, &TENSORRT];
 pub(crate) struct Pinned {
     /// The release asset's file name: `onnx_darwin_arm64.7z`.
     pub(crate) asset: String,
-    /// The release it belongs to: `runtime/1.26.0`.
+    /// The release it belongs to: `runtime/1.30.0`.
     pub(crate) tag: &'static str,
     /// The archive's pinned identity.
     pub(crate) artifact: Artifact,
@@ -341,7 +346,7 @@ mod tests {
         for (os, arch, asset) in cases {
             let pinned = ONNX_RUNTIME.pinned_for(os, arch).unwrap();
             assert_eq!(pinned.asset, asset, "{os}/{arch}");
-            assert_eq!(pinned.tag, "runtime/1.26.0");
+            assert_eq!(pinned.tag, "runtime/1.30.0");
         }
 
         assert_eq!(cases.len(), ONNX_RUNTIME.archives.len(), "a pinned platform is untested");

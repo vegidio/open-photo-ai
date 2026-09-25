@@ -84,10 +84,11 @@ imaging = { path = "../imaging" }
 # stderr-capture stack: a 380-line descriptor tailer, a second `native.log`, 100 lines of regex over ORT's text format
 # and the replay of an unread tail on the next launch.
 #
-# `api-26` is not cosmetic: `ort` refuses to load a runtime whose minor version is lower than the one its enabled
-# `api-NN` feature names, and its default `api-27` would reject the pinned 1.26.0 outright. The feature therefore
-# tracks the runtime tag pinned in `src/deps/artifact.rs` (`ONNX_RUNTIME`) and MUST be bumped with it — the failure if
-# they drift is a startup error on every machine, phrased in `ort`'s words rather than ours.
+# `api-28` is not cosmetic: `ort` refuses to load a runtime whose minor version is lower than the one its enabled
+# `api-NN` feature names. The feature therefore tracks the runtime tag pinned in `src/deps/artifact.rs`
+# (`ONNX_RUNTIME`) and MUST be kept at or below it — the failure if they drift is a startup error on every machine,
+# phrased in `ort`'s words rather than ours. `api-28` is the highest `2.0.0-rc.13` offers, which is why it sits below
+# the pinned 1.30.0 rather than matching it.
 #
 # Pinned exactly because `2.0.0-rc.13` is a pre-release: three behaviours this crate depends on — the minor-version
 # refusal, the one `CreateEnv` per process, and the lazy `commit()` — are undocumented and already differ in `ort`'s
@@ -98,7 +99,7 @@ imaging = { path = "../imaging" }
 # `ort::ep::CoreML` and its two siblings simply do not exist, and the resolved options would have nowhere to go.
 ort = { version = "=2.0.0-rc.13", default-features = false, features = [
     "load-dynamic",
-    "api-26",
+    "api-28",
     "coreml",
     "cuda",
     "tensorrt",
@@ -212,7 +213,7 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 # behaviour rather than anything this crate wraps around it.
 ort = { version = "=2.0.0-rc.13", default-features = false, features = [
     "load-dynamic",
-    "api-26",
+    "api-28",
     "coreml",
     "cuda",
     "tensorrt",

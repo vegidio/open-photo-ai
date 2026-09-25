@@ -9,7 +9,7 @@ use crate::progress::{Dependency as Which, Expansion};
 use crate::providers::Provider;
 
 /// Where the project publishes its dependency archives. The tag is a path segment of its own, so a URL reads
-/// `.../download/runtime/1.26.0/onnx_darwin_arm64.7z`.
+/// `.../download/runtime/1.30.0/onnx_darwin_arm64.7z`.
 pub(crate) const RELEASE_BASE_URL: &str = "https://github.com/vegidio/open-photo-ai/releases/download";
 
 /// One remote artifact a dependency is installed from.
@@ -167,11 +167,11 @@ mod tests {
     #[test]
     fn each_pinned_platform_builds_its_own_release_url() {
         let cases = [
-            ("macos", "aarch64", "runtime/1.26.0/onnx_darwin_arm64.7z"),
-            ("linux", "x86_64", "runtime/1.26.0/onnx_linux_amd64.7z"),
-            ("linux", "aarch64", "runtime/1.26.0/onnx_linux_arm64.7z"),
-            ("windows", "x86_64", "runtime/1.26.0/onnx_windows_amd64.7z"),
-            ("windows", "aarch64", "runtime/1.26.0/onnx_windows_arm64.7z"),
+            ("macos", "aarch64", "runtime/1.30.0/onnx_darwin_arm64.7z"),
+            ("linux", "x86_64", "runtime/1.30.0/onnx_linux_amd64.7z"),
+            ("linux", "aarch64", "runtime/1.30.0/onnx_linux_arm64.7z"),
+            ("windows", "x86_64", "runtime/1.30.0/onnx_windows_amd64.7z"),
+            ("windows", "aarch64", "runtime/1.30.0/onnx_windows_arm64.7z"),
         ];
 
         for (os, arch, tail) in cases {
@@ -180,7 +180,7 @@ mod tests {
 
             assert_eq!(source.url, format!("{RELEASE_BASE_URL}/{tail}"), "{os}/{arch}");
             assert_eq!(dependency.name, "onnx-runtime");
-            assert_eq!(dependency.version, "runtime/1.26.0");
+            assert_eq!(dependency.version, "runtime/1.30.0");
             // The row owns its destination and its progress name, so a caller cannot pair a descriptor with the
             // wrong directory — which is how one dependency's bump would delete another's files.
             assert_eq!(dependency.dir, "runtime");
@@ -195,11 +195,11 @@ mod tests {
         // The name the loader is pointed at, resolved by the same lookup the install ran from rather than by a second
         // `match` on the platform at the call site — which is what could disagree with what was actually installed.
         let cases = [
-            ("macos", "aarch64", "onnxruntime.1.26.0.dylib"),
-            ("linux", "x86_64", "onnxruntime.so.1.26.0"),
-            ("linux", "aarch64", "onnxruntime.so.1.26.0"),
-            ("windows", "x86_64", "onnxruntime-1.26.0.dll"),
-            ("windows", "aarch64", "onnxruntime-1.26.0.dll"),
+            ("macos", "aarch64", "libonnxruntime.1.30.0.dylib"),
+            ("linux", "x86_64", "libonnxruntime.so.1.30.0"),
+            ("linux", "aarch64", "libonnxruntime.so.1.30.0"),
+            ("windows", "x86_64", "onnxruntime.dll"),
+            ("windows", "aarch64", "onnxruntime.dll"),
         ];
 
         for (os, arch, lib) in cases {
@@ -280,6 +280,6 @@ mod tests {
         let dependency =
             Dependency::from_release_at("http://127.0.0.1:9/base/", &ONNX_RUNTIME, "linux", "x86_64").unwrap();
 
-        assert_eq!(dependency.sources[0].url, "http://127.0.0.1:9/base/runtime/1.26.0/onnx_linux_amd64.7z");
+        assert_eq!(dependency.sources[0].url, "http://127.0.0.1:9/base/runtime/1.30.0/onnx_linux_amd64.7z");
     }
 }

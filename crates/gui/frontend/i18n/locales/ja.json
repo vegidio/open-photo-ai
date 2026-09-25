@@ -76,10 +76,14 @@
                 "coreml": {
                     "description": "Apple Neural Engine と GPU でモデルを実行します。CPU よりはるかに高速ですが、すべてのモデルが使えるわけではありません。"
                 },
+                "webgpu": {
+                    "description": "メーカーを問わず、最新のあらゆる GPU でモデルを実行します。CPU よりはるかに高速ですが、通常はメーカー専用のオプションより低速です。"
+                },
                 "cpu": {
                     "description": "対応 GPU のないどのマシンでも動作します。補正にはかなり時間がかかります。"
                 }
             },
+            "experimental": "実験的",
             "recommended": "推奨"
         },
         "export": {

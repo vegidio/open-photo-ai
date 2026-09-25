@@ -43,8 +43,21 @@ use crate::select::Selected;
 use crate::sweep::{Lines, Listener, Silent, SweepResult};
 use crate::viewport::{Viewport, Watcher};
 
-#[tokio::main]
-async fn main() -> ExitCode {
+// A plain `main` building its runtime by hand rather than `#[tokio::main]`, because the attribute starts the worker
+// threads before the body's first statement — and `prepare_library_path` is only sound while no other thread exists.
+fn main() -> ExitCode {
+    // Set the CUDA and TensorRT provider library search path.
+    let prepared = unsafe { opai::prepare_library_path(opai::APP_NAME) }.map(|_| ());
+
+    let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+        Ok(runtime) => runtime,
+        Err(error) => return fail(&format!("perftest: could not start the async runtime: {error}")),
+    };
+
+    runtime.block_on(start(prepared))
+}
+
+async fn start(prepared: Result<(), opai::InitError>) -> ExitCode {
     let arguments = Cli::parse();
 
     match arguments.command {
@@ -53,7 +66,17 @@ async fn main() -> ExitCode {
             print!("{}", select::listing());
             ExitCode::SUCCESS
         }
-        None => run(&arguments.options).await,
+        None => {
+            // Not fatal, as in the GUI: only the GPU providers are affected, and a sweep on them reports every
+            // fallback to the CPU in its warnings. Said here too so that those warnings have a cause beside them.
+            if let Err(error) = prepared {
+                eprintln!(
+                    "perftest: could not establish the library search path; GPU providers will be unavailable: {error}"
+                );
+            }
+
+            run(&arguments.options).await
+        }
     }
 }
 

@@ -33,10 +33,10 @@ const renderPage = () => {
 };
 
 /** A machine with an NVIDIA card, which the Mac the shared fixture describes is not. */
-const RTX: SupportedProviders = { cpu: true, coreml: false, cuda: true, tensorrt: true };
+const RTX: SupportedProviders = { cpu: true, coreml: false, cuda: true, tensorrt: true, webgpu: false };
 
 /** A machine offering nothing beyond its processor. */
-const CPU_ONLY: SupportedProviders = { cpu: true, coreml: false, cuda: false, tensorrt: false };
+const CPU_ONLY: SupportedProviders = { cpu: true, coreml: false, cuda: false, tensorrt: false, webgpu: false };
 
 /** Mounts the page against a report, and returns the cards it offers, by name. */
 const listed = (providers: SupportedProviders) => {
@@ -115,6 +115,14 @@ describe("the processor cards", () => {
 
         expect(card("Auto")).toHaveTextContent("Recommended");
         expect(screen.getAllByText("Recommended")).toHaveLength(1);
+    });
+
+    it("mark WebGPU, and only it, as experimental", () => {
+        useSetupStore.getState().succeeded({ ...RTX, webgpu: true });
+        renderPage();
+
+        expect(card("WebGPU")).toHaveTextContent("Experimental");
+        expect(screen.getAllByText("Experimental")).toHaveLength(1);
     });
 
     it("choose a processor from a click anywhere on its card, and outline it", () => {
