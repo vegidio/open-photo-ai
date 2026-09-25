@@ -25,7 +25,7 @@ const (
 )
 
 // DownloadProgress is the payload of EventAppDownload. Emitted while a required runtime dependency
-// (ONNX Runtime, CUDA, cuDNN, TensorRT) is being fetched.
+// (ONNX Runtime, CUDA, cuDNN, TensorRT, the WebGPU plugin) is being fetched.
 type DownloadProgress struct {
 	Dependency string  `json:"dependency"`
 	Percent    float64 `json:"percent"`

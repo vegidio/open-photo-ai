@@ -8,9 +8,10 @@ import (
 	"github.com/vegidio/open-photo-ai/types"
 )
 
-// This model excludes no provider at all now, and both former exclusions are pinned here with the reason attached
-// rather than left to the comment in loader.go alone.
-func TestProfileExcludesNoProvider(t *testing.T) {
+// This model excludes no vendor provider now, and both former exclusions are pinned here with the reason attached
+// rather than left to the comment in loader.go alone. (WebGPU is the one exclusion it does carry, for memory rather
+// than correctness - see TestEveryGraphExcludesWebGPU.)
+func TestProfileExcludesNoVendorProvider(t *testing.T) {
 	p := profileFor(types.PrecisionFp32)
 
 	// The three CoreML failures the exclusion used to carry - the VAE's "axis 4 is not in valid range" error, the
@@ -22,11 +23,13 @@ func TestProfileExcludesNoProvider(t *testing.T) {
 	// are fixed-shape now and it is the fastest provider this model has: 1.797s against the CUDA provider's 4.494s
 	// end to end on an RTX 5090, and 140.3ms against 441.1ms on one region.
 	//
-	// Asserting the list is empty rather than naming the two says what the test name says, and catches a third
-	// exclusion arriving as well.
-	if len(p.ExcludeEPs) != 0 {
-		t.Errorf("no provider may be excluded, got %v: CoreML is worth ~40x here and TensorRT 2.5x the CUDA provider",
-			p.ExcludeEPs)
+	// Asserting nothing but WebGPU is listed, rather than naming the two, says what the test name says and catches a
+	// third exclusion arriving as well.
+	for _, ep := range p.ExcludeEPs {
+		if ep != types.ExecutionProviderWebGPU {
+			t.Errorf("no vendor provider may be excluded, got %v: CoreML is worth ~40x here and TensorRT 2.5x the "+
+				"CUDA provider", p.ExcludeEPs)
+		}
 	}
 }
 
@@ -174,6 +177,24 @@ func TestOnlyTheDiTOverridesTheProfile(t *testing.T) {
 	for _, g := range graphs {
 		if (g.Role == roleDiT) != (g.Profile != nil) {
 			t.Errorf("%s: per-graph profile set = %v, want %v", g.Role, g.Profile != nil, g.Role == roleDiT)
+		}
+	}
+}
+
+// The DiT's weights alone are 3.7 GB; on an integrated GPU the WebGPU plugin would pin that much system RAM outside
+// any process limit, which takes the machine down rather than the app. Every graph of the variant must keep the
+// provider excluded until it can be budgeted.
+func TestEveryGraphExcludesWebGPU(t *testing.T) {
+	for _, precision := range []types.Precision{types.PrecisionFp16, types.PrecisionInt8} {
+		for _, name := range []string{"dit", "vae"} {
+			p := profileFor(precision)
+			if name == "dit" {
+				p = ditProfile(precision)
+			}
+
+			if !slices.Contains(p.ExcludeEPs, types.ExecutionProviderWebGPU) {
+				t.Errorf("%s %s: WebGPU is not excluded", name, precision)
+			}
 		}
 	}
 }

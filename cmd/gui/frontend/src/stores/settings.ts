@@ -17,6 +17,7 @@ const {
     ExecutionProviderCUDA,
     ExecutionProviderTensorRT,
     ExecutionProviderCoreML,
+    ExecutionProviderWebGPU,
     ExecutionProviderAuto,
     ExecutionProviderCPU,
 } = ExecutionProvider;
@@ -94,6 +95,7 @@ export const useSettingsStore = create(
                     if (supportedEps.TensorRT) options.push(ExecutionProviderTensorRT);
                     if (supportedEps.CUDA) options.push(ExecutionProviderCUDA);
                     if (supportedEps.CoreML) options.push(ExecutionProviderCoreML);
+                    if (supportedEps.WebGPU) options.push(ExecutionProviderWebGPU);
 
                     options.push(ExecutionProviderCPU);
 

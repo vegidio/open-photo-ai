@@ -94,3 +94,21 @@ func TestEveryOnnxArchiveNamesItsLibrary(t *testing.T) {
 		}
 	}
 }
+
+// Same for the WebGPU plugin, which is registered by path exactly as the runtime is loaded by one.
+//
+// The subset check is the other half: the plugin is published for fewer platforms than the runtime is (Microsoft
+// builds it for four, this app runs on six), and a plugin archive for a platform with no runtime would be a download
+// that could never be registered. Only the direction "plugin implies runtime" is an error; the reverse is the normal
+// state of Linux and Windows on ARM, where utils.IsWebGPUSupported reports no support.
+func TestEveryWebGPUArchiveNamesItsLibraryAndHasARuntime(t *testing.T) {
+	for platform, artifact := range Releases["webgpu"].Archives {
+		if artifact.Lib == "" {
+			t.Errorf("the webgpu archive for %s does not name its shared library", platform)
+		}
+
+		if _, found := Releases["onnx"].Archives[platform]; !found {
+			t.Errorf("the webgpu plugin is published for %s but the ONNX Runtime is not", platform)
+		}
+	}
+}

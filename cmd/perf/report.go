@@ -141,8 +141,9 @@ func probeSummary() string {
 		return "no"
 	}
 
-	return fmt.Sprintf("CUDA %s | TensorRT %s | CoreML %s",
-		yesNo(utils.IsCudaSupported()), yesNo(utils.IsTensorRtSupported()), yesNo(utils.IsCoreMLSupported()))
+	return fmt.Sprintf("CUDA %s | TensorRT %s | CoreML %s | WebGPU %s",
+		yesNo(utils.IsCudaSupported()), yesNo(utils.IsTensorRtSupported()), yesNo(utils.IsCoreMLSupported()),
+		yesNo(utils.IsWebGPUSupported()))
 }
 
 // printSummary renders the results table plus the failure and warning lists.

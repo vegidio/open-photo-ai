@@ -46,6 +46,7 @@ type SupportedEPs struct {
 	CUDA     bool
 	TensorRT bool
 	CoreML   bool
+	WebGPU   bool
 }
 
 func NewAppService(app *application.App, otel *o11y.Telemetry) *AppService {
@@ -117,6 +118,24 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 		slog.Info("CoreML supported")
 	}
 
+	// WebGPU reaches every GPU with a current driver, so it is offered wherever one is found - which includes the
+	// NVIDIA and Apple machines above, where it is a menu entry the user can pick rather than what Auto lands on.
+	// The plugin is a download of a few megabytes and needs no restart, so it is installed here whenever it is
+	// offered, and only registered with the runtime by the first session that actually resolves to it.
+	//
+	// Unlike the vendor libraries a failure here does not fail the launch. Those are only attempted when the GPU
+	// they need was found, so a failed download is a broken machine; this one is attempted on every machine with a
+	// GPU, and losing it means the CPU, which is exactly what the app had before it existed.
+	if utils.IsWebGPUSupported() {
+		if err := s.initializeWebGPU(ctx); err != nil {
+			s.otel.LogWarn("WebGPU plugin unavailable", nil)
+			slog.Warn("the WebGPU plugin could not be prepared; not offering it this run", "err", err)
+		} else {
+			supportedEPs.WebGPU = true
+			slog.Info("WebGPU supported")
+		}
+	}
+
 	// The library falls back rather than failing when its cache directory is locked, and logs that to the log file
 	// only - so unless it is reported here, a run with no cache is invisible from outside the machine. Deliberately
 	// LogWarn and not LogError: this is a slower run, not a failed one, and it must not go back into the error budget
@@ -129,8 +148,8 @@ func (s *AppService) Initialize(ctx context.Context) (SupportedEPs, error) {
 	s.initialized = true
 	s.supportedEPs = supportedEPs
 
-	slog.Info("app service initialized",
-		"cuda", supportedEPs.CUDA, "tensorrt", supportedEPs.TensorRT, "coreml", supportedEPs.CoreML)
+	slog.Info("app service initialized", "cuda", supportedEPs.CUDA, "tensorrt", supportedEPs.TensorRT,
+		"coreml", supportedEPs.CoreML, "webgpu", supportedEPs.WebGPU)
 	return supportedEPs, nil
 }
 
@@ -245,6 +264,13 @@ func (s *AppService) initializeCuda(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *AppService) initializeWebGPU(ctx context.Context) error {
+	return utils.InitializeWebGPULib(ctx,
+		func(_, _ int64, percent float64) {
+			s.app.Event.Emit(EventAppDownload, DownloadProgress{Dependency: "WebGPU plugin", Percent: percent})
+		})
 }
 
 func (s *AppService) initializeTensorRT(ctx context.Context) error {

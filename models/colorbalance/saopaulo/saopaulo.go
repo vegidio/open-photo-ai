@@ -2,7 +2,9 @@ package saopaulo
 
 import (
 	"context"
+	"strings"
 
+	"github.com/vegidio/open-photo-ai/internal/utils"
 	"github.com/vegidio/open-photo-ai/models/colorbalance"
 	"github.com/vegidio/open-photo-ai/types"
 )
@@ -140,7 +142,29 @@ var variant = &colorbalance.Variant{
 	// +62% at fp16 and +732% at fp32 - and that is the same answer rio reaches from the opposite direction. Rio is 52
 	// convolutional nodes that land on the Neural Engine whole; this is 511 nodes including resamples and a softmax,
 	// and the ANE cannot take all of it.
-	Profile: nil,
+	//
+	// The profile it does carry is for WebGPU alone, and it is a correctness fix rather than tuning: see webgpuOptions.
+	Profile: profile,
+}
+
+// The grid branch's residual block has six small 3x3 convolutions whose inputs are 9 and 18 channels wide, and on
+// WebGPU's Vulkan path those come back wrong - not slightly: the colour-balanced image differs from the CPU result by
+// about 7 levels on average and up to 47, on more than half the pixels. The count is the pattern, as it is for jaipur:
+// the provider's unvectorised convolution (input channels not a multiple of four) is where it goes wrong, and the
+// network's first convolution, 3 channels in at the very start, is unaffected. With these six on the CPU the output
+// matches the CPU exactly; they are a few thousand weights each, so it costs nothing measurable.
+var webgpuOptions = map[string]string{
+	"forceCpuNodeNames": strings.Join([]string{
+		"/grid/enc_res.0.0/block/block.1/Conv", "/grid/enc_res.0.0/block/block.3/Conv",
+		"/grid/enc_res.0.0/block/block.1_1/Conv", "/grid/enc_res.0.0/block/block.3_1/Conv",
+		"/grid/enc_res.0.0/block/block.1_2/Conv", "/grid/enc_res.0.0/block/block.3_2/Conv",
+	}, "\n"),
+}
+
+// profile leaves every provider on its defaults, which the measurements above settled, and only pins the nodes WebGPU
+// mishandles - for both precisions, since the fault is in the provider's kernel, not in either export.
+func profile(types.Precision) utils.EPProfile {
+	return utils.EPProfile{WebGPUOptions: webgpuOptions}
 }
 
 // New loads the saopaulo session for the given operation.

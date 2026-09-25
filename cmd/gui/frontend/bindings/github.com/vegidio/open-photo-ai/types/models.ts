@@ -49,6 +49,14 @@ export enum ExecutionProvider {
      * Available on macOS and iOS devices with Apple Silicon or Intel processors.
      */
     ExecutionProviderCoreML = "CoreML",
+
+    /**
+     * ExecutionProviderWebGPU runs inference through the WebGPU API - Vulkan on Linux, Direct3D 12 on Windows and
+     * Metal on macOS - so it reaches any GPU with a current driver, including the AMD and Intel ones the vendor
+     * providers above leave on the CPU. It is a plugin provider: a small library the app downloads on first use, with
+     * no vendor toolkit behind it.
+     */
+    ExecutionProviderWebGPU = "WebGPU",
 };
 
 /**

@@ -31,6 +31,20 @@ import (
 type Session struct {
 	*ort.DynamicAdvancedSession
 	bytes int64
+
+	// serialize says this session's runs must not overlap another serialized session's, because the provider they
+	// share crashes when they do. See webgpuRunMu.
+	serialize bool
+}
+
+// Run executes the session, one at a time across every session that asked for it. The rest go straight through.
+func (s *Session) Run(inputs, outputs []ort.Value) error {
+	if s.serialize {
+		webgpuRunMu.Lock()
+		defer webgpuRunMu.Unlock()
+	}
+
+	return s.DynamicAdvancedSession.Run(inputs, outputs)
 }
 
 // ResidentBytes implements types.Measurable, reporting the on-disk size of the files behind this session.
@@ -293,9 +307,9 @@ func createSessionInner(
 		return nil, err
 	}
 
-	paths := cachePaths{engine: enginePath, timing: timingPath}
+	paths := cachePaths{engine: enginePath, timing: timingPath, model: modelFile}
 
-	options, trt, err := createOptions(currentPlatform, paths, ep, p)
+	options, report, err := createOptions(currentPlatform, paths, ep, p)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create session options")
 	}
@@ -304,6 +318,20 @@ func createSessionInner(
 	if err = applyProfile(options, p); err != nil {
 		return nil, err
 	}
+
+	// After the profile, on purpose: the profile's execution mode is the model's preference for the CPU thread pools,
+	// and it is the zero value - Parallel - for most graphs. ONNX Runtime only supports the parallel executor with
+	// the CPU provider; with any other it switches to sequential itself and warns about it on every build. Setting
+	// it here keeps the log honest and is the provider's constraint rather than the model's, which is why it
+	// overrides here instead of asking every model to know which provider it might land on.
+	serialize := serializesRuns(report.attached)
+	if serialize {
+		if err = options.SetExecutionMode(ort.ExecutionModeSequential); err != nil {
+			return nil, errors.Wrap(err, "failed to set the sequential execution mode")
+		}
+	}
+
+	trt := report.triedTensorRT
 
 	// The build is serialized when TensorRT is in the chain, because the timing cache the previous block pointed it at
 	// is one file shared by every model, and ONNX Runtime reads it at the start of a build and rewrites it at the end
@@ -333,7 +361,7 @@ func createSessionInner(
 		return nil, errors.Wrap(err, "failed to create session")
 	}
 
-	return &Session{DynamicAdvancedSession: session, bytes: modelFileBytes(modelPath)}, nil
+	return &Session{DynamicAdvancedSession: session, bytes: modelFileBytes(modelPath), serialize: serialize}, nil
 }
 
 // modelFileBytes reports the total size of the files backing the model at modelPath: the graph itself plus any

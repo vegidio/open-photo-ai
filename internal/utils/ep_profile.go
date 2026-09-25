@@ -113,6 +113,15 @@ type EPProfile struct {
 	// reports itself only as one Warn line. Check that line after changing anything here.
 	CudaOptions map[string]string
 
+	// WebGPUOptions are handed to the WebGPU plugin verbatim, on top of its defaults. The keys are the plugin's own
+	// (`forceCpuNodeNames`, `storageBufferCacheMode`, `preferredLayout`, ...), and the same warning as CudaOptions
+	// applies: an unrecognised key makes the provider decline and the graph run on the CPU.
+	//
+	// Its first use is a graph the provider cannot run whole. `forceCpuNodeNames`, a newline-separated list of node
+	// names, keeps just those nodes on the CPU while the rest of the graph stays on the GPU - a far cheaper fix than
+	// excluding the provider for the model. See models/colorization/jaipur for the case that motivated it.
+	WebGPUOptions map[string]string
+
 	// CoreMLComputeUnits selects which of the Mac's engines CoreML may dispatch this model to. The zero value is
 	// ALL, which is what every model used before profiles existed.
 	CoreMLComputeUnits CoreMLComputeUnits
@@ -369,6 +378,11 @@ type cachePaths struct {
 
 	// timing is the installation-wide TensorRT timing cache directory. See internal.TimingCacheDir.
 	timing string
+
+	// model is the file being loaded, e.g. "dn_gothenburg_fp16.onnx". It is not a path, and no provider is pointed
+	// at it; it is here for the provider that has to decide from the name whether it can take the graph at all -
+	// see webgpuSupportsGraph - which is a decision the appender makes and so needs beside the other two.
+	model string
 }
 
 type providerAppender func(paths cachePaths, options *ort.SessionOptions, p EPProfile) error
@@ -377,6 +391,7 @@ var providerAppenders = map[types.ExecutionProvider]providerAppender{
 	types.ExecutionProviderTensorRT: appendTensorRT,
 	types.ExecutionProviderCUDA:     appendCuda,
 	types.ExecutionProviderCoreML:   appendCoreML,
+	types.ExecutionProviderWebGPU:   appendWebGPU,
 	types.ExecutionProviderOpenVINO: appendOpenVINO,
 }
 
@@ -385,19 +400,30 @@ var providerAppenders = map[types.ExecutionProvider]providerAppender{
 //
 // CPU is deliberately absent. It needs no appender, and it is what ONNX Runtime falls back to on its own once the
 // providers above it decline a node.
+// fallbackTier marks the providers Auto only reaches for when nothing above them in the chain attached. TensorRT and
+// CUDA are meant to stack - CUDA takes the nodes TensorRT declines - but WebGPU under a working CUDA would only ever
+// get the nodes both vendor providers refused, at the price of standing up a second GPU runtime beside them. So on
+// Auto it is the alternative to a vendor provider, not a supplement; an explicit request still attaches it alone.
+var fallbackTier = map[types.ExecutionProvider]bool{
+	types.ExecutionProviderWebGPU: true,
+}
+
 var autoChain = map[string][]types.ExecutionProvider{
 	"windows": {
 		types.ExecutionProviderTensorRT,
 		types.ExecutionProviderCUDA,
+		types.ExecutionProviderWebGPU,
 		types.ExecutionProviderOpenVINO,
 	},
 	"linux": {
 		types.ExecutionProviderTensorRT,
 		types.ExecutionProviderCUDA,
+		types.ExecutionProviderWebGPU,
 		types.ExecutionProviderOpenVINO,
 	},
 	"darwin": {
 		types.ExecutionProviderCoreML,
+		types.ExecutionProviderWebGPU,
 		types.ExecutionProviderOpenVINO,
 	},
 }
@@ -444,42 +470,56 @@ func filterExcluded(chain []types.ExecutionProvider, p EPProfile) []types.Execut
 	return out
 }
 
+// chainReport is what createOptions learned while attaching the providers, for the two decisions the caller makes
+// on it.
+type chainReport struct {
+	// triedTensorRT says whether TensorRT was resolved into the chain, which the caller needs in order to serialize
+	// the build against the shared timing cache. It answers "would TensorRT be resolved", not "did TensorRT attach" -
+	// a provider that declines is only logged. That is deliberately the wider question, since a build that tried
+	// TensorRT is a build that may have touched the shared timing cache.
+	triedTensorRT bool
+
+	// attached lists the providers that accepted the session options, in chain order. Unlike the TensorRT flag this
+	// is the narrow question, because what hangs off it - the execution mode, and whether runs are serialized - only
+	// matters for a provider that is actually going to run the graph.
+	attached []types.ExecutionProvider
+}
+
 // createOptions builds the session options for one model on one execution provider.
 //
-// The second return says whether TensorRT was resolved into the chain, which the caller needs in order to serialize
-// the build against the shared timing cache. It is reported from here rather than answered by a separate predicate
-// because resolving the chain is what decides it: asking twice would run the resolution twice and repeat the log line
-// it emits when a profile excludes the requested provider.
-//
-// Note it answers "would TensorRT be resolved into the chain", not "did TensorRT attach" - a provider that declines is
-// only logged. That is deliberately the wider question, since a build that tried TensorRT is a build that may have
-// touched the shared timing cache.
+// The report is produced here rather than answered by separate predicates because resolving the chain is what
+// decides it: asking twice would run the resolution twice and repeat the log line it emits when a profile excludes
+// the requested provider.
 func createOptions(
 	goos string,
 	paths cachePaths,
 	ep types.ExecutionProvider,
 	p EPProfile,
-) (*ort.SessionOptions, bool, error) {
+) (*ort.SessionOptions, chainReport, error) {
+	var report chainReport
+
 	if _, ok := autoChain[goos]; !ok {
-		return nil, false, errors.Errorf("unsupported platform: %s", goos)
+		return nil, report, errors.Errorf("unsupported platform: %s", goos)
 	}
 
 	options, err := ort.NewSessionOptions()
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "failed to create %s session options", goos)
+		return nil, report, errors.Wrapf(err, "failed to create %s session options", goos)
 	}
 
 	// The CPU provider is always present and takes no configuration, so there is nothing to append for it - and
 	// nothing that could reach TensorRT.
 	if ep == types.ExecutionProviderCPU {
-		return options, false, nil
+		return options, report, nil
 	}
 
 	providers, err := resolveProviders(goos, ep, p)
 	if err != nil {
 		options.Destroy()
-		return nil, false, err
+		return nil, report, err
 	}
+
+	report.triedTensorRT = slices.Contains(providers, types.ExecutionProviderTensorRT)
 
 	// A provider that declines to attach is not fatal: the ones after it, and ultimately the CPU, still run the
 	// graph. That is the long-standing behaviour and the reason these errors are only logged.
@@ -498,13 +538,31 @@ func createOptions(
 			continue
 		}
 
-		if err = appender(paths, options, p); err != nil {
-			internal.Log().Warn("execution provider declined to attach; the graph will run on the next provider "+
-				"in the chain", "ep", provider, "requested_ep", ep, "err", err)
+		if ep == types.ExecutionProviderAuto && fallbackTier[provider] && len(report.attached) > 0 {
+			internal.Log().Debug("a provider above it attached; not adding the fallback provider",
+				"ep", provider, "attached", report.attached)
+			continue
 		}
+
+		err = appender(paths, options, p)
+		if err == nil {
+			report.attached = append(report.attached, provider)
+			continue
+		}
+
+		// The one exception to the Warn: a provider that was never set up on this machine. Auto walks every provider
+		// the platform lists, so on an NVIDIA machine that never downloaded the WebGPU plugin this would otherwise
+		// warn on every single session build about a provider nobody asked for.
+		if errors.Is(err, errProviderUnavailable) && ep == types.ExecutionProviderAuto {
+			internal.Log().Debug("execution provider is not set up; skipping it", "ep", provider, "err", err)
+			continue
+		}
+
+		internal.Log().Warn("execution provider declined to attach; the graph will run on the next provider "+
+			"in the chain", "ep", provider, "requested_ep", ep, "err", err)
 	}
 
-	return options, slices.Contains(providers, types.ExecutionProviderTensorRT), nil
+	return options, report, nil
 }
 
 // applyProfile applies the session-level settings a profile carries, as opposed to the per-provider ones.
@@ -710,6 +768,21 @@ func appendCuda(_ cachePaths, options *ort.SessionOptions, p EPProfile) error {
 
 func appendCoreML(paths cachePaths, options *ort.SessionOptions, p EPProfile) error {
 	return options.AppendExecutionProviderCoreMLV2(coreMLOptions(paths, p))
+}
+
+// appendWebGPU attaches the WebGPU plugin provider, or declines: quietly when the plugin was never installed or found
+// no GPU (errProviderUnavailable), and with the reason when the graph is one it is not trusted with.
+func appendWebGPU(paths cachePaths, options *ort.SessionOptions, p EPProfile) error {
+	if !webgpuSupportsGraph(paths.model) {
+		return errors.Newf("the WebGPU provider only runs the fp32 graphs; %s stays on the next provider", paths.model)
+	}
+
+	device, err := webgpuDevice()
+	if err != nil {
+		return err
+	}
+
+	return options.AppendExecutionProviderV2([]ort.EpDevice{device}, webgpuOptions(p))
 }
 
 func appendOpenVINO(_ cachePaths, _ *ort.SessionOptions, _ EPProfile) error {

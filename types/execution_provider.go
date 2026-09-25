@@ -34,10 +34,16 @@ const (
 	// ExecutionProviderCoreML uses Apple's Core ML framework for optimized inference on Apple devices.
 	// Available on macOS and iOS devices with Apple Silicon or Intel processors.
 	ExecutionProviderCoreML ExecutionProvider = "CoreML"
+
+	// ExecutionProviderWebGPU runs inference through the WebGPU API - Vulkan on Linux, Direct3D 12 on Windows and
+	// Metal on macOS - so it reaches any GPU with a current driver, including the AMD and Intel ones the vendor
+	// providers above leave on the CPU. It is a plugin provider: a small library the app downloads on first use, with
+	// no vendor toolkit behind it.
+	ExecutionProviderWebGPU ExecutionProvider = "WebGPU"
 )
 
 // AllExecutionProviders lists every published provider, in the order a user is most likely to reach for one. It is the
-// single source for anything that has to enumerate them - a CLI flag's help text, a parser - so a seventh constant is
+// single source for anything that has to enumerate them - a CLI flag's help text, a parser - so an eighth constant is
 // reachable everywhere by declaring it here.
 func AllExecutionProviders() []ExecutionProvider {
 	return []ExecutionProvider{
@@ -46,6 +52,7 @@ func AllExecutionProviders() []ExecutionProvider {
 		ExecutionProviderCoreML,
 		ExecutionProviderCUDA,
 		ExecutionProviderTensorRT,
+		ExecutionProviderWebGPU,
 		ExecutionProviderOpenVINO,
 	}
 }
