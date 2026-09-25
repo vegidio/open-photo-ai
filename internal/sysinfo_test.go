@@ -80,9 +80,10 @@ func TestTotalRAMBytes(t *testing.T) {
 	})
 }
 
-// TestLargestVRAMBytes covers the other unit: GPU memory is reported in MiB, not in the decimal megabytes system RAM
-// uses. It also pins "largest, not sum" - a model is built on one card, so the budget describes the card it lands on.
-func TestLargestVRAMBytes(t *testing.T) {
+// TestLargestNvidiaVRAMBytes covers the other unit: GPU memory is reported in MiB, not in the decimal megabytes system
+// RAM uses. It also pins "largest, not sum" - a model is built on one card, so the budget describes the card it lands
+// on - and "NVIDIA only", since an integrated GPU's carve-out is system RAM that no device-pool provider can use.
+func TestLargestNvidiaVRAMBytes(t *testing.T) {
 	const mib = int64(1) << 20
 
 	tests := []struct {
@@ -94,27 +95,43 @@ func TestLargestVRAMBytes(t *testing.T) {
 	}{
 		{
 			name:   "a single card converts from MiB",
-			gpus:   []sysinfo.GPUInfo{{Name: "RTX 4080", Memory: 16384}},
+			gpus:   []sysinfo.GPUInfo{{Name: "RTX 4080", Vendor: "NVIDIA", Memory: 16384}},
 			want:   16384 * mib,
 			wantOk: true,
 		},
 		{
-			name:   "two cards report the largest, not the sum",
-			gpus:   []sysinfo.GPUInfo{{Name: "RTX 4080", Memory: 16384}, {Name: "RTX 3060", Memory: 12288}},
+			name: "two cards report the largest, not the sum",
+			gpus: []sysinfo.GPUInfo{
+				{Name: "RTX 4080", Vendor: "NVIDIA", Memory: 16384}, {Name: "RTX 3060", Vendor: "NVIDIA", Memory: 12288},
+			},
 			want:   16384 * mib,
 			wantOk: true,
 		},
 		{
 			name:   "a card that reports nothing is not ok",
-			gpus:   []sysinfo.GPUInfo{{Name: "Radeon", Memory: 0}},
+			gpus:   []sysinfo.GPUInfo{{Name: "NVIDIA GeForce GTX 1660", Memory: 0}},
 			want:   0,
 			wantOk: false,
 		},
 		{
 			name:   "an integrated part alongside a discrete one still finds the discrete one",
-			gpus:   []sysinfo.GPUInfo{{Name: "UHD Graphics", Memory: 0}, {Name: "RTX 3060", Memory: 12288}},
+			gpus:   []sysinfo.GPUInfo{{Name: "UHD Graphics", Memory: 0}, {Name: "RTX 3060", Vendor: "NVIDIA", Memory: 12288}},
 			want:   12288 * mib,
 			wantOk: true,
+		},
+		{
+			name: "a larger integrated carve-out does not size the NVIDIA card",
+			gpus: []sysinfo.GPUInfo{
+				{Name: "AMD Radeon 780M", Vendor: "AMD", Memory: 16384}, {Name: "RTX 3050", Vendor: "NVIDIA", Memory: 6144},
+			},
+			want:   6144 * mib,
+			wantOk: true,
+		},
+		{
+			name:   "an integrated GPU alone is not ok",
+			gpus:   []sysinfo.GPUInfo{{Name: "AMD Radeon 680M", Vendor: "AMD", Memory: 1024}},
+			want:   0,
+			wantOk: false,
 		},
 		{
 			name:   "a failed probe is not ok",
@@ -128,9 +145,9 @@ func TestLargestVRAMBytes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stubGPUInfo(t, tt.gpus, tt.err)
 
-			got, ok := LargestVRAMBytes()
+			got, ok := largestNvidiaVRAMBytes()
 			if got != tt.want || ok != tt.wantOk {
-				t.Errorf("LargestVRAMBytes() = (%d, %t), want (%d, %t)", got, ok, tt.want, tt.wantOk)
+				t.Errorf("largestNvidiaVRAMBytes() = (%d, %t), want (%d, %t)", got, ok, tt.want, tt.wantOk)
 			}
 		})
 	}

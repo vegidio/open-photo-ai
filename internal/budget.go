@@ -5,7 +5,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/vegidio/open-photo-ai/types"
@@ -103,25 +102,11 @@ func PoolOf(ep types.ExecutionProvider) types.MemoryPool {
 // going to the CPU all along: the budget evicted models that would have fit comfortably in host memory, for a GPU
 // no provider in the chain could reach.
 //
-// The vendor check follows utils.isNvidia in matching the name as well, because the Windows CIM fallback fills the
-// vendor in from the driver's description and does not always say "NVIDIA".
+// It shares largestNvidiaVRAMBytes with defaultDeviceBudget, so the decision to use the device pool and the size of
+// that pool cannot disagree about which card they describe.
 func hasDiscreteGPU() bool {
-	gpus, err := GPUInfo()
-	if err != nil {
-		return false
-	}
-
-	for _, gpu := range gpus {
-		if gpu.Memory == 0 {
-			continue
-		}
-
-		if strings.EqualFold(gpu.Vendor, "nvidia") || strings.Contains(strings.ToLower(gpu.Name), "nvidia") {
-			return true
-		}
-	}
-
-	return false
+	_, ok := largestNvidiaVRAMBytes()
+	return ok
 }
 
 // DefaultBudgets derives the per-pool ceilings for this machine, honouring BudgetEnvVar when it is set.
@@ -179,11 +164,11 @@ func envInt64(name string) (int64, bool) {
 	return value, true
 }
 
-// defaultDeviceBudget takes a fraction of the largest GPU's VRAM.
+// defaultDeviceBudget takes a fraction of the largest NVIDIA GPU's VRAM - the only card a device-pool provider runs on.
 func defaultDeviceBudget() int64 {
-	vram, ok := LargestVRAMBytes()
+	vram, ok := largestNvidiaVRAMBytes()
 	if !ok {
-		Log().Warn("could not determine GPU memory; using the default device budget")
+		Log().Info("no NVIDIA GPU memory reported; using the default device budget")
 	}
 
 	return deviceBudgetFor(vram)

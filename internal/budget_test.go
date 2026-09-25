@@ -169,8 +169,13 @@ func TestAutoIsChargedToTheDevicePoolOnlyWithAnNvidiaGPU(t *testing.T) {
 	}{
 		{"an NVIDIA card with VRAM", []sysinfo.GPUInfo{{Name: "RTX 4080", Vendor: "NVIDIA", Memory: 16384}},
 			types.MemoryPoolDevice},
-		{"an NVIDIA card named but not vendored, as the Windows CIM fallback reports it",
+		{"an NVIDIA card identified only by name",
 			[]sysinfo.GPUInfo{{Name: "NVIDIA GeForce RTX 3060", Memory: 12288}}, types.MemoryPoolDevice},
+		{"an NVIDIA card as the Windows CIM fallback reports it: no vendor, no memory",
+			[]sysinfo.GPUInfo{{Name: "NVIDIA GeForce RTX 3060", Memory: 0}}, types.MemoryPoolHost},
+		{"an integrated Radeon beside an NVIDIA card",
+			[]sysinfo.GPUInfo{{Name: "AMD Radeon 780M", Vendor: "AMD", Memory: 16384},
+				{Name: "RTX 3050", Vendor: "NVIDIA", Memory: 6144}}, types.MemoryPoolDevice},
 		{"an integrated Radeon reporting its 1 GiB carve-out",
 			[]sysinfo.GPUInfo{{Name: "PCI GPU (0x1002 0x1681)", Vendor: "AMD", Memory: 1024}}, types.MemoryPoolHost},
 		{"an Intel integrated GPU", []sysinfo.GPUInfo{{Name: "Intel Iris Xe", Vendor: "Intel", Memory: 2048}},
@@ -186,6 +191,35 @@ func TestAutoIsChargedToTheDevicePoolOnlyWithAnNvidiaGPU(t *testing.T) {
 
 			if got := PoolOf(types.ExecutionProviderAuto); got != tt.want {
 				t.Errorf("PoolOf(Auto) = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// The device pool is sized from the same card that decides Auto goes there. An APU's carve-out can be the larger
+// figure - some BIOSes allow 16 GiB - and sizing the pool from it would let models overflow the real card, which on
+// Windows pages them to system RAM without an error.
+func TestDeviceBudgetFollowsTheNvidiaCard(t *testing.T) {
+	const mib = int64(1) << 20
+
+	tests := []struct {
+		name string
+		gpus []sysinfo.GPUInfo
+		want int64
+	}{
+		{"an integrated Radeon with a larger carve-out beside an NVIDIA card",
+			[]sysinfo.GPUInfo{{Name: "AMD Radeon 780M", Vendor: "AMD", Memory: 16384},
+				{Name: "RTX 3050", Vendor: "NVIDIA", Memory: 6144}}, deviceBudgetFor(6144 * mib)},
+		{"an integrated Radeon alone gets the unknown-VRAM default",
+			[]sysinfo.GPUInfo{{Name: "AMD Radeon 680M", Vendor: "AMD", Memory: 1024}}, unknownVramBudget},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubGPUInfo(t, tt.gpus, nil)
+
+			if got := defaultDeviceBudget(); got != tt.want {
+				t.Errorf("defaultDeviceBudget() = %d, want %d", got, tt.want)
 			}
 		})
 	}
