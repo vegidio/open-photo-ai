@@ -221,7 +221,8 @@ pub(crate) async fn open_images(
         // `async` is required here: the dialog plugin's blocking call must run off the main thread, while the
         // native picker itself must be opened *on* it. A synchronous command would deadlock — the same
         // thread-shape issue `src/reveal.rs` records for `tauri-plugin-opener`.
-        let extensions = opai::image::input_extensions();
+        let patterns = picker_extensions(&opai::image::input_extensions(), cfg!(target_os = "linux"));
+        let extensions: Vec<&str> = patterns.iter().map(String::as_str).collect();
 
         // Only the word is translated: the frontend owns the catalogue, and this crate doesn't keep a second one. The
         // extension list stays derived from the decoder, so no second list of extensions lives in the frontend.
@@ -249,6 +250,30 @@ pub(crate) async fn open_images(
         describe_and_admit(paths, &opened).await.map_err(|message| ImagesError::OpenImages { message })
     })
     .await
+}
+
+/// The extensions the picker filters on, spelled so that any casing matches when `any_case` is set.
+///
+/// GTK matches filter globs case-sensitively, so on Linux each letter becomes a bracket class (`dng` →
+/// `[dD][nN][gG]`; rfd adds the `*.`) and a camera's `L1041576.DNG` is offered too. macOS turns extensions into
+/// UTTypes and Windows has no bracket classes; both already match case-insensitively, so they get the list unchanged.
+fn picker_extensions(extensions: &[&str], any_case: bool) -> Vec<String> {
+    extensions
+        .iter()
+        .map(|extension| {
+            if !any_case {
+                return (*extension).to_string();
+            }
+
+            extension
+                .chars()
+                .map(|c| {
+                    let (lower, upper) = (c.to_ascii_lowercase(), c.to_ascii_uppercase());
+                    if lower == upper { c.to_string() } else { format!("[{lower}{upper}]") }
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// Describe image files the user supplied some other way, and admit them.
@@ -632,6 +657,35 @@ mod tests {
             "camera RAW is a format the picker is filtered to"
         );
         assert!(input_extensions(Traceparent::default()).iter().all(|extension| !extension.starts_with('.')));
+    }
+
+    #[test]
+    fn the_linux_picker_matches_every_casing_of_an_extension() {
+        // GTK's globs are case-sensitive: a plain `*.dng` hides the `L1041576.DNG` a Leica writes. Digits have no case
+        // and stay as they are.
+        assert_eq!(picker_extensions(&["jpg", "dng", "3fr"], true), ["[jJ][pP][gG]", "[dD][nN][gG]", "3[fF][rR]"]);
+    }
+
+    #[test]
+    fn other_pickers_get_the_decoder_s_extensions_unchanged() {
+        // macOS turns each extension into a UTType, where a bracket class would name no type at all.
+        let extensions = opai::image::input_extensions();
+
+        assert_eq!(picker_extensions(&extensions, false), extensions);
+    }
+
+    #[test]
+    fn every_bracketed_extension_still_names_its_own_format() {
+        // Against the decoder's real list: an extension with a character the bracketing mishandled would filter on a
+        // pattern that no longer spells it.
+        let extensions = opai::image::input_extensions();
+
+        for (pattern, extension) in picker_extensions(&extensions, true).iter().zip(&extensions) {
+            // The decoder's extensions are lower-case, so dropping the brackets and the upper-case half of each class
+            // must give the extension back.
+            let unbracketed: String = pattern.chars().filter(|c| !matches!(c, '[' | ']') && !c.is_uppercase()).collect();
+            assert_eq!(&unbracketed, extension, "{pattern} no longer spells {extension}");
+        }
     }
 
     // ── The errors that cross the boundary ────────────────────────────────────────────────────────────────────────
