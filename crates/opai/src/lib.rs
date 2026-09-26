@@ -144,6 +144,7 @@ mod config;
 mod deps;
 mod error;
 mod gpu;
+mod hardware;
 pub mod image;
 mod inference;
 mod instance;

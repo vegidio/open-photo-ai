@@ -116,7 +116,7 @@ fn second_session() {
 /// Asserts that `line` is a session header for `app`.
 ///
 /// The header's job is to say what a reader has to know before reading anything under it: which application, which
-/// version, and what it was running on.
+/// version, and what it was running on, down to the hardware.
 fn assert_header(line: &str, app: &str) {
     assert!(line.contains("level=INFO"), "the header is not an informational record: {line}");
     assert!(line.contains(&format!(" app={app} ")), "the header does not name the application: {line}");
@@ -129,6 +129,10 @@ fn assert_header(line: &str, app: &str) {
         line.contains(&format!("arch={}", std::env::consts::ARCH)),
         "the header carries no architecture: {line}"
     );
+
+    for field in ["cpu_model=", "cpu_cores=", "memory=", "gpus="] {
+        assert!(line.contains(field), "the header carries no `{field}`: {line}");
+    }
 
     // And it is a timestamped record like every other line, rather than a banner of its own shape.
     assert!(line.starts_with("time="), "the header is not in the record format: {line}");

@@ -45,7 +45,7 @@ workspace = true
 # the session id and the export thread are all `o11y`'s. `tracing` and `tracing-subscriber` are named below, and the
 # exporter's `reqwest` is the one `fetch` already builds; the one crate it adds is `machine-uid`, which `o11y` hashes
 # into the machine id it reports.
-rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.9.11", features = [
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.9.10", features = [
     "crypto",
     "fetch",
     "fs",

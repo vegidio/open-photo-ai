@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import { appVersion, forgetOutdated, isOutdated } from "./app";
+import { appVersion, forgetOutdated, isOutdated, telemetryIds } from "./app";
 
 // Mocked at the `invoke` boundary, so the name asserted below is the one that would actually go on
 // the wire. This is the frontend half of a contract whose Rust half is `#[tauri::command] fn version`
@@ -22,6 +22,15 @@ describe("appVersion", () => {
         invoked.mockResolvedValue("26.9.0");
 
         await expect(appVersion()).resolves.toBe("26.9.0");
+    });
+});
+
+describe("telemetryIds", () => {
+    it("calls the command Rust registers, by name, and returns its answer untouched", async () => {
+        invoked.mockResolvedValue(null);
+
+        await expect(telemetryIds()).resolves.toBeNull();
+        expect(invoked).toHaveBeenCalledWith("telemetry_ids");
     });
 });
 

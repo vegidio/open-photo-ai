@@ -38,6 +38,23 @@ fn version(traceparent: command::Traceparent) -> &'static str {
     command::traced_sync(command::command_span!("version", traceparent), opai::version)
 }
 
+/// What the backend's telemetry sends under, as `frontend/ipc/app.ts`'s `TelemetryIds` reads it.
+#[derive(Debug, serde::Serialize)]
+struct TelemetryIds {
+    session: String,
+    machine: Option<String>,
+}
+
+// The command's name is written once more, in `frontend/ipc/app.ts`.
+/// The backend's telemetry session and machine, for the window to report beside its own; `None` when the backend sends
+/// nothing.
+#[tauri::command]
+fn telemetry_ids(traceparent: command::Traceparent) -> Option<TelemetryIds> {
+    command::traced_sync(command::command_span!("telemetry_ids", traceparent), || {
+        opai::telemetry::session_id().map(|session| TelemetryIds { session, machine: opai::telemetry::machine_id() })
+    })
+}
+
 /// Build and run the application. Blocks until it exits.
 ///
 /// `prepared` is `opai::prepare_library_path`'s result from `main`, reported here since this is where the log sink
@@ -124,6 +141,7 @@ pub fn run(prepared: Result<(), opai::InitError>) {
         })
         .invoke_handler(tauri::generate_handler![
             version,
+            telemetry_ids,
             analytics::set_analytics,
             frontend::log,
             setup::initialize,

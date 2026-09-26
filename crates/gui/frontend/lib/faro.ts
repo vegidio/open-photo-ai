@@ -1,5 +1,6 @@
 import { type Faro, initializeFaro, SessionInstrumentation, ViewInstrumentation } from "@grafana/faro-web-sdk";
 import { TracingInstrumentation } from "@grafana/faro-web-tracing";
+import type { TelemetryIds } from "@/ipc/app";
 import type { EventName, EventParams } from "@/lib/events";
 
 // The one module that touches Grafana Faro's SDK, or the OpenTelemetry one beneath its tracing;
@@ -37,10 +38,15 @@ const ERROR = 2;
  * version arrives is dropped rather than queued, and still reaches the file. An opt-out that arrives
  * meanwhile wins.
  *
- * `version` is `appVersion` from `ipc/app.ts`, handed in by `main.tsx` rather than imported: every
- * `ipc/` module sends through `ipc/invoke.ts`, which imports this one.
+ * `version` is `appVersion` from `ipc/app.ts`, and `backendIds` its `telemetryIds`, both handed in by
+ * `main.tsx` rather than imported: every `ipc/` module sends through `ipc/invoke.ts`, which imports
+ * this one. Only the type is imported, which leaves nothing behind at runtime.
  */
-export const startFaro = async (analytics: boolean, version: () => Promise<string>): Promise<void> => {
+export const startFaro = async (
+    analytics: boolean,
+    version: () => Promise<string>,
+    backendIds: () => Promise<TelemetryIds | null>,
+): Promise<void> => {
     if (starting) return;
     starting = true;
 
@@ -48,7 +54,9 @@ export const startFaro = async (analytics: boolean, version: () => Promise<strin
     const collector = import.meta.env.VITE_FARO_URL;
     if (!collector || !analytics || paused) return;
 
-    const built = await version();
+    // The backend's ids are only a link between the two halves' records, so a failure to ask for them
+    // starts Faro without them rather than not at all.
+    const [built, backend] = await Promise.all([version(), backendIds().catch(() => null)]);
     if (paused) return;
 
     faro = initializeFaro({
@@ -69,11 +77,21 @@ export const startFaro = async (analytics: boolean, version: () => Promise<strin
             new ViewInstrumentation(),
             new TracingInstrumentation({ instrumentations: [] }),
         ],
-        sessionTracking: { enabled: true },
+        // The backend's session and machine on every event, as `session_attr_backend_session` and
+        // `session_attr_machine_id`, so a dashboard can put the window's location beside the backend's
+        // records and exclude a machine from both halves alike. In the configuration rather than set on
+        // the session afterwards: Faro carries configured attributes into each session it starts after this one.
+        sessionTracking: backend
+            ? { enabled: true, session: { attributes: sessionAttributes(backend) } }
+            : { enabled: true },
         // No global `window.faro` for other code to reach.
         isolate: true,
     });
 };
+
+/** The session attributes naming the backend's ids; a host with no machine id sends the session alone. */
+const sessionAttributes = ({ session, machine }: TelemetryIds): Record<string, string> =>
+    machine === null ? { backend_session: session } : { backend_session: session, machine_id: machine };
 
 /**
  * Stops sending for the rest of this load, dropping what is held unsent. Idempotent.

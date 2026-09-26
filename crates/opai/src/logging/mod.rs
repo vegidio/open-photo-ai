@@ -278,6 +278,10 @@ fn install(name: &str, app: &str) -> Result<PathBuf, LogError> {
 
     panic::install_hook();
 
+    // Probed after the subscriber is installed, so a machine whose adapters cannot be enumerated gets the warning
+    // saying so in the file — one line above the header rather than nowhere.
+    let hardware = crate::hardware::snapshot();
+
     // Last, so that it is the first record under this session's divider, and after the subscriber so that it goes
     // through the same format every other record does.
     // No `app` field of its own: the formatter writes it onto every line, this one included, so naming it here would
@@ -286,6 +290,10 @@ fn install(name: &str, app: &str) -> Result<PathBuf, LogError> {
         version = crate::version(),
         os = std::env::consts::OS,
         arch = std::env::consts::ARCH,
+        cpu_model = %hardware.cpu_model,
+        cpu_cores = hardware.cpu_cores,
+        memory = %crate::hardware::gib(hardware.memory),
+        gpus = %hardware.gpus_summary(),
         "Open Photo AI starting"
     );
 

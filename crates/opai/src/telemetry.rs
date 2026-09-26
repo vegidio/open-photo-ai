@@ -98,6 +98,20 @@ pub fn stop() {
     o11y::shutdown();
 }
 
+/// The session id every record sent right now carries, or `None` when nothing is being sent.
+///
+/// For a front end that reports on its own, so its records can name the backend session they belong with.
+pub fn session_id() -> Option<String> {
+    o11y::session_id()
+}
+
+/// The machine id every record sent right now carries, or `None` when nothing is being sent or the host has no id.
+///
+/// For a front end that reports on its own, so its records can be filtered by the machine that sent them.
+pub fn machine_id() -> Option<String> {
+    o11y::machine_id()
+}
+
 /// Runs `open` so that the span it opens continues the trace `traceparent` names, as a child of the span it names.
 ///
 /// For a request whose caller started a trace of its own and sent it as a W3C `traceparent`: the span `open` creates
@@ -147,17 +161,28 @@ pub(crate) fn begin(endpoint: Option<&str>, auth: Option<&str>) -> Result<Sendin
 }
 
 /// This project's configuration of `o11y`. Everything not named keeps `o11y`'s default: a 5 s flush, batches of 512,
-/// 8192 records buffered and a 10 s export timeout. Geolocation stays off, as it was in the Go application.
+/// 8192 records buffered and a 10 s export timeout.
+///
+/// Geolocation is on, as it was in the Go application: one lookup of the public IP per session, on `o11y`'s own
+/// thread, adding `location.*` to every record sent after it answers. The machine's hardware goes on every record too,
+/// as resource attributes, so any record can be broken down by the machine that sent it.
 fn config(endpoint: &str, auth: &str) -> Config {
     // From the build profile rather than from a third variable: a release build is what users run.
     let environment = if cfg!(debug_assertions) { Environment::Development } else { Environment::Production };
 
-    Config::builder(endpoint, [("Authorization", auth)])
+    let builder = Config::builder(endpoint, [("Authorization", auth)])
         .service_name(SERVICE_NAME)
         .service_version(crate::version())
         .environment(environment)
         .min_level(Level::Info)
-        .on_export_error(|error| record_export_failure(&EXPORT_FAILED, error))
+        // Never under test: the suite's collector is local, and a lookup would put ipinfo.io on the test's path.
+        .geolocation(cfg!(not(test)))
+        .on_export_error(|error| record_export_failure(&EXPORT_FAILED, error));
+
+    crate::hardware::snapshot()
+        .attributes()
+        .into_iter()
+        .fold(builder, |builder, (key, value)| builder.resource_attribute(key, value))
         .build()
 }
 

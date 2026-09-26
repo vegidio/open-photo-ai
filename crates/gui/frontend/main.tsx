@@ -13,7 +13,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 // runs. The rule it imposes on the rest of the app is that `t()` is never called at module scope -
 // that would capture the language at evaluation time and never update when it changes.
 import "@/i18n";
-import { appVersion } from "@/ipc/app";
+import { appVersion, telemetryIds } from "@/ipc/app";
 import { windowReady } from "@/ipc/window";
 import { mirrorAnalytics } from "@/lib/analytics";
 import { startFaro } from "@/lib/faro";
@@ -34,7 +34,7 @@ if (!container) {
 
 // First, and not awaited, on the stored Analytics choice: the store has already rehydrated at import.
 // What the window reports before Faro starts is dropped rather than queued - it still reaches the file.
-startFaro(useSettingsStore.getState().analytics, appVersion).catch((error: unknown) => {
+startFaro(useSettingsStore.getState().analytics, appVersion, telemetryIds).catch((error: unknown) => {
     report("Failed to start sending the window's telemetry", error);
 });
 

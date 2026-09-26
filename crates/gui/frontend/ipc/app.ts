@@ -13,6 +13,20 @@ const VERSION_COMMAND = "version";
  */
 export const appVersion = () => call<string>(VERSION_COMMAND);
 
+// Written a second time in `crates/gui/src/lib.rs`, as the `#[tauri::command]` function's name;
+// `app.test.ts` pins this half.
+const TELEMETRY_IDS_COMMAND = "telemetry_ids";
+
+/** Mirrors `TelemetryIds` in `crates/gui/src/lib.rs`. `machine` is `null` on a host with no readable id. */
+export type TelemetryIds = { session: string; machine: string | null };
+
+/**
+ * The session and machine ids the backend's telemetry is sending under, or `null` when the backend
+ * sends nothing. The window reports them beside its own, so the two halves of one launch can be
+ * matched up, and the window's records filtered by machine as the backend's are.
+ */
+export const telemetryIds = () => call<TelemetryIds | null>(TELEMETRY_IDS_COMMAND);
+
 // Written a second time in `crates/gui/src/update.rs`, as the `#[tauri::command]` function's name;
 // `app.test.ts` pins this half.
 const IS_OUTDATED_COMMAND = "is_outdated";

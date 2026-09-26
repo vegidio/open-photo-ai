@@ -350,6 +350,17 @@ fn records_and_spans_reach_the_collector_as_the_file_has_them() {
     // would pass with the setting never made, and `cargo test --release` is what catches that.
     let environment = if cfg!(debug_assertions) { "development" } else { "production" };
     assert_eq!(attribute(resource, "deployment.environment.name"), Some(environment), "{resource}");
+    // The machine's hardware, on the resource rather than on each record, under the names the dashboards query.
+    let hardware = crate::hardware::snapshot();
+    assert_eq!(attribute(resource, "cpu.model"), Some(hardware.cpu_model.as_str()), "{resource}");
+    let has_int = |key: &str| {
+        resource["attributes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["key"] == key && entry["value"]["intValue"].is_string())
+    };
+    assert!(has_int("cpu.cores") && has_int("memory"), "{resource}");
 
     // The record inside a span arrives in that span's trace, and the span arrives as a trace.
     let info = log_record("export test info record").expect("the info record did not arrive");

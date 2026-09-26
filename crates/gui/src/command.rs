@@ -170,6 +170,7 @@ finished!(
     f64,
     crate::export::ExportFormats,
     Option<String>,
+    Option<crate::TelemetryIds>,
     &'static str,
     &'static [opai::FamilyEntry],
     Vec<&'static str>

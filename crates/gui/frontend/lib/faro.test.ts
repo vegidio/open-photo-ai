@@ -1,10 +1,13 @@
 import { initializeFaro } from "@grafana/faro-web-sdk";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import type { TelemetryIds } from "@/ipc/app";
 import { formatsOf } from "@/lib/events";
 import { forgetFaro, pauseFaro, sendError, startFaro, traced, track } from "./faro";
 
 // The one thing the window asks Rust for before it starts, answered with a fixed version here.
 const version = vi.fn(async () => "26.10.0");
+// And the backend's telemetry ids, which a launch whose backend sends nothing answers `null`.
+const backendIds = vi.fn(async (): Promise<TelemetryIds | null> => null);
 
 const TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
 const SPAN_ID = "00f067aa0ba902b7";
@@ -51,7 +54,7 @@ const initialized = initializeFaro as unknown as Mock;
 const COLLECTOR = "https://faro.example.grafana.net/collect/k";
 
 /** Starts Faro in a build that names a collector, on a launch with Analytics on. */
-const start = () => startFaro(true, version);
+const start = () => startFaro(true, version, backendIds);
 
 beforeEach(() => {
     forgetFaro();
@@ -63,7 +66,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("startFaro", () => {
     it("initialises nothing on a launch with Analytics off", async () => {
-        await startFaro(false, version);
+        await startFaro(false, version, backendIds);
 
         expect(initialized).not.toHaveBeenCalled();
         expect(version).not.toHaveBeenCalled();
@@ -95,6 +98,37 @@ describe("startFaro", () => {
         expect(config.instrumentations[2].options).toEqual({ instrumentations: [] });
     });
 
+    it("names the backend's session and machine on every session it starts, when the backend has them", async () => {
+        backendIds.mockResolvedValueOnce({ session: "3f2c9a1e-backend", machine: "4905398b-machine" });
+
+        await start();
+
+        expect(initialized.mock.calls[0]?.[0].sessionTracking).toEqual({
+            enabled: true,
+            session: { attributes: { backend_session: "3f2c9a1e-backend", machine_id: "4905398b-machine" } },
+        });
+    });
+
+    it("names the backend's session alone when the host has no machine id", async () => {
+        backendIds.mockResolvedValueOnce({ session: "3f2c9a1e-backend", machine: null });
+
+        await start();
+
+        expect(initialized.mock.calls[0]?.[0].sessionTracking).toEqual({
+            enabled: true,
+            session: { attributes: { backend_session: "3f2c9a1e-backend" } },
+        });
+    });
+
+    it("starts without the backend's ids when asking for them fails", async () => {
+        backendIds.mockRejectedValueOnce(new Error("no bridge"));
+
+        await start();
+
+        expect(initialized).toHaveBeenCalledOnce();
+        expect(initialized.mock.calls[0]?.[0].sessionTracking).toEqual({ enabled: true });
+    });
+
     it("starts once, however often it is called", async () => {
         await Promise.all([start(), start()]);
 
@@ -115,7 +149,7 @@ describe("track and sendError", () => {
         track("autopilot_run", { count: 3 });
         sendError(new Error("early"), { type: "warn", message: "m" });
 
-        await startFaro(false, version);
+        await startFaro(false, version, backendIds);
         track("autopilot_run", { count: 3 });
         sendError(new Error("never"), { type: "warn", message: "m" });
 
