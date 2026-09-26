@@ -584,6 +584,13 @@ pub(crate) fn profile(_precision: Precision) -> EpProfile {
         disabled_optimizers: BROKEN_OPTIMIZERS.iter().map(|name| (*name).to_string()).collect(),
         cuda_prefer_nhwc: true,
         trt_options: [(TRT_BUILDER_OPTIMIZATION_LEVEL.to_string(), "3".to_string())].into(),
+        // Declined for all three graphs, and not for speed. The WebGPU plugin uploads a graph's weights into GPU
+        // buffers, and on the integrated GPUs it exists to serve those buffers are system RAM the driver pins outside
+        // any process's accounting — so the transformer's 3.7 GB of INT8 weights become 3.7 GB the kernel cannot
+        // reclaim, beside the copy ONNX Runtime already holds and the two VAEs. On a 16 GB laptop that was not an
+        // out-of-memory error in the application but the whole machine locking up. The other models are a few hundred
+        // megabytes at most and never approach it.
+        webgpu_declined: true,
         ..EpProfile::default()
     }
 }

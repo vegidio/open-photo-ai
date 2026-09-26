@@ -136,9 +136,45 @@ impl<S> SessionHandle<S> {
     /// Borrows the session for a run.
     ///
     /// Exclusive, because `ort::session::Session::run` takes `&mut self`. Two different models still run
-    /// concurrently; two runs of *one* model against one GPU are serialized, which is not a throughput loss.
-    pub(crate) fn session(&self) -> MutexGuard<'_, S> {
-        lock(&self.entry.session)
+    /// concurrently; two runs of *one* model against one GPU are serialized, which is not a throughput loss. The
+    /// exception is a session built on WebGPU, which is also serialized against every other WebGPU session — see
+    /// [`WEBGPU_RUN`].
+    pub(crate) fn session(&self) -> SessionGuard<'_, S> {
+        // The run lock before the session's own, in every caller, so two borrows can never each hold one of the pair
+        // while waiting on the other.
+        let webgpu = (self.entry.provider == ExecutionProvider::WebGpu).then(|| lock(&WEBGPU_RUN));
+
+        SessionGuard { session: lock(&self.entry.session), _webgpu: webgpu }
+    }
+}
+
+/// Held across every run of a session built on WebGPU.
+///
+/// Two sessions running at once on the WebGPU plugin crash the process on Linux (microsoft/onnxruntime#32561), and two
+/// different models running concurrently is what the rest of this module is built to allow — an analysis beside an
+/// enhancement, say. The plugin queues its work onto the one device either way, so this costs something only in the
+/// overlap it protects.
+static WEBGPU_RUN: Mutex<()> = Mutex::new(());
+
+/// A session borrowed for a run, and on WebGPU the process-wide run lock with it.
+pub(crate) struct SessionGuard<'a, S> {
+    // Declared first so it is released first: the session goes back before the run lock does, the reverse of the order
+    // they were taken in.
+    session: MutexGuard<'a, S>,
+    _webgpu: Option<MutexGuard<'static, ()>>,
+}
+
+impl<S> std::ops::Deref for SessionGuard<'_, S> {
+    type Target = S;
+
+    fn deref(&self) -> &S {
+        &self.session
+    }
+}
+
+impl<S> std::ops::DerefMut for SessionGuard<'_, S> {
+    fn deref_mut(&mut self) -> &mut S {
+        &mut self.session
     }
 }
 

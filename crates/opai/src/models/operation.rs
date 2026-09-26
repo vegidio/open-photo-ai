@@ -980,7 +980,7 @@ pub(crate) mod tests {
 
             if measured_arm {
                 assert_ne!(
-                    operation.profile(),
+                    operation.profile().tuning(),
                     EpProfile::default(),
                     "{} lost its measured profile",
                     operation.display_name()
@@ -989,11 +989,39 @@ pub(crate) mod tests {
             }
 
             assert_eq!(
-                operation.profile(),
+                operation.profile().tuning(),
                 EpProfile::default(),
                 "{} declared a profile nothing measured",
                 operation.display_name()
             );
+        }
+    }
+
+    #[test]
+    fn only_the_models_webgpu_mishandles_carry_a_webgpu_setting() {
+        // The other half of what `tuning` takes out, across all eight families: the three graphs with nodes the plugin
+        // gets wrong pin exactly those, at both precisions, Osaka declines the provider outright, and nothing else
+        // says anything to WebGPU at all.
+        for analysis in every_analysis() {
+            let profile = analysis.profile();
+            assert!(profile.webgpu_cpu_nodes.is_empty() && !profile.webgpu_declined, "{}", analysis.display_name());
+        }
+
+        for operation in every_operation() {
+            let profile = operation.profile();
+            // `cb_saopaulo_fp16`: the codename is the model tag's second field.
+            let tag = operation.model_tag();
+            let codename = tag.split('_').nth(1).expect("every model tag names its codename");
+
+            let pinned = matches!(codename, "paris" | "saopaulo" | "jaipur");
+            assert_eq!(
+                !profile.webgpu_cpu_nodes.is_empty(),
+                pinned,
+                "{} pins {:?}",
+                operation.display_name(),
+                profile.webgpu_cpu_nodes
+            );
+            assert_eq!(profile.webgpu_declined, codename == "osaka", "{}", operation.display_name());
         }
     }
 

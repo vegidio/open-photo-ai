@@ -209,7 +209,7 @@ pub(crate) mod tests {
         // of the seam rather than that one arm is unwritten: both arms reach a model's own file, and only one of
         // the two files answers with anything but the provider's defaults.
         for variant in every_variant() {
-            let declared = variant.profile();
+            let declared = variant.profile().tuning();
 
             let measured = matches!(variant, ColorBalanceVariant::Rio(FloatPrecision::Fp16));
             assert_eq!(
@@ -224,7 +224,7 @@ pub(crate) mod tests {
         // Rio's FP16 arm still declares the specialization its own graph earned.
         for precision in FloatPrecision::ALL {
             assert_eq!(
-                ColorBalanceVariant::SaoPaulo(precision).profile(),
+                ColorBalanceVariant::SaoPaulo(precision).profile().tuning(),
                 EpProfile::default(),
                 "São Paulo at {precision:?} carries a setting its own sweep could not separate from noise"
             );
