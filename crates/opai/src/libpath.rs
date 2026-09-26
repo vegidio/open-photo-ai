@@ -14,6 +14,15 @@ use crate::config;
 use crate::deps::artifact;
 use crate::error::InitError;
 
+/// The CUDA driver stub WSL2 exposes for the Windows NVIDIA driver. Its presence is what says this is WSL2 with an
+/// NVIDIA GPU.
+#[cfg(target_os = "linux")]
+const WSL_CUDA_STUB: &str = "/usr/lib/wsl/lib/libcuda.so.1";
+
+/// The Windows driver store as WSL2 mounts it: one directory per driver package, old versions included.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+const WSL_DRIVER_STORE: &str = "/usr/lib/wsl/drivers";
+
 /// The variable whose presence says this process is already the replacement, so the re-exec happens at most once
 /// however many times the entry point runs.
 ///
@@ -85,7 +94,8 @@ pub(crate) fn search_path(dirs: &[PathBuf], inherited: Option<&OsStr>) -> OsStri
 ///   process tree. glibc reads that variable when the process starts, so appending to it later — after the libraries
 ///   have been downloaded — changes nothing about the `dlopen` calls the runtime makes. On success this **does not
 ///   return**. A replacement that fails is reported and startup continues under the inherited path, which costs the
-///   GPU providers rather than the launch.
+///   GPU providers rather than the launch. Under WSL2 with an NVIDIA GPU, the active Windows driver's directory is
+///   added after the application's own — see [`wsl_cuda_driver_dir`].
 /// - **Windows**: prepends the directories to `PATH`, which `LoadLibrary` consults at call time, so no restart is
 ///   needed.
 /// - **macOS**: creates the directories and returns. No NVIDIA library is published for it, and the CoreML provider
@@ -151,13 +161,68 @@ unsafe fn apply(dirs: &[PathBuf]) {
     // `exec` replaces the process image and does not return on success, so everything after this line is the failure
     // path. Reported rather than fatal: a machine that cannot exec its own binary has worse problems than an
     // unfindable CUDA, and startup on the CPU is better than no startup at all.
+    let mut ours = dirs.to_vec();
+    ours.extend(wsl_cuda_driver_dir());
+
     let error = std::process::Command::new(program)
         .args(std::env::args_os().skip(1))
-        .env("LD_LIBRARY_PATH", search_path(dirs, std::env::var_os("LD_LIBRARY_PATH").as_deref()))
+        .env("LD_LIBRARY_PATH", search_path(&ours, std::env::var_os("LD_LIBRARY_PATH").as_deref()))
         .env(REEXEC_GUARD, "1")
         .exec();
 
     eprintln!("opai: could not restart with LD_LIBRARY_PATH set; the NVIDIA libraries will not be found: {error}");
+}
+
+/// Under WSL2, the directory of the Windows NVIDIA driver that CUDA actually uses, so it can go on the search path.
+///
+/// WSL2's `libcuda.so.1` is a stub that finds the real driver, `libcuda.so.1.1`, in the Windows driver store and loads
+/// it — and that driver then loads its PTX JIT compiler by soname alone, `libnvidia-ptxjitcompiler.so.1`. The
+/// compiler it needs sits beside it in the driver store, which is not on any search path, so the loader falls through
+/// to its cache. On a distribution with a native NVIDIA driver package installed — Ubuntu's `nvidia-cuda-toolkit`
+/// pulls in `libnvidia-compute-*` — the cache hands it that package's compiler, from a different driver version, and
+/// the first CUDA call segfaults inside it. Putting the driver's own directory on the path makes its compiler win.
+///
+/// The directory is asked for rather than guessed: the driver store keeps old driver versions beside the current one,
+/// and the compiler has to match the driver exactly. `cuInit` is what makes the stub load the real driver, and
+/// `/proc/self/maps` then says where it came from. That costs a CUDA initialisation, around 60 ms, on WSL2 with an
+/// NVIDIA GPU and nothing anywhere else. The compiler itself is not loaded by `cuInit`, so this is safe to call on
+/// exactly the machines it exists for.
+///
+/// The driver is never unloaded: a driver is not written to be, and the process is about to be replaced anyway.
+#[cfg(target_os = "linux")]
+fn wsl_cuda_driver_dir() -> Option<PathBuf> {
+    use std::ffi::{c_int, c_uint};
+
+    if !Path::new(WSL_CUDA_STUB).is_file() {
+        return None;
+    }
+
+    // SAFETY: loading the stub runs its initialisers, which it ships precisely for a process to load it.
+    let library = unsafe { libloading::Library::new(WSL_CUDA_STUB) }.ok()?;
+
+    // The status is not read: a failed initialisation still says where the driver was loaded from if it got that far,
+    // and one that never loaded it leaves nothing in the maps and nothing to add.
+    //
+    // SAFETY: `cuInit` has this signature in `cuda.h`, and the symbol does not outlive `library`, which is never
+    // unloaded. `0` is the only flag value it accepts.
+    unsafe {
+        let init: libloading::Symbol<unsafe extern "C" fn(c_uint) -> c_int> = library.get(b"cuInit\0").ok()?;
+        init(0);
+    }
+    std::mem::forget(library);
+
+    driver_dir_in_maps(&std::fs::read_to_string("/proc/self/maps").ok()?)
+}
+
+/// The driver-store directory the real CUDA driver was mapped from, read from a `/proc/<pid>/maps` listing.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn driver_dir_in_maps(maps: &str) -> Option<PathBuf> {
+    maps.lines()
+        // The path is the last column and the only one that contains a `/`; it may itself contain spaces.
+        .filter_map(|line| line.find('/').map(|start| Path::new(&line[start..])))
+        .find(|path| path.starts_with(WSL_DRIVER_STORE) && path.file_name() == Some(OsStr::new("libcuda.so.1.1")))
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
 }
 
 /// The Windows half: `LoadLibrary` consults `PATH` when it is called rather than when the process starts, so the
@@ -284,6 +349,49 @@ mod tests {
 
         assert_eq!(first, second);
         assert!(second[0].join("onnxruntime.so").exists(), "a second call emptied an install");
+    }
+
+    /// A `/proc/self/maps` excerpt from a WSL2 process after `cuInit`, trimmed to the lines that matter.
+    const WSL_MAPS: &str = "\
+7b64646d4000-7b64646d5000 r--p 00000000 00:3f 2533274790988457           /usr/lib/wsl/lib/libcuda.so.1
+7b612e6c0000-7b612e6c1000 r--p 00000000 00:40 1125899906950443           /usr/lib/wsl/drivers/nv_dispsi.inf_amd64_d95662815b9b13a8/libcuda.so.1.1
+7b612e6c1000-7b612f854000 r-xp 00001000 00:40 1125899906950443           /usr/lib/wsl/drivers/nv_dispsi.inf_amd64_d95662815b9b13a8/libcuda.so.1.1
+7b640f773000-7b640f774000 r--p 00000000 00:3f 1970324837567045           /usr/lib/wsl/lib/libdxcore.so
+7ffd2c9f1000-7ffd2ca12000 rw-p 00000000 00:00 0                          [stack]
+";
+
+    #[test]
+    fn the_active_driver_directory_is_where_the_real_cuda_driver_was_mapped_from() {
+        assert_eq!(
+            driver_dir_in_maps(WSL_MAPS),
+            Some(PathBuf::from("/usr/lib/wsl/drivers/nv_dispsi.inf_amd64_d95662815b9b13a8"))
+        );
+    }
+
+    #[test]
+    fn no_driver_directory_before_the_real_driver_is_loaded() {
+        // The stub alone, which is all a failed `cuInit` leaves: there is no driver to point the loader at.
+        let stub_only = "7b64646d4000-7b64646d5000 r--p 00000000 00:3f 25332 /usr/lib/wsl/lib/libcuda.so.1\n";
+
+        assert_eq!(driver_dir_in_maps(stub_only), None);
+        assert_eq!(driver_dir_in_maps(""), None);
+    }
+
+    #[test]
+    fn a_cuda_driver_outside_the_driver_store_is_not_a_wsl_driver() {
+        // A native Linux driver has nothing to add: its compiler is already the one the loader finds.
+        let native = "7b612e6c0000-7b612e6c1000 r--p 00000000 08:20 4242 /usr/lib/x86_64-linux-gnu/libcuda.so.1.1\n";
+
+        assert_eq!(driver_dir_in_maps(native), None);
+    }
+
+    #[test]
+    fn other_files_in_the_driver_store_are_not_the_driver() {
+        // `libcuda_loader.so` is the stub's twin in the store, and old driver versions keep theirs too: only the real
+        // driver that was mapped says which version is active.
+        let loader = "7b612e6c0000-7b612e6c1000 r--p 00000000 00:40 42 /usr/lib/wsl/drivers/nv_dispi.inf_amd64_0ld/libcuda_loader.so\n";
+
+        assert_eq!(driver_dir_in_maps(loader), None);
     }
 
     #[test]

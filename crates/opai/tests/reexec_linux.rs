@@ -70,8 +70,13 @@ fn the_process_restarts_once_under_the_composed_library_path() {
     assert_ne!(composed, INHERITED, "the process is still running under the path it was started with");
     assert_eq!(dirs.len(), 4, "expected the runtime and the three library directories, got {dirs:?}");
     assert_eq!(&entries[..4], &dirs[..], "the library directories are not at the front of {composed}");
+
+    // Under WSL2 with an NVIDIA GPU, the active Windows driver's directory sits between the application's directories
+    // and the inherited ones; everywhere else nothing does.
+    let driver_dirs = entries[4..].iter().take_while(|entry| entry.starts_with("/usr/lib/wsl/drivers")).count();
+    assert!(driver_dirs <= 1, "more than one WSL driver directory in {composed}");
     assert_eq!(
-        entries.get(4).map(PathBuf::as_path),
+        entries.get(4 + driver_dirs).map(PathBuf::as_path),
         Some(std::path::Path::new(INHERITED)),
         "the inherited entry was dropped or reordered in {composed}"
     );

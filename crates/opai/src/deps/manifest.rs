@@ -564,7 +564,7 @@ mod tests {
         // its sidecar and `install::part_path` follows, the mismatch has to fail here — the alternative is `empty_dir`
         // deleting a multi-gigabyte resumable download on every launch, and `record_tree` writing the leftovers into a
         // manifest as installed content.
-        let target = Path::new("/somewhere/opai/runtime/onnx_linux_amd64.7z");
+        let target = Path::new("/somewhere/opai/runtime/onnx_linux_x64.7z");
 
         for path in [crate::deps::install::part_path(target), crate::deps::install::sidecar_path(target)] {
             let name = path.file_name().unwrap().to_str().unwrap();

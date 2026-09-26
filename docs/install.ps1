@@ -20,7 +20,7 @@ function Write-Fail($msg) { Write-Host "error: $msg" -ForegroundColor Red; throw
 # WOW64 reports x86 in PROCESSOR_ARCHITECTURE; ARCHITEW6432 holds the real arch when present.
 $archEnv = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
 switch ($archEnv) {
-    'AMD64' { $Arch = 'amd64' }
+    'AMD64' { $Arch = 'x64' }
     'ARM64' { $Arch = 'arm64' }
     default { Write-Fail "unsupported architecture: $archEnv" }
 }

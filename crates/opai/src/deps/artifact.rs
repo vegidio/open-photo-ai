@@ -15,17 +15,17 @@ pub(crate) enum Os {
     Windows,
 }
 
-/// An architecture the release assets are named for, likewise from Go's `GOARCH`.
+/// An architecture the release assets are named for, spelled as the release spells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Arch {
-    /// 64-bit x86, which the assets call `amd64` and Rust calls `x86_64`.
-    Amd64,
+    /// 64-bit x86, which the assets call `x64` and Rust calls `x86_64`.
+    X64,
     /// 64-bit ARM, which the assets call `arm64` and Rust calls `aarch64`.
     Arm64,
 }
 
 // A pair of enums rather than a free-form string. A string has to match what the mapper spells with nothing
-// connecting the two, so a typo — `win_amd64`, `darwin_aarch64` — is not a compile error: it silently makes that
+// connecting the two, so a typo — `win_x64`, `darwin_aarch64` — is not a compile error: it silently makes that
 // platform unpublished, and the first person to find out is a user on it. There is no way to write one of those down
 // here.
 /// The platform one published archive is built for, and the key the table is looked up by.
@@ -48,11 +48,11 @@ impl Platform {
         // The one place the segment is spelled, so the names in the table and the names the lookup builds are the same
         // strings rather than two spellings that have to agree.
         match (self.os, self.arch) {
-            (Os::Darwin, Arch::Amd64) => "darwin_amd64",
+            (Os::Darwin, Arch::X64) => "darwin_x64",
             (Os::Darwin, Arch::Arm64) => "darwin_arm64",
-            (Os::Linux, Arch::Amd64) => "linux_amd64",
+            (Os::Linux, Arch::X64) => "linux_x64",
             (Os::Linux, Arch::Arm64) => "linux_arm64",
-            (Os::Windows, Arch::Amd64) => "windows_amd64",
+            (Os::Windows, Arch::X64) => "windows_x64",
             (Os::Windows, Arch::Arm64) => "windows_arm64",
         }
     }
@@ -70,7 +70,7 @@ impl Platform {
             _ => return None,
         };
         let arch = match arch {
-            "x86_64" => Arch::Amd64,
+            "x86_64" => Arch::X64,
             "aarch64" => Arch::Arm64,
             _ => return None,
         };
@@ -162,7 +162,7 @@ pub(crate) const ONNX_RUNTIME: Release = Release {
             lib: Some("libonnxruntime.1.30.0.dylib"),
         },
         Artifact {
-            platform: Platform::new(Os::Linux, Arch::Amd64),
+            platform: Platform::new(Os::Linux, Arch::X64),
             hash: "2a9fadb295f66fca1480bad457355c7044bf14ca06927468b991996764ad5d37",
             size: 190_133_628,
             lib: Some("libonnxruntime.so.1.30.0"),
@@ -174,7 +174,7 @@ pub(crate) const ONNX_RUNTIME: Release = Release {
             lib: Some("libonnxruntime.so.1.30.0"),
         },
         Artifact {
-            platform: Platform::new(Os::Windows, Arch::Amd64),
+            platform: Platform::new(Os::Windows, Arch::X64),
             hash: "cc13165ce3df6747a561db8bc06ebdd05bf21135808171a5f76245d8bdb10a63",
             size: 144_411_038,
             lib: Some("onnxruntime.dll"),
@@ -190,7 +190,7 @@ pub(crate) const ONNX_RUNTIME: Release = Release {
 
 /// The CUDA runtime libraries, pinned to `cuda/13.3.0`.
 ///
-/// Published for `linux_amd64`, `linux_arm64` and `windows_amd64` only — there is no NVIDIA hardware to serve on
+/// Published for `linux_x64`, `linux_arm64` and `windows_x64` only — there is no NVIDIA hardware to serve on
 /// macOS, and no `windows_arm64` build exists. A platform with no row here is not an error for a GPU library; it is
 /// a provider that is reported unsupported and never attempted.
 pub(crate) const CUDA: Release = Release {
@@ -206,7 +206,7 @@ pub(crate) const CUDA: Release = Release {
     //       --jq '.assets[] | "\(.name) \(.size) \(.digest)"'
     archives: &[
         Artifact {
-            platform: Platform::new(Os::Linux, Arch::Amd64),
+            platform: Platform::new(Os::Linux, Arch::X64),
             hash: "fb4eb6ef362973c6cdefeae43e09cea05270288acbdd47cc0fc4f50ca6bc47c0",
             size: 587_322_552,
             lib: None,
@@ -218,7 +218,7 @@ pub(crate) const CUDA: Release = Release {
             lib: None,
         },
         Artifact {
-            platform: Platform::new(Os::Windows, Arch::Amd64),
+            platform: Platform::new(Os::Windows, Arch::X64),
             hash: "b85d858e4fd97bab2c808c7ad7106a89dc8dfba535a0f20f63c4decc4d24452b",
             size: 585_185_362,
             lib: None,
@@ -239,7 +239,7 @@ pub(crate) const CUDNN: Release = Release {
     provides: None,
     archives: &[
         Artifact {
-            platform: Platform::new(Os::Linux, Arch::Amd64),
+            platform: Platform::new(Os::Linux, Arch::X64),
             hash: "18e84817dd836046087ece4b6776fea066440854c48b6b6e6c4a388b43df4174",
             size: 407_298_251,
             lib: None,
@@ -251,7 +251,7 @@ pub(crate) const CUDNN: Release = Release {
             lib: None,
         },
         Artifact {
-            platform: Platform::new(Os::Windows, Arch::Amd64),
+            platform: Platform::new(Os::Windows, Arch::X64),
             hash: "a26f54c17ea990e59a6f7232bdebf39f58b5debd9a0c8ec9a6573885ae27edbd",
             size: 354_760_387,
             lib: None,
@@ -272,7 +272,7 @@ pub(crate) const TENSORRT: Release = Release {
     provides: Some(Provider::TensorRt),
     archives: &[
         Artifact {
-            platform: Platform::new(Os::Linux, Arch::Amd64),
+            platform: Platform::new(Os::Linux, Arch::X64),
             hash: "d2a29e4fbc78445ae715ff7ff6fde6f59ba6425a8b0017753f3a776096c59376",
             size: 1_780_420_117,
             lib: None,
@@ -284,7 +284,7 @@ pub(crate) const TENSORRT: Release = Release {
             lib: None,
         },
         Artifact {
-            platform: Platform::new(Os::Windows, Arch::Amd64),
+            platform: Platform::new(Os::Windows, Arch::X64),
             hash: "1156bf236dd66aa7c4772f8144599b81061512d035d05f02c037e1a1ad20370b",
             size: 1_399_566_073,
             lib: None,
@@ -337,9 +337,9 @@ mod tests {
     fn every_pinned_platform_resolves_to_its_own_asset() {
         let cases = [
             ("macos", "aarch64", "onnx_darwin_arm64.7z"),
-            ("linux", "x86_64", "onnx_linux_amd64.7z"),
+            ("linux", "x86_64", "onnx_linux_x64.7z"),
             ("linux", "aarch64", "onnx_linux_arm64.7z"),
-            ("windows", "x86_64", "onnx_windows_amd64.7z"),
+            ("windows", "x86_64", "onnx_windows_x64.7z"),
             ("windows", "aarch64", "onnx_windows_arm64.7z"),
         ];
 
@@ -385,9 +385,9 @@ mod tests {
     fn each_gpu_library_resolves_to_its_own_asset_on_every_published_platform() {
         for (release, prefix) in GPU_LIBRARIES {
             let cases = [
-                ("linux", "x86_64", "linux_amd64"),
+                ("linux", "x86_64", "linux_x64"),
                 ("linux", "aarch64", "linux_arm64"),
-                ("windows", "x86_64", "windows_amd64"),
+                ("windows", "x86_64", "windows_x64"),
             ];
 
             for (os, arch, platform) in cases {
@@ -481,9 +481,9 @@ mod tests {
         // pinned by history rather than by choice.
         let cases = [
             ("macos", "aarch64", "darwin_arm64"),
-            ("linux", "x86_64", "linux_amd64"),
+            ("linux", "x86_64", "linux_x64"),
             ("linux", "aarch64", "linux_arm64"),
-            ("windows", "x86_64", "windows_amd64"),
+            ("windows", "x86_64", "windows_x64"),
             ("windows", "aarch64", "windows_arm64"),
         ];
 
@@ -491,9 +491,9 @@ mod tests {
             assert_eq!(Platform::from_consts(os, arch).unwrap().segment(), segment, "{os}/{arch}");
         }
 
-        // `darwin_amd64` is spellable and nothing is published for it, which is the point: the type says what a
+        // `darwin_x64` is spellable and nothing is published for it, which is the point: the type says what a
         // platform *is*, and the table says what is built for it.
-        assert_eq!(Platform::new(Os::Darwin, Arch::Amd64).segment(), "darwin_amd64");
+        assert_eq!(Platform::new(Os::Darwin, Arch::X64).segment(), "darwin_x64");
     }
 
     #[test]

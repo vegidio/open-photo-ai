@@ -44,7 +44,7 @@ fn profile(precision: Precision) -> EpProfile {
         // measurement is of the conversion rather than of the model.
         //
         // `CPUAndNeuralEngine` makes the runtime throw at session build on a Mac with no Neural Engine, which would
-        // drop this model to the CPU provider. That cannot be reached here: no `darwin_amd64` ONNX Runtime is
+        // drop this model to the CPU provider. That cannot be reached here: no `darwin_x64` ONNX Runtime is
         // published, so every Mac that runs inference at all is Apple Silicon and has one. Publishing an Intel runtime
         // would make this setting conditional. The margin is an M2 Max's, and the balance between the Neural Engine
         // and the GPU differs across Apple Silicon generations — the direction follows from the op mix and should

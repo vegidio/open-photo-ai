@@ -191,12 +191,12 @@ just <interface> <architecture>
 Where:
 
 - `<interface>`: can be `cli` or `gui`.
-- `<architecture>`: can be `amd64` or `arm64` (optional).
+- `<architecture>`: can be `x64` or `arm64` (optional).
 
-For example, if I wanted to build a GUI version of the app, on architecture AMD64, I would run the command:
+For example, if I wanted to build a GUI version of the app, on architecture x64, I would run the command:
 
 ```bash
-just gui amd64
+just gui x64
 ```
 
 ## 📝 License

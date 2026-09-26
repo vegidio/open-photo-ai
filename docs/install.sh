@@ -36,8 +36,10 @@ Options:
 
 Environment variables:
   OPAI_VERSION       release tag         (default: latest)
-  OPAI_INSTALL_DIR   install dir         (default: ~/Applications on macOS,
-                                                   /usr/local/bin on Linux)
+  OPAI_INSTALL_DIR   install dir, macOS  (default: ~/Applications)
+
+On Linux the app is installed system-wide as a .deb or .rpm package, picked
+from the distro, so sudo is needed unless the installer runs as root.
 EOF
 }
 
@@ -52,25 +54,23 @@ while [ $# -gt 0 ]; do
 done
 
 case "$(uname -s)" in
-    Darwin) OS=darwin ;;
+    Darwin) OS=macos ;;
     Linux)  OS=linux ;;
     *) error "unsupported OS: $(uname -s). This installer supports macOS and Linux. For Windows, use install.ps1." ;;
 esac
 
 case "$(uname -m)" in
     arm64|aarch64)  ARCH=arm64 ;;
-    x86_64|amd64)   ARCH=amd64 ;;
+    x86_64|amd64)   ARCH=x64 ;;
     *) error "unsupported architecture: $(uname -m)" ;;
 esac
 
-if [ "$OS" = darwin ]; then
-    INSTALL_DIR="${OPAI_INSTALL_DIR:-$HOME/Applications}"
-else
-    INSTALL_DIR="${OPAI_INSTALL_DIR:-/usr/local/bin}"
-fi
+INSTALL_DIR="${OPAI_INSTALL_DIR:-$HOME/Applications}"
 
 command -v curl  >/dev/null 2>&1 || error "curl is required but not found"
-command -v unzip >/dev/null 2>&1 || error "unzip is required but not found"
+if [ "$OS" = macos ]; then
+    command -v unzip >/dev/null 2>&1 || error "unzip is required but not found"
+fi
 
 if [ "$OPAI_VERSION" = "latest" ]; then
     info "resolving latest version..."
@@ -87,12 +87,17 @@ info "installing Open Photo AI ${TAG} (${OS}/${ARCH})"
 TMP=$(mktemp -d -t opai-install.XXXXXX)
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
-download_zip() {
+download_asset() {
     asset="$1"
     url="https://github.com/${REPO}/releases/download/${TAG}/${asset}"
     info "downloading ${asset}"
     curl -fL --progress-bar -o "$TMP/$asset" "$url" \
         || error "download failed: $url"
+}
+
+download_zip() {
+    asset="$1"
+    download_asset "$asset"
     mkdir -p "$TMP/${asset%.zip}"
     unzip -q -o "$TMP/$asset" -d "$TMP/${asset%.zip}" \
         || error "failed to unzip $asset"
@@ -112,8 +117,8 @@ move_in_place() {
     fi
 }
 
-install_darwin() {
-    asset="opai-gui_darwin_${ARCH}.zip"
+install_macos() {
+    asset="opai-gui_macos_${ARCH}.zip"
     download_zip "$asset"
     app_src=$(find "$TMP/${asset%.zip}" -maxdepth 3 -name '*.app' -type d 2>/dev/null | head -n 1)
     [ -n "$app_src" ] || error ".app bundle not found inside $asset"
@@ -126,20 +131,143 @@ install_darwin() {
     info "${GREEN}${app_name} installed${RESET} at ${INSTALL_DIR}/${app_name}"
 }
 
-install_linux() {
-    asset="opai-gui_linux_${ARCH}.zip"
-    download_zip "$asset"
-    bin=$(find "$TMP/${asset%.zip}" -maxdepth 3 -name 'OpenPhotoAI' -type f 2>/dev/null | head -n 1)
-    [ -n "$bin" ] || error "OpenPhotoAI binary not found inside $asset"
-    chmod +x "$bin"
+has() { command -v "$1" >/dev/null 2>&1; }
 
-    info "installing OpenPhotoAI to ${INSTALL_DIR}"
-    move_in_place "$bin" "${INSTALL_DIR}/OpenPhotoAI"
-    info "${GREEN}OpenPhotoAI installed${RESET} at ${INSTALL_DIR}/OpenPhotoAI"
+# Prints `deb` or `rpm`: from the distro's os-release when it's one we know, otherwise from whichever package
+# manager is on the system.
+detect_pkg_format() {
+    if [ -r /etc/os-release ]; then
+        ids=$(. /etc/os-release && printf '%s %s' "${ID:-}" "${ID_LIKE:-}")
+        for id in $ids; do
+            case "$id" in
+                debian|ubuntu|linuxmint|pop|elementary|raspbian|kali|zorin|neon)
+                    echo deb; return ;;
+                fedora|rhel|centos|rocky|almalinux|suse|opensuse*|sles|mageia|amzn|ol|nobara)
+                    echo rpm; return ;;
+            esac
+        done
+    fi
+    if has apt-get || has dpkg; then echo deb; return; fi
+    if has dnf || has yum || has zypper || has rpm; then echo rpm; return; fi
+    error "unsupported Linux distribution: no apt/dpkg or dnf/yum/zypper/rpm found"
+}
+
+# Installing a package is system-wide, so it needs root.
+set_sudo() {
+    if [ "$(id -u)" -eq 0 ]; then
+        SUDO=""
+    else
+        has sudo || error "sudo is required to install the package (or run this installer as root)"
+        SUDO="sudo"
+        info "elevating with sudo to install the package"
+    fi
+}
+
+install_deb() {
+    pkg="$1"
+    # apt fetches local files as the unprivileged _apt user, which can't read mktemp's 0700 directory.
+    chmod 755 "$TMP" && chmod 644 "$pkg"
+    if has apt-get; then
+        # The path must be absolute (it is, via $TMP) for apt to treat it as a file and resolve its dependencies.
+        $SUDO apt-get install -y "$pkg" || error "apt-get failed to install $(basename "$pkg")"
+    else
+        $SUDO dpkg -i "$pkg" || error "dpkg failed to install $(basename "$pkg")"
+    fi
+}
+
+install_rpm() {
+    pkg="$1"
+    if has dnf; then
+        $SUDO dnf install -y "$pkg"
+    elif has yum; then
+        $SUDO yum install -y "$pkg"
+    elif has zypper; then
+        # The package isn't signed.
+        $SUDO zypper --non-interactive install --allow-unsigned-rpm "$pkg"
+    else
+        $SUDO rpm -Uvh --replacepkgs "$pkg"
+    fi || error "failed to install $(basename "$pkg")"
+}
+
+# Earlier versions installed an AppImage into ~/Applications with its own menu entry, which would now show up next
+# to the package's.
+remove_appimage() {
+    old_app="${INSTALL_DIR}/OpenPhotoAI.AppImage"
+    old_entry="${XDG_DATA_HOME:-$HOME/.local/share}/applications/open-photo-ai.desktop"
+    if [ -e "$old_app" ]; then
+        rm -f "$old_app" 2>/dev/null || $SUDO rm -f "$old_app" || warn "could not remove ${old_app}"
+        info "removed the previous AppImage at ${old_app}"
+    fi
+    if [ -e "$old_entry" ]; then
+        rm -f "$old_entry" && info "removed the previous menu entry at ${old_entry}"
+        if has update-desktop-database; then
+            update-desktop-database "$(dirname "$old_entry")" >/dev/null 2>&1 || true
+        fi
+    fi
+}
+
+# Copies the menu entry the package installed onto the user's desktop; best-effort.
+create_shortcut() {
+    fmt="$1"
+    name="$2"
+    if [ "$fmt" = deb ]; then
+        files=$(dpkg -L "$name" 2>/dev/null || true)
+    else
+        files=$(rpm -ql "$name" 2>/dev/null || true)
+    fi
+    entry=$(printf '%s\n' "$files" | grep '/applications/.*\.desktop$' | head -n 1 || true)
+    if [ -z "$entry" ]; then
+        entry=$(grep -l '^Exec=.*OpenPhotoAI' /usr/share/applications/*.desktop 2>/dev/null | head -n 1 || true)
+    fi
+    if [ -z "$entry" ] || [ ! -r "$entry" ]; then
+        warn "could not find the app's menu entry, so no desktop shortcut was created"
+        return
+    fi
+
+    desktop_dir=""
+    has xdg-user-dir && desktop_dir=$(xdg-user-dir DESKTOP 2>/dev/null || true)
+    { [ -n "$desktop_dir" ] && [ "$desktop_dir" != "$HOME" ]; } || desktop_dir="$HOME/Desktop"
+    if [ ! -d "$desktop_dir" ]; then
+        info "no desktop folder at ${desktop_dir}, skipping the desktop shortcut"
+        return
+    fi
+
+    shortcut="${desktop_dir}/open-photo-ai.desktop"
+    if cp "$entry" "$shortcut" 2>/dev/null && chmod +x "$shortcut" 2>/dev/null; then
+        # GNOME won't launch a desktop file until it's marked trusted.
+        if has gio; then
+            gio set "$shortcut" metadata::trusted true >/dev/null 2>&1 || true
+        fi
+        info "desktop shortcut created at ${shortcut}"
+    else
+        warn "could not create desktop shortcut at ${shortcut}"
+    fi
+}
+
+install_linux() {
+    fmt=$(detect_pkg_format)
+    asset="opai-gui_linux_${ARCH}.${fmt}"
+    download_asset "$asset"
+    pkg="$TMP/$asset"
+
+    if [ "$fmt" = deb ]; then
+        name=$(dpkg-deb -f "$pkg" Package 2>/dev/null || true)
+    else
+        name=$(rpm -qp --queryformat '%{NAME}' "$pkg" 2>/dev/null || true)
+    fi
+    name="${name:-open-photo-ai}"
+
+    set_sudo
+    info "installing ${asset} (${name})"
+    if [ "$fmt" = deb ]; then install_deb "$pkg"; else install_rpm "$pkg"; fi
+    info "${GREEN}Open Photo AI installed${RESET} (${fmt} package ${name})"
+
+    remove_appimage
+    create_shortcut "$fmt" "$name"
 }
 
 case "$OS" in
-    darwin) install_darwin ;;
+    macos)  install_macos ;;
     linux)  install_linux ;;
 esac
 

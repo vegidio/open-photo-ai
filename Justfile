@@ -1,22 +1,22 @@
 set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 
-# Host architecture, in Go-style names.
-host_arch := if arch() == "aarch64" { "arm64" } else if arch() == "x86_64" { "amd64" } else { error("unsupported host architecture: " + arch()) }
+# Host architecture, as spelled in the release asset names.
+host_arch := if arch() == "aarch64" { "arm64" } else if arch() == "x86_64" { "x64" } else { error("unsupported host architecture: " + arch()) }
 
 os_triple := if os() == "macos" { "apple-darwin" } else if os() == "linux" { "unknown-linux-gnu" } else if os() == "windows" { "pc-windows-msvc" } else { error("unsupported OS: " + os()) }
 
-bundle_flags := if os() == "macos" { "--bundles app" } else if os() == "linux" { "--bundles appimage" } else { "--no-bundle" }
+bundle_flags := if os() == "macos" { "--bundles app" } else if os() == "linux" { "--bundles deb,rpm" } else { "--no-bundle" }
 
 build_dir := justfile_directory() / "build"
 
 default:
     @just --list
 
-# Build the GUI for this OS into build/. Pass `arm64` or `amd64` to override the host architecture.
-gui arch=host_arch: (_compile (if arch == "arm64" { "aarch64" } else if arch == "amd64" { "x86_64" } else { error("arch must be arm64 or amd64, got: " + arch) }) + "-" + os_triple)
+# Build the GUI for this OS into build/. Pass `arm64` or `x64` to override the host architecture.
+gui arch=host_arch: (_compile (if arch == "arm64" { "aarch64" } else if arch == "x64" { "x86_64" } else { error("arch must be arm64 or x64, got: " + arch) }) + "-" + os_triple)
 
-# Build the GUI like `gui`, then zip it at max compression into build/opai-gui_<os>_<arch>.zip.
-package arch=host_arch: (gui arch) (_zip "opai-gui_" + os() + "_" + arch + ".zip")
+# Build the GUI like `gui`, then package it as build/opai-gui_<os>_<arch>.zip (.deb and .rpm on Linux, unzipped).
+package arch=host_arch: (gui arch) (_package "opai-gui_" + os() + "_" + arch)
 
 # Delete build output and all generated build/dev artifacts (target, node_modules, dist, ...).
 [unix]
@@ -34,12 +34,19 @@ clean:
 # Run the Rust and frontend tests. Pass `rust` or `node` to run only one of them.
 test suite="all": (_check-suite suite)
     {{ if suite != "node" { "cargo test --workspace" } else { "" } }}
-    {{ if suite != "rust" { "pnpm --dir crates/gui install --frozen-lockfile" } else { "" } }}
-    {{ if suite != "rust" { "pnpm --dir crates/gui test" } else { "" } }}
+    {{ if suite != "rust" { "just _pnpm install --frozen-lockfile" } else { "" } }}
+    {{ if suite != "rust" { "just _pnpm test" } else { "" } }}
 
 # Run a component in development mode. Currently only `gui` is supported.
 dev target: (_check-dev target)
-    pnpm --dir crates/gui tauri dev
+    @just _pnpm tauri dev
+
+# Runs pnpm from inside the GUI rather than with `--dir`: corepack picks the pnpm version from the `packageManager`
+# field of the package.json in the *current* directory, and never sees `--dir`, so run from the root it starts
+# whatever pnpm is installed globally, which then refuses the GUI's pinned version.
+[working-directory: 'crates/gui']
+_pnpm +args:
+    pnpm {{ args }}
 
 _check-suite suite:
     @{{ if suite =~ '^(all|rust|node)$' { "" } else { error("suite must be rust or node, got: " + suite) } }}
@@ -49,8 +56,8 @@ _check-dev target:
 
 _compile triple:
     rustup target add {{ triple }}
-    pnpm --dir crates/gui install --frozen-lockfile
-    pnpm --dir crates/gui tauri build --target {{ triple }} {{ bundle_flags }}
+    @just _pnpm install --frozen-lockfile
+    @just _pnpm tauri build --target {{ triple }} {{ bundle_flags }}
     @just _stage {{ triple }}
 
 [macos]
@@ -62,11 +69,12 @@ _stage triple:
 
 [linux]
 _stage triple:
-    rm -f "{{ build_dir }}/OpenPhotoAI.AppImage"
+    rm -f "{{ build_dir }}/OpenPhotoAI.deb" "{{ build_dir }}/OpenPhotoAI.rpm"
     mkdir -p "{{ build_dir }}"
-    cp "$(ls -t target/{{ triple }}/release/bundle/appimage/*.AppImage | head -n 1)" "{{ build_dir }}/OpenPhotoAI.AppImage"
-    chmod +x "{{ build_dir }}/OpenPhotoAI.AppImage"
-    @echo "Built {{ build_dir }}/OpenPhotoAI.AppImage"
+    cp "$(ls -t target/{{ triple }}/release/bundle/deb/*.deb | head -n 1)" "{{ build_dir }}/OpenPhotoAI.deb"
+    cp "$(ls -t target/{{ triple }}/release/bundle/rpm/*.rpm | head -n 1)" "{{ build_dir }}/OpenPhotoAI.rpm"
+    @echo "Built {{ build_dir }}/OpenPhotoAI.deb"
+    @echo "Built {{ build_dir }}/OpenPhotoAI.rpm"
 
 [windows]
 _stage triple:
@@ -75,17 +83,22 @@ _stage triple:
     @echo "Built {{ build_dir }}/OpenPhotoAI.exe"
 
 [macos]
-_zip name:
-    cd "{{ build_dir }}" && rm -f "{{ name }}" && zip -9 -r -y -q "{{ name }}" OpenPhotoAI.app
-    @echo "Packaged {{ build_dir }}/{{ name }}"
+_package base:
+    cd "{{ build_dir }}" && rm -f "{{ base }}.zip" && zip -9 -r -y -q "{{ base }}.zip" OpenPhotoAI.app
+    @echo "Packaged {{ build_dir }}/{{ base }}.zip"
 
+# The .deb and .rpm are already compressed and are released as they are, so they're only renamed.
 [linux]
-_zip name:
-    cd "{{ build_dir }}" && rm -f "{{ name }}" && zip -9 -q "{{ name }}" OpenPhotoAI.AppImage
-    @echo "Packaged {{ build_dir }}/{{ name }}"
+_package base:
+    cp "{{ build_dir }}/OpenPhotoAI.deb" "{{ build_dir }}/{{ base }}.deb"
+    cp "{{ build_dir }}/OpenPhotoAI.rpm" "{{ build_dir }}/{{ base }}.rpm"
+    @echo "Packaged {{ build_dir }}/{{ base }}.deb"
+    @echo "Packaged {{ build_dir }}/{{ base }}.rpm"
 
+# Test-Path rather than -ErrorAction SilentlyContinue: a silenced error still leaves $? false, and
+# `powershell -Command` turns that into exit code 1 when the zip doesn't exist yet.
 [windows]
-_zip name:
-    Remove-Item -Force -ErrorAction SilentlyContinue "{{ build_dir }}/{{ name }}"
-    Compress-Archive -CompressionLevel Optimal -Path "{{ build_dir }}/OpenPhotoAI.exe" -DestinationPath "{{ build_dir }}/{{ name }}"
-    @echo "Packaged {{ build_dir }}/{{ name }}"
+_package base:
+    if (Test-Path "{{ build_dir }}/{{ base }}.zip") { Remove-Item -Force "{{ build_dir }}/{{ base }}.zip" }
+    Compress-Archive -CompressionLevel Optimal -Path "{{ build_dir }}/OpenPhotoAI.exe" -DestinationPath "{{ build_dir }}/{{ base }}.zip"
+    @echo "Packaged {{ build_dir }}/{{ base }}.zip"

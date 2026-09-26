@@ -50,7 +50,7 @@ thiserror = "2.0.20"
 # The RAII temp file the embedded sample is materialized through - the module the project context names for temp
 # handles, which is why this is not `tempfile` directly. Pinned by git tag exactly as `opai` pins it; `Cargo.lock`
 # records the revision.
-rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.9.10", features = ["fs"] }
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.9.11", features = ["fs"] }
 
 # `Opai::initialize` and `Opai::process` are `async`, so `main` needs a runtime. `signal` is what turns a Ctrl-C
 # into the cancellation the sweep breaks out of.

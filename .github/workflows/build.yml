@@ -24,6 +24,10 @@ jobs:
 
   test-rust:
     runs-on: ubuntu-latest
+    # `actions: write` lets the cancel step below stop the whole run.
+    permissions:
+      contents: read
+      actions: write
     steps:
       - name: Code checkout
         uses: actions/checkout@v5
@@ -48,7 +52,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Set up Just
-        uses: extractions/setup-just@v3
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
       - name: Install dependencies
         run: |
@@ -65,8 +71,19 @@ jobs:
       - name: Run Rust tests
         run: just test rust
 
+      # The test jobs run in parallel outside a matrix, so fail-fast doesn't reach them; cancel the run explicitly.
+      - name: Cancel workflow on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+
   test-node:
     runs-on: ubuntu-latest
+    # `actions: write` lets the cancel step below stop the whole run.
+    permissions:
+      contents: read
+      actions: write
     steps:
       - name: Code checkout
         uses: actions/checkout@v5
@@ -84,25 +101,35 @@ jobs:
           cache-dependency-path: crates/gui/pnpm-lock.yaml
 
       - name: Set up Just
-        uses: extractions/setup-just@v3
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
       - name: Run frontend tests
         run: just test node
 
+      # The test jobs run in parallel outside a matrix, so fail-fast doesn't reach them; cancel the run explicitly.
+      - name: Cancel workflow on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+
   build:
     needs: [version, test-rust, test-node]
     strategy:
-      fail-fast: false
+      # One broken platform cancels the others; a partial set of binaries can't be released anyway.
+      fail-fast: true
       matrix:
         include:
           - runner: ubuntu-latest
-            arch: amd64
+            arch: x64
           - runner: ubuntu-24.04-arm
             arch: arm64
           - runner: macos-latest
             arch: arm64
           - runner: windows-latest
-            arch: amd64
+            arch: x64
           - runner: windows-11-arm
             arch: arm64
     runs-on: ${{ matrix.runner }}
@@ -135,14 +162,16 @@ jobs:
           key: ${{ matrix.arch }}
 
       - name: Set up Just
-        uses: extractions/setup-just@v3
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
-      # patchelf and file are for the AppImage bundler; the rest is what Tauri needs to compile on Linux.
+      # What Tauri needs to compile on Linux. The .deb and .rpm bundlers are pure Rust, so no dpkg-deb or rpmbuild.
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt update
-          sudo apt install -y build-essential pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf file
+          sudo apt install -y build-essential pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
 
       # The crates inherit `[workspace.package]`'s version, but tauri.conf.json holds its own literal that Tauri reads
       # directly, so both are stamped. Node rather than sed so one step works on every runner.
@@ -173,7 +202,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ runner.os }}-${{ matrix.arch }}
-          path: build/*.zip
+          path: |
+            build/opai-gui_*.zip
+            build/opai-gui_*.deb
+            build/opai-gui_*.rpm
           if-no-files-found: error
 
   release:
@@ -204,10 +236,10 @@ jobs:
         with:
           node-version: '24'
 
+      # dlx rather than `pnpm add -g`: pnpm installs each global package in its own isolated directory, so release-it
+      # can't find the changelog plugin. dlx puts both in one temporary install, where the plugin resolves.
       - name: Create the changelog
-        run: |
-          pnpm add -g release-it @release-it/conventional-changelog@10.0.1
-          release-it --ci
+        run: pnpm dlx --package release-it --package @release-it/conventional-changelog@10.0.1 release-it --ci
 
       - name: Create release
         uses: ncipollo/release-action@v1
@@ -216,4 +248,4 @@ jobs:
           tag: ${{ github.ref_name }}
           bodyFile: CHANGELOG.md
           replacesArtifacts: true
-          artifacts: binaries/*.zip
+          artifacts: binaries/*.zip,binaries/*.deb,binaries/*.rpm

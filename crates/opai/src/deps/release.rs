@@ -168,9 +168,9 @@ mod tests {
     fn each_pinned_platform_builds_its_own_release_url() {
         let cases = [
             ("macos", "aarch64", "runtime/1.30.0/onnx_darwin_arm64.7z"),
-            ("linux", "x86_64", "runtime/1.30.0/onnx_linux_amd64.7z"),
+            ("linux", "x86_64", "runtime/1.30.0/onnx_linux_x64.7z"),
             ("linux", "aarch64", "runtime/1.30.0/onnx_linux_arm64.7z"),
-            ("windows", "x86_64", "runtime/1.30.0/onnx_windows_amd64.7z"),
+            ("windows", "x86_64", "runtime/1.30.0/onnx_windows_x64.7z"),
             ("windows", "aarch64", "runtime/1.30.0/onnx_windows_arm64.7z"),
         ];
 
@@ -280,6 +280,6 @@ mod tests {
         let dependency =
             Dependency::from_release_at("http://127.0.0.1:9/base/", &ONNX_RUNTIME, "linux", "x86_64").unwrap();
 
-        assert_eq!(dependency.sources[0].url, "http://127.0.0.1:9/base/runtime/1.30.0/onnx_linux_amd64.7z");
+        assert_eq!(dependency.sources[0].url, "http://127.0.0.1:9/base/runtime/1.30.0/onnx_linux_x64.7z");
     }
 }
