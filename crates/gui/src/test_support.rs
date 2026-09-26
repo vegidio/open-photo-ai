@@ -160,9 +160,50 @@ impl Recorded {
 pub(crate) fn recorded<T>(work: impl FnOnce() -> T) -> (Recorded, T) {
     use tracing_subscriber::layer::SubscriberExt;
 
+    static UNDECIDED: std::sync::Once = std::sync::Once::new();
+    UNDECIDED.call_once(|| {
+        // Ignored where something else already set one: any global subscriber keeps callsites from caching `never`.
+        let _ = tracing::subscriber::set_global_default(Undecided);
+        tracing::callsite::rebuild_interest_cache();
+    });
+
     let recorder = Recorder::default();
     let answer = tracing::subscriber::with_default(tracing_subscriber::registry().with(recorder.clone()), work);
     (recorder.recorded(), answer)
+}
+
+/// The process's global subscriber under test: it records nothing, and never lets a callsite decide for good.
+///
+/// Without a global subscriber a callsite that a parallel test reaches first, on a thread with no subscriber of its
+/// own, can cache `Interest::never` — `tracing-core` computes a callsite's interest before adding it to the list a new
+/// subscriber's registration rebuilds, so a recorder installed in between never gets asked about it. Its spans are then
+/// dropped under every [`recorded`] for the rest of the process. Answering `sometimes` for every callsite makes each
+/// span ask the subscriber current on its thread instead, which is the recorder wherever one is installed.
+struct Undecided;
+
+impl tracing::Subscriber for Undecided {
+    fn register_callsite(&self, _: &'static tracing::Metadata<'static>) -> tracing::subscriber::Interest {
+        tracing::subscriber::Interest::sometimes()
+    }
+
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        false
+    }
+
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        // Unreachable: nothing is enabled, so no span is ever created here.
+        tracing::span::Id::from_u64(1)
+    }
+
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+
+    fn event(&self, _: &tracing::Event<'_>) {}
+
+    fn enter(&self, _: &tracing::span::Id) {}
+
+    fn exit(&self, _: &tracing::span::Id) {}
 }
 
 /// Which [`SeenSpan`] a `tracing` span is, kept in the span's extensions.

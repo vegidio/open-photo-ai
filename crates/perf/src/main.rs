@@ -47,6 +47,9 @@ use crate::viewport::{Viewport, Watcher};
 // threads before the body's first statement — and `prepare_library_path` is only sound while no other thread exists.
 fn main() -> ExitCode {
     // Set the CUDA and TensorRT provider library search path.
+    //
+    // SAFETY: the first statement of `main`, so no thread but this one exists and nothing has yet read or written the
+    // process environment.
     let prepared = unsafe { opai::prepare_library_path(opai::APP_NAME) }.map(|_| ());
 
     let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {

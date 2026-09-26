@@ -24,7 +24,8 @@ use super::{Accelerator, ExecutionProvider, SupportedProviders};
 ///
 /// WebGPU is last on every platform: it reaches the widest range of GPUs, and is the slowest of them where a
 /// vendor's own provider is available.
-const AUTO_ORDER: [Accelerator; 4] = [Accelerator::TensorRt, Accelerator::Cuda, Accelerator::CoreMl, Accelerator::WebGpu];
+const AUTO_ORDER: [Accelerator; 4] =
+    [Accelerator::TensorRt, Accelerator::Cuda, Accelerator::CoreMl, Accelerator::WebGpu];
 
 /// What a request resolved to on this machine: which providers to attach, in order, and what was asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]

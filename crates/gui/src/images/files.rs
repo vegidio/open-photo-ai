@@ -683,7 +683,8 @@ mod tests {
         for (pattern, extension) in picker_extensions(&extensions, true).iter().zip(&extensions) {
             // The decoder's extensions are lower-case, so dropping the brackets and the upper-case half of each class
             // must give the extension back.
-            let unbracketed: String = pattern.chars().filter(|c| !matches!(c, '[' | ']') && !c.is_uppercase()).collect();
+            let unbracketed: String =
+                pattern.chars().filter(|c| !matches!(c, '[' | ']') && !c.is_uppercase()).collect();
             assert_eq!(&unbracketed, extension, "{pattern} no longer spells {extension}");
         }
     }

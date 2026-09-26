@@ -226,9 +226,18 @@ fn silence_on_exit(environment: &Arc<Environment>) {
 /// is attached through `RegisterExecutionProviderLibrary` and its devices, never through the named
 /// `AppendExecutionProvider("WebGPU")` the `ort::ep::WebGPU` type calls — which this runtime does not know.
 ///
-/// Nothing here is an error. A missing file, a refused registration or no adapter each leaves WebGPU unsupported and
-/// the rest of the runtime untouched, which is the same place a machine without the plugin is in.
+/// A machine that cannot run WebGPU at all — on Linux, one without a Vulkan driver for a GPU — never has the plugin
+/// registered, so its adapter probe never starts.
+///
+/// Nothing here is an error. An unsupported machine, a missing file, a refused registration or no adapter each leaves
+/// WebGPU unsupported and the rest of the runtime untouched, which is the same place a machine without the plugin is
+/// in.
 fn register_webgpu(environment: &Arc<Environment>, library: &Path) -> bool {
+    if !rust_sak::sysinfo::is_webgpu_supported() {
+        tracing::info!("WebGPU not supported on this machine (no Vulkan GPU driver)");
+        return false;
+    }
+
     let plugin = library.with_file_name(WEBGPU_LIB);
     if !plugin.is_file() {
         tracing::info!(plugin = %plugin.display(), "WebGPU plugin not installed");
