@@ -1,7 +1,7 @@
 import type { FamilyEntry } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
-import { type Enhancement, modelValue, withModel } from "@/lib/enhancements";
-import { ModelTray } from "./ModelTray";
+import type { Enhancement } from "@/lib/enhancements";
+import { OperationModelTray } from "./ModelTray";
 
 type ColorizationOptionsProps = {
     /** The enhancement this panel is open over, which the tray reports and writes. */
@@ -26,12 +26,6 @@ type ColorizationOptionsProps = {
  * **Nothing is written on open.** The tray writes only when it is operated, so opening the panel to see
  * which model is in use never cancels the run in flight.
  */
-export const ColorizationOptions = ({ enhancement, operation, entry, onChange }: ColorizationOptionsProps) => {
-    // Resolved rather than parsed - see `withModel`.
-    const chooseModel = (value: string) => {
-        const updated = withModel(operation, entry, value);
-        if (updated) onChange(updated);
-    };
-
-    return <ModelTray enhancement={enhancement} entry={entry} value={modelValue(operation)} onChange={chooseModel} />;
-};
+export const ColorizationOptions = ({ enhancement, operation, entry, onChange }: ColorizationOptionsProps) => (
+    <OperationModelTray enhancement={enhancement} operation={operation} entry={entry} onChange={onChange} />
+);

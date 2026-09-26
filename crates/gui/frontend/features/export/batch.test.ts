@@ -9,7 +9,6 @@ import type { Operation } from "@/ipc/enhance";
 import { cancelExport, type Exported, type ExportRequest, exportImage } from "@/ipc/export";
 import { detectFaces, type Face } from "@/ipc/faces";
 import type { ImageRecord } from "@/ipc/images";
-import { faceKey } from "@/lib/faces";
 import { track } from "@/lib/faro";
 import { useAutopilotStore } from "@/stores/autopilot";
 import { useEnhancementStore } from "@/stores/enhancements";
@@ -420,7 +419,7 @@ describe("Autopilot at export", () => {
 describe("the faces", () => {
     it("are never detected first: the export is asked for at once, carrying the choice made among them", async () => {
         // The export finds its own faces inside the one request, under its stop and on its bar.
-        const choice = { skipped: [faceKey(face(0, 40))], restored: [] };
+        const choice = { skipped: [face(0, 40).key], restored: [] };
         useFacesStore.getState().setFaceChoice(HOLIDAY.identity ?? "", choice);
         stack(HOLIDAY, [upscale, recovery]);
 

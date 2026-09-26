@@ -2,21 +2,6 @@ import type { FaceChoice, Operation } from "@/ipc/enhance";
 import type { Face } from "@/ipc/faces";
 
 /**
- * A face's identity, as far as anything in this application is concerned: the key Rust publishes on it.
- *
- * **Rust's, not this side's.** `face_key` in `crates/gui/src/faces.rs` writes it - the four bounding-box
- * coordinates, `min.x,min.y,max.x,max.y` - and reads it back when a run asks which faces to restore, so the
- * two ends cannot spell one face two ways. It is stable across a re-detection, because a coordinate is
- * quantized to a hundredth of a pixel as `Face::new` accepts it.
- *
- * The coordinates are in the **framed** photograph's pixels, which is what makes a framing change leave a
- * choice behind: every face at a framing nobody has been at before is at new numbers, so no choice matches
- * and every one of them follows the default. A framing *returned to* answers with the numbers it answered
- * the first time, so the keys match and the choices made there are in force again. See design.md D2.
- */
-export const faceKey = (face: Face): string => face.key;
-
-/**
  * Whether a face recovery restores `face` under `choice`: the user's own word where they gave one, and
  * otherwise the default - `restorable`, `opai`'s `Face::restorable`.
  *
@@ -26,7 +11,7 @@ export const faceKey = (face: Face): string => face.key;
  * back enlarged, which on a face that was already sharp is a softening rather than a restoration.
  */
 export const isKept = (face: Face, choice: FaceChoice | undefined): boolean => {
-    const key = faceKey(face);
+    const { key } = face;
 
     return !choice?.skipped.includes(key) && (choice?.restored.includes(key) || face.restorable);
 };
@@ -60,12 +45,12 @@ export const choiceAfter = (
     off: ReadonlySet<string>,
     choice: FaceChoice | undefined,
 ): FaceChoice | undefined => {
-    const here = new Set(shown.map(faceKey));
+    const here = new Set(shown.map((face) => face.key));
     const skipped = (choice?.skipped ?? []).filter((key) => !here.has(key));
     const restored = (choice?.restored ?? []).filter((key) => !here.has(key));
 
     for (const face of shown) {
-        const key = faceKey(face);
+        const { key } = face;
         const left = off.has(key);
 
         if (left && face.restorable) skipped.push(key);

@@ -53,7 +53,12 @@ impl ExecutionProvider {
 
     /// Every provider a session can be **built on**, in [`ALL`](Self::ALL) order: the CPU and each accelerator.
     /// [`Auto`](Self::Auto) is a request — "pick for me" — rather than something anything runs on.
-    pub(crate) const BUILT_ON: [Self; 5] = [Self::Cpu, Self::CoreMl, Self::Cuda, Self::TensorRt, Self::WebGpu];
+    ///
+    /// [`ALL`](Self::ALL) past its first entry, which is `Auto`, so the two lists cannot drift apart.
+    pub(crate) const BUILT_ON: [Self; 5] = {
+        assert!(matches!(Self::ALL[0], Self::Auto), "`ALL` must begin with the request");
+        *Self::ALL.last_chunk().unwrap()
+    };
 
     /// The accelerator this names, or `None` for the two that are not one: [`Auto`](Self::Auto), which is a request,
     /// and [`Cpu`](Self::Cpu), which is attached by nobody and configured with nothing — it is what the runtime falls
@@ -371,16 +376,6 @@ pub(crate) mod tests {
             );
             assert!(error.to_string().contains(text), "the message did not name the text: {error}");
         }
-    }
-
-    #[test]
-    fn the_providers_a_session_is_built_on_are_every_published_one_but_the_request() {
-        let published: Vec<_> = ExecutionProvider::ALL
-            .into_iter()
-            .filter(|provider| *provider != ExecutionProvider::Auto)
-            .collect();
-
-        assert_eq!(ExecutionProvider::BUILT_ON.to_vec(), published);
     }
 
     #[test]

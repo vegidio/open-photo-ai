@@ -309,19 +309,18 @@ mod tests {
         }
     }
 
-    /// `tauri.conf.json`'s `version`/`identifier` must match the crate: Tauri reads the JSON literal directly rather
-    /// than resolving `version.workspace`, so a mismatch ships a bundle whose version disagrees with its binary.
-    /// `identifier` also keys every single-instance backend (D-Bus name, Windows mutex/window class, macOS socket
-    /// path), so changing it would let old and new versions run side by side against the same config directory.
+    /// `tauri.conf.json` carries no `version`, so Tauri takes the crate's (the workspace version) and a bundle can
+    /// never disagree with its binary. `identifier` must match the crate's identity: it keys every single-instance
+    /// backend (D-Bus name, Windows mutex/window class, macOS socket path), so changing it would let old and new
+    /// versions run side by side against the same config directory.
     #[test]
     fn tauri_conf_json_agrees_with_the_crate() {
         let raw = include_str!("../tauri.conf.json");
         let conf: serde_json::Value = serde_json::from_str(raw).expect("tauri.conf.json is not valid JSON");
 
-        assert_eq!(
-            conf["version"],
-            env!("CARGO_PKG_VERSION"),
-            "tauri.conf.json `version` has drifted from the workspace version in Cargo.toml"
+        assert!(
+            conf.get("version").is_none(),
+            "tauri.conf.json must not set `version`; it is inherited from the workspace version in Cargo.toml"
         );
         assert_eq!(
             conf["identifier"], "io.vinicius.opai",

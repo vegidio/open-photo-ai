@@ -29,14 +29,6 @@ use crate::telemetry::unit::{self, Outcome, Unit, unit_span};
 /// report [`InitError::RuntimeUnavailable`] instead of succeeding against a runtime that was never opened.
 static FAILED_LOAD: Mutex<Option<Failure>> = Mutex::new(None);
 
-/// The WebGPU plugin's file name, as every `runtime/` archive from `runtime/1.26.1` on ships it beside the runtime.
-#[cfg(target_os = "macos")]
-const WEBGPU_LIB: &str = "libonnxruntime_providers_webgpu.dylib";
-#[cfg(target_os = "windows")]
-const WEBGPU_LIB: &str = "onnxruntime_providers_webgpu.dll";
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-const WEBGPU_LIB: &str = "libonnxruntime_providers_webgpu.so";
-
 /// The name the WebGPU plugin registers its devices under — what [`ort::device::Device::ep`] reports for them.
 pub(crate) const WEBGPU_EP: &str = "WebGpuExecutionProvider";
 
@@ -95,14 +87,15 @@ pub(crate) fn library_path(dir: &Path, lib: &str) -> PathBuf {
 /// check: two threads loading at once reach the same defect, since the one that does not run the closure sees a
 /// completed `Once` and gets the same uninitialized handle.
 ///
-/// On success, says whether the WebGPU plugin execution provider is usable — see [`register_webgpu`].
-pub(crate) fn start(name: &str, library: &Path) -> Result<bool, InitError> {
+/// `webgpu` is the WebGPU plugin's file name beside `library`, from the same descriptor row `library` was named by.
+/// On success, says whether that plugin execution provider is usable — see [`register_webgpu`].
+pub(crate) fn start(name: &str, library: &Path, webgpu: Option<&str>) -> Result<bool, InitError> {
     let span = unit_span!("runtime_load", library = %library.display());
 
     // Started before the `dlopen`, so the record below says what the load and the environment together cost: the
     // single slowest step of an initialization that has nothing to install.
     let started = std::time::Instant::now();
-    let outcome = span.in_scope(|| load(name, library, started));
+    let outcome = span.in_scope(|| load(name, library, webgpu, started));
     let duration = started.elapsed();
 
     // A failure's record is `initialize`'s, which the error is returned to. The span ends here either way.
@@ -115,7 +108,7 @@ pub(crate) fn start(name: &str, library: &Path) -> Result<bool, InitError> {
 }
 
 /// [`start`]'s body, inside its span. `started` is when the load began, for the record that closes it.
-fn load(name: &str, library: &Path, started: std::time::Instant) -> Result<bool, InitError> {
+fn load(name: &str, library: &Path, webgpu: Option<&str>, started: std::time::Instant) -> Result<bool, InitError> {
     // A poisoned lock means a previous caller panicked between the check and the record. The state behind it is still
     // readable and is what the next caller has to see, so the guard is taken rather than the panic propagated.
     let mut failed = crate::task::lock(&FAILED_LOAD);
@@ -180,7 +173,7 @@ fn load(name: &str, library: &Path, started: std::time::Instant) -> Result<bool,
     let duration = started.elapsed();
     tracing::info!(name, library = %library.display(), ?duration, "ONNX Runtime started");
 
-    let webgpu = *WEBGPU.get_or_init(|| register_webgpu(&environment, library));
+    let webgpu = *WEBGPU.get_or_init(|| register_webgpu(&environment, library, webgpu));
 
     Ok(webgpu)
 }
@@ -220,7 +213,8 @@ fn silence_on_exit(environment: &Arc<Environment>) {
     }
 }
 
-/// Registers the WebGPU plugin execution provider installed beside `library`, and says whether it offers a device.
+/// Registers the WebGPU plugin execution provider installed beside `library` as `plugin`, and says whether it offers a
+/// device.
 ///
 /// WebGPU ships as a *plugin* rather than being built into the runtime: the library exports `CreateEpFactories`, so it
 /// is attached through `RegisterExecutionProviderLibrary` and its devices, never through the named
@@ -232,13 +226,22 @@ fn silence_on_exit(environment: &Arc<Environment>) {
 /// Nothing here is an error. An unsupported machine, a missing file, a refused registration or no adapter each leaves
 /// WebGPU unsupported and the rest of the runtime untouched, which is the same place a machine without the plugin is
 /// in.
-fn register_webgpu(environment: &Arc<Environment>, library: &Path) -> bool {
+fn register_webgpu(environment: &Arc<Environment>, library: &Path, plugin: Option<&str>) -> bool {
     if !rust_sak::sysinfo::is_webgpu_supported() {
-        tracing::info!("WebGPU not supported on this machine (no Vulkan GPU driver)");
+        // Only Linux is probed: macOS and Windows always report support, and any other platform has no WebGPU at all.
+        let reason = if cfg!(target_os = "linux") {
+            "no Vulkan GPU driver"
+        } else {
+            "not available on this platform"
+        };
+        tracing::info!("WebGPU not supported on this machine ({reason})");
         return false;
     }
 
-    let plugin = library.with_file_name(WEBGPU_LIB);
+    let Some(plugin) = plugin.map(|plugin| library.with_file_name(plugin)) else {
+        tracing::info!("WebGPU plugin not published for this platform");
+        return false;
+    };
     if !plugin.is_file() {
         tracing::info!(plugin = %plugin.display(), "WebGPU plugin not installed");
         return false;
@@ -250,10 +253,18 @@ fn register_webgpu(environment: &Arc<Environment>, library: &Path) -> bool {
         return false;
     }
 
-    let devices = environment.devices().filter(|device| device.ep().is_ok_and(|ep| ep == WEBGPU_EP)).count();
+    let devices = webgpu_devices(environment).count();
     tracing::info!(plugin = %plugin.display(), devices, "WebGPU plugin registered");
 
     devices > 0
+}
+
+/// The devices the WebGPU plugin registered with `environment`, in the order the runtime reports them.
+///
+/// One filter for the two questions asked of them — whether the plugin offers any at initialization, and which one a
+/// session attaches — so the two cannot disagree about what counts as a WebGPU device.
+pub(crate) fn webgpu_devices(environment: &Environment) -> impl Iterator<Item = ort::device::Device<'_>> {
+    environment.devices().filter(|device| device.ep().is_ok_and(|ep| ep == WEBGPU_EP))
 }
 
 #[cfg(test)]
@@ -374,7 +385,7 @@ mod tests {
     child_test! {
         fn a_library_that_is_not_there_is_reported_against_the_path_it_was_attempted_against() {
             let missing = Path::new("/no/such/directory/libonnxruntime.1.30.0.dylib");
-            let error = start("opai-test", missing).unwrap_err();
+            let error = start("opai-test", missing, None).unwrap_err();
 
             match error {
                 InitError::RuntimeLoad { path, .. } => assert_eq!(path, missing),
@@ -392,7 +403,7 @@ mod tests {
             let not_a_library = dir.path().join("libonnxruntime.1.30.0.dylib");
             std::fs::write(&not_a_library, b"this is not a shared library").unwrap();
 
-            let error = start("opai-test", &not_a_library).unwrap_err();
+            let error = start("opai-test", &not_a_library, None).unwrap_err();
 
             match error {
                 InitError::RuntimeLoad { path, .. } => assert_eq!(path, not_a_library),
@@ -404,7 +415,7 @@ mod tests {
     child_test! {
         fn a_second_start_after_a_failed_load_is_refused_rather_than_wrongly_succeeding() {
             let first = Path::new("/no/such/directory/first-onnxruntime.dylib");
-            assert!(matches!(start("opai-test", first).unwrap_err(), InitError::RuntimeLoad { .. }));
+            assert!(matches!(start("opai-test", first, None).unwrap_err(), InitError::RuntimeLoad { .. }));
 
             // A different path, and one that is not a library either. `ort` alone answers this with `Ok` — its
             // `OnceLock` counts the failed attempt as completed and hands back a reference to uninitialized
@@ -414,7 +425,7 @@ mod tests {
             let second = dir.path().join("second-onnxruntime.dylib");
             std::fs::write(&second, b"this is not a shared library either").unwrap();
 
-            match start("opai-test", &second).unwrap_err() {
+            match start("opai-test", &second, None).unwrap_err() {
                 InitError::RuntimeUnavailable { path, reason } => {
                     assert_eq!(path, first, "the retry must name the library the first attempt used");
                     assert!(!reason.is_empty(), "the retry must carry what the first attempt reported");
@@ -466,7 +477,8 @@ mod tests {
 
         // The first start is the one that loads the library, so it is the one whose record says what the load cost.
         // Asserted only here: the record is written after a successful load, which nothing hermetic can produce.
-        let (log, started) = crate::logging::records_of_blocking("info", || start("opai-live-test", &library));
+        let (log, started) =
+            crate::logging::records_of_blocking("info", || start("opai-live-test", &library, descriptor.webgpu));
         started.expect("the pinned runtime must load and start");
 
         let [loaded] = crate::logging::records(&log, "ONNX Runtime started")[..] else {
@@ -488,7 +500,8 @@ mod tests {
         // A second start in the same process, as a front end's error boundary performs. It must succeed, and it must
         // leave the environment that is already running in place rather than build a second one — which the ONNX
         // Runtime C API could not do anyway, since it supports one `CreateEnv` per process even after a `ReleaseEnv`.
-        start("opai-live-test-again", &library).expect("a second start in the same process must succeed");
+        start("opai-live-test-again", &library, descriptor.webgpu)
+            .expect("a second start in the same process must succeed");
 
         let second = Environment::current().unwrap();
         assert!(std::sync::Arc::ptr_eq(&first, &second), "the second start replaced the running environment");
@@ -524,7 +537,7 @@ mod tests {
         tracing::subscriber::with_default(collecting_subscriber(sink), || {
             // A second start under the running environment, which is the call that re-reads the configuration and is
             // the cheapest thing here that asks the runtime to say something.
-            start("opai-live-log-test", &library).expect("a start under a subscriber must succeed");
+            start("opai-live-log-test", &library, descriptor.webgpu).expect("a start under a subscriber must succeed");
             let _ = Environment::current();
         });
 

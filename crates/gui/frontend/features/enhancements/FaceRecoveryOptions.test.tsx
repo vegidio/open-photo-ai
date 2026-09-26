@@ -5,7 +5,6 @@ import "@/i18n";
 import { forgetCatalogue } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
 import type { Face } from "@/ipc/faces";
-import { faceKey } from "@/lib/faces";
 import { useCropStore } from "@/stores/crop";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { useFacesStore } from "@/stores/faces";
@@ -83,7 +82,9 @@ const found = (faces: Face[], crop?: typeof FRAMING | undefined) =>
 
 /** Records which of them the user has skipped, as applying a choice in the dialog would. */
 const skip = (...faces: Face[]) =>
-    act(() => useFacesStore.getState().setFaceChoice(identity, { skipped: faces.map(faceKey), restored: [] }));
+    act(() =>
+        useFacesStore.getState().setFaceChoice(identity, { skipped: faces.map((face) => face.key), restored: [] }),
+    );
 
 /** The way into the chooser, drawn in the options panel. */
 const selectFaces = () => screen.getByRole("button", { name: /Select faces/ });

@@ -1,15 +1,8 @@
 import { Separator } from "@/components/ui/separator";
 import type { FamilyEntry } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
-import {
-    type Enhancement,
-    modelValue,
-    parameterOf,
-    publishedRange,
-    withModel,
-    withParameter,
-} from "@/lib/enhancements";
-import { ModelTray } from "./ModelTray";
+import { type Enhancement, parameterOf, publishedRange, withParameter } from "@/lib/enhancements";
+import { OperationModelTray } from "./ModelTray";
 import { ScaleControl } from "./ScaleControl";
 
 // Named rather than found by kind, because a variant may publish more than one range - face
@@ -42,20 +35,12 @@ type UpscaleOptionsProps = {
  * The scale's bounds are the **selected model's** own published range.
  */
 export const UpscaleOptions = ({ enhancement, operation, entry, onChange }: UpscaleOptionsProps) => {
-    const value = modelValue(operation);
-
     // The selected model's rather than the family's - see `publishedRange`.
     const range = publishedRange(entry, operation.codename, SCALE_PARAMETER);
 
-    // Resolved rather than parsed - see `withModel`.
-    const chooseModel = (chosen: string) => {
-        const updated = withModel(operation, entry, chosen);
-        if (updated) onChange(updated);
-    };
-
     return (
         <>
-            <ModelTray enhancement={enhancement} entry={entry} value={value} onChange={chooseModel} />
+            <OperationModelTray enhancement={enhancement} operation={operation} entry={entry} onChange={onChange} />
 
             <Separator />
 

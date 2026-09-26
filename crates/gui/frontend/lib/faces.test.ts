@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FaceChoice, Operation } from "@/ipc/enhance";
 import type { Face } from "@/ipc/faces";
-import { choiceAfter, enabledFaces, faceKey, isKept, withChoice } from "./faces";
+import { choiceAfter, enabledFaces, isKept, withChoice } from "./faces";
 
 const at = (left: number, top = 4): Face => ({
     bounding_box: { min: { x: left, y: top }, max: { x: left + 3, y: top + 3 } },
@@ -21,16 +21,8 @@ const at = (left: number, top = 4): Face => ({
 const large = (left: number): Face => ({ ...at(left), restorable: false });
 
 const choice = (skipped: Face[] = [], restored: Face[] = []): FaceChoice => ({
-    skipped: skipped.map(faceKey),
-    restored: restored.map(faceKey),
-});
-
-describe("a face's key", () => {
-    it("is the key Rust published on it, not one composed here", () => {
-        const published: Face = { ...at(10), key: "whatever Rust wrote" };
-
-        expect(faceKey(published)).toBe("whatever Rust wrote");
-    });
+    skipped: skipped.map((face) => face.key),
+    restored: restored.map((face) => face.key),
 });
 
 describe("whether a run keeps a face", () => {
@@ -65,18 +57,18 @@ describe("the faces a run restores", () => {
 
 describe("the choice the picker commits", () => {
     const shown = [at(0), at(20), large(40)];
-    const defaults = new Set([faceKey(large(40))]);
+    const defaults = new Set([large(40).key]);
 
     it("hands back the choice it was given where the faces are left as they were", () => {
         const held = choice([at(0)]);
 
-        expect(choiceAfter(shown, new Set([faceKey(at(0)), faceKey(large(40))]), held)).toBe(held);
+        expect(choiceAfter(shown, new Set([at(0).key, large(40).key]), held)).toBe(held);
         expect(choiceAfter(shown, defaults, undefined)).toBeUndefined();
     });
 
     it("records only the exceptions to each face's default", () => {
         // A restorable face turned off, and a large one turned on: nothing else is written.
-        const off = new Set([faceKey(at(20))]);
+        const off = new Set([at(20).key]);
 
         expect(choiceAfter(shown, off, undefined)).toEqual(choice([at(20)], [large(40)]));
     });
@@ -86,7 +78,7 @@ describe("the choice the picker commits", () => {
     });
 
     it("keeps the exceptions made at another framing", () => {
-        expect(choiceAfter(shown, new Set([...defaults, faceKey(at(0))]), choice([at(900)]))).toEqual(
+        expect(choiceAfter(shown, new Set([...defaults, at(0).key]), choice([at(900)]))).toEqual(
             choice([at(900), at(0)]),
         );
     });

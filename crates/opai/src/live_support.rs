@@ -71,6 +71,7 @@ pub(crate) async fn live_application_at(name: &str, app_dir: &Path) -> Opai {
         Descriptor::from_release_at(RELEASE_BASE_URL, &ONNX_RUNTIME, std::env::consts::OS, std::env::consts::ARCH)
             .expect("the runtime is published for this platform");
     let lib = descriptor.lib.expect("every platform the runtime is published for names its library");
+    let webgpu = descriptor.webgpu;
 
     let claim = crate::instance::tests::claimed(&app_dir);
     let (opai, installed) =
@@ -81,7 +82,7 @@ pub(crate) async fn live_application_at(name: &str, app_dir: &Path) -> Opai {
     // From the directory the install reported, as `Opai::initialize` does it. `start` is once per process, so a
     // second call from another check in the same binary is the no-op it reports as success.
     let library = runtime::library_path(&installed.runtime, lib);
-    runtime::start(name, &library).expect("the pinned runtime must load and start");
+    runtime::start(name, &library, webgpu).expect("the pinned runtime must load and start");
 
     opai
 }

@@ -4,7 +4,7 @@ import { familyEntry } from "@/hooks/useCatalogue";
 import i18n from "@/i18n";
 import { type Suggestion, suggest } from "@/ipc/autopilot";
 import { catalogue } from "@/ipc/catalogue";
-import { type CropInfo, cropKey } from "@/ipc/crop";
+import { type CropInfo, sameCrop } from "@/ipc/crop";
 import type { Operation } from "@/ipc/enhance";
 import type { ImageRecord } from "@/ipc/images";
 import { applyOrder, familiesWhere, suggestedOperation } from "@/lib/enhancements";
@@ -210,7 +210,7 @@ export const useAutopilot = () => {
         // reframe stop, or its answer would land measured on a framing that is gone.
         if (inFlight) {
             // By value, as every other reader of the crop store compares it.
-            if (cropKey(inFlight.crop) === cropKey(crop)) return;
+            if (sameCrop(inFlight.crop, crop)) return;
 
             store.stop(file.path);
         }

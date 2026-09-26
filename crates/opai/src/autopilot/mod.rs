@@ -552,10 +552,7 @@ async fn suggest_inner<B: Backend>(
     // drawn in — is what places a signal added later without anyone having to remember where its push belongs, and
     // the evaluation order above is a cost decision, which is a different question entirely. That this order agrees
     // with the reference's is pinned by `the_order_suggestions_come_back_in_agrees_with_the_reference`.
-    //
-    // `applied_at` cannot miss: every suggestion names a family whose result is an image. The fallback is written
-    // rather than an `expect` so that a sort cannot panic on a photograph.
-    suggested.sort_by_key(|suggestion| suggestion.family().applied_at().unwrap_or(usize::MAX));
+    suggested.sort_by_key(|suggestion| suggestion.family().apply_rank());
 
     Ok(Suggestions { suggested, incomplete })
 }

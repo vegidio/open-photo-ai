@@ -21,7 +21,7 @@
 //!
 //! `ort::session::Session::builder()` needs a live environment, so nothing here that touches one can be exercised on
 //! a CI runner. What is factored out to be checkable anyway is everything that decides *what* the runtime is asked
-//! for: [`dispatch`] builds the three provider dispatches from the resolved maps, [`BuilderSettings`] is the typed
+//! for: [`attachment`] builds the three provider dispatches from the resolved maps, [`BuilderSettings`] is the typed
 //! translation of the session settings into the three calls that carry them, and [`serialized`] is the TensorRT
 //! ordering and the timing cache it drops. The one thing left is the sequence of calls itself, which the live tests
 //! in the test-only `super::live` are what cover — by hand, on real hardware.
@@ -98,7 +98,7 @@ pub(crate) fn build(request: BuildRequest) -> Result<Session, SessionError> {
     // worker threads, during inference rather than during the build, is not, and arrives with the runtime's fields
     // alone exactly as it does today. That is a narrowing of what the reference reconstructed by hand, and what it
     // buys back is the entire stderr-capture stack slice 1 deleted.
-    let span = tracing::info_span!("session_build", artifact = %artifact, provider = %plan.resolved);
+    let span = tracing::info_span!("session_build", artifact = %artifact, provider = %plan.resolved());
     let _entered = span.enter();
 
     // Before the builder is touched, and the whole of the distinction the specs ask for. Everything after this point
@@ -119,49 +119,51 @@ fn open(artifact: &ArtifactId, plan: &SessionPlan, model: &Path) -> Result<Sessi
     // than four closures that could each name the failure differently.
     let failed = |source: ort::Error| SessionError::Build {
         artifact: artifact.as_str().to_string(),
-        provider: plan.resolved,
+        provider: plan.resolved(),
         source: Arc::new(source),
     };
 
     // In the plan's own order, so that one provider declining a node at session-build time leaves the next to run
     // the graph. Empty for a CPU run, which attaches nothing.
-    //
-    // WebGPU is held back: it is a plugin, attached through its devices below rather than by name. It is last in every
-    // chain it appears in, so attaching it after the rest keeps the plan's order.
-    let dispatches: Vec<ExecutionProviderDispatch> = plan
-        .providers
-        .iter()
-        .filter(|options| options.provider != Accelerator::WebGpu)
-        .map(dispatch)
-        .collect();
-
-    let mut builder = Session::builder()
-        .map_err(failed)?
-        .with_execution_providers(&dispatches)
-        .map_err(|err| failed(err.into()))?;
-
-    if let Some(webgpu) = plan.providers.iter().find(|options| options.provider == Accelerator::WebGpu) {
-        builder = attach_webgpu(builder, &webgpu.options).map_err(failed)?;
+    let mut builder = Session::builder().map_err(failed)?;
+    for options in &plan.providers {
+        builder = match attachment(options) {
+            Attach::Named(dispatch) => {
+                builder.with_execution_providers([dispatch]).map_err(|err| failed(err.into()))?
+            }
+            Attach::PluginDevices(options) => attach_webgpu(builder, options).map_err(failed)?,
+        };
     }
+
     builder = BuilderSettings::of(&plan.settings).apply(builder).map_err(failed)?;
 
     builder.commit_from_file(model).map_err(failed)
 }
 
-/// The dispatch `options` describes.
+/// How one provider of a plan is attached to a session.
+#[derive(Debug)]
+enum Attach<'a> {
+    /// By name, through the dispatch its options describe.
+    Named(ExecutionProviderDispatch),
+    /// Through the devices a plugin registered with the environment, configured with these options — WebGPU, which
+    /// the runtime does not know by name; see [`attach_webgpu`].
+    PluginDevices(&'a BTreeMap<String, String>),
+}
+
+/// How `options` is attached: the dispatch it describes, or the plugin devices it configures.
 ///
 /// One arm per [`Accelerator`], and none for the request or the CPU: the attach list cannot hold either — the first is
 /// a request rather than a provider, and the second takes no configuration and is what the runtime falls back to on
 /// its own once everything above it has declined.
-fn dispatch(options: &ProviderOptions) -> ExecutionProviderDispatch {
+fn attachment(options: &ProviderOptions) -> Attach<'_> {
     let dispatch = match options.provider {
         Accelerator::TensorRt => configure(ort::ep::TensorRT::default(), &options.options).build(),
         Accelerator::Cuda => configure(ort::ep::CUDA::default(), &options.options).build(),
         Accelerator::CoreMl => configure(ort::ep::CoreML::default(), &options.options).build(),
-        Accelerator::WebGpu => unreachable!("WebGPU is attached through its devices, never dispatched by name"),
+        Accelerator::WebGpu => return Attach::PluginDevices(&options.options),
     };
 
-    dispatch.error_on_failure()
+    Attach::Named(dispatch.error_on_failure())
 }
 
 /// Attaches the WebGPU plugin's devices to `builder`, configured with `options`.
@@ -180,9 +182,8 @@ fn attach_webgpu(builder: SessionBuilder, options: &BTreeMap<String, String>) ->
     // One device, the first the plugin offers. The plugin can report several (one per adapter, each from its own
     // factory), and the runtime refuses a single append whose devices come from different factories — *"All
     // OrtEpDevice values in ep_devices must have the same execution provider"*.
-    let device = environment
-        .devices()
-        .find(|device| device.ep().is_ok_and(|ep| ep == crate::runtime::WEBGPU_EP))
+    let device = crate::runtime::webgpu_devices(&environment)
+        .next()
         .ok_or_else(|| ort::Error::new("the WebGPU plugin offers no device"))?;
 
     let options: Vec<(String, String)> = options
@@ -343,11 +344,8 @@ mod tests {
 
     /// A plan attaching exactly `providers`, with default settings.
     fn plan_attaching(providers: Vec<Accelerator>) -> SessionPlan {
-        let resolved = providers.first().map_or(ExecutionProvider::Cpu, |&accelerator| accelerator.into());
-
         SessionPlan {
-            requested: resolved,
-            resolved,
+            requested: providers.first().map_or(ExecutionProvider::Cpu, |&accelerator| accelerator.into()),
             providers: providers.into_iter().map(resolved_for).collect(),
             settings: SessionSettings {
                 execution_mode: ExecutionMode::Parallel,
@@ -388,7 +386,9 @@ mod tests {
         ];
 
         for (provider, name) in cases {
-            let dispatch = dispatch(&resolved(provider));
+            let Attach::Named(dispatch) = attachment(&resolved(provider)) else {
+                panic!("{provider} is attached through plugin devices rather than by name");
+            };
 
             // `ort` exposes neither the provider's name nor the flag as accessors; its `Debug` prints both, and they
             // are the two facts that decide which provider is attached and what happens when it will not.

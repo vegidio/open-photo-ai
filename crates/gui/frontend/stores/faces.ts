@@ -1,8 +1,8 @@
 import { create } from "zustand";
-import { type CropInfo, cropKey } from "@/ipc/crop";
+import { type CropInfo, sameCrop } from "@/ipc/crop";
 import type { FaceChoice } from "@/ipc/enhance";
 import type { Face } from "@/ipc/faces";
-import { registerFileOwner } from "@/stores/files";
+import { registerFileOwner, useFileStore } from "@/stores/files";
 
 /** The faces found in one photograph, beside the framing they were found at. */
 type Detected = {
@@ -58,13 +58,14 @@ type FacesStore = {
     choices: Map<string, FaceChoice>;
 
     setFaces: (identity: string, crop: CropInfo | undefined, faces: Face[]) => void;
+    recordFaces: (identity: string, crop: CropInfo | undefined, faces: Face[]) => void;
     setFaceChoice: (identity: string, choice: FaceChoice) => void;
     forgetFaces: (identity: string) => void;
     forgetAllFaces: () => void;
 };
 
 // **The faces' writers are the run path and the picker**, and both write the same value through the same
-// `setFaces`. `hooks/useEnhancementRun.ts` records what a chain carrying a face recovery found - the run finds them
+// `recordFaces`. `hooks/useEnhancementRun.ts` records what a chain carrying a face recovery found - the run finds them
 // itself - and the face-recovery row asks `detect_faces` when its options are open over a photograph whose faces are
 // not known yet, so the picker has something to offer before the chain has finished. Nothing else asks for a
 // detection, which is what makes "faces are found only for a photograph whose enhancements need them" structural.
@@ -78,7 +79,7 @@ type FacesStore = {
  *
  * **Not persisted**, and released when the photograph is closed.
  */
-export const useFacesStore = create<FacesStore>()((set) => ({
+export const useFacesStore = create<FacesStore>()((set, get) => ({
     faces: new Map<string, Detected>(),
     choices: new Map<string, FaceChoice>(),
 
@@ -94,6 +95,27 @@ export const useFacesStore = create<FacesStore>()((set) => ({
      */
     setFaces: (identity: string, crop: CropInfo | undefined, faces: Face[]) =>
         set((state) => ({ faces: new Map(state.faces).set(identity, { ...(crop && { crop }), faces }) })),
+
+    /**
+     * Records the faces a detection answered with, as `setFaces` does - **but only while the photograph is still
+     * open**, as every late answer is: a photograph that was closed has had every owner told to forget it.
+     *
+     * **Writes nothing where the same faces are already recorded at the same framing**, compared by key, so a
+     * detection answered again - by the picker and then by the chain, say - does not re-render every subscriber
+     * over an equal value.
+     */
+    recordFaces: (identity: string, crop: CropInfo | undefined, faces: Face[]) => {
+        if (!useFileStore.getState().files.some((open) => open.identity === identity)) return;
+
+        const recorded = get().faces.get(identity);
+        const unchanged =
+            recorded &&
+            sameCrop(recorded.crop, crop) &&
+            recorded.faces.length === faces.length &&
+            recorded.faces.every((face, index) => face.key === faces[index]?.key);
+
+        if (!unchanged) get().setFaces(identity, crop, faces);
+    },
 
     /**
      * Records the choice made among one photograph's faces.
@@ -137,7 +159,7 @@ export const useFacesStore = create<FacesStore>()((set) => ({
  * The faces found in one photograph **at the framing in force**, or `undefined` where they are not known -
  * including where they were found at another framing.
  *
- * The framing is compared **by value**, through `cropKey`, as `useEnhancementRun` compares the one its result was
+ * The framing is compared **by value**, through `sameCrop`, as `useEnhancementRun` compares the one its result was
  * made at.
  *
  * A photograph with no identity can only ever read as unknown: nothing can serve its pixels, so there is
@@ -151,7 +173,7 @@ export const useImageFaces = (identity: string | undefined, crop: CropInfo | und
 
         // A miss rather than a wrong answer is the whole point: a flip, a turn or a cut moves every face and can
         // add or remove one, so an answer found at another framing describes a photograph nobody is looking at.
-        return detected && cropKey(detected.crop) === cropKey(crop) ? detected.faces : undefined;
+        return detected && sameCrop(detected.crop, crop) ? detected.faces : undefined;
     });
 
 // Same reference until a write, because `Map.get` answers the object the writer put in, and the writer replaces it

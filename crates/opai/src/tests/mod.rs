@@ -63,6 +63,7 @@ fn fixture(server: &TestServer, release: &'static deps::artifact::Release, versi
         dir: release.dir.to_string(),
         progress: release.progress.clone(),
         lib: test_server::fixture_lib(&release.progress),
+        webgpu: None,
         provides: release.provides,
         derived: Vec::new(),
         sources: vec![test_server::fixture_source(server, version, &format!("{}_test.7z", release.name))],

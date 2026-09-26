@@ -106,7 +106,7 @@ struct Bench {
 impl Bench {
     /// The providers every build so far was planned for, in order.
     fn built_on(&self) -> Vec<ExecutionProvider> {
-        lock(&self.builds).iter().map(|request| request.plan.resolved).collect()
+        lock(&self.builds).iter().map(|request| request.plan.resolved()).collect()
     }
 
     /// How many builds have been performed.
@@ -120,7 +120,7 @@ fn builder(bench: &Arc<Bench>) -> Builder<Fake> {
     let bench = Arc::clone(bench);
 
     Arc::new(move |request: BuildRequest| {
-        let provider = request.plan.resolved;
+        let provider = request.plan.resolved();
         let artifact = request.artifact.clone();
         let model = request.model.clone();
 

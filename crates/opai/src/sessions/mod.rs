@@ -208,6 +208,11 @@ impl<S: Send + 'static> Sessions<S> {
         self.supported = self.supported.with_webgpu(webgpu);
     }
 
+    /// What this machine can be asked to run on, as decided during initialization — the one copy of it.
+    pub(crate) const fn supported(&self) -> SupportedProviders {
+        self.supported
+    }
+
     /// Sessions installing from `base_url` against `listing` and building through `build`, for a suite above this
     /// layer that needs the real request, flight and install around a fake session.
     #[cfg(test)]
@@ -298,7 +303,7 @@ impl<S: Send + 'static> Sessions<S> {
         let auto = requested == ExecutionProvider::Auto;
         let rungs: Vec<_> = options::ladder(requested, self.supported)
             .into_iter()
-            .filter(|rung| !(auto && self.cache.is_declined(artifact, rung.resolved)))
+            .filter(|rung| !(auto && self.cache.is_declined(artifact, rung.resolved())))
             .collect();
 
         for (index, rung) in rungs.iter().enumerate() {
@@ -318,7 +323,7 @@ impl<S: Send + 'static> Sessions<S> {
                 // Matched on the provider the failure *carries*, which `sessions::build` sets from the plan it
                 // attached, so the fallback is decided by what was actually tried.
                 Err(SessionError::Build { provider, .. }) if provider != ExecutionProvider::Cpu => {
-                    let next = rungs.get(index + 1).map_or(ExecutionProvider::Cpu, |rung| rung.resolved);
+                    let next = rungs.get(index + 1).map_or(ExecutionProvider::Cpu, |rung| rung.resolved());
 
                     // **The record this whole instrumentation sweep is most for.** A downgrade is invisible to a user
                     // — the enhancement still completes, several times slower — so a bug report about speed has
@@ -330,13 +335,7 @@ impl<S: Send + 'static> Sessions<S> {
                         next = %next,
                         "the execution provider could not open this model; falling back to the next provider"
                     );
-                    // By the provider that was attempted: an `Auto` request counted as `Auto` would not say which
-                    // accelerator declined.
-                    metrics::PROVIDER_FALLBACKS.add_with_tags(1, &[("requested", provider.as_str())]);
-
-                    if auto {
-                        self.cache.decline(artifact, provider);
-                    }
+                    self.fall_back(artifact, provider, auto);
                 }
                 Err(other) => return Err(other),
             }
@@ -358,7 +357,7 @@ impl<S: Send + 'static> Sessions<S> {
     ) -> Result<Option<SessionHandle<S>>, SessionError> {
         // Keyed on what the machine will actually serve, not on what was asked for: filing a CPU session under a GPU
         // key would make an explicit switch to the CPU build a second identical copy of it.
-        let (requested, resolved) = (rung.requested, rung.resolved);
+        let (requested, resolved) = (rung.requested, rung.resolved());
 
         self.cache
             .get_or_build(artifact, requested, resolved, interest, |installing| -> BuildFuture<'_, S> {
@@ -401,9 +400,20 @@ impl<S: Send + 'static> Sessions<S> {
             provider = %provider,
             "the execution provider failed running this model; falling back to the next provider"
         );
+        self.fall_back(artifact, provider, true)
+    }
+
+    /// Counts a fallback away from `provider` for `artifact`, and declines it for good where `decline` is set. Returns
+    /// whether it was newly declined.
+    ///
+    /// The half both fallbacks share — one from a session that would not open, one from a session that failed running
+    /// — so they are counted the same way; each writes its own record, because what went wrong differs.
+    fn fall_back(&self, artifact: &ArtifactId, provider: ExecutionProvider, decline: bool) -> bool {
+        // By the provider that was attempted: an `Auto` request counted as `Auto` would not say which accelerator
+        // declined.
         metrics::PROVIDER_FALLBACKS.add_with_tags(1, &[("requested", provider.as_str())]);
 
-        self.cache.decline(artifact, provider)
+        decline && self.cache.decline(artifact, provider)
     }
 
     /// Installs `artifact`'s files and returns the directory they landed in, or `None` where the transfer stopped

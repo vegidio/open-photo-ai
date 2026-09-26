@@ -32,9 +32,12 @@ clean:
     Get-ChildItem -Recurse -Force -File -Filter *.tsbuildinfo | Remove-Item -Force
 
 # Run the Rust and frontend tests. Pass `rust` or `node` to run only one of them.
+# The frontend is built before the Rust tests because `tauri::generate_context!` embeds crates/gui/dist at compile
+# time, and dist is not committed.
 test suite="all": (_check-suite suite)
+    @just _pnpm install --frozen-lockfile
+    {{ if suite != "node" { "just _pnpm build" } else { "" } }}
     {{ if suite != "node" { "cargo test --workspace" } else { "" } }}
-    {{ if suite != "rust" { "just _pnpm install --frozen-lockfile" } else { "" } }}
     {{ if suite != "rust" { "just _pnpm test" } else { "" } }}
 
 # Run a component in development mode. Currently only `gui` is supported.

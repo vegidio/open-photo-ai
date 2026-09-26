@@ -601,7 +601,7 @@ fn premultiply(channels: [u16; 3], alpha: u16) -> [u16; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::gradient;
+    use crate::test_support::{every_variant, gradient};
 
     /// [`flattened`]'s converting path, with the depth-matched shortcut bypassed.
     fn flattened_converting<T: Channel>(sampler: &Sampler<'_>, width: u32, height: u32) -> ImageBuffer<Rgb<T>, Vec<T>>
@@ -1181,31 +1181,6 @@ mod tests {
                 dest[2 * plane + index] = norm.encode(b);
             }
         }
-    }
-
-    /// Every variant a source can reach the sampler as, at an odd size, with every channel — alpha included — spread
-    /// over its whole range, so partial transparency is everywhere rather than at a hand-picked pixel.
-    fn every_variant(width: u32, height: u32) -> Vec<(&'static str, DynamicImage)> {
-        let mut state = 0x2545_f491_u32;
-        let wide = DynamicImage::ImageRgba16(ImageBuffer::from_fn(width, height, |_, _| {
-            Rgba([(); 4].map(|()| {
-                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-                (state >> 16) as u16
-            }))
-        }));
-
-        vec![
-            ("Rgb8", DynamicImage::ImageRgb8(wide.to_rgb8())),
-            ("Rgba8", DynamicImage::ImageRgba8(wide.to_rgba8())),
-            ("Rgb16", DynamicImage::ImageRgb16(wide.to_rgb16())),
-            ("Rgba16", wide.clone()),
-            ("Luma8", DynamicImage::ImageLuma8(wide.to_luma8())),
-            ("LumaA8", DynamicImage::ImageLumaA8(wide.to_luma_alpha8())),
-            ("Luma16", DynamicImage::ImageLuma16(wide.to_luma16())),
-            ("LumaA16", DynamicImage::ImageLumaA16(wide.to_luma_alpha16())),
-            ("Rgb32F", DynamicImage::ImageRgb32F(wide.to_rgb32f())),
-            ("Rgba32F", DynamicImage::ImageRgba32F(wide.to_rgba32f())),
-        ]
     }
 
     #[test]

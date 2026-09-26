@@ -318,8 +318,6 @@ struct Inner {
     /// drops. No method releases it early.
     #[expect(dead_code, reason = "the claim is held rather than read; dropping it is what releases the lock")]
     claim: instance::Claim,
-    /// What this machine turned out to be able to run, decided during initialization.
-    providers: SupportedProviders,
     /// What this process does with a model whose files are already on disk, as this initialization declared.
     ///
     /// Held rather than read (the installer runs from its own copy), as [`claim`](Self::claim) is.
@@ -567,6 +565,7 @@ impl Opai {
 
         // Taken by name before the plan moves into install, so this can't disagree with what actually installs.
         let lib = plan.runtime.lib.expect("every platform the runtime is published for names its library");
+        let webgpu = plan.runtime.webgpu;
 
         let (mut opai, installed) = Self::install(name, app_dir, claim, plan, models, on_progress).await?;
 
@@ -589,13 +588,14 @@ impl Opai {
         // `dlopen` of a ~175 MB library plus environment creation is blocking and syscall-heavy, so it runs on
         // a blocking thread.
         let app_name = name.to_string();
-        let webgpu = spawn_blocking::<_, InitError, _>(move || runtime::start(&app_name, &library)).await??;
+        let webgpu = spawn_blocking::<_, InitError, _>(move || runtime::start(&app_name, &library, webgpu)).await??;
 
         // WebGPU is the one provider the install plan cannot decide: its plugin ships inside the runtime's archive, and
         // whether it offers a device is only known once that runtime has loaded it. The handle has not been shared yet.
-        let inner = Arc::get_mut(&mut opai.inner).expect("the handle is not shared before initialization returns");
-        inner.providers = inner.providers.with_webgpu(webgpu);
-        inner.sessions.set_webgpu(webgpu);
+        Arc::get_mut(&mut opai.inner)
+            .expect("the handle is not shared before initialization returns")
+            .sessions
+            .set_webgpu(webgpu);
 
         Ok(opai)
     }
@@ -607,7 +607,8 @@ impl Opai {
     ///
     /// A report of what can be *asked* for, not a promise a session will build on it.
     pub fn providers(&self) -> SupportedProviders {
-        self.inner.providers
+        // The copy the sessions build from, so what is reported and what a request is resolved against are one value.
+        self.inner.sessions.supported()
     }
 
     /// What is backing the run cache, as decided during initialization.

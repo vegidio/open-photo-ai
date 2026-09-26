@@ -38,6 +38,9 @@ export type Face = {
     /**
      * The face's identity for a choice among faces: `face_key` in `crates/gui/src/faces.rs`, the four
      * bounding-box coordinates. Rust writes it and reads it back, so this side never composes one.
+     *
+     * In the **framed** photograph's pixels, so a framing change leaves a choice behind and a framing returned to
+     * finds it again. See design.md D2.
      */
     key: string;
     /**

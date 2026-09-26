@@ -84,6 +84,22 @@ impl Decoded {
         Ok(picture)
     }
 
+    /// The photograph `identity` names, served from what is held but, on a miss, decoded **without being kept**.
+    /// Blocking.
+    ///
+    /// For a reader that only wants a small rendition of it — a drawer thumbnail — so that a run of them does not
+    /// evict the photograph on the canvas from a cache two entries deep.
+    ///
+    /// # Errors
+    ///
+    /// As [`load_blocking`](Self::load_blocking).
+    pub(crate) fn load_passing_blocking(&self, identity: &str, path: &Path) -> Result<Picture, ImageIoError> {
+        match self.get(identity) {
+            Some(picture) => Ok(picture),
+            None => opai::image::load_blocking(path),
+        }
+    }
+
     /// [`load_blocking`](Self::load_blocking), off the runtime's own threads.
     ///
     /// # Errors
@@ -211,6 +227,23 @@ mod tests {
         // And the identity it did compute is a hit from then on.
         let again = decoded.load_blocking(first.identity(), &path).expect("readable");
         assert!(Arc::ptr_eq(&again.shared_pixels(), &first.shared_pixels()), "a second read decoded again");
+    }
+
+    #[test]
+    fn a_passing_read_is_served_from_what_is_held_and_keeps_nothing_it_decoded() {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let path = crate::images::test_support::write_image(&dir, "holiday.png", 8, 8, opai::ImageFormat::Png);
+        let decoded = Decoded::default();
+
+        let passing = decoded.load_passing_blocking("0000000000000000", &path).expect("readable");
+        assert!(held(&decoded).is_empty(), "a passing read kept what it decoded");
+
+        let kept = decoded.load_blocking(passing.identity(), &path).expect("readable");
+        let again = decoded.load_passing_blocking(kept.identity(), &path).expect("readable");
+        assert!(
+            Arc::ptr_eq(&again.shared_pixels(), &kept.shared_pixels()),
+            "a passing read decoded a held picture"
+        );
     }
 
     #[test]

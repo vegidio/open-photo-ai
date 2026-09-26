@@ -258,7 +258,7 @@ impl Opai {
         // Built against the report this exact install produced, and carrying `models` since the one model
         // installer is behind `Sessions`.
         let sessions = Sessions::new(app_dir.clone(), name.to_string(), providers, models);
-        let inner = Inner { name: name.to_string(), config_dir: app_dir, claim, providers, models, sessions, cache };
+        let inner = Inner { name: name.to_string(), config_dir: app_dir, claim, models, sessions, cache };
         let opai = Self { inner: Arc::new(inner) };
 
         // Returned alongside the handle so a caller uses the path actually installed to, rather than

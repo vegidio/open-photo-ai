@@ -303,61 +303,50 @@ async fn run<B: Backend, O: DataOperation>(
     // The same block the chain runs, over the head of this operation's range. See `acquire`.
     //
     // A model that throws an error on an `Auto` accelerator is run again on the next provider of its ladder; every
-    // retry declines at least one provider for good, so it ends at the latest on the CPU. See the chain's step loop.
-    let (held, produced) = loop {
-        let sessions = acquire::acquire(backend, pipeline.as_ref(), &reporter, provider, cancel).await?;
+    // retry declines at least one provider for good, so it ends at the latest on the CPU. See `run_declining`.
+    let (held, produced) =
+        acquire::run_declining(backend, pipeline.as_ref(), &reporter, provider, cancel, |sessions| {
+            let running = Arc::clone(&pipeline);
+            let input = source.shared_pixels();
+            let cancelled = cancel.clone();
+            let reported = Arc::clone(&reporter);
+            let wanted = progress.wanted();
 
-        let running = Arc::clone(&pipeline);
-        let input = source.shared_pixels();
-        let cancelled = cancel.clone();
-        let reported = Arc::clone(&reporter);
-        let wanted = progress.wanted();
+            // Moved into the closure below — the same pair the read above used, so the two ends cannot disagree about
+            // where this result lives. Cloned rather than moved only so the record at the tail can name the slot a
+            // computed result went into, which is what lets one `grep` pair a miss with the hit it later serves.
+            let keeping = store.clone();
 
-        // Moved into the closure below — the same pair the read above used, so the two ends cannot disagree about where
-        // this result lives. Cloned rather than moved only so the record at the tail can name the slot a computed result
-        // went into, which is what lets one `grep` pair a miss with the hit it later serves.
-        let keeping = store.clone();
-
-        // Acquired on the runtime and run off it, exactly as the chain does and for the same reason: in a Tauri process the
-        // async runtime *is* the window's event loop. The hop is written out here rather than shared with the chain because
-        // the two closures have nothing in common but their shape — the chain's moves whole decoded pictures and encodes
-        // one back, this one moves a value and serialises one.
-        //
-        // The sessions travel into the blocking closure and back out of it, so they are owned throughout the run and are
-        // held until this function returns — there is no window in which one could be found reclaimed. The error type is
-        // named rather than inferred: `Cancelled` converts into three of this crate's errors, and which one a shutdown is
-        // reported as is the choice being made here.
-        let (sessions, produced) = spawn_blocking::<_, InferenceError, _>(move || {
-            let report = |fraction: f64| reported.running(fraction);
-            let report = wanted.then_some(&report as &dyn Fn(f64));
-            let stopped = || cancelled.is_cancelled();
-
-            let produced = running.run(&input, &sessions, report, &stopped);
-
-            // Inside the same blocking call the run happened on, as the chain's write is: encoding and storing is I/O and
-            // belongs nowhere near the runtime, and there is a blocking thread here already.
+            // Acquired on the runtime and run off it, exactly as the chain does and for the same reason: in a Tauri
+            // process the async runtime *is* the window's event loop. The hop is written out here rather than shared
+            // with the chain because the two closures have nothing in common but their shape — the chain's moves whole
+            // decoded pictures and encodes one back, this one moves a value and serialises one.
             //
-            // **Only a successful run writes.** A failed one and a cancelled one both arrive here as an `Err` — the
-            // pipeline returns the error rather than a value — so neither has a result to store, and a later run is never
-            // served something that was never produced. Nothing checks the token a second time to get that.
-            if let (Some((cache, key)), Ok(value)) = (&keeping, &produced) {
-                cache.put_value(key, value);
-            }
+            // The sessions travel into the blocking closure and back out of it, so they are owned throughout the run
+            // and are held until this function returns — there is no window in which one could be found reclaimed. The
+            // error type is named rather than inferred: `Cancelled` converts into three of this crate's errors, and
+            // which one a shutdown is reported as is the choice being made here.
+            spawn_blocking::<_, InferenceError, _>(move || {
+                let report = |fraction: f64| reported.running(fraction);
+                let report = wanted.then_some(&report as &dyn Fn(f64));
+                let stopped = || cancelled.is_cancelled();
 
-            (sessions, produced)
+                let produced = running.run(&input, &sessions, report, &stopped);
+
+                // Inside the same blocking call the run happened on, as the chain's write is: encoding and storing is
+                // I/O and belongs nowhere near the runtime, and there is a blocking thread here already.
+                //
+                // **Only a successful run writes.** A failed one and a cancelled one both arrive here as an `Err` — the
+                // pipeline returns the error rather than a value — so neither has a result to store, and a later run is
+                // never served something that was never produced. Nothing checks the token a second time to get that.
+                if let (Some((cache, key)), Ok(value)) = (&keeping, &produced) {
+                    cache.put_value(key, value);
+                }
+
+                (sessions, produced)
+            })
         })
         .await?;
-
-        if matches!(produced, Err(InferenceError::Run { .. }))
-            && acquire::decline(backend, pipeline.as_ref(), &sessions, provider)
-        {
-            // Let go of before the retry acquires, so what they held on the device is freed for their replacement.
-            drop(sessions);
-            continue;
-        }
-
-        break (sessions, produced);
-    };
 
     let value = produced?;
 

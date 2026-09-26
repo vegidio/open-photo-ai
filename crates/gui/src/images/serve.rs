@@ -192,14 +192,24 @@ fn locate(opened: &Opened, runs: &crate::enhance::Runs, identity: &str) -> Resul
 ///
 /// The only place [`Refusal::Unreadable`] is produced, since a held result was never on disk to begin
 /// with.
-fn decode(pixels: Pixels) -> Result<opai::Picture, Refusal> {
+///
+/// `bound` is the rendition's: only a full-size one — what the canvas asks for — keeps what it decoded. A bounded
+/// one, a drawer thumbnail among them, is served from a decode already held but keeps nothing, so a drawer full of
+/// thumbnails does not evict the canvas's photograph from the cache.
+fn decode(pixels: Pixels, bound: u32) -> Result<opai::Picture, Refusal> {
     match pixels {
         Pixels::Held(picture) => Ok(picture),
         // Not logged: `opai` records the failure itself, naming the file and the reason.
         //
-        // Through the decoded cache, so the thumbnail, the canvas and every run that follows share one decode.
+        // Through the decoded cache, so the canvas and every run that follows share one decode.
         Pixels::File(identity, path, decoded) => {
-            decoded.load_blocking(&identity, &path).map_err(|_| Refusal::Unreadable)
+            let loaded = if bound == 0 {
+                decoded.load_blocking(&identity, &path)
+            } else {
+                decoded.load_passing_blocking(&identity, &path)
+            };
+
+            loaded.map_err(|_| Refusal::Unreadable)
         }
     }
 }
@@ -330,7 +340,7 @@ fn reduced(pixels: &DynamicImage, bound: u32, crop: Crop) -> (Cow<'_, DynamicIma
 /// cropped thumbnail cost about what an uncropped one costs, and it is why the reference doesn't crop
 /// bounded renditions at all. See [`reduced`] and design.md D5.
 fn render(pixels: Pixels, asked: &Asked) -> Result<Rendition, Refusal> {
-    let picture = decode(pixels)?;
+    let picture = decode(pixels, asked.bound)?;
 
     // Bound out here rather than inside the arm, so a framing that changed nothing can borrow the reduction
     // instead of copying it.
@@ -517,7 +527,10 @@ mod tests {
 
         std::fs::remove_file(&path).expect("removable");
 
-        assert_eq!(located(&opened, &identity).and_then(decode).map(|_| ()), Err(Refusal::Unreadable));
+        assert_eq!(
+            located(&opened, &identity).and_then(|pixels| decode(pixels, 0)).map(|_| ()),
+            Err(Refusal::Unreadable)
+        );
     }
 
     #[test]
@@ -527,7 +540,9 @@ mod tests {
         let opened = Opened::default();
         let identity = admit(&opened, &path);
 
-        let picture = located(&opened, &identity).and_then(decode).expect("an admitted, readable file");
+        let picture = located(&opened, &identity)
+            .and_then(|pixels| decode(pixels, 0))
+            .expect("an admitted, readable file");
 
         assert_eq!(picture.dimensions(), (40, 30));
         assert_eq!(picture.identity(), identity, "the file served is not the file admitted");

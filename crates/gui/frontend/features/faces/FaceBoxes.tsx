@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
 import type { Face } from "@/ipc/faces";
-import { faceKey } from "@/lib/faces";
 import { cn } from "@/lib/utils";
 
 type FaceBoxesProps = {
@@ -54,7 +53,7 @@ export const FaceBoxes = ({ width, height, faces, skipped, onToggle }: FaceBoxes
 
                 // The face's own key, which is what the selection is recorded under: two boxes that
                 // shared one would be one face to everything else here, so they share a React key too.
-                const key = faceKey(face);
+                const { key } = face;
                 const chosen = !skipped.has(key);
 
                 return (

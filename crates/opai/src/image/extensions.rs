@@ -48,7 +48,13 @@ pub fn input_extensions() -> Vec<&'static str> {
 }
 
 /// Every extension `format` is written under, canonical first.
-fn extensions_of(format: ImageFormat) -> &'static [&'static str] {
+///
+/// ```
+/// use opai::ImageFormat;
+///
+/// assert_eq!(opai::image::extensions_of(ImageFormat::Jpeg), ["jpg", "jpeg"]);
+/// ```
+pub fn extensions_of(format: ImageFormat) -> &'static [&'static str] {
     // An exhaustive match, which is the whole point of the function: `rust_sak::image::ImageFormat::extension` answers
     // with one canonical name per format, and a picker built from that alone would refuse the `.jpeg`, `.heic` and
     // `.tif` a camera or another application wrote. The second names come from `ImageFormat::from_extension`, which is

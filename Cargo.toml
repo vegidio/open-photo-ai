@@ -6,8 +6,8 @@ members = ["crates/opai", "crates/imaging", "crates/cli", "crates/gui", "crates/
 
 [workspace.package]
 # CalVer (YY.M.MICRO), continuing the Go app's scheme: it shipped 25.12.0, so this stays ahead and a
-# release can never go backwards. Duplicated as a literal in crates/gui/tauri.conf.json, which
-# cannot resolve workspace inheritance - a test in crates/gui/src/lib.rs pins the two together.
+# release can never go backwards. The single source of the version: crates/gui/tauri.conf.json omits
+# `version` so Tauri inherits it from here.
 version = "26.10.0"
 # Kept in sync with `edition` in rustfmt.toml.
 edition = "2024"

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useOnce } from "@/hooks/useOnce";
 import { catalogue, type FamilyEntry } from "@/ipc/catalogue";
 
 /**
@@ -9,28 +9,11 @@ import { catalogue, type FamilyEntry } from "@/ipc/catalogue";
  * it has answered there is nothing to offer. `catalogue()` keeps the promise for the life of the
  * process, so every consumer mounting at once is one call rather than one each.
  *
- * No error branch, as in `Navbar`'s version number: a rejection here means the IPC bridge is broken,
- * and a rejected promise in the console says so better than an empty chooser that claims a reason.
- *
  * In `hooks/` rather than beside the settings rows it was written for, because the add menu is its
  * second caller: a `use` reaching from one feature into another is a promotion that has not happened
  * yet.
  */
-export const useCatalogue = (): FamilyEntry[] => {
-    const [families, setFamilies] = useState<FamilyEntry[]>([]);
-
-    useEffect(() => {
-        let live = true;
-
-        catalogue().then((entries) => live && setFamilies(entries));
-
-        return () => {
-            live = false;
-        };
-    }, []);
-
-    return families;
-};
+export const useCatalogue = (): FamilyEntry[] => useOnce(catalogue, [] as FamilyEntry[]);
 
 /**
  * What one family publishes, or `undefined` while the catalogue has not arrived or does not name it.

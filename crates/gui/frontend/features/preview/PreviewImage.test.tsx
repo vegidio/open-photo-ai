@@ -7,7 +7,6 @@ import { cropQuery } from "@/ipc/crop";
 import type { RunProgress } from "@/ipc/enhance";
 import type { Face } from "@/ipc/faces";
 import { DRAWER_HEIGHT, ZOOM_MAX, ZOOM_MIN, ZOOM_WHEEL_STEP } from "@/lib/constants";
-import { faceKey } from "@/lib/faces";
 import { useDrawerStore } from "@/stores/drawer";
 import { useFacesStore } from "@/stores/faces";
 import { useFileStore } from "@/stores/files";
@@ -959,7 +958,7 @@ describe("the faces in the photograph on the canvas", () => {
 
         act(() => {
             useFacesStore.getState().setFaces(identity, undefined, [face(500), face(2000)]);
-            useFacesStore.getState().setFaceChoice(identity, { skipped: [faceKey(face(500))], restored: [] });
+            useFacesStore.getState().setFaceChoice(identity, { skipped: [face(500).key], restored: [] });
         });
     });
 

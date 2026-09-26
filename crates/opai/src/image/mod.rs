@@ -78,7 +78,7 @@ mod test_support;
 
 pub use encode::{encode, encode_blocking};
 pub use error::ImageIoError;
-pub use extensions::input_extensions;
+pub use extensions::{extensions_of, input_extensions};
 pub use identity::{identity, identity_blocking};
 pub use load::{load, load_blocking};
 pub use picture::Picture;

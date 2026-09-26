@@ -41,9 +41,8 @@ where
     // The dispatcher is carried too. In an application that is the global one on both threads, so this changes
     // nothing there. Under a subscriber bound to the calling thread alone, as the suite's recordings are, a unit span
     // opened on the blocking thread would otherwise go to a subscriber that never saw its parent.
-    let span = tracing::Span::current();
-    let dispatch = tracing::dispatcher::get_default(tracing::Dispatch::clone);
-    let work = move || tracing::dispatcher::with_default(&dispatch, || span.in_scope(work));
+    let carried = Carried::current();
+    let work = move || carried.in_scope(work);
     match tokio::task::spawn_blocking(work).await {
         Ok(value) => Ok(value),
         Err(err) if err.is_panic() => std::panic::resume_unwind(err.into_panic()),
@@ -51,6 +50,39 @@ where
         // case rather than an I/O error over the `JoinError`: nothing on disk failed, and a caller that can tell the
         // two apart can stop quietly instead of reporting a broken install to a user already closing the application.
         Err(_) => Err(E::from(Cancelled)),
+    }
+}
+
+/// The calling thread's `tracing` context — its current span and the subscriber that span belongs to — captured to be
+/// re-entered on another thread.
+///
+/// `tracing`'s current span and its default dispatcher are both thread-local, so work handed to a thread of its own
+/// loses them unless they are carried across by hand; see [`spawn_blocking`], which is where the reasons are written
+/// out. One type for every hop off the calling thread, so the two halves are never carried one without the other.
+pub(crate) struct Carried {
+    /// The span the work was handed over in.
+    span: tracing::Span,
+    /// The subscriber that span belongs to.
+    dispatch: tracing::Dispatch,
+}
+
+impl Carried {
+    /// Captures the calling thread's current span and dispatcher.
+    pub(crate) fn current() -> Self {
+        Self {
+            span: tracing::Span::current(),
+            dispatch: tracing::dispatcher::get_default(tracing::Dispatch::clone),
+        }
+    }
+
+    /// Runs `work` under the captured dispatcher, inside the captured span.
+    pub(crate) fn in_scope<T>(&self, work: impl FnOnce() -> T) -> T {
+        tracing::dispatcher::with_default(&self.dispatch, || self.span.in_scope(work))
+    }
+
+    /// Runs `work` under the captured dispatcher alone, outside the captured span.
+    pub(crate) fn in_dispatch<T>(&self, work: impl FnOnce() -> T) -> T {
+        tracing::dispatcher::with_default(&self.dispatch, work)
     }
 }
 

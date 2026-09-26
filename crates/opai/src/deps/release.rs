@@ -69,6 +69,9 @@ pub(crate) struct Dependency {
     /// The shared library inside the archive the loader has to be pointed at, or `None` where the dependency is a
     /// directory of files rather than one loadable file.
     pub(crate) lib: Option<&'static str>,
+    /// The WebGPU plugin shipped beside [`lib`](Self::lib), or `None` where the dependency ships none. Carried from the
+    /// same row, for the same reason.
+    pub(crate) webgpu: Option<&'static str>,
     /// The execution provider installing this unlocks, `None` for one that unlocks none of its own. Carried from the
     /// same row.
     pub(crate) provides: Option<Provider>,
@@ -141,6 +144,7 @@ impl Dependency {
             dir: release.dir.to_string(),
             progress: release.progress.clone(),
             lib: pinned.artifact.lib,
+            webgpu: pinned.artifact.webgpu,
             provides: release.provides,
             // Nothing is computed from a runtime or a GPU library: what an execution provider compiles is compiled
             // from a model's weights, and only a model's descriptor names one.

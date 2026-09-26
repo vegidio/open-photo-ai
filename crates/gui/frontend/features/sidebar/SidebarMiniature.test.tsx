@@ -4,7 +4,6 @@ import "@/i18n";
 import type { Face } from "@/ipc/faces";
 import { renditionUrl } from "@/ipc/images";
 import { THUMBNAIL_BOUND } from "@/lib/constants";
-import { faceKey } from "@/lib/faces";
 import { useFacesStore } from "@/stores/faces";
 import { type ImageViewport, useTransformStore } from "@/stores/transform";
 import {
@@ -142,7 +141,7 @@ describe("SidebarMiniature", () => {
         openFiles(HOLIDAY);
         act(() => {
             useFacesStore.getState().setFaces(identity, undefined, [face]);
-            useFacesStore.getState().setFaceChoice(identity, { skipped: [faceKey(face)], restored: [] });
+            useFacesStore.getState().setFaceChoice(identity, { skipped: [face.key], restored: [] });
         });
 
         render(<SidebarMiniature />);

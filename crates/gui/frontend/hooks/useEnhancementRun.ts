@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { type CropInfo, cropKey } from "@/ipc/crop";
+import { type CropInfo, sameCrop } from "@/ipc/crop";
 import { cancelEnhance, enhance, onEnhanceProgress, type RunProgress } from "@/ipc/enhance";
 import type { Face } from "@/ipc/faces";
 import type { ImageRecord } from "@/ipc/images";
@@ -9,7 +9,6 @@ import { withChoice } from "@/lib/faces";
 import { report } from "@/lib/report";
 import { useFileEnhancements } from "@/stores/enhancements";
 import { useFaceChoice, useFacesStore } from "@/stores/faces";
-import { useFileStore } from "@/stores/files";
 import { useSettingsStore } from "@/stores/settings";
 
 /** Where an enhanced result's pixels are, and how large they are. */
@@ -156,10 +155,9 @@ export const useEnhancementRun = (file: ImageRecord | undefined, crop?: CropInfo
      */
     const [running, setRunning] = useState(false);
 
-    // The framing is compared by value, through `cropKey`: a result made at the framing in force is
+    // The framing is compared by value, through `sameCrop`: a result made at the framing in force is
     // this framing's result, whichever object the crop store happens to hand back for it.
-    const enhanced =
-        result && result.source === source && cropKey(result.crop) === cropKey(crop) ? result.image : undefined;
+    const enhanced = result && result.source === source && sameCrop(result.crop, crop) ? result.image : undefined;
 
     /*
      * The run this window is drawing, read by the progress listener - which is registered once and
@@ -240,11 +238,7 @@ export const useEnhancementRun = (file: ImageRecord | undefined, crop?: CropInfo
          * there is still a photograph to hold it for. Read off the store rather than subscribed to: what
          * this needs is the writer.
          */
-        const record = (found: Face[]) => {
-            if (!useFileStore.getState().files.some((open) => open.identity === source)) return;
-
-            useFacesStore.getState().setFaces(source, crop, found);
-        };
+        const record = (found: Face[]) => useFacesStore.getState().recordFaces(source, crop, found);
 
         done.then(
             (outcome) => {

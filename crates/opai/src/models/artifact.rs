@@ -68,21 +68,27 @@ impl Family {
     ///   photograph's own resolution rather than at up to sixty-four times its pixels.
     ///
     /// The same order the application has always presented its enhancements in; it is [`Family::ALL`] without
-    /// detection.
-    pub const APPLY_ORDER: [Self; 7] = [
-        Self::Denoise,
-        Self::FaceRecovery,
-        Self::Colorization,
-        Self::LightAdjustment,
-        Self::ColorBalance,
-        Self::Sharpen,
-        Self::Upscale,
-    ];
+    /// detection, and derived from it so the two cannot drift apart.
+    pub const APPLY_ORDER: [Self; 7] = {
+        assert!(
+            matches!(Self::ALL[0], Self::Detection),
+            "`ALL` must begin with the family that is never applied"
+        );
+        *Self::ALL.last_chunk().unwrap()
+    };
 
     /// Where this family's operation sits in a chain — its index in [`Family::APPLY_ORDER`] — or `None` for detection,
     /// which is never in one.
     pub fn applied_at(self) -> Option<usize> {
         Self::APPLY_ORDER.iter().position(|family| *family == self)
+    }
+
+    /// [`applied_at`](Self::applied_at) as a sort key: a family that is never applied sorts after every one that is.
+    ///
+    /// The fallback rather than an `expect`, so that sorting a chain or a set of suggestions never panics over a
+    /// photograph — every family a caller sorts this way is one whose result is an image, and so has a position.
+    pub(crate) fn apply_rank(self) -> usize {
+        self.applied_at().unwrap_or(usize::MAX)
     }
 
     /// The two-letter prefix this family's artifact names begin with: `up`.
@@ -192,15 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn the_apply_order_holds_every_image_family_once_and_restores_faces_before_resizing_them() {
-        for family in Family::ALL {
-            assert_eq!(
-                Family::APPLY_ORDER.iter().filter(|applied| **applied == family).count(),
-                usize::from(family != Family::Detection),
-                "{family:?} is in the apply order other than exactly when its result is an image"
-            );
-        }
-
+    fn the_apply_order_restores_faces_before_resizing_them() {
         // The one ordering that is a correctness rule rather than a quality one: faces are in the chain input's
         // coordinates.
         assert!(Family::FaceRecovery.applied_at() < Family::Upscale.applied_at());

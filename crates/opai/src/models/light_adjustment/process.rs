@@ -257,7 +257,7 @@ mod tests {
     use imaging::ChannelDepth;
     use imaging::present::{plan, presented};
 
-    use imaging::test_support::photograph;
+    use imaging::test_support::{photograph, variants_of};
 
     #[test]
     fn the_graph_is_fed_the_unit_range_rather_than_the_signed_one_face_recovery_uses() {
@@ -313,17 +313,6 @@ mod tests {
         })
     }
 
-    /// `picture` as each variant a sampler can borrow, and one it has to convert.
-    fn variants(picture: &DynamicImage) -> [DynamicImage; 5] {
-        [
-            DynamicImage::ImageRgb8(picture.to_rgb8()),
-            DynamicImage::ImageRgba8(picture.to_rgba8()),
-            DynamicImage::ImageRgb16(picture.to_rgb16()),
-            DynamicImage::ImageRgba16(picture.to_rgba16()),
-            DynamicImage::ImageLumaA16(picture.to_luma_alpha16()),
-        ]
-    }
-
     #[test]
     fn the_gain_read_by_rows_is_bit_identical_to_the_gain_read_pixel_by_pixel() {
         let (width, height) = (37, 23);
@@ -337,9 +326,9 @@ mod tests {
         let shown = photograph(width + 3, height + 5).crop_imm(2, 1, width, height);
         let produced = shown.brighten(17);
 
-        for source in variants(&picture) {
-            for (shown, produced) in variants(&shown).iter().zip(variants(&produced).iter().rev()) {
-                let (source, shown, produced) = (Sampler::new(&source), Sampler::new(shown), Sampler::new(produced));
+        for (_, source) in variants_of(&picture) {
+            for ((_, shown), (_, produced)) in variants_of(&shown).zip(variants_of(&produced).rev()) {
+                let (source, shown, produced) = (Sampler::new(&source), Sampler::new(&shown), Sampler::new(&produced));
 
                 assert!(
                     gained::<u8>(&source, &shown, &produced, (width, height))
@@ -364,7 +353,7 @@ mod tests {
         let extent = (6000, 4000);
         let picture = photograph(extent.0, extent.1);
 
-        for (name, source) in ["Rgb8", "Rgba8", "Rgb16", "Rgba16"].into_iter().zip(variants(&picture)) {
+        for (name, source) in variants_of(&picture).take(4) {
             let shown = source.brighten(3);
             let produced = source.brighten(11);
             let (source, shown, produced) = (Sampler::new(&source), Sampler::new(&shown), Sampler::new(&produced));

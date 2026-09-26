@@ -67,6 +67,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::image::Picture;
+use crate::task::Carried;
 use crate::telemetry::unit::{self, Outcome, unit_span};
 
 // A day covers a working session, which is the span over which somebody re-runs the same enhancement on the same
@@ -354,13 +355,7 @@ impl RunCache {
     pub(crate) fn put_later(&self, key: &str, image: Arc<DynamicImage>) {
         PENDING.begin(key);
 
-        let job = Write {
-            cache: self.clone(),
-            key: key.to_string(),
-            image,
-            span: tracing::Span::current(),
-            dispatch: tracing::dispatcher::get_default(tracing::Dispatch::clone),
-        };
+        let job = Write { cache: self.clone(), key: key.to_string(), image, carried: Carried::current() };
 
         let refused = match &*WRITER {
             Some(queue) => queue.send(job).err().map(|refused| refused.0),
@@ -540,26 +535,25 @@ struct Write {
     key: String,
     /// What, shared with whatever else still holds it.
     image: Arc<DynamicImage>,
-    /// The span the write was asked for in, which its own `cache_write` span is opened beneath.
-    span: tracing::Span,
-    /// The subscriber that span belongs to, which a thread of this module's own does not otherwise have.
-    dispatch: tracing::Dispatch,
+    /// The span the write was asked for in, which its own `cache_write` span is opened beneath, and the subscriber
+    /// that span belongs to, which a thread of this module's own does not otherwise have.
+    carried: Carried,
 }
 
 impl Write {
     /// Writes, and says so to anything waiting on the key — even where the write panicked, which would otherwise
     /// leave a reader of the key waiting forever.
     fn run(self) {
-        let Self { cache, key, image, span, dispatch } = self;
+        let Self { cache, key, image, carried } = self;
 
         let wrote = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            tracing::dispatcher::with_default(&dispatch, || span.in_scope(|| cache.put(&key, &image)));
+            carried.in_scope(|| cache.put(&key, &image));
         }));
 
         PENDING.end(&key);
 
         if wrote.is_err() {
-            tracing::dispatcher::with_default(&dispatch, || {
+            carried.in_dispatch(|| {
                 tracing::warn!(source = cache.source(), key, "writing a result panicked and it was not kept");
             });
         }

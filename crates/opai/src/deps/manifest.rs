@@ -340,6 +340,7 @@ mod tests {
             // Neither is part of the fingerprint — which is version and sources — so they only have to be
             // plausible.
             lib: Some("onnxruntime.1.26.0.dylib"),
+            webgpu: None,
             derived: Vec::new(),
             provides: None,
             sources: vec![Source { url: url.to_string(), sha256: sha256.to_string(), size: 10 }],

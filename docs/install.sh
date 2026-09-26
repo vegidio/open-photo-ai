@@ -25,6 +25,7 @@ fi
 info()  { printf '%s==>%s %s\n' "$BOLD" "$RESET" "$*" >&2; }
 warn()  { printf '%swarn:%s %s\n' "$YELLOW" "$RESET" "$*" >&2; }
 error() { printf '%serror:%s %s\n' "$RED" "$RESET" "$*" >&2; exit 1; }
+has()   { command -v "$1" >/dev/null 2>&1; }
 
 usage() {
     cat <<EOF
@@ -67,9 +68,9 @@ esac
 
 INSTALL_DIR="${OPAI_INSTALL_DIR:-$HOME/Applications}"
 
-command -v curl  >/dev/null 2>&1 || error "curl is required but not found"
+has curl || error "curl is required but not found"
 if [ "$OS" = macos ]; then
-    command -v unzip >/dev/null 2>&1 || error "unzip is required but not found"
+    has unzip || error "unzip is required but not found"
 fi
 
 if [ "$OPAI_VERSION" = "latest" ]; then
@@ -130,8 +131,6 @@ install_macos() {
     xattr -dr com.apple.quarantine "${INSTALL_DIR}/${app_name}" 2>/dev/null || true
     info "${GREEN}${app_name} installed${RESET} at ${INSTALL_DIR}/${app_name}"
 }
-
-has() { command -v "$1" >/dev/null 2>&1; }
 
 # Prints `deb` or `rpm`: from the distro's os-release when it's one we know, otherwise from whichever package
 # manager is on the system.

@@ -64,9 +64,7 @@ pub use report::{Enhanced, ProviderReport, ProviderVerdict};
 /// that listed its stack another way asked for that result, not for an error. Putting the rule here rather than in each
 /// front end is what keeps two front ends from running one stack two ways.
 pub(crate) fn in_apply_order(operations: &[Operation]) -> std::borrow::Cow<'_, [Operation]> {
-    // `applied_at` is `Some` for every family an `Operation` can carry; the fallback sorts a family it ever missed last
-    // rather than panicking over a photograph.
-    let position = |operation: &Operation| operation.family().applied_at().unwrap_or(usize::MAX);
+    let position = |operation: &Operation| operation.family().apply_rank();
 
     if operations.is_sorted_by_key(position) {
         return std::borrow::Cow::Borrowed(operations);
@@ -416,72 +414,68 @@ pub(crate) async fn run<B: Backend>(
         // A step whose model throws an error on an `Auto` accelerator is run again on the next provider of its
         // ladder, from the start of the step: the steps before it keep what they produced. Every retry declines at
         // least one provider for good, so it ends — at the latest on the CPU, which is never declined.
-        let (sessions, produced, running) = loop {
-            let sessions = acquire::acquire(backend, operation.pipeline.as_ref(), &reporter, provider, cancel)
-                .instrument(step.clone())
-                .await
-                .map_err(in_step)?;
+        let (sessions, produced) =
+            acquire::run_declining(backend, operation.pipeline.as_ref(), &reporter, provider, cancel, |sessions| {
+                // Shared with the blocking half rather than borrowed into it; see `Shared`.
+                let pipeline = Shared::clone(&operation.pipeline);
 
-            // Shared with the blocking half rather than borrowed into it; see `Shared`.
-            let pipeline = Shared::clone(&operation.pipeline);
+                let input = Arc::clone(&current);
+                let cancelled = cancel.clone();
+                let reported = Arc::clone(&reporter);
+                let wanted = progress.wanted();
+                // Handed to the store's writer from inside the blocking call, the moment the result exists.
+                let writing = cache.cloned().zip(key.clone());
 
-            let input = Arc::clone(&current);
-            let cancelled = cancel.clone();
-            let reported = Arc::clone(&reporter);
-            let wanted = progress.wanted();
-            // Handed to the store's writer from inside the blocking call, the moment the result exists.
-            let writing = cache.cloned().zip(key.clone());
-
-            // **Acquire on the runtime, run off it.** In a Tauri process the async runtime *is* the window's event loop, so a
-            // minute of tiled inference on it would not merely slow the application down, it would stop the window from
-            // drawing — including the progress bar this reporting exists to feed.
-            //
-            // The sessions travel into the blocking closure and back out of it, so they are owned throughout the run and
-            // are pushed onto the chain's own list the moment it ends — there is no window in which a later operation
-            // could find one of them reclaimed. For a diffusion operation that is three handles held across **every**
-            // region of the image rather than across one, which makes the operation longer but not different in kind.
-            // The error type is named rather than inferred: `Cancelled` converts into three of this crate's errors, and
-            // which one a shutdown is reported as is the choice being made here — `InferenceError::Shutdown`.
-            let running = std::time::Instant::now();
-            let (sessions, produced) = spawn_blocking::<_, InferenceError, _>(move || {
-                let report = |fraction: f64| reported.running(fraction);
-                let report = wanted.then_some(&report as &dyn Fn(f64));
-                let stopped = || cancelled.is_cancelled();
-
-                // One call, whatever the model is. Shared from here on, so the store's writer and the rest of the chain
-                // hold one buffer rather than two.
-                let produced = pipeline.run(&input, &sessions, depth, report, &stopped).map(Arc::new);
-
-                // Only what actually succeeded — a cancelled or failed operation arrives as an `Err`, so nothing needs to
-                // check the token a second time — and the result is handed back either way: a write that is declined or that
-                // breaks is dropped where it happened, because the pixels are already computed and throwing finished work
-                // away over a full disk would be the cache's problem becoming the enhancement's.
+                // **Acquire on the runtime, run off it.** In a Tauri process the async runtime *is* the window's event
+                // loop, so a minute of tiled inference on it would not merely slow the application down, it would stop
+                // the window from drawing — including the progress bar this reporting exists to feed.
                 //
-                // **Queued, not written.** Encoding a large result as PNG and writing it is hundreds of milliseconds to
-                // seconds, and nothing in this run needs it done: the next step and the caller have the pixels. A later
-                // read of this key waits for the write rather than missing it — see `RunCache::put_later`.
-                if let (Ok(image), Some((cache, key))) = (&produced, &writing) {
-                    cache.put_later(key, Arc::clone(image));
-                }
+                // The sessions travel into the blocking closure and back out of it, so they are owned throughout the
+                // run and are pushed onto the chain's own list the moment it ends — there is no window in which a later
+                // operation could find one of them reclaimed. For a diffusion operation that is three handles held
+                // across **every** region of the image rather than across one, which makes the operation longer but not
+                // different in kind. The error type is named rather than inferred: `Cancelled` converts into three of
+                // this crate's errors, and which one a shutdown is reported as is the choice being made here —
+                // `InferenceError::Shutdown`.
+                let running = std::time::Instant::now();
+                let ran = spawn_blocking::<_, InferenceError, _>(move || {
+                    let report = |fraction: f64| reported.running(fraction);
+                    let report = wanted.then_some(&report as &dyn Fn(f64));
+                    let stopped = || cancelled.is_cancelled();
 
-                (sessions, produced)
+                    // One call, whatever the model is. Shared from here on, so the store's writer and the rest of the
+                    // chain hold one buffer rather than two.
+                    let produced = pipeline.run(&input, &sessions, depth, report, &stopped).map(Arc::new);
+
+                    // Only what actually succeeded — a cancelled or failed operation arrives as an `Err`, so nothing
+                    // needs to check the token a second time — and the result is handed back either way: a write that
+                    // is declined or that breaks is dropped where it happened, because the pixels are already computed
+                    // and throwing finished work away over a full disk would be the cache's problem becoming the
+                    // enhancement's.
+                    //
+                    // **Queued, not written.** Encoding a large result as PNG and writing it is hundreds of
+                    // milliseconds to seconds, and nothing in this run needs it done: the next step and the caller have
+                    // the pixels. A later read of this key waits for the write rather than missing it — see
+                    // `RunCache::put_later`.
+                    if let (Ok(image), Some((cache, key))) = (&produced, &writing) {
+                        cache.put_later(key, Arc::clone(image));
+                    }
+
+                    (sessions, produced)
+                });
+
+                // The model's run alone, timed from this attempt's hop: a failed attempt's time is the retry's to
+                // replace.
+                async move {
+                    let (sessions, produced) = ran.await?;
+                    let ran = running.elapsed();
+
+                    Ok((sessions, produced.map(|image| (image, ran))))
+                }
             })
             .instrument(step.clone())
             .await
             .map_err(in_step)?;
-
-            if matches!(produced, Err(InferenceError::Run { .. }))
-                && acquire::decline(backend, operation.pipeline.as_ref(), &sessions, provider)
-            {
-                // The failed sessions are let go of before the retry acquires, so what they held on the device is
-                // freed for the provider that replaces them.
-                drop(sessions);
-                continue;
-            }
-
-            break (sessions, produced, running);
-        };
-        let ran = running.elapsed();
 
         let ran_on = ran_on(&sessions);
         held.extend(sessions);
@@ -489,7 +483,7 @@ pub(crate) async fn run<B: Backend>(
         // Not recorded here: `process`'s closing record names the step, and a second record would be a second account
         // of one failure. Not the operations that had already succeeded either: a caller given a partial result has
         // no way to tell it from a finished enhancement and would show it to a user as one.
-        let produced = produced.map_err(in_step)?;
+        let (produced, ran) = produced.map_err(in_step)?;
 
         // The counterpart of the hit above, at the same level and with the same fields, so one `grep` over an
         // operation's id returns every step of every run that touched it and says which way each went.

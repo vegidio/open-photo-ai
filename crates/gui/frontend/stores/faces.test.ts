@@ -2,7 +2,6 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { CropInfo } from "@/ipc/crop";
 import type { Face } from "@/ipc/faces";
-import { faceKey } from "@/lib/faces";
 import { useFileStore } from "@/stores/files";
 import { FRAMING, HOLIDAY, resetFileStore, SUNSET } from "@/test/support";
 import { useFaceChoice, useFacesStore, useImageFaces } from "./faces";
@@ -160,13 +159,54 @@ describe("recording what a detection found", () => {
     });
 
     it("leaves the choice exactly as it was when the faces are found again", () => {
-        skip(HOLIDAY, faceKey(face(0)));
+        skip(HOLIDAY, face(0).key);
         const before = choices();
 
         set(HOLIDAY, undefined, [face(0), face(20)]);
         set(HOLIDAY, FRAMING, [face(40)]);
 
         expect(choices()).toBe(before);
+    });
+});
+
+describe("recording a detection's late answer", () => {
+    const record = (record: { identity?: string }, crop: CropInfo | undefined, faces: Face[]) =>
+        act(() => useFacesStore.getState().recordFaces(identity(record), crop, faces));
+
+    it("records the faces of a photograph that is still open", () => {
+        act(() => useFileStore.getState().addFiles([HOLIDAY]));
+
+        record(HOLIDAY, FRAMING, [face(0)]);
+
+        expect(read(HOLIDAY, FRAMING)).toEqual([face(0)]);
+    });
+
+    it("drops the answer for a photograph that was closed", () => {
+        record(HOLIDAY, undefined, [face(0)]);
+
+        expect(held().size).toBe(0);
+    });
+
+    it("writes nothing where the same faces are already recorded at the same framing", () => {
+        act(() => useFileStore.getState().addFiles([HOLIDAY]));
+        record(HOLIDAY, FRAMING, [face(0), face(20)]);
+        const before = held();
+
+        record(HOLIDAY, { ...FRAMING }, [{ ...face(0) }, { ...face(20) }]);
+
+        expect(held()).toBe(before);
+    });
+
+    it("writes the faces found at another framing, or different faces at the same one", () => {
+        act(() => useFileStore.getState().addFiles([HOLIDAY]));
+        record(HOLIDAY, FRAMING, [face(0)]);
+        const before = held();
+
+        record(HOLIDAY, undefined, [face(0)]);
+        expect(held()).not.toBe(before);
+
+        record(HOLIDAY, undefined, [face(0), face(20)]);
+        expect(read(HOLIDAY, undefined)).toEqual([face(0), face(20)]);
     });
 });
 

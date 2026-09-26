@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { FamilyEntry } from "@/ipc/catalogue";
 import type { Operation } from "@/ipc/enhance";
-import { type Enhancement, modelValue, withModel } from "@/lib/enhancements";
-import { ModelTray } from "./ModelTray";
+import type { Enhancement } from "@/lib/enhancements";
+import { OperationModelTray } from "./ModelTray";
 
 type FaceRecoveryOptionsProps = {
     /** The enhancement this panel is open over, which the tray reports and writes. */
@@ -56,20 +56,14 @@ export const FaceRecoveryOptions = ({
      */
     const { t } = useTranslation();
 
-    /*
-     * Resolved rather than parsed - see `withModel`.
-     *
-     * The choice among faces is left exactly as it is - it belongs to the pixels, not to the model, and
-     * the stack's copy carries none in any case. `withChoice` puts it in on the way to the run.
-     */
-    const chooseModel = (value: string) => {
-        const updated = withModel(operation, entry, value);
-        if (updated) onChange(updated);
-    };
-
     return (
         <>
-            <ModelTray enhancement={enhancement} entry={entry} value={modelValue(operation)} onChange={chooseModel} />
+            {/*
+             * A model choice leaves the choice among faces exactly as it is - it belongs to the pixels, not
+             * to the model, and the stack's copy carries none in any case. `withChoice` puts it in on the
+             * way to the run.
+             */}
+            <OperationModelTray enhancement={enhancement} operation={operation} entry={entry} onChange={onChange} />
 
             <Separator />
 

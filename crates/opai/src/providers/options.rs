@@ -39,16 +39,24 @@ pub(crate) struct ChainResolution {
     // data rather than as a log line is what lets the session builder state it once, and a front end show it, without
     // either re-deriving anything.
     pub(crate) requested: ExecutionProvider,
-    /// What this machine could actually serve. [`ExecutionProvider::Cpu`] where nothing is attached — either because
-    /// the CPU was asked for, or because the request could not be honoured.
-    ///
-    /// Not a promise that the provider builds: one that attaches can still decline the graph at session-build time,
-    /// and the runtime falls through to the next in [`attach`](Self::attach) and ultimately to the CPU when it does.
-    pub(crate) resolved: ExecutionProvider,
     /// The accelerators to attach, in attach order. Empty means a CPU run. An [`Accelerator`] rather than an
     /// [`ExecutionProvider`], so neither the request (`Auto`) nor the CPU — neither of which is something a session
     /// attaches — can be put here at all.
     pub(crate) attach: Vec<Accelerator>,
+}
+
+impl ChainResolution {
+    /// What this machine could actually serve: the first accelerator that will be tried, or
+    /// [`ExecutionProvider::Cpu`] where nothing is attached — either because the CPU was asked for, or because the
+    /// request could not be honoured.
+    ///
+    /// Derived rather than stored, so it cannot disagree with the list it describes.
+    ///
+    /// Not a promise that the provider builds: one that attaches can still decline the graph at session-build time,
+    /// and the runtime falls through to the next in [`attach`](Self::attach) and ultimately to the CPU when it does.
+    pub(crate) fn resolved(&self) -> ExecutionProvider {
+        self.attach.first().map_or(ExecutionProvider::Cpu, |&accelerator| accelerator.into())
+    }
 }
 
 /// What `requested` resolves to on a machine reporting `supported`.
@@ -81,11 +89,7 @@ pub(crate) fn resolve_chain(requested: ExecutionProvider, supported: SupportedPr
         named => named.accelerator().filter(|&accelerator| supported.offers(accelerator)).into_iter().collect(),
     };
 
-    // The resolved provider is the first one that will be tried, or the CPU when there is none — so the two fields
-    // cannot disagree with the list they describe.
-    let resolved = attach.first().map_or(ExecutionProvider::Cpu, |&accelerator| accelerator.into());
-
-    ChainResolution { requested, resolved, attach }
+    ChainResolution { requested, attach }
 }
 
 /// Every resolution a session for `requested` may be built under on a machine reporting `supported`, in the order
@@ -104,15 +108,12 @@ pub(crate) fn ladder(requested: ExecutionProvider, supported: SupportedProviders
 
     let mut rungs: Vec<ChainResolution> = match requested {
         ExecutionProvider::Auto => (0..chain.attach.len())
-            .map(|from| {
-                let attach = chain.attach[from..].to_vec();
-                ChainResolution { requested, resolved: attach[0].into(), attach }
-            })
+            .map(|from| ChainResolution { requested, attach: chain.attach[from..].to_vec() })
             .collect(),
-        _ if chain.resolved == ExecutionProvider::Cpu => Vec::new(),
+        _ if chain.attach.is_empty() => Vec::new(),
         _ => vec![chain],
     };
-    rungs.push(ChainResolution { requested, resolved: ExecutionProvider::Cpu, attach: Vec::new() });
+    rungs.push(ChainResolution { requested, attach: Vec::new() });
 
     rungs
 }
@@ -181,7 +182,7 @@ const GRAPH_CAPTURE_DISABLED: &str = "0";
 
 // Named rather than spelled at each site because `tensorrt_options` merges a profile's overrides over the pinned map
 // **by key**: a key that does not match does not fail, it silently leaves the pinned value in place and adds an
-// unrecognised one alongside. ONNX Runtime rejects an options update wholesale (see `sessions::build::dispatch`), so
+// unrecognised one alongside. ONNX Runtime rejects an options update wholesale (see `sessions::build::attachment`), so
 // that is the most expensive typo available in this area, and the two sides share one spelling.
 /// The key of TensorRT's builder optimization level, which a model's profile may override through
 /// [`EpProfile::trt_options`].
@@ -313,13 +314,18 @@ impl SessionSettings {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionPlan {
     pub(crate) requested: ExecutionProvider,
-    /// What this machine could serve. [`ExecutionProvider::Cpu`] where the request could not be honoured; see
-    /// [`ChainResolution`].
-    pub(crate) resolved: ExecutionProvider,
     /// The providers to attach, in attach order, each with the options it was measured with. Empty means a CPU run.
     pub(crate) providers: Vec<ProviderOptions>,
     /// The settings the session itself is built with, whichever provider was resolved.
     pub(crate) settings: SessionSettings,
+}
+
+impl SessionPlan {
+    /// What this machine could serve: the first provider attached, or [`ExecutionProvider::Cpu`] where the request
+    /// could not be honoured; see [`ChainResolution::resolved`].
+    pub(crate) fn resolved(&self) -> ExecutionProvider {
+        self.providers.first().map_or(ExecutionProvider::Cpu, |options| options.provider.into())
+    }
 }
 
 /// The plan for running a model with `profile` on a machine reporting `supported`, having been asked for `requested`.
@@ -342,7 +348,7 @@ pub(crate) fn resolve(
 
 /// The plan for running a model with `profile` under `chain`, one rung of a [`ladder`] or the whole of a request.
 pub(crate) fn plan(chain: ChainResolution, profile: &EpProfile, paths: &CachePaths) -> SessionPlan {
-    let ChainResolution { requested, resolved, attach } = chain;
+    let ChainResolution { requested, attach } = chain;
 
     let providers = attach
         .into_iter()
@@ -359,7 +365,7 @@ pub(crate) fn plan(chain: ChainResolution, profile: &EpProfile, paths: &CachePat
         })
         .collect();
 
-    SessionPlan { requested, resolved, providers, settings: SessionSettings::from_profile(profile) }
+    SessionPlan { requested, providers, settings: SessionSettings::from_profile(profile) }
 }
 
 #[cfg(test)]
@@ -387,7 +393,7 @@ mod tests {
         assert_eq!(resolution.attach, vec![Accelerator::TensorRt, Accelerator::Cuda]);
         // Both are attached rather than only the best one, so that TensorRT declining the graph at session-build
         // time leaves CUDA to run it instead of dropping the run to the CPU.
-        assert_eq!(resolution.resolved, ExecutionProvider::TensorRt);
+        assert_eq!(resolution.resolved(), ExecutionProvider::TensorRt);
     }
 
     #[test]
@@ -395,7 +401,7 @@ mod tests {
         let resolution = resolve_chain(ExecutionProvider::Auto, mac());
 
         assert_eq!(resolution.attach, vec![Accelerator::CoreMl]);
-        assert_eq!(resolution.resolved, ExecutionProvider::CoreMl);
+        assert_eq!(resolution.resolved(), ExecutionProvider::CoreMl);
     }
 
     #[test]
@@ -403,7 +409,7 @@ mod tests {
         let resolution = resolve_chain(ExecutionProvider::Auto, no_accelerator());
 
         assert!(resolution.attach.is_empty(), "a machine with no accelerator attached {:?}", resolution.attach);
-        assert_eq!(resolution.resolved, ExecutionProvider::Cpu);
+        assert_eq!(resolution.resolved(), ExecutionProvider::Cpu);
         assert_eq!(resolution.requested, ExecutionProvider::Auto);
     }
 
@@ -427,7 +433,7 @@ mod tests {
             !resolution.attach.contains(&Accelerator::TensorRt),
             "an explicit CUDA request attached TensorRT"
         );
-        assert_eq!(resolution.resolved, ExecutionProvider::Cuda);
+        assert_eq!(resolution.resolved(), ExecutionProvider::Cuda);
         assert_eq!(resolution.requested, ExecutionProvider::Cuda);
     }
 
@@ -441,7 +447,7 @@ mod tests {
             let resolution = resolve_chain(provider, machine);
 
             assert_eq!(resolution.attach, provider.accelerator().into_iter().collect::<Vec<_>>());
-            assert_eq!(resolution.resolved, provider);
+            assert_eq!(resolution.resolved(), provider);
         }
     }
 
@@ -472,14 +478,13 @@ mod tests {
     }
 
     #[test]
-    fn auto_s_first_rung_is_the_whole_chain_and_every_rung_names_its_first_accelerator() {
+    fn auto_s_first_rung_is_the_whole_chain_and_every_rung_carries_the_request() {
         let machine = nvidia().with_webgpu(true);
         let ladder = ladder(ExecutionProvider::Auto, machine);
 
         assert_eq!(ladder[0], resolve_chain(ExecutionProvider::Auto, machine));
         for rung in &ladder {
             assert_eq!(rung.requested, ExecutionProvider::Auto);
-            assert_eq!(rung.resolved, rung.attach.first().map_or(ExecutionProvider::Cpu, |&first| first.into()));
         }
     }
 
@@ -501,7 +506,7 @@ mod tests {
         let resolution = resolve_chain(ExecutionProvider::Cpu, machine_supporting(true, true, true));
 
         assert!(resolution.attach.is_empty(), "a CPU request attached {:?}", resolution.attach);
-        assert_eq!(resolution.resolved, ExecutionProvider::Cpu);
+        assert_eq!(resolution.resolved(), ExecutionProvider::Cpu);
         assert_eq!(resolution.requested, ExecutionProvider::Cpu);
     }
 
@@ -512,7 +517,7 @@ mod tests {
         let resolution = resolve_chain(ExecutionProvider::CoreMl, nvidia());
 
         assert!(resolution.attach.is_empty());
-        assert_eq!(resolution.resolved, ExecutionProvider::Cpu);
+        assert_eq!(resolution.resolved(), ExecutionProvider::Cpu);
         assert_eq!(resolution.requested, ExecutionProvider::CoreMl, "the downgrade lost what was asked for");
     }
 
@@ -524,7 +529,7 @@ mod tests {
         let resolution = resolve_chain(ExecutionProvider::TensorRt, machine_supporting(false, true, false));
 
         assert!(resolution.attach.is_empty(), "TensorRT was attached on a machine that never installed it");
-        assert_eq!(resolution.resolved, ExecutionProvider::Cpu);
+        assert_eq!(resolution.resolved(), ExecutionProvider::Cpu);
         assert_eq!(resolution.requested, ExecutionProvider::TensorRt);
     }
 
@@ -535,33 +540,8 @@ mod tests {
             let resolution = resolve_chain(provider, no_accelerator());
 
             assert!(resolution.attach.is_empty(), "{provider} attached something on a machine with no accelerator");
-            assert_eq!(resolution.resolved, ExecutionProvider::Cpu);
+            assert_eq!(resolution.resolved(), ExecutionProvider::Cpu);
             assert_eq!(resolution.requested, provider);
-        }
-    }
-
-    #[test]
-    fn what_was_resolved_is_always_the_first_provider_that_will_be_tried() {
-        // The invariant the two fields are built on, checked across every request on every shape of machine: the
-        // pair cannot disagree with the list it describes, which is what makes reporting the downgrade from it safe.
-        let machines = [
-            no_accelerator(),
-            mac(),
-            nvidia(),
-            machine_supporting(true, true, true),
-            machine_supporting(false, true, false),
-        ];
-
-        for machine in machines {
-            for provider in ExecutionProvider::ALL {
-                let resolution = resolve_chain(provider, machine);
-
-                assert_eq!(
-                    resolution.resolved,
-                    resolution.attach.first().map_or(ExecutionProvider::Cpu, |&accelerator| accelerator.into()),
-                    "{provider} on {machine:?}"
-                );
-            }
         }
     }
 
@@ -948,7 +928,7 @@ mod tests {
             let plan = resolve(requested, machine, &EpProfile::default(), &paths());
 
             assert!(plan.providers.is_empty(), "{requested} produced options for a CPU run");
-            assert_eq!(plan.resolved, ExecutionProvider::Cpu);
+            assert_eq!(plan.resolved(), ExecutionProvider::Cpu);
             assert_eq!(plan.requested, requested, "the plan lost what was asked for");
         }
     }
@@ -983,7 +963,7 @@ mod tests {
 
         let plan = resolve(ExecutionProvider::Auto, mac(), &kyoto.profile(), &paths());
 
-        assert_eq!(plan.resolved, ExecutionProvider::CoreMl);
+        assert_eq!(plan.resolved(), ExecutionProvider::CoreMl);
         assert_eq!(option(&plan.providers[0].options, "MLComputeUnits"), "CPUAndNeuralEngine");
     }
 }

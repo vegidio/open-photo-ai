@@ -1,5 +1,6 @@
 //! Opening every session a planned operation needs, before any of it runs.
 
+use std::future::Future;
 use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
@@ -76,4 +77,49 @@ pub(crate) fn decline<B: Backend>(
     model.sessions().into_iter().zip(sessions).fold(false, |declined, ((artifact, _), handle)| {
         backend.decline(artifact, handle.provider()) | declined
     })
+}
+
+/// What one attempt at a step hands back: the sessions it ran on, which travel through the run and out of it, and what
+/// the run produced.
+pub(crate) type Attempt<S, T> = (Vec<SessionHandle<S>>, Result<T, InferenceError>);
+
+/// Acquires the sessions `model` needs and runs `run` over them, running the step again on the next provider of its
+/// ladder for as long as a run throws an error on an [`Auto`](ExecutionProvider::Auto) accelerator that
+/// [`decline`] gives up for good.
+///
+/// The loop both drivers share, written once so what ends it is too: every retry declines at least one provider for
+/// good, so it ends — at the latest on the CPU, which is never declined. The failed sessions are let go of before the
+/// retry acquires, so what they held on the device is freed for the provider that replaces them.
+///
+/// `run` is handed the step's sessions and gives them back beside what it produced, so the caller owns them throughout
+/// the run and holds them for as long as it holds the result. Only a failure *running* the model is retried: one
+/// acquiring the sessions, or the hop off the runtime failing, ends the step as it is.
+///
+/// # Errors
+///
+/// [`InferenceError`] from [`acquire`] or from `run` itself; what the run produced, failed or not, is the `Ok` half.
+pub(crate) async fn run_declining<B, T, F, Fut>(
+    backend: &B,
+    model: &dyn Model<B>,
+    reporter: &Arc<OperationProgress>,
+    provider: ExecutionProvider,
+    cancel: &CancellationToken,
+    mut run: F,
+) -> Result<Attempt<B::Session, T>, InferenceError>
+where
+    B: Backend,
+    F: FnMut(Vec<SessionHandle<B::Session>>) -> Fut,
+    Fut: Future<Output = Result<Attempt<B::Session, T>, InferenceError>>,
+{
+    loop {
+        let sessions = acquire(backend, model, reporter, provider, cancel).await?;
+        let (sessions, produced) = run(sessions).await?;
+
+        if matches!(produced, Err(InferenceError::Run { .. })) && decline(backend, model, &sessions, provider) {
+            drop(sessions);
+            continue;
+        }
+
+        return Ok((sessions, produced));
+    }
 }

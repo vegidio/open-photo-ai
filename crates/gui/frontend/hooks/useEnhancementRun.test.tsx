@@ -8,7 +8,6 @@ import type { CropInfo } from "@/ipc/crop";
 import type { Enhancement, Operation, RunProgress } from "@/ipc/enhance";
 import { cancelEnhance, enhance, onEnhanceProgress } from "@/ipc/enhance";
 import { detectFaces, type Face } from "@/ipc/faces";
-import { faceKey } from "@/lib/faces";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { useFacesStore } from "@/stores/faces";
 import { useFileStore } from "@/stores/files";
@@ -425,7 +424,7 @@ describe("a chain that restores faces", () => {
     });
 
     it("sends the choice made among the photograph's faces, and leaves the stack without it", async () => {
-        const choice = { skipped: [faceKey(face(0))], restored: [] };
+        const choice = { skipped: [face(0).key], restored: [] };
         act(() => useFacesStore.getState().setFaceChoice(HOLIDAY.identity ?? "", choice));
         stack(HOLIDAY.path, recovery(), upscale(2));
         mount();

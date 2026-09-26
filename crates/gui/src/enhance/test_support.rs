@@ -7,7 +7,7 @@ use super::run::{Enhancer, Processor, Request};
 use super::slot::Runs;
 use crate::enhance::run::{EnhanceError, Enhancement, enhance_with};
 use crate::images::{Crop, Opened};
-use crate::test_support::admitted;
+use crate::test_support::{admitted, no_providers};
 
 /// A request for `source`, naming the run `run`, over the whole photograph.
 pub(super) fn request(run: &str, source: &str, operations: Vec<Requested>) -> Request {
@@ -47,11 +47,9 @@ pub(super) fn fixture() -> (tempfile::TempDir, Opened, Runs, String) {
 /// What a fake [`Enhancer`] hands back: a picture of the given size at the given identity, on the source's
 /// own path, reporting the automatic provider.
 pub(super) fn enhanced(source: &Picture, width: u32, height: u32, identity: &str) -> Enhanced {
-    // The provider report is the same at every fake because none of them is what any test is asserting about —
-    // it is the shape `Enhanced` requires, and repeating it per fake is four lines that say nothing.
     Enhanced {
         picture: Picture::new(source.path(), image::DynamicImage::new_rgb8(width, height), identity),
-        providers: opai::ProviderReport { requested: opai::ExecutionProvider::Auto, actual: Vec::new() },
+        providers: no_providers(),
     }
 }
 

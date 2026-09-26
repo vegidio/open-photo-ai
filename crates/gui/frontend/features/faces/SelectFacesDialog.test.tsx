@@ -2,7 +2,6 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import type { Face } from "@/ipc/faces";
-import { faceKey } from "@/lib/faces";
 import { useCropStore } from "@/stores/crop";
 import { useFacesStore } from "@/stores/faces";
 import { FRAMING, HOLIDAY, openFiles, render, resetFileStore } from "@/test/support";
@@ -159,7 +158,7 @@ describe("the Select faces dialog", () => {
         fireEvent.click(box(2));
         fireEvent.click(applyButton());
 
-        expect(stored()).toEqual({ skipped: [faceKey(SECOND)], restored: [] });
+        expect(stored()).toEqual({ skipped: [SECOND.key], restored: [] });
         expect(closed).toHaveBeenCalledOnce();
     });
 

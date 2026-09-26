@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Face } from "@/ipc/faces";
-import { choiceAfter, faceKey, isKept } from "@/lib/faces";
+import { choiceAfter, isKept } from "@/lib/faces";
 import { useFacesStore } from "@/stores/faces";
 
 /**
@@ -59,11 +59,11 @@ export const useFaceSelection = (identity: string | undefined, faces: Face[], op
         if (!open) return;
 
         const choice = committed();
-        setSkipped(new Set(shown.current.filter((face) => !isKept(face, choice)).map(faceKey)));
+        setSkipped(new Set(shown.current.filter((face) => !isKept(face, choice)).map((face) => face.key)));
     }, [open, committed]);
 
     const toggle = useCallback((face: Face) => {
-        const key = faceKey(face);
+        const { key } = face;
 
         setSkipped((previous) => {
             const next = new Set(previous);

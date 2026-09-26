@@ -2,7 +2,6 @@ import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import type { Face } from "@/ipc/faces";
-import { faceKey } from "@/lib/faces";
 import { FRAMING, render } from "@/test/support";
 import { FaceBoxes } from "./FaceBoxes";
 
@@ -78,7 +77,7 @@ describe("the boxes over a photograph's faces", () => {
     });
 
     it("tells a chosen face from a skipped one", () => {
-        boxes({ skipped: new Set([faceKey(TENTH)]) });
+        boxes({ skipped: new Set([TENTH.key]) });
 
         expect(box(1)).toHaveAttribute("aria-pressed", "false");
         expect(box(1).className).toContain("border-foreground-dim");

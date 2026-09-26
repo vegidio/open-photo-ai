@@ -34,7 +34,9 @@ pub(crate) use operation::Requested;
 // Read by `export`'s tests, which build the refusal an export carries inside its `EnhanceError`.
 #[cfg(test)]
 pub(crate) use operation::UnknownOperation;
-pub(crate) use run::{EnhanceError, Enhancement, Enhancer, Processor, Request, enhance_with};
+pub(crate) use run::{
+    EnhanceError, Enhancement, Enhancer, Prepared, Processor, Request, enhance_with, judge_chain, prepare_chain,
+};
 pub(crate) use slot::{Resident, Runs};
 
 // The command's name is written once more, in `frontend/ipc/enhance.ts`.

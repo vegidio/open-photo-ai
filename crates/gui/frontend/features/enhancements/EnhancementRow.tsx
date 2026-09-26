@@ -13,7 +13,6 @@ import { report } from "@/lib/report";
 import { toPercent } from "@/lib/utils";
 import { useImageCrop } from "@/stores/crop";
 import { useFaceChoice, useFacesStore, useImageFaces } from "@/stores/faces";
-import { useFileStore } from "@/stores/files";
 import { useSettingsStore } from "@/stores/settings";
 import { ColorBalanceOptions } from "./ColorBalanceOptions";
 import { ColorizationOptions } from "./ColorizationOptions";
@@ -125,11 +124,7 @@ export const EnhancementRow = ({
         const { processor } = useSettingsStore.getState();
 
         detectFaces(identity, processor, crop).done.then(
-            (found) => {
-                if (!useFileStore.getState().files.some((open) => open.identity === identity)) return;
-
-                useFacesStore.getState().setFaces(identity, crop, found);
-            },
+            (found) => useFacesStore.getState().recordFaces(identity, crop, found),
             (error: unknown) => report("detecting the faces for the picker failed", error),
         );
     }, [lookingForFaces, identity, crop]);

@@ -25,6 +25,30 @@ pub(crate) fn admitted(dir: &tempfile::TempDir, opened: &Opened) -> String {
     opai::image::identity_blocking(&path).expect("a written file has an identity")
 }
 
+// Crate tier because every fake of the library's seams needs them: `faces`' detectors, and the enhancers in `enhance`
+// and `export`.
+/// The provider report every fake hands back. None of them is what any test asserts about; it is the shape `Enhanced`
+/// and `Executed` require.
+pub(crate) fn no_providers() -> opai::ProviderReport {
+    opai::ProviderReport { requested: opai::ExecutionProvider::Auto, actual: Vec::new() }
+}
+
+/// What a fake detection hands back: `value`, and [`no_providers`].
+pub(crate) fn executed<T>(value: T) -> opai::Executed<T> {
+    opai::Executed { value, providers: no_providers() }
+}
+
+/// A face at the given box, with every landmark on its top-left corner, as a detector would report it.
+pub(crate) fn boxed(min_x: f32, min_y: f32, max_x: f32, max_y: f32) -> opai::Face {
+    use opai::{Confidence, Face, Point, Rect};
+
+    Face::new(
+        Rect::new(Point::new(min_x, min_y), Point::new(max_x, max_y)),
+        [Point::new(min_x, min_y); Face::LANDMARKS],
+        Confidence::new(0.9).expect("0.9 is inside the permitted range"),
+    )
+}
+
 // Crate tier because two modules read back what they logged: `autopilot`'s incomplete analysis and `update`'s failed
 // check.
 /// A log sink the test can read back, shared between the subscriber and the assertions.

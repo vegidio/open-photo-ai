@@ -292,12 +292,9 @@ export const EXPORT_FORMATS: ExportFormats = {
 };
 
 /** What each lossy format in {@link EXPORT_FORMATS} starts at, by format - the quality a user never moved. */
-export const PUBLISHED_QUALITY: Record<"avif" | "heic" | "jpeg" | "webp", number> = {
-    avif: 60,
-    heic: 60,
-    jpeg: 90,
-    webp: 75,
-};
+export const PUBLISHED_QUALITY = Object.fromEntries(
+    EXPORT_FORMATS.formats.flatMap(({ format, quality }) => (quality ? [[format, quality.default]] : [])),
+) as Record<"avif" | "heic" | "jpeg" | "webp", number>;
 
 /** The order {@link CATALOGUE} publishes a chain in, as the application reads it off the catalogue. */
 export const APPLY_ORDER = applyOrder(CATALOGUE);

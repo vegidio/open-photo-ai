@@ -76,6 +76,7 @@ pub(crate) fn descriptor_at(
         // A model is not a library the loader is pointed at, and it unlocks no execution provider of its own — it is
         // what the providers already installed are asked to run.
         lib: None,
+        webgpu: None,
         provides: None,
         // What a provider compiled from these weights, which a replacement of them must discard: new weights beside
         // an engine built from the old ones produce a wrong image with nothing reporting it.

@@ -320,6 +320,10 @@ export const modelValue = (operation: Pick<Operation, "codename" | "precision">)
 export const optionFor = (entry: FamilyEntry | undefined, value: string): ModelOption | undefined =>
     modelChoice(entry, value).options.find((candidate) => candidate.value === value);
 
+/** The model `entry` publishes as `codename`, or `undefined` where it publishes none - or the catalogue has not arrived. */
+const variantOf = (entry: FamilyEntry | undefined, codename: string): VariantEntry | undefined =>
+    entry?.variants.find((published) => published.codename === codename);
+
 /**
  * The range `entry` publishes as `name` for the model `codename`, or `undefined` where that model
  * publishes none - or the catalogue has not arrived.
@@ -335,12 +339,10 @@ export const publishedRange = (
     codename: string,
     name: string,
 ): (ParameterEntry & { kind: "range" }) | undefined =>
-    entry?.variants
-        .find((published) => published.codename === codename)
-        ?.parameters.find(
-            (parameter): parameter is ParameterEntry & { kind: "range" } =>
-                parameter.name === name && parameter.kind === "range",
-        );
+    variantOf(entry, codename)?.parameters.find(
+        (parameter): parameter is ParameterEntry & { kind: "range" } =>
+            parameter.name === name && parameter.kind === "range",
+    );
 
 /** Every range `variant` publishes, at the value a newly added enhancement starts it at. */
 const publishedDefaults = (variant: VariantEntry | undefined): Record<string, number> =>
@@ -388,7 +390,7 @@ export const withModel = (
     const option = optionFor(entry, value);
     if (!option) return undefined;
 
-    const variant = entry?.variants.find((published) => published.codename === option.codename);
+    const variant = variantOf(entry, option.codename);
 
     return {
         ...operation,
@@ -527,7 +529,7 @@ export const newOperation = (
 
     if (!option) return undefined;
 
-    const variant = entry?.variants.find((published) => published.codename === option.codename);
+    const variant = variantOf(entry, option.codename);
     const operation: Operation = {
         family,
         codename: option.codename,

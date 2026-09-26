@@ -52,6 +52,9 @@ export const cropQuery = (crop: CropInfo) =>
  */
 export const cropKey = (crop: CropInfo | undefined) => (crop ? cropQuery(crop) : "");
 
+/** Whether `one` and `other` are the same framing, compared **by value** through {@link cropKey}. */
+export const sameCrop = (one: CropInfo | undefined, other: CropInfo | undefined) => cropKey(one) === cropKey(other);
+
 /**
  * The dimensions of a photograph as it is framed, or the file's own where it is drawn whole.
  *

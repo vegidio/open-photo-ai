@@ -714,6 +714,7 @@ mod tests {
             dir: "runtime".to_string(),
             progress: Which::Runtime,
             lib: test_server::fixture_lib(&Which::Runtime),
+            webgpu: None,
             provides: None,
             // Empty, which is what proves the branch reading it changes nothing for the dependencies that derive
             // nothing.
@@ -1144,6 +1145,7 @@ mod tests {
                 crate::models::Precision::Fp32,
             )),
             lib: None,
+            webgpu: None,
             provides: None,
             derived: Vec::new(),
             sources: vec![test_server::fixture_source(server, version, MODEL)],
@@ -1438,6 +1440,7 @@ mod tests {
             dir: "runtime".to_string(),
             progress: Which::Runtime,
             lib: None,
+            webgpu: None,
             provides: None,
             derived: Vec::new(),
             sources: Vec::new(),

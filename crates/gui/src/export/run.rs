@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use opai::{Enhanced, ExecuteOptions, InferenceError, OutputDepth, ProcessOptions};
+use opai::{Enhanced, InferenceError, OutputDepth, ProcessOptions};
 use serde::Serialize;
 
 use super::Exports;
@@ -17,9 +17,8 @@ use super::destination;
 use super::format::{ExportFormat, encode_options};
 use super::progress::ExportReporting;
 use crate::command::{Answer, CommandError, Ended};
-use crate::enhance::{EnhanceError, Enhancer, Handover, Processor, Requested};
-use crate::faces::for_chain;
-use crate::images::{Crop, Opened, load_framed};
+use crate::enhance::{EnhanceError, Enhancer, Handover, Prepared, Processor, Requested, judge_chain, prepare_chain};
+use crate::images::{Crop, Opened};
 
 /// How an export ended.
 ///
@@ -162,19 +161,7 @@ pub(crate) async fn export_with<E: Enhancer>(
     reporting: Option<ExportReporting>,
     request: Request,
 ) -> Result<Exported, ExportError> {
-    // The whole chain, before any of it begins, so a bad second operation doesn't first fetch a model for the first.
-    let operations = request
-        .operations
-        .iter()
-        .enumerate()
-        .map(|(index, requested)| {
-            requested.resolve().map_err(|reason| EnhanceError::UnknownOperation { index, reason })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let path = opened
-        .resolve(&request.source)
-        .ok_or_else(|| EnhanceError::UnknownSource { identity: request.source.clone() })?;
+    let judged = judge_chain(opened, &request.source, &request.operations)?;
 
     let Some(registration) = exports.register(&request.run) else {
         tracing::debug!("an export was stopped before it started");
@@ -182,41 +169,37 @@ pub(crate) async fn export_with<E: Enhancer>(
         return Ok(Exported::Stopped);
     };
 
-    // Not logged here, nor the chain's failure or the save's below: `opai` records each once, where it happened.
-    let picture = load_framed(opened, &request.source, path, request.crop).await.map_err(|error| {
-        EnhanceError::UnreadableSource { identity: request.source.clone(), message: error.to_string() }
-    })?;
-
     // A face recovery finds its own faces, inside this export and under its stop, exactly as a canvas run's does — see
-    // `for_chain`. The row reports it as the head of its `enhancing` bar.
-    let handover = reporting.as_ref().map(|reporting| Handover::new(&reporting.enhancing.on_progress));
-    let detecting = ExecuteOptions {
-        provider: request.processor.into(),
-        on_progress: handover.as_ref().map(Handover::detection),
-        cancel: registration.cancel().clone(),
-        ..Default::default()
-    };
-
-    // What was found is the canvas's to record, not an export's: a detection that failed is exported over no faces
-    // without a notice, as a file whose other enhancements still apply.
-    let operations = match for_chain(enhancer, &picture, &request.operations, operations, detecting).await {
-        Ok((operations, _)) => Some(operations),
-        Err(_) => None,
-    };
-
-    // `OutputDepth::Source`, unlike the canvas's `Eight`: this result is written to a file rather than drawn, and a
-    // 16-bit photograph written to a format that holds 16 bits keeps them.
-    let options = ProcessOptions {
-        provider: request.processor.into(),
-        depth: OutputDepth::Source,
-        on_progress: handover.as_ref().map(Handover::chain),
-        cancel: registration.cancel().clone(),
-        ..Default::default()
-    };
+    // `prepare_chain`. The row reports it as the head of its `enhancing` bar. What was found is the canvas's to record,
+    // not an export's: a detection that failed is exported over no faces without a notice, as a file whose other
+    // enhancements still apply.
+    let on_progress = reporting.as_ref().map(|reporting| &reporting.enhancing.on_progress);
+    let prepared = prepare_chain(
+        enhancer,
+        opened,
+        judged,
+        request.crop,
+        request.processor,
+        registration.cancel().clone(),
+        on_progress,
+    )
+    .await?;
 
     // A stop during the detection is a stop of the chain, answered below as one.
-    let outcome = match operations {
-        Some(operations) => enhancer.process(&picture, &operations, options).await,
+    let outcome = match prepared {
+        Some(Prepared { picture, operations, handover, .. }) => {
+            // `OutputDepth::Source`, unlike the canvas's `Eight`: this result is written to a file rather than drawn,
+            // and a 16-bit photograph written to a format that holds 16 bits keeps them.
+            let options = ProcessOptions {
+                provider: request.processor.into(),
+                depth: OutputDepth::Source,
+                on_progress: handover.as_ref().map(Handover::chain),
+                cancel: registration.cancel().clone(),
+                ..Default::default()
+            };
+
+            enhancer.process(&picture, &operations, options).await
+        }
         None => Err(InferenceError::Cancelled),
     };
 
@@ -279,19 +262,16 @@ mod tests {
     use std::path::Path;
     use std::sync::{Arc, Mutex};
 
-    use opai::{ExecutionProvider, Opai, Picture, Precision};
+    use opai::{ExecuteOptions, ExecutionProvider, Opai, Picture, Precision};
 
     use super::*;
     use crate::enhance::UnknownOperation;
     use crate::export::progress::{ExportProgress, collecting};
-    use crate::test_support::admitted;
+    use crate::test_support::{admitted, no_providers};
 
     /// What a fake enhancer hands back: `pixels` at `identity`, on the source's own path.
     fn enhanced(source: &Picture, pixels: image::DynamicImage, identity: &str) -> Enhanced {
-        Enhanced {
-            picture: Picture::new(source.path(), pixels, identity),
-            providers: opai::ProviderReport { requested: ExecutionProvider::Auto, actual: Vec::new() },
-        }
+        Enhanced { picture: Picture::new(source.path(), pixels, identity), providers: no_providers() }
     }
 
     /// An enhancer that doubles the picture for a chain and answers the source itself for an empty one — `opai`'s own

@@ -7,10 +7,11 @@
 //! writes it onto each of them from there. See `crate::command`.
 
 use std::future::Future;
+use std::path::PathBuf;
 
 use opai::{
-    Analysis, Enhanced, ExecuteOptions, Executed, ExecutionProvider, Faces, InferenceError, Opai, OutputDepth, Picture,
-    ProcessOptions,
+    Analysis, CancellationToken, Enhanced, ExecuteOptions, Executed, ExecutionProvider, Faces, InferenceError, Opai,
+    OutputDepth, Picture, ProcessOptions,
 };
 use serde::{Deserialize, Serialize};
 
@@ -211,6 +212,99 @@ pub(crate) struct Request {
     pub(crate) crop: Option<Crop>,
 }
 
+/// A chain judged whole and the source it runs over found: what [`prepare_chain`] goes on from.
+pub(crate) struct Judged<'a> {
+    /// The identity the source was asked for by.
+    source: &'a str,
+    /// The chain as the window asked for it, which a face recovery's choice of faces is read from.
+    requested: &'a [Requested],
+    /// `requested`, resolved.
+    operations: Vec<opai::Operation>,
+    /// Where the source is on disk.
+    path: PathBuf,
+}
+
+/// Judges the whole of `requested` and resolves `source`: the refusals a canvas run and an export make before anything
+/// is displaced, registered or read.
+///
+/// The whole chain comes first, so a bad second operation doesn't first fetch a model for the first.
+///
+/// # Errors
+///
+/// [`EnhanceError::UnknownOperation`], naming the first operation that cannot be served, then
+/// [`EnhanceError::UnknownSource`].
+pub(crate) fn judge_chain<'a>(
+    opened: &Opened,
+    source: &'a str,
+    requested: &'a [Requested],
+) -> Result<Judged<'a>, EnhanceError> {
+    let operations = requested
+        .iter()
+        .enumerate()
+        .map(|(index, requested)| {
+            requested.resolve().map_err(|reason| EnhanceError::UnknownOperation { index, reason })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let path = opened
+        .resolve(source)
+        .ok_or_else(|| EnhanceError::UnknownSource { identity: source.to_string() })?;
+
+    Ok(Judged { source, requested, operations, path })
+}
+
+/// What a judged chain runs over, and with, once [`prepare_chain`] has framed its source and found its faces.
+pub(crate) struct Prepared {
+    /// The framed source: the chain's input, and what every cache key is folded from.
+    pub(crate) picture: Picture,
+    /// The chain, with every face recovery handed the faces it keeps.
+    pub(crate) operations: Vec<opai::Operation>,
+    /// What finding the faces came to — see [`for_chain`].
+    pub(crate) faces: ChainFaces,
+    /// The bar the detection reported onto the head of, whose [`Handover::chain`] the chain reports through.
+    pub(crate) handover: Option<Handover>,
+}
+
+/// Decodes and frames a judged chain's source, then finds the faces its face recoveries restore — steps shared by a
+/// canvas run and an export, taken once the caller has claimed whatever a stop reaches the run through.
+///
+/// The detection runs on `processor` under `cancel`, so it is stopped with the chain and runs where it would, and
+/// reports onto the head of `on_progress`'s bar — see [`Handover`]. `None` is a run stopped during the detection,
+/// before the chain began.
+///
+/// # Errors
+///
+/// [`EnhanceError::UnreadableSource`]. Not logged here: `opai` records the failed decode, where it happened.
+pub(crate) async fn prepare_chain<E: Enhancer>(
+    enhancer: &E,
+    opened: &Opened,
+    judged: Judged<'_>,
+    crop: Option<Crop>,
+    processor: Processor,
+    cancel: CancellationToken,
+    on_progress: Option<&opai::OnInference>,
+) -> Result<Option<Prepared>, EnhanceError> {
+    let Judged { source, requested, operations, path } = judged;
+
+    let picture = load_framed(opened, source, path, crop)
+        .await
+        .map_err(|error| EnhanceError::UnreadableSource { identity: source.to_string(), message: error.to_string() })?;
+
+    let handover = on_progress.map(Handover::new);
+    let detecting = ExecuteOptions {
+        provider: processor.into(),
+        on_progress: handover.as_ref().map(Handover::detection),
+        cancel,
+        ..Default::default()
+    };
+
+    let Ok((operations, faces)) = for_chain(enhancer, &picture, requested, operations, detecting).await else {
+        return Ok(None);
+    };
+
+    Ok(Some(Prepared { picture, operations, faces, handover }))
+}
+
 /// Runs a chain over an open image, and answers what it produced without its pixels.
 ///
 /// The whole of what the [`enhance`](super::enhance) command does once the library handle has been taken
@@ -262,20 +356,7 @@ pub(crate) async fn enhance_with<E: Enhancer>(
     reporting: Option<Reporting>,
     request: Request,
 ) -> Result<Enhancement, EnhanceError> {
-    // The whole chain, before any of it begins, so a bad second operation doesn't first fetch a model for the
-    // first.
-    let operations = request
-        .operations
-        .iter()
-        .enumerate()
-        .map(|(index, requested)| {
-            requested.resolve().map_err(|reason| EnhanceError::UnknownOperation { index, reason })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let path = opened
-        .resolve(&request.source)
-        .ok_or_else(|| EnhanceError::UnknownSource { identity: request.source.clone() })?;
+    let judged = judge_chain(opened, &request.source, &request.operations)?;
 
     // Past every refusal: this is the point the previous run stops and its result goes.
     let cancel = runs.start(&request.run, &request.source);
@@ -287,33 +368,17 @@ pub(crate) async fn enhance_with<E: Enhancer>(
         return Ok(Enhancement::Stopped);
     }
 
-    // Not logged here, nor the run's failure below: `opai` records each once, where it happened.
-    let picture = load_framed(opened, &request.source, path, request.crop).await.map_err(|error| {
-        EnhanceError::UnreadableSource { identity: request.source.clone(), message: error.to_string() }
-    })?;
-
-    // One bar over the detection and the chain after it — see `Handover`.
-    let handover = reporting.as_ref().map(|reporting| Handover::new(&reporting.on_progress));
-
-    // The provider and the stop the chain runs under, so a detection is stopped with it and runs where it would.
-    let detecting = ExecuteOptions {
-        provider: request.processor.into(),
-        on_progress: handover.as_ref().map(Handover::detection),
-        cancel: cancel.clone(),
-        ..Default::default()
-    };
-
-    let (operations, faces) = match for_chain(enhancer, &picture, &request.operations, operations, detecting).await {
-        Ok(found) => found,
+    let on_progress = reporting.as_ref().map(|reporting| &reporting.on_progress);
+    let Some(Prepared { picture, operations, faces, handover }) =
+        prepare_chain(enhancer, opened, judged, request.crop, request.processor, cancel.clone(), on_progress).await?
+    else {
         // Stopped during the detection, before the chain began.
-        Err(_) => {
-            if let Some(reporting) = &reporting {
-                reporting.release();
-            }
-            tracing::debug!("a run was stopped while its faces were being found");
-
-            return Ok(Enhancement::Stopped);
+        if let Some(reporting) = &reporting {
+            reporting.release();
         }
+        tracing::debug!("a run was stopped while its faces were being found");
+
+        return Ok(Enhancement::Stopped);
     };
 
     // `..Default::default()` keeps this source-compatible as `ProcessOptions` grows; `cache` stays on by
@@ -377,6 +442,7 @@ mod tests {
     use super::*;
     use crate::enhance::slot::Resident;
     use crate::enhance::test_support::{enhanced, fixture, framed_request, kyoto, request, run_now};
+    use crate::test_support::{boxed, executed};
 
     use opai::{Family, Precision};
 
@@ -977,11 +1043,7 @@ mod tests {
 
     impl FindingOne {
         fn face() -> opai::Face {
-            opai::Face::new(
-                opai::Rect::new(opai::Point::new(1.0, 1.0), opai::Point::new(5.0, 5.0)),
-                [opai::Point::new(2.0, 2.0); opai::Face::LANDMARKS],
-                opai::Confidence::new(0.9).expect("in range"),
-            )
+            boxed(1.0, 1.0, 5.0, 5.0)
         }
     }
 
@@ -1003,10 +1065,7 @@ mod tests {
             _analysis: &Analysis,
             _options: ExecuteOptions,
         ) -> Result<Executed<Faces>, InferenceError> {
-            Ok(Executed {
-                value: Faces::new([Self::face()]),
-                providers: opai::ProviderReport { requested: ExecutionProvider::Auto, actual: Vec::new() },
-            })
+            Ok(executed(Faces::new([Self::face()])))
         }
     }
 

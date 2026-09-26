@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { FamilyEntry } from "@/ipc/catalogue";
-import { type Enhancement, modelChoice, modelLabel } from "@/lib/enhancements";
+import type { Operation } from "@/ipc/enhance";
+import { type Enhancement, modelChoice, modelLabel, modelValue, withModel } from "@/lib/enhancements";
 import { cn } from "@/lib/utils";
 
 type ModelTrayProps = {
@@ -16,6 +17,13 @@ type ModelTrayProps = {
     value: string;
     /** Called with another option's value when the user picks one. */
     onChange: (value: string) => void;
+};
+
+type OperationModelTrayProps = Omit<ModelTrayProps, "value" | "onChange"> & {
+    /** The enhancement as the stack carries it, which is where the model in use is read from. */
+    operation: Operation;
+    /** Called with `operation` switched to the model the user picked. */
+    onChange: (operation: Operation) => void;
 };
 
 /**
@@ -157,4 +165,20 @@ export const ModelTray = ({ enhancement, entry, value, onChange }: ModelTrayProp
             </ToggleGroup>
         </div>
     );
+};
+
+/**
+ * A {@link ModelTray} over an operation the stack carries, for the panels whose only model control writes the
+ * operation itself.
+ *
+ * A choice is resolved rather than parsed - see `withModel` - and one the catalogue no longer publishes writes
+ * nothing, leaving the enhancement on the model it is already running.
+ */
+export const OperationModelTray = ({ enhancement, operation, entry, onChange }: OperationModelTrayProps) => {
+    const chooseModel = (value: string) => {
+        const updated = withModel(operation, entry, value);
+        if (updated) onChange(updated);
+    };
+
+    return <ModelTray enhancement={enhancement} entry={entry} value={modelValue(operation)} onChange={chooseModel} />;
 };

@@ -99,38 +99,49 @@ pub(crate) struct ExportFormats {
     pub(crate) fallback: ExportFormat,
 }
 
-/// A lossy format's quality range, starting at `default`.
-const fn lossy(default: u8) -> Option<QualityRange> {
-    Some(QualityRange { min: MIN_QUALITY, max: MAX_QUALITY, default })
-}
-
-/// What every format can do: the one table the window's format rules are read from.
-pub(crate) fn capabilities() -> ExportFormats {
-    let capability = |format, extension, preserves, quality| FormatCapability { format, extension, preserves, quality };
-
-    ExportFormats {
-        formats: vec![
-            capability(ExportFormat::Avif, "avif", &["avif"], lossy(60)),
-            capability(ExportFormat::Bmp, "bmp", &["bmp"], None),
-            capability(ExportFormat::Gif, "gif", &["gif"], None),
-            capability(ExportFormat::Heic, "heic", &["heic", "heif"], lossy(60)),
-            capability(ExportFormat::Jpeg, "jpg", &["jpeg", "jpg"], lossy(90)),
-            capability(ExportFormat::Png, "png", &["png"], None),
-            capability(ExportFormat::Tiff, "tiff", &["tif", "tiff"], None),
-            capability(ExportFormat::Webp, "webp", &["webp"], lossy(75)),
-        ],
-        fallback: ExportFormat::Tiff,
+/// The quality `format` is written at where the window names none, or `None` for a format that takes none.
+const fn default_quality(format: ExportFormat) -> Option<u8> {
+    match format {
+        ExportFormat::Avif | ExportFormat::Heic => Some(60),
+        ExportFormat::Jpeg => Some(90),
+        ExportFormat::Webp => Some(75),
+        ExportFormat::Bmp | ExportFormat::Gif | ExportFormat::Png | ExportFormat::Tiff => None,
     }
 }
 
-/// The quality `format` is written at where the window names none, or `None` for a format that takes none.
-fn default_quality(format: ExportFormat) -> Option<u8> {
-    capabilities()
-        .formats
-        .into_iter()
-        .find(|capability| capability.format == format)?
-        .quality
-        .map(|range| range.default)
+/// The quality range `format` takes, starting at its [`default_quality`], or `None` for a lossless format.
+const fn quality_range(format: ExportFormat) -> Option<QualityRange> {
+    match default_quality(format) {
+        Some(default) => Some(QualityRange { min: MIN_QUALITY, max: MAX_QUALITY, default }),
+        None => None,
+    }
+}
+
+/// What every format can do: the one table the window's format rules are read from.
+///
+/// What a Preserve export writes back as each format is the library's own list of the extensions it is written under
+/// — see [`opai::image::extensions_of`] — so the aliases this reads are the ones a picker offered.
+pub(crate) fn capabilities() -> ExportFormats {
+    let capability = |format: ExportFormat, extension| FormatCapability {
+        format,
+        extension,
+        preserves: opai::image::extensions_of(format.into()),
+        quality: quality_range(format),
+    };
+
+    ExportFormats {
+        formats: vec![
+            capability(ExportFormat::Avif, "avif"),
+            capability(ExportFormat::Bmp, "bmp"),
+            capability(ExportFormat::Gif, "gif"),
+            capability(ExportFormat::Heic, "heic"),
+            capability(ExportFormat::Jpeg, "jpg"),
+            capability(ExportFormat::Png, "png"),
+            capability(ExportFormat::Tiff, "tiff"),
+            capability(ExportFormat::Webp, "webp"),
+        ],
+        fallback: ExportFormat::Tiff,
+    }
 }
 
 /// The encoder settings for `format` at `quality`.
@@ -315,13 +326,13 @@ mod tests {
             serde_json::json!({
                 "format": "jpeg",
                 "extension": "jpg",
-                "preserves": ["jpeg", "jpg"],
+                "preserves": ["jpg", "jpeg"],
                 "quality": { "min": 1, "max": 100, "default": 90 },
             })
         );
         assert_eq!(
             json["formats"][6],
-            serde_json::json!({ "format": "tiff", "extension": "tiff", "preserves": ["tif", "tiff"], "quality": null })
+            serde_json::json!({ "format": "tiff", "extension": "tiff", "preserves": ["tiff", "tif"], "quality": null })
         );
     }
 }

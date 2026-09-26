@@ -99,6 +99,10 @@ pub(crate) struct Artifact {
     /// The shared library inside the archive the loader has to be pointed at, or `None` where the archive is a
     /// directory of several hundred files rather than one loadable file.
     pub(crate) lib: Option<&'static str>,
+    // On the row for the same reason `lib` is: it is the per-platform file name of something inside this archive, and
+    // a `match` on the platform elsewhere is a second resolution that could disagree with the one the install ran from.
+    /// The WebGPU plugin execution provider shipped beside [`lib`](Self::lib), or `None` where the archive ships none.
+    pub(crate) webgpu: Option<&'static str>,
 }
 
 // `Clone` but not `Copy`, because `Dependency` is not: its model variant names which model, and that name is composed
@@ -160,30 +164,35 @@ pub(crate) const ONNX_RUNTIME: Release = Release {
             hash: "f58971f0f556567e9b7fcce6a0110c5072ff003d9a1bb1214060b188f5d11178",
             size: 10_043_605,
             lib: Some("libonnxruntime.1.30.0.dylib"),
+            webgpu: Some("libonnxruntime_providers_webgpu.dylib"),
         },
         Artifact {
             platform: Platform::new(Os::Linux, Arch::X64),
             hash: "2a9fadb295f66fca1480bad457355c7044bf14ca06927468b991996764ad5d37",
             size: 190_133_628,
             lib: Some("libonnxruntime.so.1.30.0"),
+            webgpu: Some("libonnxruntime_providers_webgpu.so"),
         },
         Artifact {
             platform: Platform::new(Os::Linux, Arch::Arm64),
             hash: "50c3dc45b758105bec33f640c3db9f4efad97c99b3f99c2be52e00cfe89b6811",
             size: 9_702_215,
             lib: Some("libonnxruntime.so.1.30.0"),
+            webgpu: Some("libonnxruntime_providers_webgpu.so"),
         },
         Artifact {
             platform: Platform::new(Os::Windows, Arch::X64),
             hash: "cc13165ce3df6747a561db8bc06ebdd05bf21135808171a5f76245d8bdb10a63",
             size: 144_411_038,
             lib: Some("onnxruntime.dll"),
+            webgpu: Some("onnxruntime_providers_webgpu.dll"),
         },
         Artifact {
             platform: Platform::new(Os::Windows, Arch::Arm64),
             hash: "07d64750a60aee7e84443e21471a9811fb8114f50b26e19f8daf336b84028327",
             size: 12_250_575,
             lib: Some("onnxruntime.dll"),
+            webgpu: Some("onnxruntime_providers_webgpu.dll"),
         },
     ],
 };
@@ -210,18 +219,21 @@ pub(crate) const CUDA: Release = Release {
             hash: "fb4eb6ef362973c6cdefeae43e09cea05270288acbdd47cc0fc4f50ca6bc47c0",
             size: 587_322_552,
             lib: None,
+            webgpu: None,
         },
         Artifact {
             platform: Platform::new(Os::Linux, Arch::Arm64),
             hash: "ed5eb63005e30a098c270b2020b66eab87a5142d9936886fe820c19693487a24",
             size: 697_083_065,
             lib: None,
+            webgpu: None,
         },
         Artifact {
             platform: Platform::new(Os::Windows, Arch::X64),
             hash: "b85d858e4fd97bab2c808c7ad7106a89dc8dfba535a0f20f63c4decc4d24452b",
             size: 585_185_362,
             lib: None,
+            webgpu: None,
         },
     ],
 };
@@ -243,18 +255,21 @@ pub(crate) const CUDNN: Release = Release {
             hash: "18e84817dd836046087ece4b6776fea066440854c48b6b6e6c4a388b43df4174",
             size: 407_298_251,
             lib: None,
+            webgpu: None,
         },
         Artifact {
             platform: Platform::new(Os::Linux, Arch::Arm64),
             hash: "92537e1ed61579840b12282c70633f0ef6bfd3929d38943e31ebcd6b699b62d6",
             size: 507_936_847,
             lib: None,
+            webgpu: None,
         },
         Artifact {
             platform: Platform::new(Os::Windows, Arch::X64),
             hash: "a26f54c17ea990e59a6f7232bdebf39f58b5debd9a0c8ec9a6573885ae27edbd",
             size: 354_760_387,
             lib: None,
+            webgpu: None,
         },
     ],
 };
@@ -276,18 +291,21 @@ pub(crate) const TENSORRT: Release = Release {
             hash: "d2a29e4fbc78445ae715ff7ff6fde6f59ba6425a8b0017753f3a776096c59376",
             size: 1_780_420_117,
             lib: None,
+            webgpu: None,
         },
         Artifact {
             platform: Platform::new(Os::Linux, Arch::Arm64),
             hash: "28a7699c9208d6d1a5f77f65bd2dad9547a6245599ae5192c8a1baf4ef1496a0",
             size: 1_993_059_105,
             lib: None,
+            webgpu: None,
         },
         Artifact {
             platform: Platform::new(Os::Windows, Arch::X64),
             hash: "1156bf236dd66aa7c4772f8144599b81061512d035d05f02c037e1a1ad20370b",
             size: 1_399_566_073,
             lib: None,
+            webgpu: None,
         },
     ],
 };

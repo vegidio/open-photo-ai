@@ -403,9 +403,9 @@ mod tests {
     use super::*;
     use crate::enhance::{RunProgress, Stage};
     use crate::images::cropped;
-    use crate::test_support::admitted;
+    use crate::test_support::{admitted, boxed, executed};
 
-    use opai::{Confidence, Point, ProviderReport, Rect};
+    use opai::{Confidence, Point, Rect};
 
     /// A detector that answers a fixed set of faces and records every picture it was handed.
     #[derive(Default)]
@@ -498,14 +498,6 @@ mod tests {
             total: Some(1000),
             fraction,
         })
-    }
-
-    /// What a fake [`Detector`] hands back: the faces, and a provider report no test asserts about.
-    fn executed(faces: Faces) -> Executed<Faces> {
-        Executed {
-            value: faces,
-            providers: ProviderReport { requested: opai::ExecutionProvider::Auto, actual: Vec::new() },
-        }
     }
 
     /// One face, as the detector would have reported it.
@@ -625,11 +617,7 @@ mod tests {
     #[test]
     fn each_face_answered_says_whether_a_recovery_can_restore_it_and_is_otherwise_the_librarys_own_shape() {
         let (_dir, opened, identity) = fixture();
-        let large = Face::new(
-            Rect::new(Point::new(0.0, 0.0), Point::new(600.0, 600.0)),
-            [Point::new(300.0, 300.0); Face::LANDMARKS],
-            Confidence::new(0.9).expect("0.9 is inside the permitted range"),
-        );
+        let large = boxed(0.0, 0.0, 600.0, 600.0);
         let detector = Recording { answers: vec![face(0.0), large], ..Recording::default() };
 
         let answered = tauri::async_runtime::block_on(detect_with(&detector, &opened, None, request(&identity)))
@@ -649,15 +637,6 @@ mod tests {
     }
 
     // ── A key, a choice, and the faces a chain finds for itself ──────────────────────────────────────────────────────
-
-    /// A face at the given box.
-    fn boxed(min_x: f32, min_y: f32, max_x: f32, max_y: f32) -> Face {
-        Face::new(
-            Rect::new(Point::new(min_x, min_y), Point::new(max_x, max_y)),
-            [Point::new(min_x, min_y); Face::LANDMARKS],
-            Confidence::new(0.9).expect("0.9 is inside the permitted range"),
-        )
-    }
 
     #[test]
     fn a_key_is_the_four_coordinates_as_both_sides_print_them() {
