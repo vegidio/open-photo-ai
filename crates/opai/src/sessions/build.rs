@@ -391,6 +391,36 @@ mod tests {
     }
 
     #[test]
+    fn webgpu_refuses_every_fp16_graph_and_a_declined_model_and_takes_the_rest() {
+        // What keeps the graphs the plugin corrupts off it. Kept to the decision rather than the attach, which needs a
+        // runtime: `open` fails the build on a refusal only where WebGPU is alone in the chain, and that half is
+        // exercised on real hardware.
+        let webgpu = |declined| ProviderOptions { provider: Accelerator::WebGpu, options: BTreeMap::new(), declined };
+        let artifact =
+            |precision| crate::models::ArtifactId::new(crate::models::Family::Denoise, "stockholm", None, precision);
+
+        assert_eq!(webgpu_refusal(&artifact(Precision::Fp32), &webgpu(false)), None);
+        assert!(
+            webgpu_refusal(&artifact(Precision::Fp16), &webgpu(false)).is_some(),
+            "an FP16 graph reached WebGPU"
+        );
+        assert!(
+            webgpu_refusal(&artifact(Precision::Fp32), &webgpu(true)).is_some(),
+            "a declined model reached WebGPU"
+        );
+
+        // Osaka's graphs are named with a suffix and published at INT8 as well; the INT8 one is refused by its profile
+        // rather than by its precision, which is why both halves are needed.
+        let osaka = crate::models::ArtifactId::suffixed(
+            crate::models::Family::Upscale,
+            "osaka",
+            "_vae_decoder",
+            Precision::Fp16,
+        );
+        assert!(webgpu_refusal(&osaka, &webgpu(false)).is_some(), "a suffixed FP16 graph reached WebGPU");
+    }
+
+    #[test]
     fn every_resolved_option_is_applied_to_the_provider() {
         // The one thing a mistyped or dropped key costs is the whole provider — ONNX Runtime rejects an options
         // update wholesale — so what has to be checked is that the map arrives entire, not that it arrives at all.
