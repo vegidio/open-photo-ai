@@ -88,6 +88,35 @@ pub(crate) fn resolve_chain(requested: ExecutionProvider, supported: SupportedPr
     ChainResolution { requested, resolved, attach }
 }
 
+/// Every resolution a session for `requested` may be built under on a machine reporting `supported`, in the order
+/// they are tried: each one is what the session falls back to when the one before it throws an error.
+///
+/// [`Auto`](ExecutionProvider::Auto) walks its chain one accelerator at a time, and each rung keeps every accelerator
+/// below it attached — so an operation one declines is still delegated down the list, and an accelerator leaves the
+/// ladder only by failing. A Mac's `Auto` is `[CoreML, WebGPU]`, then `[WebGPU]`, then the CPU.
+///
+/// Anything else is what [`resolve_chain`] makes of it, then the CPU: a deliberate choice is not quietly widened into
+/// the `Auto` chain on a failure any more than it is on success.
+///
+/// Never empty, and always ends on the CPU, which attaches nothing and so has nothing left to fail over to.
+pub(crate) fn ladder(requested: ExecutionProvider, supported: SupportedProviders) -> Vec<ChainResolution> {
+    let chain = resolve_chain(requested, supported);
+
+    let mut rungs: Vec<ChainResolution> = match requested {
+        ExecutionProvider::Auto => (0..chain.attach.len())
+            .map(|from| {
+                let attach = chain.attach[from..].to_vec();
+                ChainResolution { requested, resolved: attach[0].into(), attach }
+            })
+            .collect(),
+        _ if chain.resolved == ExecutionProvider::Cpu => Vec::new(),
+        _ => vec![chain],
+    };
+    rungs.push(ChainResolution { requested, resolved: ExecutionProvider::Cpu, attach: Vec::new() });
+
+    rungs
+}
+
 /// The directories the execution providers are pointed at.
 ///
 /// Both are **inputs**: this module writes them into an option map and decides nothing about where they are, which
@@ -295,8 +324,11 @@ pub(crate) struct SessionPlan {
 
 /// The plan for running a model with `profile` on a machine reporting `supported`, having been asked for `requested`.
 ///
+/// The first rung of the request's [`ladder`], which is what a session is built under until it throws an error.
+///
 /// The whole of the decision, and it touches nothing: no runtime is loaded, no model file is opened, and neither
 /// cache directory is created or read. `paths` is written into the option maps as text and otherwise left alone.
+#[cfg(test)]
 pub(crate) fn resolve(
     requested: ExecutionProvider,
     supported: SupportedProviders,
@@ -305,7 +337,12 @@ pub(crate) fn resolve(
 ) -> SessionPlan {
     // Infallible, deliberately. Every outcome other than the one asked for is a downgrade rather than an error; the one
     // thing that can fail is parsing a provider *name*, which happens at the boundary long before this.
-    let ChainResolution { requested, resolved, attach } = resolve_chain(requested, supported);
+    plan(resolve_chain(requested, supported), profile, paths)
+}
+
+/// The plan for running a model with `profile` under `chain`, one rung of a [`ladder`] or the whole of a request.
+pub(crate) fn plan(chain: ChainResolution, profile: &EpProfile, paths: &CachePaths) -> SessionPlan {
+    let ChainResolution { requested, resolved, attach } = chain;
 
     let providers = attach
         .into_iter()
@@ -406,6 +443,55 @@ mod tests {
             assert_eq!(resolution.attach, provider.accelerator().into_iter().collect::<Vec<_>>());
             assert_eq!(resolution.resolved, provider);
         }
+    }
+
+    /// Each rung of `requested`'s ladder on `machine`, as the accelerators it attaches.
+    fn rungs(requested: ExecutionProvider, machine: SupportedProviders) -> Vec<Vec<Accelerator>> {
+        ladder(requested, machine).into_iter().map(|rung| rung.attach).collect()
+    }
+
+    #[test]
+    fn auto_s_ladder_drops_one_accelerator_per_rung_and_keeps_the_rest_attached_behind_it() {
+        use Accelerator::{CoreMl, Cuda, TensorRt, WebGpu};
+
+        let everything = nvidia().with_webgpu(true);
+        assert_eq!(
+            rungs(ExecutionProvider::Auto, everything),
+            vec![vec![TensorRt, Cuda, WebGpu], vec![Cuda, WebGpu], vec![WebGpu], vec![]]
+        );
+        assert_eq!(
+            rungs(ExecutionProvider::Auto, mac().with_webgpu(true)),
+            vec![vec![CoreMl, WebGpu], vec![WebGpu], vec![]]
+        );
+        assert_eq!(
+            rungs(ExecutionProvider::Auto, machine_supporting(false, true, false).with_webgpu(true)),
+            vec![vec![Cuda, WebGpu], vec![WebGpu], vec![]]
+        );
+        assert_eq!(rungs(ExecutionProvider::Auto, no_accelerator().with_webgpu(true)), vec![vec![WebGpu], vec![]]);
+        assert_eq!(rungs(ExecutionProvider::Auto, no_accelerator()), vec![Vec::<Accelerator>::new()]);
+    }
+
+    #[test]
+    fn auto_s_first_rung_is_the_whole_chain_and_every_rung_names_its_first_accelerator() {
+        let machine = nvidia().with_webgpu(true);
+        let ladder = ladder(ExecutionProvider::Auto, machine);
+
+        assert_eq!(ladder[0], resolve_chain(ExecutionProvider::Auto, machine));
+        for rung in &ladder {
+            assert_eq!(rung.requested, ExecutionProvider::Auto);
+            assert_eq!(rung.resolved, rung.attach.first().map_or(ExecutionProvider::Cpu, |&first| first.into()));
+        }
+    }
+
+    #[test]
+    fn an_explicit_request_falls_back_to_the_cpu_alone() {
+        let machine = nvidia().with_webgpu(true);
+
+        assert_eq!(rungs(ExecutionProvider::TensorRt, machine), vec![vec![Accelerator::TensorRt], vec![]]);
+        assert_eq!(rungs(ExecutionProvider::Cuda, machine), vec![vec![Accelerator::Cuda], vec![]]);
+        assert_eq!(rungs(ExecutionProvider::Cpu, machine), vec![Vec::<Accelerator>::new()]);
+        // A provider the machine cannot serve is already the CPU, and is not tried twice.
+        assert_eq!(rungs(ExecutionProvider::CoreMl, machine), vec![Vec::<Accelerator>::new()]);
     }
 
     #[test]

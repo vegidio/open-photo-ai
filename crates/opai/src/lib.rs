@@ -371,6 +371,10 @@ impl pipeline::Backend for Opai {
         self.session(artifact, profile, requested, interest).await
     }
 
+    fn decline(&self, artifact: &ArtifactId, provider: ExecutionProvider) -> bool {
+        self.inner.sessions.decline(artifact, provider)
+    }
+
     fn run_tile(
         handle: &sessions::SessionHandle<Self::Session>,
         input: &[f32],

@@ -54,3 +54,26 @@ pub(crate) async fn acquire<B: Backend>(
 
     Ok(sessions)
 }
+
+/// Declines, for its artifact, the provider of every session `model` threw an error running on, when the run asked
+/// for [`Auto`](ExecutionProvider::Auto). Returns whether anything was newly declined — whether running the step
+/// again would run it somewhere different.
+///
+/// Every session of the step rather than the one that failed, because a failed run does not say which of its graphs
+/// it was in; a model with several graphs may give up an accelerator one of them could have kept, and it always ends.
+/// An explicit provider is never declined: that choice fails as it was asked for.
+pub(crate) fn decline<B: Backend>(
+    backend: &B,
+    model: &dyn Model<B>,
+    sessions: &[SessionHandle<B::Session>],
+    provider: ExecutionProvider,
+) -> bool {
+    if provider != ExecutionProvider::Auto {
+        return false;
+    }
+
+    // Not short-circuited: every session's provider is declined, not only the first one's.
+    model.sessions().into_iter().zip(sessions).fold(false, |declined, ((artifact, _), handle)| {
+        backend.decline(artifact, handle.provider()) | declined
+    })
+}

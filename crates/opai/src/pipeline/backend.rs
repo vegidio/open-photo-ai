@@ -45,6 +45,15 @@ pub(crate) trait Backend: Send + Sync + 'static {
         interest: &Interest,
     ) -> impl Future<Output = Result<SessionHandle<Self::Session>, SessionError>> + Send;
 
+    /// Records that the session built on `provider` threw an error running `artifact`, so an `Auto` request falls
+    /// back to the next provider of its ladder from now on. Returns whether anything was newly declined, which is
+    /// what tells a driver a retry would run somewhere different.
+    ///
+    /// A default that declines nothing, for the fakes that never exercise the fallback.
+    fn decline(&self, _artifact: &ArtifactId, _provider: ExecutionProvider) -> bool {
+        false
+    }
+
     /// Runs one tile against `handle`, writing what the model produced into `output`.
     fn run_tile(handle: &SessionHandle<Self::Session>, input: &[f32], output: &mut [f32]) -> Result<(), Self::Error>;
 

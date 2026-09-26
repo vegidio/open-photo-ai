@@ -11,7 +11,7 @@
 //! an explicit release, or by a provider switch. For a region that is three handles for one operation rather than one
 //! per pass, and there is no window in which one could be reclaimed mid-region.
 //!
-//! The three may be built on **different providers**, because the CPU fallback is per session: a machine where the
+//! The three may be built on **different providers**, because the provider fallback is per session: a machine where the
 //! transformer fails to build on CoreML but the VAE halves succeed runs the region across two. That is correct and
 //! already reported, and it is worth knowing because it is a plausible explanation for a region slower than either
 //! provider alone.

@@ -29,8 +29,9 @@ pub struct ProcessOptions {
     // from struct-literal syntax altogether, including the `..Default::default()` form above — which is the very thing
     // that makes a field added later source-compatible. A `Default` plus that idiom gives the compatibility the
     // attribute would be reached for, and leaves the idiom usable.
-    /// What to run on. Defaults to [`ExecutionProvider::Auto`], which resolves to the best this machine supports and
-    /// falls back to the CPU where a provider cannot open the model.
+    /// What to run on. Defaults to [`ExecutionProvider::Auto`], which resolves to the best this machine supports and,
+    /// where a provider throws an error opening or running the model, falls back to the next best — the CPU last.
+    /// Any other provider falls back to the CPU where it cannot open the model.
     pub provider: ExecutionProvider,
 
     /// How many bits per channel the result carries. Defaults to [`OutputDepth::Eight`] — see that type for why, and

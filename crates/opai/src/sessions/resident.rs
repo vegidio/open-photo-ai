@@ -1,6 +1,6 @@
 //! The sessions held in memory, how long each one stays, and the handle a request holds on one.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, Instant};
@@ -35,7 +35,12 @@ pub(super) const IDLE_LIFE: Duration = Duration::from_secs(15 * 60);
 /// takes anyway.
 pub(super) const SWEEP_INTERVAL: Duration = Duration::from_secs(IDLE_LIFE.as_secs() / 4);
 
-/// What a resident session is filed under: the artifact, and the provider it was actually built on.
+/// What a resident session is filed under: the artifact, the provider it was actually built on, and whether it was
+/// built as a rung of the `Auto` ladder.
+///
+/// The third field because a rung keeps every accelerator below it attached — `Auto`'s CUDA rung is CUDA with WebGPU
+/// behind it — while an explicit request for the same provider attaches it alone. Two different sessions, which one
+/// key would hand out as each other. A CPU session attaches nothing either way, so it is never filed as a rung.
 ///
 /// The **artifact** rather than the operation that asked for one, so that two operations needing the same graph share
 /// a session — an 8x Kyoto and a 4x Kyoto both need `up_kyoto_4x_fp16`, and the reference implementation, which keys
@@ -46,7 +51,14 @@ pub(super) const SWEEP_INTERVAL: Duration = Duration::from_secs(IDLE_LIFE.as_sec
 /// artifact name is composed from the family, the codename, the native scale and the precision — and there is a test
 /// in `tests::resident` that says so, because the diffusion upscaler is the case that tests it: a per-graph override,
 /// where one graph of a set wants a setting the others do not.
-type Key = (ArtifactId, ExecutionProvider);
+type Key = (ArtifactId, ExecutionProvider, bool);
+
+/// The key a session for `artifact`, asked for as `requested` and built on `resolved`, is filed under.
+fn key(artifact: &ArtifactId, requested: ExecutionProvider, resolved: ExecutionProvider) -> Key {
+    let rung = requested == ExecutionProvider::Auto && resolved != ExecutionProvider::Cpu;
+
+    (artifact.clone(), resolved, rung)
+}
 
 /// One session held in memory, and what is known about it.
 ///
@@ -152,6 +164,9 @@ pub(crate) struct SessionCache<S, E = SessionError> {
     /// A separate map rather than a third state in the one above, so that an entry being built is never something the
     /// sweep or [`clear`](Self::clear) has to know about.
     pub(super) flights: Mutex<HashMap<Key, Arc<Flight<S, E>>>>,
+    /// The providers that threw an error for an artifact under `Auto`, at build or at run, which its ladder skips from
+    /// then on. Emptied by [`clear`](Self::clear), so an explicit release gives every provider another chance.
+    declined: Mutex<HashSet<(ArtifactId, ExecutionProvider)>>,
     /// Where the count of resident sessions is published: this process's instrument, or a test's own.
     resident_gauge: Gauge,
 }
@@ -169,6 +184,7 @@ impl<S, E> Default for SessionCache<S, E> {
         Self {
             entries: Mutex::new(HashMap::new()),
             flights: Mutex::new(HashMap::new()),
+            declined: Mutex::new(HashSet::new()),
             resident_gauge: metrics::RESIDENT_SESSIONS.clone(),
         }
     }
@@ -207,7 +223,7 @@ impl<S, E> SessionCache<S, E> {
     fn publish_resident(&self, entries: &HashMap<Key, Arc<Resident<S>>>) {
         // Every provider a session can be built on, which leaves out `Auto`: that is what a request asks for.
         for provider in ExecutionProvider::BUILT_ON {
-            let count = entries.keys().filter(|(_, built_on)| *built_on == provider).count();
+            let count = entries.keys().filter(|(_, built_on, _)| *built_on == provider).count();
             let count = u32::try_from(count).unwrap_or(u32::MAX);
             self.resident_gauge.set_with_tags(count, &[("provider", provider.as_str())]);
         }
@@ -221,14 +237,32 @@ impl<S, E> SessionCache<S, E> {
         lock(&self.entries).len()
     }
 
-    /// The session filed for `artifact` on `provider`, if one is.
+    /// The session filed under `key`, if one is.
     ///
     /// One map lookup and nothing else — no filesystem work at all, which is what makes a cache hit affordable on a
     /// path the slice that runs inference will take once per tile.
-    pub(super) fn get(&self, artifact: &ArtifactId, provider: ExecutionProvider) -> Option<SessionHandle<S>> {
-        lock(&self.entries)
-            .get(&(artifact.clone(), provider))
-            .map(|entry| SessionHandle::new(Arc::clone(entry)))
+    pub(super) fn get(&self, key: &Key) -> Option<SessionHandle<S>> {
+        lock(&self.entries).get(key).map(|entry| SessionHandle::new(Arc::clone(entry)))
+    }
+
+    /// Whether `provider` threw an error for `artifact` under `Auto` since the last [`clear`](Self::clear).
+    pub(crate) fn is_declined(&self, artifact: &ArtifactId, provider: ExecutionProvider) -> bool {
+        lock(&self.declined).contains(&(artifact.clone(), provider))
+    }
+
+    /// Records that `provider` threw an error for `artifact` under `Auto`, and lets go of every session of that
+    /// artifact filed on it — so the next request builds on the rung below, and the failed session's memory is freed
+    /// as soon as whatever is still holding it lets go.
+    ///
+    /// Returns whether it was newly declined.
+    pub(crate) fn decline(&self, artifact: &ArtifactId, provider: ExecutionProvider) -> bool {
+        let newly = lock(&self.declined).insert((artifact.clone(), provider));
+
+        let mut entries = lock(&self.entries);
+        entries.retain(|(filed, built_on, _), _| !(filed == artifact && *built_on == provider));
+        self.publish_resident(&entries);
+
+        newly
     }
 
     /// Releases every resident session.
@@ -240,14 +274,17 @@ impl<S, E> SessionCache<S, E> {
     /// entry nothing else holds reaches a refcount of zero as this clears the map, so its native session is dropped
     /// *inside this call*. There is no deferred sweep behind it to make a later rebuild look free.
     ///
+    /// It also forgets every provider `Auto` had declined, so the next request tries the whole ladder again.
+    ///
     /// Reached from [`Opai::release_sessions`](crate::Opai::release_sessions), which is what the application
     /// embedding this library calls.
     pub(crate) fn clear(&self) {
         let mut entries = lock(&self.entries);
-        let evicted: Vec<String> = entries.keys().map(|(artifact, _)| artifact.to_string()).collect();
+        let evicted: Vec<String> = entries.keys().map(|(artifact, _, _)| artifact.to_string()).collect();
         entries.clear();
         self.publish_resident(&entries);
         drop(entries);
+        lock(&self.declined).clear();
 
         let released = evicted.len();
         let artifacts = released_artifacts(evicted);
@@ -274,7 +311,7 @@ impl<S, E> SessionCache<S, E> {
         // `SessionHandle::drop` touches the entry, not this map — so the two passes could disagree about which
         // entries went, and the record would name something that survived.
         let mut evicted: Vec<String> = Vec::new();
-        entries.retain(|(artifact, _), entry| {
+        entries.retain(|(artifact, _, _), entry| {
             let keep = Arc::strong_count(entry) > 1 || entry.last_used() > evict_unused_since;
             if !keep {
                 evicted.push(artifact.to_string());
@@ -341,7 +378,9 @@ impl<S> SessionCache<S, SessionError> {
         // waited on.
         let request = Span::current();
 
-        if let Some(handle) = self.get(artifact, resolved) {
+        let key = key(artifact, requested, resolved);
+
+        if let Some(handle) = self.get(&key) {
             // `debug`: a chain acquires a handle per pass, so this repeats within one run. It is the record that
             // answers "why was the second image instant" — matching the level the reference gives its own.
             tracing::debug!(%artifact, provider = %resolved, "session already resident");
@@ -350,7 +389,6 @@ impl<S> SessionCache<S, SessionError> {
         }
         request.record("resident", false);
 
-        let key = (artifact.clone(), resolved);
         let flight = {
             let mut flights = lock(&self.flights);
 

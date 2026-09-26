@@ -47,19 +47,21 @@
 //!
 //! # A provider that cannot open a model is a downgrade, not a failure
 //!
-//! A session that cannot be built on the providers resolved for it is rebuilt with nothing attached, and the handle
-//! carries what was asked for beside what it was actually built on. That is what the chain folds a run's
+//! A request walks a **ladder** of resolutions (see [`options::ladder`]) until one builds. Under `Auto` that is the
+//! machine's accelerators one at a time, best first — each rung keeping every accelerator below it attached, so an
+//! operation one declines is still delegated down the list — and the CPU last. Any other request is its provider,
+//! then the CPU. The handle carries what it was actually built on, which is what the chain folds a run's
 //! [`ProviderReport`](crate::ProviderReport) out of, so a downgrade reaches a caller of
-//! [`Opai::process`](crate::Opai::process) as data rather than only as a log line. The downgrade is **not latched**:
-//! a later request
-//! attempts the provider it asks for, unlike the reference implementation, which latches the first such failure for
-//! the rest of the process and clears it only when the user changes processor — an action this project has no
-//! settings surface for, so a latched downgrade would outlive the condition that caused it. What bounds the cost is
-//! that the fallback re-enters the cache under the CPU key rather than building directly, so a repeated request pays
-//! one failed provider attach rather than a rebuild.
+//! [`Opai::process`](crate::Opai::process) as data rather than only as a log line.
 //!
-//! Only a failure about *building* the session is retried. A model file that is missing or unreadable fails the same
-//! way on the CPU, and is reported as a model that could not be put on disk.
+//! Under `Auto`, a provider that throws an error for a model — building it here, or running it in the drivers, which
+//! report it through [`Sessions::decline`] — is **declined** for that model: its sessions are let go of and the ladder
+//! skips it until the sessions are released. That is what keeps a TensorRT engine build that fails after minutes from
+//! being paid again on every run. An explicit request is not remembered: it attempts the provider it asks for every
+//! time, and each fallback re-enters the cache, so a repeated request pays one failed attach rather than a rebuild.
+//!
+//! Only a failure about *building* the session moves down the ladder. A model file that is missing or unreadable fails
+//! the same way on every provider, and is reported as a model that could not be put on disk.
 //!
 //! # What this module writes to the log
 //!
@@ -68,8 +70,8 @@
 //! - a **build** starting and the session it produced, at `info`, with the artifact, the provider and what it cost —
 //!   inside the single flight, so ten concurrent requests for one model produce one pair rather than ten;
 //! - a **resident hit**, at `debug`, since a chain takes a handle per pass;
-//! - the **downgrade**, at `warn`, naming the artifact, the provider that would not open it and the error, with the
-//!   CPU build after it carrying `requested` beside `provider` so the two read as one event;
+//! - the **downgrade**, at `warn`, naming the artifact, the provider that would not open or run it and the `next` one
+//!   tried, with the build after it carrying `requested` beside `provider` so the two read as one event;
 //! - an **eviction**, at `info`, naming which artifacts were released and how many, and whether it was the idle sweep
 //!   or an explicit release. A sweep that found nothing writes nothing: it runs every few minutes for the life of the
 //!   process.
@@ -104,7 +106,7 @@ use crate::deps::model;
 use crate::deps::model::manifest::Listing;
 use crate::error::{InitError, SessionError};
 use crate::models::ArtifactId;
-use crate::providers::options;
+use crate::providers::options::{self, ChainResolution};
 use crate::providers::profile::EpProfile;
 use crate::providers::{ExecutionProvider, SupportedProviders};
 use crate::sessions::build::BuildRequest;
@@ -244,13 +246,14 @@ impl<S: Send + 'static> Sessions<S> {
     /// and the caller is what holds the operation. That one artifact implies one profile is what the cache key rests
     /// on, and is checked by a test below rather than left to a comment.
     ///
-    /// Where the resolved providers cannot open the model, it is built again with nothing attached and the handle
-    /// reports both. A missing or unreadable model file is not retried: it fails the same way on the CPU.
+    /// Where the resolved providers cannot open the model, it is built on the next rung of the request's
+    /// [`ladder`](options::ladder) — the CPU last — and the handle reports what it was built on. A missing or
+    /// unreadable model file is not retried: it fails the same way on every provider.
     ///
     /// # Errors
     ///
     /// Returns [`SessionError::Install`] where the model's files could not be put on disk or read back, and
-    /// [`SessionError::Build`] where the model is on disk and neither the resolved providers nor the CPU could open
+    /// [`SessionError::Build`] where the model is on disk and no rung of the ladder, the CPU included, could open
     /// it. A build stopped because nothing was left waiting for it is reported as [`InitError::Stopped`], which the
     /// run layer folds into its own cancellation rather than into a failed install — nothing broke, and nobody was
     /// asking any more.
@@ -282,6 +285,9 @@ impl<S: Send + 'static> Sessions<S> {
     }
 
     /// [`session`](Self::session)'s body, inside the request's span.
+    ///
+    /// Walks the request's [`ladder`](options::ladder), trying each rung until one builds. Under `Auto` a rung that
+    /// already threw an error for this artifact is skipped, and one that throws now is remembered as declined.
     async fn request(
         &self,
         artifact: &ArtifactId,
@@ -289,68 +295,70 @@ impl<S: Send + 'static> Sessions<S> {
         requested: ExecutionProvider,
         interest: &Interest,
     ) -> Result<SessionHandle<S>, SessionError> {
-        let outcome = self.build_on(artifact, profile, requested, requested, interest).await;
+        let auto = requested == ExecutionProvider::Auto;
+        let rungs: Vec<_> = options::ladder(requested, self.supported)
+            .into_iter()
+            .filter(|rung| !(auto && self.cache.is_declined(artifact, rung.resolved)))
+            .collect();
 
-        match outcome {
-            // A stop, which is not a failure and not a downgrade: the transfer this request was waiting on ended
-            // because nothing was left waiting for it, and attempting the CPU would be starting the same install
-            // again on behalf of a request that has already gone away.
-            Ok(None) => Err(SessionError::from(InitError::Stopped)),
-            Ok(Some(handle)) => Ok(handle),
-            // The downgrade, and it re-enters the cache rather than building a CPU session directly. That is what
-            // makes carrying no latch affordable: without it a machine with a broken driver would rebuild the model
-            // from scratch on every request; with it, the second request pays one failed provider attach and then
-            // hits the CPU session the first one filed.
-            //
-            // Only a failure about building the session. A model file that is missing or unreadable reports
-            // `Install`, fails the same way on the CPU, and retrying it would double the wait before reporting what
-            // was already known.
-            // Matched on the provider the failure *carries* rather than on a second resolution of the request. The
-            // error names what the plan actually attached (`sessions::build` sets it from `plan.resolved`), so the
-            // retry is decided by what was tried; re-resolving here would agree only for as long as nothing else can
-            // influence a plan, and the day one can — a per-artifact override, a provider blacklist — the retry
-            // would fire against a provider that was never attempted.
-            Err(SessionError::Build { provider, .. }) if provider != ExecutionProvider::Cpu => {
-                // **The record this whole instrumentation sweep is most for.** A downgrade is invisible to a user —
-                // the enhancement still completes, several times slower — so a bug report about speed has nothing to
-                // carry unless this line is in the file. `warn`, by the rule: the application is continuing, and the
-                // user is paying for something they did not ask for.
+        for (index, rung) in rungs.iter().enumerate() {
+            match self.build_on(artifact, profile, rung, interest).await {
+                // A stop, which is not a failure and not a downgrade: the transfer this request was waiting on ended
+                // because nothing was left waiting for it, and attempting the next rung would be starting the same
+                // install again on behalf of a request that has already gone away.
+                Ok(None) => return Err(SessionError::from(InitError::Stopped)),
+                Ok(Some(handle)) => return Ok(handle),
+                // The downgrade, and it re-enters the cache rather than building directly, so a rung that is already
+                // resident is served rather than rebuilt.
                 //
-                // The `info` for the CPU session that follows carries `requested` beside `provider`, so the two lines
-                // read as one event. No `error`: the failed build recorded it, just before this, in the same request.
-                tracing::warn!(
-                    %artifact,
-                    provider = %provider,
-                    "the requested execution provider could not open this model; falling back to the CPU"
-                );
-                // By the provider that was attempted, which is what the request resolved to: an `Auto` request
-                // counted as `Auto` would not say which accelerator declined.
-                metrics::PROVIDER_FALLBACKS.add_with_tags(1, &[("requested", provider.as_str())]);
+                // Only a failure about building the session. A model file that is missing or unreadable reports
+                // `Install`, fails the same way on every rung, and retrying it would multiply the wait before
+                // reporting what was already known.
+                //
+                // Matched on the provider the failure *carries*, which `sessions::build` sets from the plan it
+                // attached, so the fallback is decided by what was actually tried.
+                Err(SessionError::Build { provider, .. }) if provider != ExecutionProvider::Cpu => {
+                    let next = rungs.get(index + 1).map_or(ExecutionProvider::Cpu, |rung| rung.resolved);
 
-                match self.build_on(artifact, profile, requested, ExecutionProvider::Cpu, interest).await? {
-                    Some(handle) => Ok(handle),
-                    None => Err(SessionError::from(InitError::Stopped)),
+                    // **The record this whole instrumentation sweep is most for.** A downgrade is invisible to a user
+                    // — the enhancement still completes, several times slower — so a bug report about speed has
+                    // nothing to carry unless this line is in the file. `warn`: the application is continuing, and
+                    // the user is paying for something they did not ask for.
+                    tracing::warn!(
+                        %artifact,
+                        provider = %provider,
+                        next = %next,
+                        "the execution provider could not open this model; falling back to the next provider"
+                    );
+                    // By the provider that was attempted: an `Auto` request counted as `Auto` would not say which
+                    // accelerator declined.
+                    metrics::PROVIDER_FALLBACKS.add_with_tags(1, &[("requested", provider.as_str())]);
+
+                    if auto {
+                        self.cache.decline(artifact, provider);
+                    }
                 }
+                Err(other) => return Err(other),
             }
-            Err(other) => Err(other),
         }
+
+        // The ladder always ends on the CPU, which is never declined, and a CPU failure returns above.
+        unreachable!("the provider ladder ended without reaching the CPU")
     }
 
-    /// The session for `artifact` under the plan `plan_from` resolves to, recording `requested` beside it.
+    /// The session for `artifact` under `rung`, one resolution of the request's ladder.
     ///
-    /// The two providers are separate because they differ on the retry: the build's records still name what the
-    /// *caller* asked for, while the plan — and therefore the key — is built from the CPU.
+    /// The build's records name what the *caller* asked for, carried on the rung, beside what it was built on.
     async fn build_on(
         &self,
         artifact: &ArtifactId,
         profile: &EpProfile,
-        requested: ExecutionProvider,
-        plan_from: ExecutionProvider,
+        rung: &ChainResolution,
         interest: &Interest,
     ) -> Result<Option<SessionHandle<S>>, SessionError> {
         // Keyed on what the machine will actually serve, not on what was asked for: filing a CPU session under a GPU
         // key would make an explicit switch to the CPU build a second identical copy of it.
-        let resolved = options::resolve_chain(plan_from, self.supported).resolved;
+        let (requested, resolved) = (rung.requested, rung.resolved);
 
         self.cache
             .get_or_build(artifact, requested, resolved, interest, |installing| -> BuildFuture<'_, S> {
@@ -363,7 +371,7 @@ impl<S: Send + 'static> Sessions<S> {
                     };
 
                     let paths = caches::resolve(&self.app_dir, &self.name, artifact)?;
-                    let plan = options::resolve(plan_from, self.supported, profile, &paths);
+                    let plan = options::plan(rung.clone(), profile, &paths);
 
                     // The graph is the artifact's own name, the same rule the descriptor composes a model's version from;
                     // a model too large for the protobuf limit keeps its weights in a sibling the runtime opens itself.
@@ -377,6 +385,25 @@ impl<S: Send + 'static> Sessions<S> {
                 })
             })
             .await
+    }
+
+    /// Records that the session built on `provider` threw an error running `artifact`, so an `Auto` request for it
+    /// falls back to the next rung from now on, and lets go of the session that failed.
+    ///
+    /// Returns whether it was newly declined. The CPU is never declined: it is the ladder's last rung.
+    pub(crate) fn decline(&self, artifact: &ArtifactId, provider: ExecutionProvider) -> bool {
+        if provider == ExecutionProvider::Cpu {
+            return false;
+        }
+
+        tracing::warn!(
+            %artifact,
+            provider = %provider,
+            "the execution provider failed running this model; falling back to the next provider"
+        );
+        metrics::PROVIDER_FALLBACKS.add_with_tags(1, &[("requested", provider.as_str())]);
+
+        self.cache.decline(artifact, provider)
     }
 
     /// Installs `artifact`'s files and returns the directory they landed in, or `None` where the transfer stopped

@@ -151,7 +151,7 @@ impl FromStr for ExecutionProvider {
 /// The execution providers initialization found this machine can offer.
 ///
 /// What the machine can be *asked* for, not a promise that a session will build: a provider reported as supported can
-/// still fail at session-build time, and the application falls back to the CPU when it does.
+/// still fail at session-build time, and the application falls back to the next provider when it does.
 ///
 /// `#[non_exhaustive]` reaches the wire too. A provider added later is a new field in the JSON, which a reader that
 /// names the fields it knows tolerates, and one it does not offer until it is taught the name.

@@ -23,7 +23,7 @@ fn interested() -> (Interest, CancellationToken, Arc<Mutex<Vec<crate::progress::
 
 /// The flight for `id` on the CPU, as the cache is holding it.
 fn flight_for<S>(cache: &SessionCache<S>, id: &ArtifactId) -> Option<Arc<Flight<S, SessionError>>> {
-    lock(&cache.flights).get(&(id.clone(), ExecutionProvider::Cpu)).map(Arc::clone)
+    lock(&cache.flights).get(&(id.clone(), ExecutionProvider::Cpu, false)).map(Arc::clone)
 }
 
 /// Waits until exactly `count` requests are waiting on the CPU flight for `id`.

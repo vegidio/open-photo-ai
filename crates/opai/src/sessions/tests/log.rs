@@ -127,11 +127,12 @@ async fn a_downgrade_is_recorded_as_a_pair_naming_what_was_asked_for_and_what_ra
     assert_eq!(handle.provider(), ExecutionProvider::Cpu);
 
     let downgraded =
-        records(&log, "the requested execution provider could not open this model; falling back to the CPU");
+        records(&log, "the execution provider could not open this model; falling back to the next provider");
     assert_eq!(downgraded.len(), 1, "the downgrade was recorded {} times:\n{log}", downgraded.len());
     assert!(downgraded[0].contains("level=WARN"), "a downgrade is not a warning: {}", downgraded[0]);
     assert_eq!(field(downgraded[0], "artifact"), Some(id.as_str()));
     assert_eq!(field(downgraded[0], "provider"), Some(ExecutionProvider::Cuda.as_str()));
+    assert_eq!(field(downgraded[0], "next"), Some(ExecutionProvider::Cpu.as_str()));
     // The reason is on the failed build's record, written just before, rather than repeated here.
     assert!(
         field(downgraded[0], "error").is_none(),
@@ -147,8 +148,10 @@ async fn a_downgrade_is_recorded_as_a_pair_naming_what_was_asked_for_and_what_ra
     assert_eq!(field(failed[0], "requested"), Some(ExecutionProvider::Cuda.as_str()));
     assert!(field(failed[0], "duration").is_some(), "{}", failed[0]);
     assert!(field(failed[0], "error").is_some(), "the failed build does not say why: {}", failed[0]);
-    let (build_at, fallback_at) =
-        (log.find("session build failed").unwrap(), log.find("falling back to the CPU").unwrap());
+    let (build_at, fallback_at) = (
+        log.find("session build failed").unwrap(),
+        log.find("falling back to the next provider").unwrap(),
+    );
     assert!(build_at < fallback_at, "the fallback was recorded before the build that caused it:\n{log}");
 
     // And the CPU build that follows carries `requested` beside `provider`, so the pair reads as one event.

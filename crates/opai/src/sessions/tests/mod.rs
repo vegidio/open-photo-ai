@@ -75,7 +75,7 @@ async fn build_and_release(
     drop(handle);
 }
 
-/// A failure of the kind the CPU fallback retries: the model is on disk and the provider would not open it.
+/// A failure of the kind the provider fallback retries: the model is on disk and the provider would not open it.
 fn build_failure(artifact: &ArtifactId, provider: ExecutionProvider) -> SessionError {
     SessionError::Build {
         artifact: artifact.as_str().to_string(),

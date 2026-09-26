@@ -29,7 +29,7 @@ pub(crate) static STEP_DURATION: LazyLock<Histogram> =
 /// Run cache lookups, by `kind` ([`STEP`] or [`ANALYSIS`]) and `result` ([`HIT`] or [`MISS`]).
 pub(crate) static CACHE_LOOKUPS: LazyLock<Counter> = LazyLock::new(|| metric::counter("opai_cache_lookups_total"));
 
-/// Sessions built on the CPU because the `requested` provider could not open the model.
+/// Fallbacks to the next provider because the `requested` one could not open or run the model.
 pub(crate) static PROVIDER_FALLBACKS: LazyLock<Counter> =
     LazyLock::new(|| metric::counter("opai_provider_fallbacks_total"));
 

@@ -240,7 +240,7 @@ pub(crate) enum SessionError {
     #[error(transparent)]
     Install(Arc<InitError>),
 
-    // Also what the CPU fallback matches on: this is the failure a session built with nothing attached might not
+    // Also what the provider fallback matches on: this is the failure a session built with nothing attached might not
     // have.
     /// The model is on disk and the runtime would not open it, naming the provider that was being attached.
     #[error("failed to open the model {artifact} on {provider}: {source}")]
@@ -693,7 +693,7 @@ mod tests {
 
     #[test]
     fn a_model_that_could_not_be_put_on_disk_is_told_apart_from_one_that_would_not_open() {
-        // What the CPU fallback decides on: an install failure fails the same way with nothing attached, so it is
+        // What the provider fallback decides on: an install failure fails the same way with nothing attached, so it is
         // never retried there.
         let install = SessionError::from(InitError::UnpublishedModel { artifact: "up_kyoto_4x_fp16".to_string() });
         let build = SessionError::Build {

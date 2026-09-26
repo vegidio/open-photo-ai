@@ -260,3 +260,78 @@ async fn the_source_depth_is_resolved_against_the_image_that_was_loaded() {
         result.pixels()
     );
 }
+
+/// A backend whose `Auto` ladder is TensorRT, CUDA, then the CPU, and whose 4x model throws on `provider`.
+fn throwing_on(provider: ExecutionProvider) -> Fake {
+    Fake {
+        ladder: vec![ExecutionProvider::TensorRt, ExecutionProvider::Cuda, ExecutionProvider::Cpu],
+        fails_on: Some(("up_kyoto_4x_fp16".to_string(), provider)),
+        ..Fake::new()
+    }
+}
+
+#[tokio::test]
+async fn a_step_that_throws_on_an_auto_accelerator_is_run_again_on_the_next_one() {
+    let backend = throwing_on(ExecutionProvider::TensorRt);
+
+    let (result, report) =
+        run_reporting(&backend, source(300, 200), &[kyoto(2.0), kyoto(4.0)], ExecutionProvider::Auto)
+            .await
+            .expect("the step was not retried on the next provider");
+
+    assert_eq!(result.dimensions(), (2400, 1600));
+    // The step before it kept what it produced; only the one that threw was acquired again.
+    assert_eq!(backend.log().acquired, vec!["up_kyoto_2x_fp16", "up_kyoto_4x_fp16", "up_kyoto_4x_fp16"]);
+    // The failed session is not in the report: nothing it produced was used.
+    assert_eq!(report.actual, vec![ExecutionProvider::TensorRt, ExecutionProvider::Cuda]);
+}
+
+#[tokio::test]
+async fn a_step_that_throws_on_every_provider_walks_the_whole_ladder_before_failing() {
+    let backend = Fake {
+        ladder: vec![ExecutionProvider::TensorRt, ExecutionProvider::Cuda, ExecutionProvider::Cpu],
+        fails_to_run: Some("up_kyoto_4x_fp16".to_string()),
+        ..Fake::new()
+    };
+
+    let outcome = run_reporting(&backend, source(300, 200), &[kyoto(4.0)], ExecutionProvider::Auto).await;
+
+    assert!(matches!(outcome, Err(InferenceError::Run { .. })), "{outcome:?}");
+    // Once per rung, ending on the CPU, which is never declined.
+    assert_eq!(backend.log().acquired.len(), 3);
+}
+
+#[tokio::test]
+async fn an_explicit_provider_that_throws_is_not_retried() {
+    let backend = throwing_on(ExecutionProvider::TensorRt);
+
+    let outcome = run_reporting(&backend, source(300, 200), &[kyoto(4.0)], ExecutionProvider::TensorRt).await;
+
+    assert!(matches!(outcome, Err(InferenceError::Run { .. })), "{outcome:?}");
+    assert_eq!(backend.log().acquired, vec!["up_kyoto_4x_fp16"]);
+    assert!(backend.declined.lock().unwrap().is_empty(), "an explicit choice was declined");
+}
+
+#[tokio::test]
+async fn a_cancelled_step_is_not_retried() {
+    let token = CancellationToken::new();
+    let backend = Fake {
+        cancels: Some(("up_kyoto_4x_fp16".to_string(), token.clone())),
+        ..throwing_on(ExecutionProvider::Cuda)
+    };
+
+    let outcome = run_chain(
+        &backend,
+        source(300, 200),
+        &[kyoto(4.0)],
+        ExecutionProvider::Auto,
+        ChannelDepth::Eight,
+        None,
+        &token,
+        None,
+    )
+    .await;
+
+    assert!(matches!(outcome, Err(InferenceError::Cancelled)), "{outcome:?}");
+    assert_eq!(backend.log().acquired.len(), 1, "a cancelled step was run again");
+}

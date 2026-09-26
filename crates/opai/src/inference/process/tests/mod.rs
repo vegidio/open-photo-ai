@@ -12,7 +12,7 @@ mod spans;
 use super::plan::Planned;
 use super::*;
 use crate::pipeline::test_support::stub_backend_runs;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use image::{GenericImageView as _, ImageBuffer};
@@ -152,6 +152,13 @@ struct Fake {
     /// arriving from somewhere else while a chain is running. It drops the store's own reference and nothing
     /// else, which is exactly what `SessionCache::clear` does.
     release_before_acquire: Option<usize>,
+    /// Where set, the providers `Auto` walks, best first: each artifact's session is built on the first one not yet
+    /// declined for it, standing in for the session layer's ladder.
+    ladder: Vec<ExecutionProvider>,
+    /// The artifact whose tile runs fail on this provider only, standing in for an accelerator that throws.
+    fails_on: Option<(String, ExecutionProvider)>,
+    /// What the driver declined, by artifact and provider.
+    declined: Mutex<HashSet<(String, ExecutionProvider)>>,
 }
 
 impl Fake {
@@ -171,6 +178,9 @@ impl Fake {
             opens: Mutex::new(0),
             freed: Arc::new(Mutex::new(Vec::new())),
             release_before_acquire: None,
+            ladder: Vec::new(),
+            fails_on: None,
+            declined: Mutex::new(HashSet::new()),
         }
     }
 
@@ -268,11 +278,19 @@ impl Backend for Fake {
 
         // The provider this artifact's session is built on. `SessionHandle::provider` is the only half of the
         // report folded out of the handles, so this is the whole of what a test has to set to drive a downgrade.
-        let built_on = self.built_on.get(&artifact).copied().unwrap_or(self.builds_on);
+        let declined = self.declined.lock().unwrap();
+        let built_on = self
+            .ladder
+            .iter()
+            .copied()
+            .find(|provider| !declined.contains(&(artifact.clone(), *provider)))
+            .unwrap_or_else(|| self.built_on.get(&artifact).copied().unwrap_or(self.builds_on));
+        drop(declined);
+        let fails_here = self.fails_on.as_ref().is_some_and(|(named, on)| *named == artifact && *on == built_on);
 
         Ok(SessionHandle::held(
             FakeSession {
-                fails: self.fails_to_run.as_deref() == Some(artifact.as_str()),
+                fails: self.fails_to_run.as_deref() == Some(artifact.as_str()) || fails_here,
                 artifact,
                 log: Arc::clone(&self.log),
                 cancels,
@@ -281,6 +299,16 @@ impl Backend for Fake {
             },
             built_on,
         ))
+    }
+
+    fn decline(&self, artifact: &ArtifactId, provider: ExecutionProvider) -> bool {
+        if provider == ExecutionProvider::Cpu {
+            return false;
+        }
+
+        // Let go of the session, as the resident cache does, so the retry opens a fresh one.
+        self.open.lock().unwrap().remove(artifact.as_str());
+        self.declined.lock().unwrap().insert((artifact.as_str().to_string(), provider))
     }
 
     fn run_tile(handle: &SessionHandle<Self::Session>, input: &[f32], output: &mut [f32]) -> Result<(), Self::Error> {

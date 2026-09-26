@@ -56,8 +56,9 @@ pub struct ExecuteOptions {
     // meaningless here — it names bits per channel of pixels this run does not produce — and a field a caller can set
     // that does nothing is a guarantee they can get wrong. Deliberately **not** `#[non_exhaustive]`, for the reason
     // written into `ProcessOptions`.
-    /// What to run on. Defaults to [`ExecutionProvider::Auto`], which resolves to the best this machine supports and
-    /// falls back to the CPU where a provider cannot open the model.
+    /// What to run on. Defaults to [`ExecutionProvider::Auto`], which resolves to the best this machine supports and,
+    /// where a provider throws an error opening or running the model, falls back to the next best — the CPU last.
+    /// Any other provider falls back to the CPU where it cannot open the model.
     pub provider: ExecutionProvider,
 
     /// Where progress reports go. Defaults to none, and a caller that asks for none is charged for none.
@@ -300,47 +301,63 @@ async fn run<B: Backend, O: DataOperation>(
     }
 
     // The same block the chain runs, over the head of this operation's range. See `acquire`.
-    let sessions = acquire::acquire(backend, pipeline.as_ref(), &reporter, provider, cancel).await?;
-
-    let input = source.shared_pixels();
-    let cancelled = cancel.clone();
-    let reported = Arc::clone(&reporter);
-    let wanted = progress.wanted();
-
-    // Moved into the closure below — the same pair the read above used, so the two ends cannot disagree about where
-    // this result lives. Cloned rather than moved only so the record at the tail can name the slot a computed result
-    // went into, which is what lets one `grep` pair a miss with the hit it later serves.
-    let keeping = store.clone();
-
-    // Acquired on the runtime and run off it, exactly as the chain does and for the same reason: in a Tauri process the
-    // async runtime *is* the window's event loop. The hop is written out here rather than shared with the chain because
-    // the two closures have nothing in common but their shape — the chain's moves whole decoded pictures and encodes
-    // one back, this one moves a value and serialises one.
     //
-    // The sessions travel into the blocking closure and back out of it, so they are owned throughout the run and are
-    // held until this function returns — there is no window in which one could be found reclaimed. The error type is
-    // named rather than inferred: `Cancelled` converts into three of this crate's errors, and which one a shutdown is
-    // reported as is the choice being made here.
-    let (held, produced) = spawn_blocking::<_, InferenceError, _>(move || {
-        let report = |fraction: f64| reported.running(fraction);
-        let report = wanted.then_some(&report as &dyn Fn(f64));
-        let stopped = || cancelled.is_cancelled();
+    // A model that throws an error on an `Auto` accelerator is run again on the next provider of its ladder; every
+    // retry declines at least one provider for good, so it ends at the latest on the CPU. See the chain's step loop.
+    let (held, produced) = loop {
+        let sessions = acquire::acquire(backend, pipeline.as_ref(), &reporter, provider, cancel).await?;
 
-        let produced = pipeline.run(&input, &sessions, report, &stopped);
+        let running = Arc::clone(&pipeline);
+        let input = source.shared_pixels();
+        let cancelled = cancel.clone();
+        let reported = Arc::clone(&reporter);
+        let wanted = progress.wanted();
 
-        // Inside the same blocking call the run happened on, as the chain's write is: encoding and storing is I/O and
-        // belongs nowhere near the runtime, and there is a blocking thread here already.
+        // Moved into the closure below — the same pair the read above used, so the two ends cannot disagree about where
+        // this result lives. Cloned rather than moved only so the record at the tail can name the slot a computed result
+        // went into, which is what lets one `grep` pair a miss with the hit it later serves.
+        let keeping = store.clone();
+
+        // Acquired on the runtime and run off it, exactly as the chain does and for the same reason: in a Tauri process the
+        // async runtime *is* the window's event loop. The hop is written out here rather than shared with the chain because
+        // the two closures have nothing in common but their shape — the chain's moves whole decoded pictures and encodes
+        // one back, this one moves a value and serialises one.
         //
-        // **Only a successful run writes.** A failed one and a cancelled one both arrive here as an `Err` — the
-        // pipeline returns the error rather than a value — so neither has a result to store, and a later run is never
-        // served something that was never produced. Nothing checks the token a second time to get that.
-        if let (Some((cache, key)), Ok(value)) = (&keeping, &produced) {
-            cache.put_value(key, value);
+        // The sessions travel into the blocking closure and back out of it, so they are owned throughout the run and are
+        // held until this function returns — there is no window in which one could be found reclaimed. The error type is
+        // named rather than inferred: `Cancelled` converts into three of this crate's errors, and which one a shutdown is
+        // reported as is the choice being made here.
+        let (sessions, produced) = spawn_blocking::<_, InferenceError, _>(move || {
+            let report = |fraction: f64| reported.running(fraction);
+            let report = wanted.then_some(&report as &dyn Fn(f64));
+            let stopped = || cancelled.is_cancelled();
+
+            let produced = running.run(&input, &sessions, report, &stopped);
+
+            // Inside the same blocking call the run happened on, as the chain's write is: encoding and storing is I/O and
+            // belongs nowhere near the runtime, and there is a blocking thread here already.
+            //
+            // **Only a successful run writes.** A failed one and a cancelled one both arrive here as an `Err` — the
+            // pipeline returns the error rather than a value — so neither has a result to store, and a later run is never
+            // served something that was never produced. Nothing checks the token a second time to get that.
+            if let (Some((cache, key)), Ok(value)) = (&keeping, &produced) {
+                cache.put_value(key, value);
+            }
+
+            (sessions, produced)
+        })
+        .await?;
+
+        if matches!(produced, Err(InferenceError::Run { .. }))
+            && acquire::decline(backend, pipeline.as_ref(), &sessions, provider)
+        {
+            // Let go of before the retry acquires, so what they held on the device is freed for their replacement.
+            drop(sessions);
+            continue;
         }
 
-        (sessions, produced)
-    })
-    .await?;
+        break (sessions, produced);
+    };
 
     let value = produced?;
 
@@ -411,6 +428,10 @@ mod tests {
         /// A token cancelled while a session is being acquired, which is how a run is stopped *in flight* rather
         /// than before it starts.
         cancels: Option<CancellationToken>,
+        /// Where set, the providers `Auto` walks: a session is built on the one past every provider declined so far.
+        ladder: Vec<ExecutionProvider>,
+        /// How many providers the driver has declined.
+        declined: Mutex<usize>,
     }
 
     impl Fake {
@@ -421,6 +442,8 @@ mod tests {
                 built_on: ExecutionProvider::Cpu,
                 fails_to_open: None,
                 cancels: None,
+                ladder: Vec::new(),
+                declined: Mutex::new(0),
             }
         }
 
@@ -472,7 +495,18 @@ mod tests {
                 });
             }
 
-            Ok(SessionHandle::held((), self.built_on))
+            let built_on = self.ladder.get(*lock(&self.declined)).copied().unwrap_or(self.built_on);
+
+            Ok(SessionHandle::held((), built_on))
+        }
+
+        fn decline(&self, _artifact: &ArtifactId, provider: ExecutionProvider) -> bool {
+            if provider == ExecutionProvider::Cpu {
+                return false;
+            }
+
+            *lock(&self.declined) += 1;
+            true
         }
 
         stub_backend_runs!(
@@ -493,6 +527,8 @@ mod tests {
         Fails,
         /// Reports nothing and hands back an empty set, which is a legitimate finding.
         FindsNothing,
+        /// Fails on a session built on this provider, and succeeds on any other.
+        FailsOn(ExecutionProvider),
     }
 
     /// A data pipeline standing in for New York: it names artifacts, reports fractions, and answers with faces.
@@ -546,7 +582,13 @@ mod tests {
                 return Err(InferenceError::Cancelled);
             }
 
-            match self.behaviour {
+            let behaviour = match self.behaviour {
+                Behaviour::FailsOn(provider) if sessions[0].provider() == provider => Behaviour::Fails,
+                Behaviour::FailsOn(_) => Behaviour::Succeeds,
+                other => other,
+            };
+
+            match behaviour {
                 Behaviour::Succeeds => {
                     for fraction in [0.2, 0.6, 1.0] {
                         if let Some(progress) = progress {
@@ -573,6 +615,7 @@ mod tests {
                     })
                 }
                 Behaviour::FindsNothing => Ok(Faces::empty()),
+                Behaviour::FailsOn(_) => unreachable!("resolved to one of the two above"),
             }
         }
     }
@@ -768,6 +811,32 @@ mod tests {
         .expect("an image with no face is a successful detection");
 
         assert!(found.is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_analysis_that_throws_on_an_auto_accelerator_is_run_again_on_the_next_one() {
+        let mut backend = Fake::new();
+        backend.ladder = vec![ExecutionProvider::CoreMl, ExecutionProvider::WebGpu, ExecutionProvider::Cpu];
+
+        let pipeline =
+            FakePipeline::shared(&backend.log, &[Precision::Fp32], Behaviour::FailsOn(ExecutionProvider::CoreMl));
+        let (found, report) = drive(&backend, pipeline, ExecuteOptions::default()).await.expect("no retry");
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(backend.log().runs, 2);
+        assert_eq!(report.actual, vec![ExecutionProvider::WebGpu]);
+
+        // An explicit provider fails as it was asked for.
+        let mut backend = Fake::new();
+        backend.ladder = vec![ExecutionProvider::CoreMl, ExecutionProvider::WebGpu, ExecutionProvider::Cpu];
+        let pipeline =
+            FakePipeline::shared(&backend.log, &[Precision::Fp32], Behaviour::FailsOn(ExecutionProvider::CoreMl));
+        let options = ExecuteOptions { provider: ExecutionProvider::CoreMl, ..Default::default() };
+
+        let outcome = drive(&backend, pipeline, options).await;
+
+        assert!(matches!(outcome, Err(InferenceError::Run { .. })));
+        assert_eq!(backend.log().runs, 1);
     }
 
     #[tokio::test]
