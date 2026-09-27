@@ -80,7 +80,7 @@ pub struct Options {
     pub strength: f64,
 
     /// Blend bias, for the families whose published parameter is the bias.
-    #[arg(long, default_value_t = 0.0, value_parser = parse_bias, allow_negative_numbers = true)]
+    #[arg(long, default_value_t = 0.5, value_parser = parse_bias, allow_negative_numbers = true)]
     pub bias: f64,
 
     /// How closely a face recovery run keeps to the face it was given, for the variant that publishes a fidelity.

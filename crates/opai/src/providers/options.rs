@@ -270,6 +270,27 @@ fn coreml_options(paths: &CachePaths, profile: &EpProfile) -> BTreeMap<String, S
     ])
 }
 
+/// The WebGPU plugin options for a model with this profile: only what the profile sets, in the plugin's own short key
+/// spelling, and nothing at all for a profile that sets nothing.
+fn webgpu_options(profile: &EpProfile) -> BTreeMap<String, String> {
+    // Nothing is pinned, unlike the other three: the plugin's own defaults are what every unmeasured model runs with,
+    // and a sweep of the rest of its options on Paris found none that beats them. Two of them are worse than harmless —
+    // `uniformBufferCacheMode=bucket` corrupts the output and `enableGraphCapture` fails any graph with a node on the
+    // CPU — so they are not offered.
+    let mut options = BTreeMap::new();
+
+    if let Some(layout) = profile.webgpu_preferred_layout.as_str() {
+        options.insert("preferredLayout".to_string(), layout.to_string());
+    }
+
+    // Newline-separated, which is the plugin's own list format for this option.
+    if !profile.webgpu_force_cpu_nodes.is_empty() {
+        options.insert("forceCpuNodeNames".to_string(), profile.webgpu_force_cpu_nodes.join("\n"));
+    }
+
+    options
+}
+
 /// The session-level settings a model runs with, as opposed to the per-provider ones.
 ///
 /// These apply on **every** provider the model runs on, which is what makes them session settings rather than
@@ -357,8 +378,7 @@ pub(crate) fn plan(chain: ChainResolution, profile: &EpProfile, paths: &CachePat
                 Accelerator::TensorRt => tensorrt_options(paths, profile),
                 Accelerator::Cuda => cuda_options(profile),
                 Accelerator::CoreMl => coreml_options(paths, profile),
-                // Nothing pinned yet: the plugin's own defaults are what it was measured with.
-                Accelerator::WebGpu => BTreeMap::new(),
+                Accelerator::WebGpu => webgpu_options(profile),
             };
 
             ProviderOptions { provider, options }
@@ -553,6 +573,41 @@ mod tests {
     /// What one option map says for `key`, or a panic naming the key when it carries none.
     fn option<'a>(options: &'a BTreeMap<String, String>, key: &str) -> &'a str {
         options.get(key).unwrap_or_else(|| panic!("the option map carries no {key:?}")).as_str()
+    }
+
+    #[test]
+    fn webgpu_carries_nothing_for_a_profile_that_measured_nothing() {
+        // The plugin's defaults are what an unmeasured model runs with, so nothing is written on its behalf.
+        assert!(webgpu_options(&EpProfile::default()).is_empty());
+    }
+
+    #[test]
+    fn webgpu_writes_the_layout_and_the_forced_nodes_in_the_plugin_s_own_spelling() {
+        use super::super::profile::WebGpuLayout;
+
+        let profile = EpProfile {
+            webgpu_preferred_layout: WebGpuLayout::Nchw,
+            webgpu_force_cpu_nodes: vec!["node_pow_1".to_string(), "node_clamp".to_string()],
+            ..EpProfile::default()
+        };
+        let options = webgpu_options(&profile);
+
+        assert_eq!(options.len(), 2, "{options:?}");
+        assert_eq!(option(&options, "preferredLayout"), "NCHW");
+        // Newline-joined: the plugin splits this option on newlines, so any other separator names one node that
+        // does not exist and forces nothing.
+        assert_eq!(option(&options, "forceCpuNodeNames"), "node_pow_1\nnode_clamp");
+    }
+
+    #[test]
+    fn a_webgpu_plan_carries_the_profile_s_options() {
+        use super::super::profile::WebGpuLayout;
+
+        let profile = EpProfile { webgpu_preferred_layout: WebGpuLayout::Nchw, ..EpProfile::default() };
+        let plan = resolve(ExecutionProvider::WebGpu, no_accelerator().with_webgpu(true), &profile, &paths());
+
+        assert_eq!(plan.resolved(), ExecutionProvider::WebGpu);
+        assert_eq!(option(&plan.providers[0].options, "preferredLayout"), "NCHW");
     }
 
     #[test]

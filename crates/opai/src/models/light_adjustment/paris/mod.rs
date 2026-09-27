@@ -27,7 +27,7 @@
 // and it is wrong: the move then is to re-export the unfolded architecture, not to patch this one.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode};
+use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode, WebGpuLayout};
 
 // Why the canvas is a fixed square: a graph with dynamic spatial axes and a dynamic batch does not run on CoreML at
 // all. With static input shapes required — which is what a model declaring no profile gets — the provider declines
@@ -57,7 +57,8 @@ use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode};
 pub(crate) const CANVAS: u32 = 1024;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
-/// and sequential execution at FP16, and the provider defaults at FP32.
+/// and sequential execution at FP16, and at both precisions WebGPU's broken `Pow` left to the CPU and its layout set to
+/// NCHW.
 pub(crate) fn profile(precision: Precision) -> EpProfile {
     // Transcribed from the reference's `paris.go` and re-confirmed on this project's own sweep. Everything below is an
     // M2 Max against ONNX Runtime 1.26 at the 1024 square.
@@ -100,15 +101,44 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     //
     // The graph compiles as **one CoreML partition** at both precisions — 76 of 77 nodes at FP16, 75 of 75 at FP32 —
     // which is what the fixed square is for, and is checked the same way Lyon's precondition is.
+    //
+    // The WebGPU settings are on both precisions, and the first of them is not tuning. The plugin compiles the graph's
+    // one `Pow` — the photograph raised to the predicted gamma, a full-size tensor against a `[1,1,1,1]` exponent — into
+    // a WGSL shader that fails validation (*"type mismatch for argument 2 in call to 'pow_v', expected 'vec4<f32>', got
+    // 'f32'"*), and the first `Run` then aborts the whole process with an uncaught `std::out_of_range`. No fallback can
+    // catch an abort, so without this Paris takes the application down on every machine where WebGPU is the GPU.
+    // Leaving that one node to the CPU provider is the only option that avoids it, and it costs nothing measurable:
+    // the result matches CoreML's to 89.9 dB at FP32.
+    //
+    // NCHW over the plugin's NHWC default is the one tuning option that measured outside run-to-run spread, -6.1% at
+    // FP32 and -7.3% at FP16 end to end, with identical output. Everything else the plugin offers was swept on the same
+    // machine against the plugin 0.4.0 and landed within ±2% or worse — see `providers::options::webgpu_options`.
+    //
+    //   paris, perftest -p webgpu --bias 1 -n 20, 3 rounds     FP32        FP16
+    //     node_pow_1 on the CPU                                104.5ms      97.5ms
+    //     + preferredLayout=NCHW                               98.2ms      90.4ms
+    //     CoreML, for comparison                               55.7ms      54.9ms
+    //
+    // FP16 on WebGPU is known to be off on the plugin 0.4.0 — 25.2 dB against CoreML's FP16 result, about 13 levels
+    // darker on average — and runs as asked regardless.
+    let webgpu = EpProfile {
+        webgpu_preferred_layout: WebGpuLayout::Nchw,
+        webgpu_force_cpu_nodes: vec![POW.to_string()],
+        ..EpProfile::default()
+    };
+
     match precision {
         Precision::Fp16 => EpProfile {
             coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
             execution_mode: ExecutionMode::Sequential,
-            ..EpProfile::default()
+            ..webgpu
         },
-        _ => EpProfile::default(),
+        _ => webgpu,
     }
 }
+
+/// The name of the graph's one `Pow` node, whose WebGPU kernel is broken — both precisions carry it under this name.
+const POW: &str = "node_pow_1";
 
 #[cfg(test)]
 mod tests {
@@ -117,8 +147,17 @@ mod tests {
     use crate::models::light_adjustment::LightAdjustmentVariant;
     use crate::models::precision::FloatPrecision;
 
+    /// The WebGPU half of the profile, which both precisions carry.
+    fn webgpu() -> EpProfile {
+        EpProfile {
+            webgpu_preferred_layout: WebGpuLayout::Nchw,
+            webgpu_force_cpu_nodes: vec!["node_pow_1".to_string()],
+            ..EpProfile::default()
+        }
+    }
+
     #[test]
-    fn paris_carries_exactly_the_two_measured_settings_at_fp16() {
+    fn paris_carries_exactly_the_measured_settings_at_fp16() {
         // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
         // refactor can break: nothing else asserts the arm reaches this file, and a profile that had been left at
         // the default would still load, still adjust the right photograph, and cost twice as much on an M2 Max.
@@ -127,21 +166,28 @@ mod tests {
             EpProfile {
                 coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
                 execution_mode: ExecutionMode::Sequential,
-                ..EpProfile::default()
+                ..webgpu()
             },
-            "Paris at FP16 is not the pair of settings measured for it"
+            "Paris at FP16 is not the settings measured for it"
         );
     }
 
     #[test]
-    fn paris_declares_nothing_at_fp32() {
-        // The other half, and the claim rather than a formality: carrying the FP16 answer across would be applying a
-        // measurement to a precision that did not earn it — see `profile`'s FP32 figures.
+    fn paris_declares_only_the_webgpu_settings_at_fp32() {
+        // Carrying the FP16 CoreML answer across would be applying a measurement to a precision that did not earn it —
+        // see `profile`'s FP32 figures. The WebGPU half is the exception, because without it the graph aborts.
         assert_eq!(
             LightAdjustmentVariant::Paris(FloatPrecision::Fp32).profile(),
-            EpProfile::default(),
+            webgpu(),
             "Paris at FP32 declared a setting nothing measured"
         );
+    }
+
+    #[test]
+    fn the_node_forced_off_webgpu_is_named_as_it_is_in_the_graph() {
+        // An unrecognised name is ignored by the plugin rather than reported, so a rename here would silently bring
+        // the abort back. Pinned as a literal, as the export names it at both precisions.
+        assert_eq!(POW, "node_pow_1");
     }
 
     #[test]

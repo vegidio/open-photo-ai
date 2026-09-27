@@ -40,7 +40,7 @@ obtaining the model.
   provider   Auto (this machine supports: CPU, CoreML)
   precision  fp32
   runs       3 timed, 1 warm-up   (cold start measured after the warm-up, so it excludes obtaining the model)
-  params     scale 4, strength 1, bias 0
+  params     scale 4, strength 1, bias 0.5
   cache      off — timings are inference, not encoding and storing the result   (store: Disk)
   log        ~/Library/Application Support/io.vinicius.opai/logs/opai.log
   models     1 selected
@@ -188,7 +188,7 @@ crash inside ONNX Runtime cannot leave the shell without an echo.
 | `--precision`      | `fp32`     | `fp32`, `fp16` or `int8`. Not every variant publishes every one.    |
 | `-s`, `--scale`    | `4`        | For the families whose published parameter is the scale.            |
 | `--strength`       | `1`        | For the families whose published parameter is the strength.         |
-| `--bias`           | `0`        | For the families whose published parameter is the bias.             |
+| `--bias`           | `0.5`      | For the families whose published parameter is the bias.             |
 | `--image <PATH>`   | the sample | Measure a photograph of your own instead.                           |
 | `--cache`          | off        | See below.                                                          |
 | `--skip-verify`    | off        | See below.                                                          |

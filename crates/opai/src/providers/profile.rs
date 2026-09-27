@@ -22,8 +22,8 @@ pub(crate) struct EpProfile {
     // `cuda_prefer_nhwc`. A default that changes nothing is what lets every variant answer `profile()` while only the
     // ones that were actually measured say anything.
     //
-    // Seven fields rather than the reference implementation's fifteen. Those seven are what its twelve measured
-    // profiles actually set; the eight it keeps permanently unset — `Fp16`, `TrtShapes`, `TrtWorkspaceBytes`,
+    // Seven fields rather than the reference implementation's fifteen, plus the two WebGPU ones it never had. Those
+    // seven are what its twelve measured profiles actually set; the eight it keeps permanently unset — `Fp16`, `TrtShapes`, `TrtWorkspaceBytes`,
     // `CudaOptions`, `Extra`, `GraphOptimization`, `DynamicShapes` and `ExcludeEPs` — are omitted along with the
     // chain-substitution logic `ExcludeEPs` alone justifies. Their default behaviour is reproduced exactly, so no model
     // runs differently for their absence, and a typed field is added the day a model needs one.
@@ -112,6 +112,23 @@ pub(crate) struct EpProfile {
     /// and the fallback moves the graph to the next provider in the chain as a reported downgrade. A typo here costs
     /// the GPU rather than a setting.
     pub(crate) trt_options: BTreeMap<String, String>,
+
+    // Per model and per precision, like `cuda_prefer_nhwc`, because what decides it is which layouts the plugin's WGSL
+    // kernels are fastest in at the shapes a graph asks for. NHWC is the plugin's own default; Paris measures -6.1% at
+    // FP32 and -7.3% at FP16 from NCHW on an M2 Max, end to end, with identical output.
+    /// The data layout the WebGPU plugin prefers for its layout-sensitive kernels, or its own default.
+    pub(crate) webgpu_preferred_layout: WebGpuLayout,
+
+    // A correctness setting rather than tuning: the escape hatch for a node whose WebGPU kernel is broken, which the
+    // plugin otherwise runs and fails on — sometimes by aborting the process, which no fallback can catch. The node then
+    // runs on the CPU provider, at the cost of a copy off the GPU and back.
+    //
+    // Only nodes **in the file** can be named. The runtime expands some ops (`Softmax`, `LeakyRelu`) into unnamed
+    // primitives before the plugin sees them, and those cannot be reached from here.
+    /// Graph nodes, by name, the WebGPU plugin must leave to the CPU provider.
+    ///
+    /// An unrecognised name is ignored rather than reported.
+    pub(crate) webgpu_force_cpu_nodes: Vec<String>,
 }
 
 // Established by measurement rather than taken from a binding's documentation, because getting it wrong is invisible:
@@ -196,6 +213,28 @@ impl CoreMlSpecialization {
     }
 }
 
+/// The data layout the WebGPU plugin prefers for its layout-sensitive kernels.
+///
+/// No NHWC arm: it is the plugin's own default, which [`Default`](Self::Default) already leaves in place.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum WebGpuLayout {
+    /// The plugin's own default, which is NHWC. Nothing is written into the option map.
+    #[default]
+    Default,
+    /// Channels first.
+    Nchw,
+}
+
+impl WebGpuLayout {
+    /// The value the plugin's `preferredLayout` option takes, or `None` for the plugin's own default.
+    pub(crate) const fn as_str(self) -> Option<&'static str> {
+        match self {
+            Self::Default => None,
+            Self::Nchw => Some("NCHW"),
+        }
+    }
+}
+
 /// Whether ONNX Runtime may run independent branches of a graph on separate threads.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum ExecutionMode {
@@ -224,6 +263,14 @@ mod tests {
         assert!(profile.disabled_optimizers.is_empty(), "an optimizer was disabled before anything was measured");
         assert!(!profile.cuda_prefer_nhwc, "NCHW is the runtime's own default and stays the default here");
         assert!(profile.trt_options.is_empty(), "a TensorRT override was applied before anything was measured");
+        assert_eq!(profile.webgpu_preferred_layout, WebGpuLayout::Default);
+        assert!(profile.webgpu_force_cpu_nodes.is_empty(), "a node was forced off WebGPU before anything was measured");
+    }
+
+    #[test]
+    fn each_webgpu_layout_renders_the_value_the_plugin_takes() {
+        assert_eq!(WebGpuLayout::Default.as_str(), None);
+        assert_eq!(WebGpuLayout::Nchw.as_str(), Some("NCHW"));
     }
 
     #[test]

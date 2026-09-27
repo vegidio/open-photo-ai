@@ -928,10 +928,13 @@ pub(crate) mod tests {
             let measured_arm = match &operation {
                 Operation::Upscale(upscale) => measured.contains(&upscale.variant()),
                 Operation::FaceRecovery(_) => true,
-                // Both variants, at FP16 **only**, which is the one family here that splits by precision on its own
-                // carrier rather than inside a list of upscale arms. Every figure behind either declaration is an
-                // FP16 measurement; see each model's own directory for which settings and why they disagree.
-                Operation::LightAdjustment(adjustment) => adjustment.precision() == Precision::Fp16,
+                // Both variants at FP16, which is the one family here that splits by precision on its own carrier
+                // rather than inside a list of upscale arms; see each model's own directory for which settings and why
+                // they disagree. Paris at FP32 too, for its WebGPU settings alone, which `paris` pins.
+                Operation::LightAdjustment(adjustment) => {
+                    adjustment.precision() == Precision::Fp16
+                        || matches!(adjustment.variant(), LightAdjustmentVariant::Paris(_))
+                }
                 // Rio at FP16 alone, and the arm is written as a variant test rather than a precision one for a
                 // reason this family is the first to need: **São Paulo is unmeasured at both precisions**, so a
                 // precision-only answer here would demand a profile of a graph nobody has run a sweep against.

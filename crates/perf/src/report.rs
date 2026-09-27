@@ -486,7 +486,7 @@ mod tests {
         assert!(rendered.contains("7 timed, 2 warm-up"), "{rendered}");
         assert!(rendered.contains("scale 4"), "{rendered}");
         assert!(rendered.contains("strength 1"), "{rendered}");
-        assert!(rendered.contains("bias 0"), "{rendered}");
+        assert!(rendered.contains("bias 0.5"), "{rendered}");
         assert!(rendered.contains("off"), "{rendered}");
         assert!(rendered.contains("store: disk"), "{rendered}");
         assert!(rendered.contains("/config/logs/opai.log"), "{rendered}");

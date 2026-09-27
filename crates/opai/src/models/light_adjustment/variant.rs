@@ -179,17 +179,18 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn only_the_fp16_arms_declare_a_profile() {
-        // Both halves of the precision split, across the whole family. Every figure behind either declaration is an
-        // FP16 measurement — an FP32 MLProgram cannot reach the Neural Engine in the first place, so there is
+    fn only_the_fp16_arms_and_paris_declare_a_profile() {
+        // Both halves of the precision split, across the whole family. Every CoreML figure behind either declaration
+        // is an FP16 measurement — an FP32 MLProgram cannot reach the Neural Engine in the first place, so there is
         // nothing at FP32 for a compute-unit restriction to buy — and a profile applied to a precision it was not
-        // measured at is a slower session with nothing to report it.
+        // measured at is a slower session with nothing to report it. Paris at FP32 is the exception, for its WebGPU
+        // settings alone; which ones is pinned in `paris`.
         for variant in every_variant() {
             let declared = variant.profile() != EpProfile::default();
 
             assert_eq!(
                 declared,
-                variant.precision() == Precision::Fp16,
+                variant.precision() == Precision::Fp16 || matches!(variant, LightAdjustmentVariant::Paris(_)),
                 "{variant:?} declared a profile at a precision nothing measured it at"
             );
         }
