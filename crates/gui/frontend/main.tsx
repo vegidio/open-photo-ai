@@ -16,6 +16,7 @@ import "@/i18n";
 import { appVersion, telemetryIds } from "@/ipc/app";
 import { windowReady } from "@/ipc/window";
 import { mirrorAnalytics } from "@/lib/analytics";
+import { suppressContextMenu } from "@/lib/contextMenu";
 import { startFaro } from "@/lib/faro";
 import { report } from "@/lib/report";
 import { watchUnhandled } from "@/lib/unhandled";
@@ -46,6 +47,11 @@ mirrorAnalytics();
 // Before the app mounts too, so a failure in the first render's own effects is recorded. Never removed,
 // for the same reason.
 watchUnhandled();
+
+// Before the app mounts, so there is no moment where a right-click opens the browser's menu. Never removed.
+if (import.meta.env.PROD) {
+    suppressContextMenu();
+}
 
 /**
  * Shows the window, once React has a tree in the DOM.

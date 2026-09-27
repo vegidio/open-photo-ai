@@ -292,6 +292,17 @@
         -webkit-user-select: text;
         user-select: text;
     }
+
+    /*
+     * The same desktop-app rule for scrolling: a two-finger swipe over a window with nothing to scroll
+     * should do nothing, but WebKit rubber-bands the whole page past its edges. Both elements, because
+     * WebKit reads the root's value from `html` and older builds from `body`. Panels that do scroll keep
+     * their own bounce; a swipe that runs off their end no longer chains into the page.
+     */
+    html,
+    body {
+        overscroll-behavior: none;
+    }
 }
 
 /*
