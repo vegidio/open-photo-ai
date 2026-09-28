@@ -74,7 +74,7 @@
                     "description": "बिना बिल्ड चरण के मॉडल को NVIDIA GPU पर चलाता है। इंजन बन जाने के बाद TensorRT से धीमा।"
                 },
                 "coreml": {
-                    "description": "मॉडल को Apple Neural Engine और GPU पर चलाता है। CPU से कहीं तेज़, हालाँकि हर मॉडल इसका उपयोग नहीं कर सकता।"
+                    "description": "मॉडल को Apple Neural Engine और GPU पर चलाता है। CPU से कहीं तेज़, और Apple Silicon वाले Mac पर सबसे तेज़ विकल्प।"
                 },
                 "webgpu": {
                     "description": "मॉडल को किसी भी निर्माता के किसी भी आधुनिक GPU पर चलाता है। CPU से काफ़ी तेज़, हालाँकि आमतौर पर निर्माता-विशिष्ट विकल्प से धीमा।"

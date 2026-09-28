@@ -5,216 +5,99 @@ import type { Face } from "./faces";
 import { call } from "./invoke";
 import type { SupportedProviders } from "./setup";
 
-/**
- * The names of the Rust commands, written out once on this side of the boundary.
- *
- * Each is written a second time in `crates/gui/src/enhance/mod.rs`, as the name of a function carrying
- * `#[tauri::command]`, and nothing in either toolchain notices when one of the two is renamed alone:
- * a rename here is not a type error, it is an `invoke` that rejects at runtime. `enhance.test.ts`
- * pins this half; the Rust half is pinned by `generate_handler![]` refusing to compile against a
- * function that does not exist.
- */
+/** Rust command names. Must match `#[tauri::command]` functions in `crates/gui/src/enhance/mod.rs`; renames aren't type-checked across the IPC boundary. */
 const ENHANCE_COMMAND = "enhance";
 const CANCEL_ENHANCE_COMMAND = "cancel_enhance";
 const RELEASE_ENHANCED_COMMAND = "release_enhanced";
 const RELEASE_ALL_ENHANCED_COMMAND = "release_all_enhanced";
 
-/**
- * The event a run's progress reports arrive under, written a second time in `crates/gui/src/enhance/progress.rs`
- * as `PROGRESS_EVENT`.
- *
- * A global event rather than a channel, unlike `initialize`'s. The two differ in what a late listener
- * costs: setup's plan fires within milliseconds of the command starting and a listener registered in
- * parallel with the invoke can miss it, which is unrecoverable. Here every report names its own run,
- * so a window that subscribes once can tell a report about the run it is drawing from one about a run
- * it has abandoned - which is also what a channel per call could not do, since a displaced run's
- * channel goes on delivering.
- */
+/** Event name for run progress, matching `PROGRESS_EVENT` in `crates/gui/src/enhance/progress.rs`. Global (not per-call) since reports carry their own run id, letting listeners filter stale runs. */
 const PROGRESS_EVENT = "enhance:progress";
 
-/**
- * The processor to run on, spelled as the settings store spells it.
- *
- * Derived from `SupportedProviders` rather than written out, for the reason `stores/settings.ts`
- * gives about its own identical derivation: a provider the library adds and `ipc/setup.ts` names
- * arrives in this type without this file being edited, and one renamed on the wire is a type error
- * rather than an option that quietly stops matching.
- *
- * These are the wire's field names (`tensorrt`), not the library's own enum spellings (`TensorRT`).
- * Rust translates once, in `enhance/run.rs`, because two spellings of one provider is the drift both
- * sides are spent avoiding.
- */
+/** Processor selector, derived from `SupportedProviders` to stay in sync with backend-added providers. Uses wire spellings (e.g. `tensorrt`), translated to library enum spellings in `enhance/run.rs`. */
 export type Processor = "auto" | keyof SupportedProviders;
 
 /**
- * One operation to run, as the window names it: a catalogue row, a precision, and the values of the row's
- * parameters.
+ * One operation in a chain: a catalogue row, precision, and parameter values.
  *
- * **Spelled in the catalogue's own vocabulary**, so a chooser and a control built from the catalogue send
- * back exactly what they read: `family` as Rust's `Family` spells it, `codename` and `precision` as
- * `VariantEntry` publishes them, and each range parameter under the `ParameterEntry.name` it is published
- * with. Rust matches a name onto the library's own bounded type (`ParameterValues::set`), so neither side
- * keeps a table of which family takes which parameter - the row says so.
- *
- * **Not a composed string.** The Wails application builds `up_kyoto_2x_fp32` here and parses it back
- * in Go, and its own comment records the cost: the string is a contract in three places at once. None
- * of those forces apply here - the run cache key is derived inside the library from the operation
- * itself, and the pixels travel over the `opai://` scheme rather than through a cache of this side's
- * own.
- *
- * Detection is not a family an operation can name: the window asks for faces through its own command,
- * never as an operation in a chain.
+ * Spelled in the catalogue's vocabulary (`family`, `codename`, `precision`, parameter names) so Rust can match
+ * directly without a lookup table. Not a composed string like `up_kyoto_2x_fp32` — avoids a triple contract.
+ * `detection` is excluded; faces are fetched via a separate command.
  */
 export type Operation = {
     family: Exclude<Family, "detection">;
-    /** Which model, as `VariantEntry.codename` publishes it. */
+    /** Model name, per `VariantEntry.codename`. */
     codename: string;
-    /** Which build of it, as `VariantEntry.precisions` publishes them. */
+    /** Build variant, per `VariantEntry.precisions`. */
     precision: Precision;
     /**
-     * Each range parameter's value, by the name the catalogue publishes it under - `scale`, `strength`,
-     * `bias`, `fidelity` - in the library's own unit rather than the percentage a control shows.
-     *
-     * **Starts at the catalogue's published defaults** (`newOperation` in `lib/enhancements.ts`), and an
-     * upscale's scale at the photograph's own. Brought inside the published range rather than refused on
-     * the Rust side: the control that drives a value is bounded to the same range, so one outside it can
-     * only arrive through a fault, and a refused enhancement is not what a user should see for one. The
-     * fault stays in the Rust log.
-     *
-     * Empty for a family that takes none.
+     * Parameter values by catalogue name (`scale`, `strength`, etc.), in library units.
+     * Starts at catalogue defaults; out-of-range values are clamped rather than rejected, since a bad value
+     * can only come from a fault, not user input.
      */
     parameters: Record<string, number>;
     /**
-     * Which of the faces the run finds a face recovery restores - a face recovery's only.
-     *
-     * **Not the faces.** Rust finds them inside the run it is asked for, so a face recovery is one
-     * request with one progress stream and one stop; this says which of them to keep. **Absent in the
-     * stack, filled at the boundary**: the stack holds what the user chose about the enhancement, and the
-     * choice among faces is kept beside the faces in `stores/faces.ts`. `withChoice` in `lib/faces.ts` puts
-     * it in on the way to {@link enhance}. A recovery that carries none restores every face the default
-     * restores.
+     * Face-recovery exceptions to restore, if any. Not the face list itself — just the user's picks,
+     * merged in by `withChoice` in `lib/faces.ts` before calling {@link enhance}.
      */
     faces?: FaceChoice;
 };
 
-/**
- * Which of the faces found a face recovery restores: the user's own exceptions to the default, by the key
- * Rust publishes on each face.
- *
- * The default is the face's own `restorable`. `skipped` holds the faces the user turned off although the
- * default would restore them, and `restored` the ones turned on although it would not. A face in neither
- * follows the default - which is why a framing nobody has been at is decided by size, and one returned to
- * finds the user's choices where they were left. Rust's `FaceChoice` in `crates/gui/src/faces.rs`.
- */
+/** User overrides to the default face-recovery selection, keyed by Rust's per-face id. Mirrors Rust's `FaceChoice` in `crates/gui/src/faces.rs`. */
 export type FaceChoice = { skipped: string[]; restored: string[] };
 
-/** What a report says is happening, as Rust's `Stage` spells it. */
+/** Current run phase, per Rust's `Stage`. */
 type Stage = "installing" | "running";
 
 /**
- * One report about a run in flight.
+ * One progress report for a run.
  *
- * `stage` is **absent** for an operation whose result the application already had. It was neither
- * fetched nor run, and reporting it as running at completion would jump the bar a whole operation's
- * width with no explanation - so a chain made entirely of such operations finishes without ever
- * saying it did any work, and the interface draws no indicator at all.
- *
- * `installFraction` is the second number and is absent unless a model is actually being fetched. Both
- * are needed while one is: a fetch occupies only the head of one operation's share of the chain, so a
- * bar tracking `chainFraction` barely moves during one, and a multi-gigabyte download without its own
- * figure is indistinguishable from a stall.
- *
- * Reports are thinned in Rust, to about a hundred per run - a tiled upscale produces thousands and an
- * indicator has about a hundred positions. Nothing here needs to throttle again.
+ * `stage` is absent when the operation's result was cached (no work done, no progress jump).
+ * `installFraction` appears only during an active model download, since `chainFraction` alone barely
+ * moves during a large fetch. Reports are pre-throttled by Rust to ~100 per run.
  */
 export type RunProgress = {
-    /** Which run this is about. A report naming a run the window has abandoned is discardable. */
+    /** Run this report belongs to; discard if it's not the run you're tracking. */
     run: string;
-    /**
-     * The operation being carried out, as a user would see it named: `Kyoto 4x (FP16)`.
-     *
-     * A diagnostic, composed in English by the library. Right for a log and untranslatable by a
-     * front end, which is why the family travels beside it.
-     */
+    /** Human-readable operation name (English, untranslated diagnostic), e.g. "Kyoto 4x (FP16)". */
     operation: string;
-    /**
-     * Which enhancement the operation belongs to, spelled as the catalogue spells it.
-     *
-     * What a chip over the preview names the operation from, in the language the rest of the window
-     * is speaking. {@link RunProgress.operation} cannot answer that - it is a sentence the library
-     * is free to reword - and reconstructing it from the chain the window sent would be right only
-     * while a chain held one operation of each family.
-     *
-     * Reported for every stage alike, including an operation whose result was already known: it did
-     * no work, but it still belongs to an enhancement.
-     */
+    /** Enhancement family this operation belongs to — used for UI labeling since `operation` can't be localized. */
     family: Family;
     stage?: Stage;
-    /** `0..1`. Never decreases over a run, and reaches 1 exactly once. */
+    /** `0..1`, monotonic, reaches 1 exactly once. */
     chainFraction: number;
-    /** `0..1` through the fetch itself, while one is happening. */
+    /** `0..1` progress of an active model download, if any. */
     installFraction?: number;
-};
+}
 
 /**
- * How a run ended.
- *
- * Two outcomes rather than one and a rejection, because **a stop is not a failure**: a user who has
- * changed their mind has not been told their enhancement broke. Both resolve; what a caller branches
- * on is `outcome`.
- *
- * The enhanced arm carries a description and not the pixels. A fourfold enlargement is tens of
- * megabytes, and putting it here would put it on the message channel and make this side responsible
- * for holding it. `identity` is the address `renditionUrl` draws it from, exactly as an opened file's is.
+ * Outcome of a run: either enhanced or stopped (never a rejection for a user-initiated stop).
+ * Carries a result *description*, not pixels — those are fetched separately via `identity`.
  */
 export type Enhancement =
     | {
-          outcome: "enhanced";
-          /**
-           * What the result's pixels are addressed by, composed from the source's identity and every
-           * operation applied - so a second chain over the same photograph is never mistaken for this
-           * one.
-           */
-          identity: string;
-          width: number;
-          height: number;
-          /**
-           * Every face found in the photograph as it is framed, for a chain carrying a face recovery - the
-           * run finds them itself. What the window counts and offers the picker over, chosen or not.
-           * Absent for a chain that looked for none, and for one whose detection failed.
-           */
-          faces?: Face[];
-          /**
-           * Why the faces could not be found, where they could not: the core library's own sentence,
-           * untranslated. The recovery then restored none and the rest of the chain ran anyway.
-           */
-          facesError?: string;
-      }
-    /**
-     * The run was stopped - by {@link cancelEnhance}, or by a later run displacing it.
-     *
-     * **A superseded run resolves this way too**, even one that finished its work before noticing it
-     * had been displaced: the backend dropped its pixels when it took the slot for the successor, so
-     * there is no address to draw. A caller branches on `outcome` and never has to ask whether the
-     * run it is holding is still the current one.
-     */
+    outcome: "enhanced";
+    /** Address for fetching result pixels, derived from source identity + operations applied. */
+    identity: string;
+    width: number;
+    height: number;
+    /** Faces found, for chains with face recovery. Absent if none were sought or detection failed. */
+    faces?: Face[];
+    /** Detection failure message (untranslated); recovery then restored nothing but the chain continued. */
+    facesError?: string;
+}
+    /** Stopped via {@link cancelEnhance} or superseded by a later run — including one that finished but was discarded. */
     | { outcome: "stopped" };
 
-/** Why an operation could not be run, as Rust's `UnknownOperation` tags it. */
+/** Reason an operation couldn't run, per Rust's `UnknownOperation`. */
 type UnknownOperation =
     | { kind: "model"; family: string; codename: string }
     | { kind: "precision"; codename: string; precision: Precision }
     | { kind: "parameter"; name: string };
 
 /**
- * Why the `enhance` command rejected.
- *
- * `kind` is the `#[serde(tag = "kind")]` on Rust's `EnhanceError`. A stop is deliberately **not** one
- * of these - see {@link Enhancement}.
- *
- * `message`, where a member carries one, is the core library's own sentence, composed in English and
- * shown untranslated: it is a diagnostic to be copied into a bug report, and a translated one is a
- * diagnostic nobody reading the report can search for. That is the same rule `ipc/setup.ts` records.
+ * Reason the `enhance` command rejected (excludes user-initiated stops — see {@link Enhancement}).
+ * `message` fields are untranslated English diagnostics, meant for bug reports.
  */
 export type EnhanceError =
     | { kind: "notReady" }
@@ -224,138 +107,61 @@ export type EnhanceError =
     | { kind: "enhance"; message: string };
 
 /**
- * A name for one run, unique within this application.
- *
- * The prefix is drawn once per load of this module and the counter runs within it, so two runs of one
- * session differ and a run from before a reload cannot collide with one after it. The second half
- * matters: the Rust slot outlives the webview, and a name reused across a reload could land a stop
- * that was meant for the previous page's run on this page's.
- *
- * Not `crypto.randomUUID()`, which would be the obvious reach: it needs a secure context, and what is
- * wanted here is a name the backend compares for equality and nothing more. Nothing about a run is
- * guessable-sensitive.
+ * Unique run name generator. Session-scoped prefix + counter avoids collisions across reloads, since the
+ * Rust-side run slot outlives the webview. Not `crypto.randomUUID()` — no need for cryptographic randomness.
  */
 const SESSION = Math.random().toString(36).slice(2, 10);
 let minted = 0;
 
-/**
- * A name for one run reported on {@link onEnhanceProgress}, unique within this application.
- *
- * Exported because a detection is the second thing reported on that event, and `ipc/faces.ts` mints its
- * name from here rather than keeping a counter of its own. **One counter is what makes a detection and
- * an enhancement unable to share a name**, which matters: the window filters progress reports by the
- * run it is drawing, and two independent counters could hand the same string to both.
- */
+/** Mints a unique run name for {@link onEnhanceProgress}. Exported so `ipc/faces.ts` shares the same counter/namespace as enhancement runs. */
 export const mintRun = () => `${SESSION}-${++minted}`;
 
 /**
- * Run a chain of enhancements over an open image.
+ * Runs a chain of enhancements over an open image.
  *
- * Answers **the run's name straight away**, beside the promise of its outcome. That is the whole
- * shape of this function and the reason it is not simply `async`: a stop and its run cross the
- * boundary independently and either may arrive first, so an effect that starts a run needs the name
- * of the thing its cleanup will stop before the promise settles.
- *
+ * Returns the run name immediately (not just a promise), since a stop can race the run and needs the name
+ * before the promise settles:
  * ```ts
  * useEffect(() => {
  *     const { run, done } = enhance(identity, operations, processor);
  *     done.then(draw);
- *
  *     return () => cancelEnhance(run);
  * }, [identity, operations, processor]);
  * ```
  *
- * **Asking for a run stops whatever was running.** The backend enforces that rather than trusting
- * this side to ask, so an unmount or a fault here cannot leave a run holding models in memory and
- * occupying the processor it was given. The explicit stop above is still needed for the case a new
- * run does not cover: removing the only enhancement, or moving to a photograph with none.
+ * Starting a run always stops any run in progress (enforced backend-side). `source` must be a previously
+ * opened image's identity. `crop`, if given, runs the chain over the framed pixels only; omitted means the
+ * whole photograph. An empty `operations` chain is valid and resolves with the source's own identity.
  *
- * `source` is the identity of an image the user opened - the same one `renditionUrl` draws it from.
- * An identity the application never admitted is rejected; a location is not an identity at all.
- *
- * `crop` is how the user has framed that image, or absent to run over the whole photograph. **The
- * chain runs over the framed pixels**, so the result is the enhancement of what the window is
- * drawing rather than of the file, and two framings of one photograph answer two different results -
- * neither of which can be served where the other was asked for. A framing that changes nothing costs
- * nothing: Rust answers the source picture unchanged, so opening the framing controls and dismissing
- * them does not discard what has already been computed.
- *
- * The same value goes on a rendition URL through `cropQuery`, in a different spelling. That is two
- * encodings of one {@link CropInfo} because there are two doors, and each is pinned by a test on
- * both sides of the boundary.
- *
- * **An empty chain is a request, not a mistake.** A user who has toggled every enhancement off is
- * asking a meaningful question, and it resolves with the source's own identity.
- *
- * Rejects with the serialized {@link EnhanceError}, typed as `unknown` because that is what an
- * `invoke` rejection is - a promise carries no type for it.
+ * Rejects with a serialized {@link EnhanceError} (typed `unknown`, as `invoke` rejections carry no type).
  */
 export const enhance = (source: string, operations: Operation[], processor: Processor, crop?: CropInfo) => {
-    // Before the invoke, which is what `enhance.test.ts` pins: the caller has the name of the run in
-    // the same turn it asked for it, so a cleanup that runs before the command has even been
-    // dispatched still has something to name.
+    // Minted before the invoke so a cleanup racing the dispatch still has a name to cancel.
     const run = mintRun();
 
-    // `crop` is sent as `undefined` rather than omitted from the object, which serde reads as the
-    // `Option<Crop>` being `None` - the same thing an absent key would mean, spelled where a reader
-    // can see that no framing was sent.
     return { run, done: call<Enhancement>(ENHANCE_COMMAND, { run, source, operations, processor, crop }) };
 };
 
 /**
- * Stop a run this window asked for, by the name {@link enhance} handed back.
- *
- * **Does nothing unless that run is still the one in flight.** A stop for a run the backend has
- * already displaced arrives in the ordinary course of changing an enhancement - this side's cleanup
- * and its next request race - and acting on it would stop the run the user is waiting for.
- *
- * A stop that arrives *before* its own run still lands on it, which is the other half of why the name
- * is minted here rather than returned by the command.
- *
- * Resolves whatever happened; there is no outcome to act on, and a run that had already finished is
- * not an error.
+ * Stops a run by the name {@link enhance} returned.
+ * No-op if that run isn't the one currently in flight (e.g. already superseded) — protects against racing
+ * a cleanup against a newer request. Also works if called before its own run starts. Never rejects.
  */
 export const cancelEnhance = (run: string) => call<void>(CANCEL_ENHANCE_COMMAND, { run });
 
 /**
- * Subscribe to every run's progress reports.
- *
- * One subscription for the application rather than one per run: each report names its own run, so a
- * listener compares {@link RunProgress.run} against the run it is drawing and discards the rest. A
- * displaced run goes on reporting until it notices it has been stopped, and this is what makes those
- * reports discardable rather than confusing.
- *
- * Resolves with the function that removes the listener, as `listen` does.
+ * Subscribes to progress reports for all runs. One global listener rather than per-run, since each report
+ * carries its own {@link RunProgress.run} id for filtering. Returns the unsubscribe function.
  */
 export const onEnhanceProgress = (handler: (report: RunProgress) => void) =>
     listen<RunProgress>(PROGRESS_EVENT, (event) => handler(event.payload));
 
 /**
- * Release the enhanced result made from an image that has been closed.
- *
- * **Names the image, not the result.** The identity is the one on the `ImageRecord` the file store is
- * removing, so nothing has to be looked up to make the call - and naming it is what makes the race
- * safe: closing one photograph while a run over another is in flight is ordinary, and a release
- * meaning "drop whatever you hold" would throw away that run's result.
- *
- * **This is what stops a large result staying resident for the session.** The backend drops the pixels
- * it holds when a later run displaces them, and until this existed that was the only thing that did -
- * so a user who enhanced a large scan, looked at it and closed it held gigabytes until they enhanced
- * something else.
- *
- * A release naming a photograph the backend holds no result for does nothing, and a run still in
- * flight is left for {@link cancelEnhance} to stop.
- *
- * Resolves whatever happened; there is no outcome to act on. A rejection loses nothing the user can
- * see - the pixels simply stay resident until the next run displaces them, which is what used to
- * happen always - so the caller logs it rather than surfacing it.
+ * Releases the enhanced result for a closed image, identified by the image's identity (not the result's).
+ * This is what frees a large enhanced result from memory once its photo is closed. No-op if nothing is
+ * held for that identity; an in-flight run is left to {@link cancelEnhance}. Never rejects meaningfully.
  */
 export const releaseEnhanced = (identity: string) => call<void>(RELEASE_ENHANCED_COMMAND, { identity });
 
-/**
- * Release the enhanced result, because every image has been closed.
- *
- * The counterpart to {@link releaseEnhanced} for emptying the window at once, on the same terms: a run
- * in flight is left to its own stop, and nothing here is worth surfacing to the user.
- */
+/** Releases all enhanced results, e.g. when every image is closed. Same semantics as {@link releaseEnhanced}, for all at once. */
 export const releaseAllEnhanced = () => call<void>(RELEASE_ALL_ENHANCED_COMMAND);

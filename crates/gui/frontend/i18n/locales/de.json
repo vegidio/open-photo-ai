@@ -74,7 +74,7 @@
                     "description": "Führt die Modelle ohne Build-Schritt auf der NVIDIA-GPU aus. Langsamer als TensorRT, sobald dessen Engines erstellt sind."
                 },
                 "coreml": {
-                    "description": "Führt die Modelle auf der Apple Neural Engine und der GPU aus. Viel schneller als die CPU, doch nicht jedes Modell kann sie nutzen."
+                    "description": "Führt die Modelle auf der Apple Neural Engine und der GPU aus. Viel schneller als die CPU und die schnellste Option auf Macs mit Apple Silicon."
                 },
                 "webgpu": {
                     "description": "Führt die Modelle auf jeder modernen GPU aus, unabhängig vom Hersteller. Viel schneller als die CPU, meist aber langsamer als eine herstellerspezifische Option."

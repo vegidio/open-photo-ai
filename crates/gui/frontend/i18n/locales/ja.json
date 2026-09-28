@@ -74,7 +74,7 @@
                     "description": "ビルド手順なしで NVIDIA GPU 上でモデルを実行します。エンジン構築後の TensorRT よりは遅くなります。"
                 },
                 "coreml": {
-                    "description": "Apple Neural Engine と GPU でモデルを実行します。CPU よりはるかに高速ですが、すべてのモデルが使えるわけではありません。"
+                    "description": "Apple Neural Engine と GPU でモデルを実行します。CPU よりはるかに高速で、Apple シリコン搭載 Mac では最速の選択肢です。"
                 },
                 "webgpu": {
                     "description": "メーカーを問わず、最新のあらゆる GPU でモデルを実行します。CPU よりはるかに高速ですが、通常はメーカー専用のオプションより低速です。"

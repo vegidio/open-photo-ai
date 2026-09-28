@@ -74,7 +74,7 @@
                     "description": "Voert de modellen uit op de NVIDIA-GPU zonder bouwstap. Langzamer dan TensorRT zodra diens engines zijn gebouwd."
                 },
                 "coreml": {
-                    "description": "Voert de modellen uit op de Apple Neural Engine en de GPU. Veel sneller dan de CPU, al kan niet elk model hem gebruiken."
+                    "description": "Voert de modellen uit op de Apple Neural Engine en de GPU. Veel sneller dan de CPU, en de snelste optie op Macs met Apple Silicon."
                 },
                 "webgpu": {
                     "description": "Voert de modellen uit op elke moderne GPU, van elke fabrikant. Veel sneller dan de CPU, maar meestal langzamer dan een fabrikantspecifieke optie."
