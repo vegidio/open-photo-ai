@@ -185,7 +185,7 @@ pub(crate) mod tests {
         // nothing at FP32 for a compute-unit restriction to buy — and a profile applied to a precision it was not
         // measured at is a slower session with nothing to report it.
         for variant in every_variant() {
-            let declared = variant.profile() != EpProfile::default();
+            let declared = variant.profile().tuning() != EpProfile::default();
 
             assert_eq!(
                 declared,

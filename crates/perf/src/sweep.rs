@@ -505,6 +505,15 @@ async fn measure(
         output = enhanced.picture.dimensions();
         runs.push(elapsed);
 
+        // The first run's picture rather than every run's: they are the same image, and one file per model is what a
+        // comparison between providers pairs up.
+        if index == 0
+            && let Some(dir) = &options.save_output
+            && let Err(reason) = save_output(dir, selected, options.provider, &enhanced)
+        {
+            return Outcome::Failed { reason };
+        }
+
         // And the result goes here, before the next run and long before the next model: it holds an `Arc` over a
         // 2560x2560 image at 4x, and keeping the sweep's outputs would change what the later models are measured
         // under.
@@ -568,6 +577,35 @@ fn classify(error: &InferenceError, stage: &str) -> Outcome {
     }
 }
 
+/// The file `--save-output` writes one model's picture to: `stockholm-fp32-webgpu.png`.
+///
+/// Named for the provider that was **requested** rather than the one that ran, so a comparison pairs the files it
+/// asked for; a downgrade is in the report beside it.
+fn output_name(codename: &str, precision: opai::Precision, provider: ExecutionProvider) -> String {
+    format!("{codename}-{}-{}.png", precision.as_str(), provider.as_str().to_lowercase())
+}
+
+/// Writes `enhanced`'s picture for `selected` into `dir` as a lossless PNG.
+///
+/// # Errors
+///
+/// The reason the directory or the file could not be written, phrased for the model's row: a sweep asked to keep its
+/// output and unable to is a failed measurement rather than a silent one.
+fn save_output(
+    dir: &std::path::Path,
+    selected: &Selected,
+    provider: ExecutionProvider,
+    enhanced: &Enhanced,
+) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|error| format!("could not create {}: {error}", dir.display()))?;
+
+    let path = dir.join(output_name(selected.codename, selected.operation.precision(), provider));
+
+    opai::image::save_blocking(enhanced.picture.pixels(), &path, opai::ImageFormat::Png, None)
+        .map(drop)
+        .map_err(|error| format!("could not save the output to {}: {error}", path.display()))
+}
+
 /// Adds one run's report to the set of providers this model's sessions were built on.
 fn fold(built: &mut Vec<ExecutionProvider>, report: &ProviderReport) {
     for provider in &report.actual {
@@ -581,6 +619,17 @@ fn fold(built: &mut Vec<ExecutionProvider>, report: &ProviderReport) {
 mod tests {
     use super::*;
     use opai::Family;
+
+    #[test]
+    fn a_saved_output_is_named_for_the_model_the_precision_and_the_requested_provider() {
+        // The three parts a comparison pairs files on, and nothing else: two providers' runs of one model at one
+        // precision differ only in the last part.
+        assert_eq!(
+            output_name("stockholm", opai::Precision::Fp32, ExecutionProvider::WebGpu),
+            "stockholm-fp32-webgpu.png"
+        );
+        assert_eq!(output_name("kyoto", opai::Precision::Fp16, ExecutionProvider::Cpu), "kyoto-fp16-cpu.png");
+    }
     use opai::UnsupportedReason;
 
     /// A report as `process` would return one.

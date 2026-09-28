@@ -126,8 +126,10 @@ async fn a_downgrade_is_recorded_as_a_pair_naming_what_was_asked_for_and_what_ra
     // The handle still reports what ran, unchanged: the log is a second reader, not a replacement.
     assert_eq!(handle.provider(), ExecutionProvider::Cpu);
 
-    let downgraded =
-        records(&log, "the execution provider could not open this model; falling back to the next provider");
+    let downgraded = records(
+        &log,
+        "the execution provider could not open or declined this model; falling back to the next provider",
+    );
     assert_eq!(downgraded.len(), 1, "the downgrade was recorded {} times:\n{log}", downgraded.len());
     assert!(downgraded[0].contains("level=WARN"), "a downgrade is not a warning: {}", downgraded[0]);
     assert_eq!(field(downgraded[0], "artifact"), Some(id.as_str()));

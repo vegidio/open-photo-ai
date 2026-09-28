@@ -172,6 +172,17 @@ impl ArtifactId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The precision this artifact's weights are stored at, read back off the name both constructors end with.
+    ///
+    /// `None` only for a name neither constructor composed, which nothing in this crate holds.
+    pub(crate) fn precision(&self) -> Option<Precision> {
+        let suffix = self.0.rsplit('_').next()?;
+
+        [Precision::Fp32, Precision::Fp16, Precision::Int8]
+            .into_iter()
+            .find(|precision| precision.as_str() == suffix)
+    }
 }
 
 impl std::fmt::Display for ArtifactId {
@@ -183,6 +194,20 @@ impl std::fmt::Display for ArtifactId {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_precision_reads_back_off_every_shape_of_name() {
+        // Plain, per-scale and suffixed, which are every name the two constructors compose; the WebGPU provider keeps
+        // FP16 graphs off the GPU by this answer, so a shape it misread would put them back on it.
+        for precision in [Precision::Fp32, Precision::Fp16, Precision::Int8] {
+            assert_eq!(ArtifactId::new(Family::Denoise, "stockholm", None, precision).precision(), Some(precision));
+            assert_eq!(ArtifactId::new(Family::Upscale, "kyoto", Some(4), precision).precision(), Some(precision));
+            assert_eq!(
+                ArtifactId::suffixed(Family::Upscale, "osaka", "_vae_decoder", precision).precision(),
+                Some(precision)
+            );
+        }
+    }
 
     #[test]
     fn each_family_renders_its_documented_prefix() {

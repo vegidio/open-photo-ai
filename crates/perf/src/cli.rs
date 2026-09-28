@@ -95,6 +95,14 @@ pub struct Options {
     #[arg(long, value_name = "PATH")]
     pub image: Option<PathBuf>,
 
+    /// Write each model's output from its first timed run into this directory, as a PNG named for the model, its
+    /// precision and the requested provider — `stockholm-fp32-webgpu.png`.
+    ///
+    /// For checking one provider's output against another's: run the same models once per provider into one
+    /// directory, and compare the pairs. Written after the run's time is taken, so it costs no measurement anything.
+    #[arg(long, value_name = "DIR")]
+    pub save_output: Option<PathBuf>,
+
     /// Keep the run cache on, so a timing covers what a run costs an ordinary caller.
     #[arg(long)]
     pub cache: bool,

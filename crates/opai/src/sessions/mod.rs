@@ -333,7 +333,7 @@ impl<S: Send + 'static> Sessions<S> {
                         %artifact,
                         provider = %provider,
                         next = %next,
-                        "the execution provider could not open this model; falling back to the next provider"
+                        "the execution provider could not open or declined this model; falling back to the next provider"
                     );
                     self.fall_back(artifact, provider, auto);
                 }

@@ -44,7 +44,7 @@ use ort::session::builder::SessionBuilder;
 
 use crate::deps::manifest;
 use crate::error::{InitError, SessionError};
-use crate::models::ArtifactId;
+use crate::models::{ArtifactId, Precision};
 use crate::providers::Accelerator;
 use crate::providers::options::{CachePaths, ProviderOptions, SessionPlan, SessionSettings};
 use crate::providers::profile::{DISABLED_OPTIMIZER_SEPARATOR, ExecutionMode};
@@ -126,12 +126,23 @@ fn open(artifact: &ArtifactId, plan: &SessionPlan, model: &Path) -> Result<Sessi
     // In the plan's own order, so that one provider declining a node at session-build time leaves the next to run
     // the graph. Empty for a CPU run, which attaches nothing.
     let mut builder = Session::builder().map_err(failed)?;
-    for options in &plan.providers {
+    for (index, options) in plan.providers.iter().enumerate() {
         builder = match attachment(options) {
             Attach::Named(dispatch) => {
                 builder.with_execution_providers([dispatch]).map_err(|err| failed(err.into()))?
             }
-            Attach::PluginDevices(options) => attach_webgpu(builder, options).map_err(failed)?,
+            Attach::PluginDevices(plugin) => match webgpu_refusal(artifact, options) {
+                // First in the plan, WebGPU's refusal is the build's: failing it sends the graph down the ladder to the
+                // CPU as a reported fallback, rather than a CPU run filed as a WebGPU one.
+                Some(reason) if index == 0 => return Err(failed(ort::Error::new(reason))),
+                // Behind a vendor provider, that provider runs the graph, and an FP16 model on an NVIDIA machine must
+                // not lose CUDA over a provider it was never going to reach.
+                Some(reason) => {
+                    tracing::debug!(%reason, "not attaching WebGPU behind the providers above it");
+                    builder
+                }
+                None => attach_webgpu(builder, plugin).map_err(failed)?,
+            },
         };
     }
 
@@ -164,6 +175,25 @@ fn attachment(options: &ProviderOptions) -> Attach<'_> {
     };
 
     Attach::Named(dispatch.error_on_failure())
+}
+
+/// Why the WebGPU provider must not be handed `artifact`, or `None` where it may.
+///
+/// A refusal fails the build, and the fallback then moves the graph to the CPU as a reported downgrade — the same path
+/// a provider that cannot open a model takes. Refusing here rather than leaving WebGPU out of the plan is what keeps
+/// the session filed under the provider that actually runs it.
+fn webgpu_refusal(artifact: &ArtifactId, webgpu: &ProviderOptions) -> Option<String> {
+    // FP16 graphs can come back wrong from the plugin rather than failing: against the FP32 graph on the CPU,
+    // Petersburg differs on every pixel, Stockholm on 81% of them, and Delhi and Mumbai on nearly all. Kyoto, Saitama
+    // and Athens survive with a few pixels off, and the rest were not measured. Stockholm and Petersburg computed in
+    // genuine FP16 by another compiler on the same GPU (MIGraphX) stay within a level on all but 0.04% of pixels,
+    // which points at the plugin rather than at FP16 itself. Refused as a class, because a wrong photograph is not
+    // reported the way a failure is. Measured on a Radeon 780M under RADV.
+    if artifact.precision() == Some(Precision::Fp16) {
+        return Some(format!("the WebGPU provider only runs FP32 graphs; {artifact} stays on the CPU"));
+    }
+
+    webgpu.declined.then(|| format!("{artifact} declines the WebGPU provider"))
 }
 
 /// Attaches the WebGPU plugin's devices to `builder`, configured with `options`.
@@ -357,7 +387,37 @@ mod tests {
 
     /// The options for one accelerator, without going through the whole resolution.
     fn resolved_for(provider: Accelerator) -> ProviderOptions {
-        ProviderOptions { provider, options: BTreeMap::new() }
+        ProviderOptions { provider, options: BTreeMap::new(), declined: false }
+    }
+
+    #[test]
+    fn webgpu_refuses_every_fp16_graph_and_a_declined_model_and_takes_the_rest() {
+        // What keeps the graphs the plugin corrupts off it. Kept to the decision rather than the attach, which needs a
+        // runtime: `open` fails the build on a refusal only where WebGPU is alone in the chain, and that half is
+        // exercised on real hardware.
+        let webgpu = |declined| ProviderOptions { provider: Accelerator::WebGpu, options: BTreeMap::new(), declined };
+        let artifact =
+            |precision| crate::models::ArtifactId::new(crate::models::Family::Denoise, "stockholm", None, precision);
+
+        assert_eq!(webgpu_refusal(&artifact(Precision::Fp32), &webgpu(false)), None);
+        assert!(
+            webgpu_refusal(&artifact(Precision::Fp16), &webgpu(false)).is_some(),
+            "an FP16 graph reached WebGPU"
+        );
+        assert!(
+            webgpu_refusal(&artifact(Precision::Fp32), &webgpu(true)).is_some(),
+            "a declined model reached WebGPU"
+        );
+
+        // Osaka's graphs are named with a suffix and published at INT8 as well; the INT8 one is refused by its profile
+        // rather than by its precision, which is why both halves are needed.
+        let osaka = crate::models::ArtifactId::suffixed(
+            crate::models::Family::Upscale,
+            "osaka",
+            "_vae_decoder",
+            Precision::Fp16,
+        );
+        assert!(webgpu_refusal(&osaka, &webgpu(false)).is_some(), "a suffixed FP16 graph reached WebGPU");
     }
 
     #[test]
