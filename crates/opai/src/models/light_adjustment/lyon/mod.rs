@@ -102,8 +102,36 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // independently by `paris`' sweep — leaves about 690 ms for the graph at FP16 against the reference's 687, and
     // about 850 ms at FP32 against its 830. CoreML is **14x** the CPU provider here, which is the other half of the
     // precondition: a graph that had fallen apart into partitions would not be.
-    cpu_and_gpu_at_fp16(precision)
+    //
+    // The WebGPU nodes at FP16 are correctness, not tuning, and nothing is wrong with the export: every tensor it
+    // declares FP16 fits. What goes wrong is WebGPU's own — it sums its `GlobalAveragePool`s over the full 1024 square
+    // in FP16, and the photograph comes out at 36 dB against FP32. Left to the CPU provider, the 17 of those that
+    // matter bring it to 50 dB; what remains is FP16 rounding spread across the graph, which no single node accounts
+    // for. Measured on an M2 Max against the WebGPU plugin 0.4.0 and ONNX Runtime 1.30, per graph: +4.4% on WebGPU,
+    // 1948.3 ms to 2034.5 ms. FP32 needs none.
+    cpu_and_gpu_at_fp16(precision).with_webgpu_cpu_nodes_at_fp16(precision, WEBGPU_CPU_NODES_FP16)
 }
+
+/// The nodes WebGPU is kept off at FP16, as the graph names them — see `profile`.
+const WEBGPU_CPU_NODES_FP16: &[&str] = &[
+    "/net/layers.0/residual_group/blocks.3/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.0/residual_group/blocks.4/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.1/residual_group/blocks.1/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.1/residual_group/blocks.2/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.1/residual_group/blocks.3/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.1/residual_group/blocks.4/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.1/residual_group/blocks.5/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.2/residual_group/blocks.0/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.2/residual_group/blocks.1/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.2/residual_group/blocks.2/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.2/residual_group/blocks.4/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.2/residual_group/blocks.5/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.3/residual_group/blocks.0/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.3/residual_group/blocks.1/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.3/residual_group/blocks.2/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.3/residual_group/blocks.3/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+    "/net/layers.3/residual_group/blocks.4/conv_block/cab/cab.3/attention/attention.0/GlobalAveragePool",
+];
 
 #[cfg(test)]
 mod tests {
@@ -114,16 +142,27 @@ mod tests {
     use crate::providers::profile::ExecutionMode;
 
     #[test]
-    fn lyon_declares_the_shared_fp16_profile_through_its_variant() {
+    fn lyon_adds_its_webgpu_nodes_to_the_shared_fp16_profile() {
         // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
         // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
-        for precision in FloatPrecision::ALL {
-            assert_eq!(
-                LightAdjustmentVariant::Lyon(precision).profile(),
-                cpu_and_gpu_at_fp16(precision.into()),
-                "{precision:?}"
-            );
-        }
+        assert_eq!(
+            LightAdjustmentVariant::Lyon(FloatPrecision::Fp16).profile(),
+            cpu_and_gpu_at_fp16(Precision::Fp16).with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, WEBGPU_CPU_NODES_FP16)
+        );
+        assert_eq!(
+            LightAdjustmentVariant::Lyon(FloatPrecision::Fp32).profile(),
+            cpu_and_gpu_at_fp16(Precision::Fp32)
+        );
+    }
+
+    #[test]
+    fn the_webgpu_list_is_the_17_nodes_measured() {
+        // Pinned by count and kind (`GlobalAveragePool`s): the plugin ignores a name it does not find, so a list that
+        // went stale against a re-export would bring the FP16 error back with nothing failing.
+        let nodes = WEBGPU_CPU_NODES_FP16;
+
+        assert_eq!(nodes.len(), 17);
+        assert!(nodes.iter().all(|node| node.ends_with("/GlobalAveragePool")), "{nodes:?}");
     }
 
     #[test]

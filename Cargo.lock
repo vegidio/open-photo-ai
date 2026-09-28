@@ -4357,6 +4357,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 name = "opai"
 version = "26.10.0"
 dependencies = [
+ "ctor",
  "file-rotate",
  "image",
  "imaging",

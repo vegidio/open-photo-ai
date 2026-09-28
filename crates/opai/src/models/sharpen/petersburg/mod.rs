@@ -19,8 +19,8 @@ use crate::providers::profile::EpProfile;
 pub(crate) const GUARD: f32 = 3.0;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: the provider defaults at both
-/// precisions, because nothing measured beat them.
-pub(crate) fn profile(_precision: Precision) -> EpProfile {
+/// precisions, because nothing measured beat them, except for the nodes WebGPU cannot run correctly at FP16.
+pub(crate) fn profile(precision: Precision) -> EpProfile {
     // **Measured, and the default won.** Ported from the reference's `petersburg.go` (not re-measured here), whose
     // sweep is written down so that nobody pays for it again — and so that nobody "fills in" Moscow's setting because
     // the three models share a family.
@@ -51,9 +51,19 @@ pub(crate) fn profile(_precision: Precision) -> EpProfile {
     // Unlike Novgorod, where the precision choice is also a speed choice, FP16 here buys download size and nothing
     // else.
     //
-    // Nothing is declared, at either precision. CUDA and TensorRT were not measured.
-    EpProfile::default()
+    // Nothing is declared for speed, at either precision. CUDA and TensorRT were not measured.
+    //
+    // The WebGPU nodes at FP16 are correctness, not tuning. The published FP16 export keeps its layer norms' squares
+    // and variances in FP32 — they reach 10.9 million, which FP16 cannot hold, and the CPU and CoreML only hid that by
+    // promoting them on their own. What WebGPU still gets wrong after that is its own: it sums the full-resolution
+    // blocks' two channel-attention `ReduceMean`s over the whole 256x256 plane in FP16, which leaves the tile at 34 dB
+    // against FP32. Left to the CPU provider those two bring it to 67 dB. Measured on an M2 Max against the WebGPU
+    // plugin 0.4.0 and ONNX Runtime 1.30, per graph: +10.2% on WebGPU, 67.4 ms to 74.3 ms. FP32 needs none.
+    EpProfile::default().with_webgpu_cpu_nodes_at_fp16(precision, WEBGPU_CPU_NODES_FP16)
 }
+
+/// The nodes WebGPU is kept off at FP16, as the graph names them — see `profile`.
+const WEBGPU_CPU_NODES_FP16: &[&str] = &["node_mean_2", "node_mean_177"];
 
 #[cfg(test)]
 mod tests {
@@ -113,10 +123,19 @@ mod tests {
     }
 
     #[test]
-    fn petersburg_declares_nothing_at_either_precision() {
+    fn petersburg_declares_only_its_webgpu_nodes_and_only_at_fp16() {
         // Compared as whole profiles, so a field added to `EpProfile` later is covered by existing.
-        for precision in FloatPrecision::ALL {
-            assert_eq!(SharpenVariant::Petersburg(precision).profile(), EpProfile::default(), "{precision:?}");
-        }
+        assert_eq!(
+            SharpenVariant::Petersburg(FloatPrecision::Fp16).profile(),
+            EpProfile::default().with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, WEBGPU_CPU_NODES_FP16)
+        );
+        assert_eq!(SharpenVariant::Petersburg(FloatPrecision::Fp32).profile(), EpProfile::default());
+    }
+
+    #[test]
+    fn the_webgpu_list_is_the_two_means_measured() {
+        // Pinned as literals: the plugin ignores a name it does not find, so a rename in a re-export would bring the
+        // FP16 error back with nothing failing.
+        assert_eq!(WEBGPU_CPU_NODES_FP16, ["node_mean_2", "node_mean_177"]);
     }
 }

@@ -20,8 +20,8 @@ use crate::providers::profile::EpProfile;
 pub(crate) const GUARD: f32 = 3.0;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: the provider defaults at both
-/// precisions, because nothing measured beat them.
-pub(crate) fn profile(_precision: Precision) -> EpProfile {
+/// precisions, because nothing measured beat them, except for the nodes WebGPU cannot run correctly at FP16.
+pub(crate) fn profile(precision: Precision) -> EpProfile {
     // **Measured, and the default won.** Nobody had measured Stockholm, in the reference or here, and it is NAFNet
     // rather than the Restormer Gothenburg and Malmö are, so their findings were not carried over: `CpuAndGpu` was
     // tried because it is a standard candidate for any CoreML graph, not because a Restormer won with it.
@@ -49,9 +49,26 @@ pub(crate) fn profile(_precision: Precision) -> EpProfile {
     // On the CPU provider sequential execution is 1.3% and 1.4% under the first default, which is inside the spread
     // the default's own two runs show, so it is not declared at either precision.
     //
-    // Nothing is declared, at either precision. CUDA and TensorRT were not measured.
-    EpProfile::default()
+    // Nothing is declared for speed, at either precision. CUDA and TensorRT were not measured.
+    //
+    // The WebGPU nodes at FP16 are correctness, not tuning. The published FP16 export keeps its layer norms' squares
+    // and variances in FP32 — they reach 1.2 million, which FP16 cannot hold, and the CPU and CoreML only hid that by
+    // promoting them on their own — and what WebGPU still gets wrong after that is its own: it sums a channel-attention
+    // `GlobalAveragePool` over the whole 256x256 plane in FP16, and six of them lose enough to turn the tile to noise
+    // (0 dB against FP32 without them). Left to the CPU provider they bring it to 74 dB. Measured on an M2 Max against
+    // the WebGPU plugin 0.4.0 and ONNX Runtime 1.30, per graph: +12.6% on WebGPU, 76.2 ms to 85.8 ms. FP32 needs none.
+    EpProfile::default().with_webgpu_cpu_nodes_at_fp16(precision, WEBGPU_CPU_NODES_FP16)
 }
+
+/// The nodes WebGPU is kept off at FP16, as the graph names them — see `profile`.
+const WEBGPU_CPU_NODES_FP16: &[&str] = &[
+    "/encoders.0/encoders.0.0/sca/sca.0/GlobalAveragePool",
+    "/encoders.0/encoders.0.1/sca/sca.0/GlobalAveragePool",
+    "/middle_blks/middle_blks.8/sca/sca.0/GlobalAveragePool",
+    "/middle_blks/middle_blks.9/sca/sca.0/GlobalAveragePool",
+    "/decoders.3/decoders.3.0/sca/sca.0/GlobalAveragePool",
+    "/decoders.3/decoders.3.1/sca/sca.0/GlobalAveragePool",
+];
 
 #[cfg(test)]
 mod tests {
@@ -112,10 +129,22 @@ mod tests {
     }
 
     #[test]
-    fn stockholm_declares_nothing_at_either_precision() {
+    fn stockholm_declares_only_its_webgpu_nodes_and_only_at_fp16() {
         // Compared as whole profiles, so a field added to `EpProfile` later is covered by existing.
-        for precision in FloatPrecision::ALL {
-            assert_eq!(DenoiseVariant::Stockholm(precision).profile(), EpProfile::default(), "{precision:?}");
-        }
+        assert_eq!(
+            DenoiseVariant::Stockholm(FloatPrecision::Fp16).profile(),
+            EpProfile::default().with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, WEBGPU_CPU_NODES_FP16)
+        );
+        assert_eq!(DenoiseVariant::Stockholm(FloatPrecision::Fp32).profile(), EpProfile::default());
+    }
+
+    #[test]
+    fn the_webgpu_list_is_the_six_global_average_pools_measured() {
+        // Pinned by count and kind: the plugin ignores a name it does not find, so a list that went stale against a
+        // re-export would bring the noise back with nothing failing.
+        let nodes = WEBGPU_CPU_NODES_FP16;
+
+        assert_eq!(nodes.len(), 6);
+        assert!(nodes.iter().all(|node| node.ends_with("/sca/sca.0/GlobalAveragePool")), "{nodes:?}");
     }
 }

@@ -279,8 +279,8 @@ fn webgpu_options(profile: &EpProfile) -> BTreeMap<String, String> {
     // CPU — so they are not offered.
     let mut options = BTreeMap::new();
 
-    if let Some(layout) = profile.webgpu_preferred_layout.as_str() {
-        options.insert("preferredLayout".to_string(), layout.to_string());
+    if profile.webgpu_prefer_nchw {
+        options.insert("preferredLayout".to_string(), "NCHW".to_string());
     }
 
     // Newline-separated, which is the plugin's own list format for this option.
@@ -583,11 +583,9 @@ mod tests {
 
     #[test]
     fn webgpu_writes_the_layout_and_the_forced_nodes_in_the_plugin_s_own_spelling() {
-        use super::super::profile::WebGpuLayout;
-
         let profile = EpProfile {
-            webgpu_preferred_layout: WebGpuLayout::Nchw,
-            webgpu_force_cpu_nodes: vec!["node_pow_1".to_string(), "node_clamp".to_string()],
+            webgpu_prefer_nchw: true,
+            webgpu_force_cpu_nodes: &["node_pow_1", "node_clamp"],
             ..EpProfile::default()
         };
         let options = webgpu_options(&profile);
@@ -601,9 +599,7 @@ mod tests {
 
     #[test]
     fn a_webgpu_plan_carries_the_profile_s_options() {
-        use super::super::profile::WebGpuLayout;
-
-        let profile = EpProfile { webgpu_preferred_layout: WebGpuLayout::Nchw, ..EpProfile::default() };
+        let profile = EpProfile { webgpu_prefer_nchw: true, ..EpProfile::default() };
         let plan = resolve(ExecutionProvider::WebGpu, no_accelerator().with_webgpu(true), &profile, &paths());
 
         assert_eq!(plan.resolved(), ExecutionProvider::WebGpu);

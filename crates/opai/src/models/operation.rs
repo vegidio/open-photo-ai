@@ -459,6 +459,7 @@ pub(crate) mod tests {
     use crate::models::upscale::UpscaleVariant;
     use crate::models::upscale::osaka::precision::OsakaPrecision;
     use crate::pipeline::test_support::NoBackend;
+    use crate::providers::profile::PROVIDER_OPTION_LIMIT;
 
     #[test]
     fn a_detection_run_produces_faces_and_the_binding_is_the_operations_own() {
@@ -876,6 +877,29 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn no_webgpu_node_list_outgrows_what_the_runtime_accepts() {
+        // The list reaches the plugin as one newline-joined provider option, and past the runtime's limit the session
+        // does not build at all — on every machine where WebGPU is the GPU, for a list that was only ever meant to fix
+        // one model. Across every variant of every family, so a list that grows with a re-export fails here first. A
+        // blank or repeated name is checked with it: neither is ever intended, and both hide a list edited by hand.
+        let profiles = every_operation()
+            .into_iter()
+            .map(|operation| (operation.display_name(), operation.profile()))
+            .chain(every_analysis().into_iter().map(|analysis| (analysis.display_name(), analysis.profile())));
+
+        for (name, profile) in profiles {
+            let nodes = profile.webgpu_force_cpu_nodes;
+            let joined = nodes.join("\n").len();
+
+            assert!(joined <= PROVIDER_OPTION_LIMIT, "{name}'s WebGPU node list is {joined} bytes");
+            assert!(nodes.iter().all(|node| !node.trim().is_empty()), "{name} names a blank node");
+
+            let unique: std::collections::HashSet<_> = nodes.iter().collect();
+            assert_eq!(unique.len(), nodes.len(), "{name} names a node twice");
+        }
+    }
+
+    #[test]
     fn an_operations_profile_is_the_one_its_variant_declares() {
         // The forwarding itself, checked against the variant directly for one family of each shape — a `Copy`
         // family, the one whose per-run input is not a scalar, and the one that carries its own precision contract.
@@ -935,13 +959,14 @@ pub(crate) mod tests {
                     adjustment.precision() == Precision::Fp16
                         || matches!(adjustment.variant(), LightAdjustmentVariant::Paris(_))
                 }
-                // Rio at FP16 alone, and the arm is written as a variant test rather than a precision one for a
-                // reason this family is the first to need: **São Paulo is unmeasured at both precisions**, so a
-                // precision-only answer here would demand a profile of a graph nobody has run a sweep against.
+                // Rio at FP16 alone, and São Paulo at both precisions for its WebGPU nodes alone, which `saopaulo`
+                // pins: its sweep adopted nothing, but a broken WebGPU kernel is a fault at both precisions. The arm is
+                // written as a variant test rather than a precision one because the two models answer differently.
                 // Rio's own settings are the opposite of light adjustment's on the same hardware; see `rio`.
-                Operation::ColorBalance(balance) => {
-                    matches!(balance.variant(), ColorBalanceVariant::Rio(FloatPrecision::Fp16))
-                }
+                Operation::ColorBalance(balance) => matches!(
+                    balance.variant(),
+                    ColorBalanceVariant::Rio(FloatPrecision::Fp16) | ColorBalanceVariant::SaoPaulo(_)
+                ),
                 // Gothenburg and Malmö at FP16, both ported from the reference. Stockholm's arms are whatever its own
                 // sweep adopted, which `stockholm` pins; they are compared against it here rather than against the
                 // default, so the outcome of that measurement is the model's to state.

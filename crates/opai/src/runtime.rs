@@ -41,6 +41,33 @@ static WEBGPU: OnceLock<bool> = OnceLock::new();
 /// The environment the exit hook silences, held weakly so the hook never extends its life — see [`silence_on_exit`].
 static EXITING_ENVIRONMENT: OnceLock<Weak<Environment>> = OnceLock::new();
 
+/// The variable ONNX Runtime reads its full telemetry opt-out from, and the value that sets it.
+const TELEMETRY_OPT_OUT: (&str, &str) = ("ORT_DISABLE_TELEMETRY", "1");
+
+// ONNX Runtime 1.30 ships Microsoft's 1DS telemetry SDK on macOS and Linux, and `with_telemetry(false)` below does not
+// stop it. That call is `DisableTelemetryEvents`, which only clears a flag: by then creating the environment has already
+// started the uploader — an HTTP worker thread posting to `mobile.events.data.microsoft.com`, an event cache and a
+// device id under `~/Library/Application Support/Microsoft/DeveloperTools/.onnxruntime` (`~/.cache/…` on Linux).
+//
+// That worker is also a crash. The runtime tears the SDK down while the process exits, and an upload's response that
+// lands during the teardown locks a mutex the teardown has already destroyed: `recursive_mutex lock failed` and a
+// SIGABRT, after the work is done, at random — seen under perftest on Stockholm, Petersburg and Saitama alike.
+//
+// The environment variable is the only full opt-out: the runtime reads it once, with `getenv`, when it creates the
+// environment, and if it is set never creates the uploader, emits an event or writes a device id. Setting it has to
+// happen before that, and writing the environment is only sound while no other thread can read it — which in an
+// application with an async runtime and a UI means before `main`. Windows is unaffected either way: its telemetry is
+// ETW, which ignores the variable and is what `with_telemetry(false)` does govern.
+/// Opts the process out of ONNX Runtime's telemetry before anything in it can start the runtime.
+#[ctor::ctor]
+fn opt_out_of_runtime_telemetry() {
+    let (name, value) = TELEMETRY_OPT_OUT;
+
+    // SAFETY: a constructor runs while the process is still being loaded, before `main` and before any thread the
+    // program starts, so nothing can read the environment concurrently with this write.
+    unsafe { std::env::set_var(name, value) };
+}
+
 /// What the first failed load in this process was, and what it said.
 #[derive(Debug)]
 struct Failure {
@@ -117,6 +144,14 @@ fn load(name: &str, library: &Path, webgpu: Option<&str>, started: std::time::In
         return Err(InitError::RuntimeUnavailable { path: failure.path.clone(), reason: failure.reason.clone() });
     }
 
+    // The opt-out `opt_out_of_runtime_telemetry` set before `main`, confirmed rather than assumed: a linker that
+    // dropped the constructor, or a caller that overwrote the variable, would otherwise leave the uploader running with
+    // nothing saying so. Reading the environment is sound from any thread; only writing it is not.
+    let (variable, opted_out) = TELEMETRY_OPT_OUT;
+    if std::env::var(variable).as_deref() != Ok(opted_out) {
+        tracing::warn!(variable, "ONNX Runtime telemetry is not opted out in this process");
+    }
+
     // Safe to call on a process that has already loaded one: `ort`'s global keeps the first library, so a second
     // initialization under a different application name installs into that name's directories and goes on using the
     // runtime this process opened first.
@@ -140,6 +175,9 @@ fn load(name: &str, library: &Path, webgpu: Option<&str>, started: std::time::In
     // `false` means an environment was already configured in this process, which on a second initialization is the
     // expected case rather than a failure. Nothing else can be learned from it either — the configuration that lost
     // is identical to the one that won, because the only inputs are the application name and two constants.
+    //
+    // `with_telemetry(false)` is kept for Windows, whose ETW telemetry it does govern; on macOS and Linux it only
+    // clears a flag, and the opt-out that counts there is `TELEMETRY_OPT_OUT`, checked above.
     builder.with_name(name).with_telemetry(false).commit();
 
     let environment =
@@ -273,6 +311,22 @@ mod tests {
     use crate::deps::artifact::{CUDA, CUDNN, ONNX_RUNTIME, TENSORRT};
     use crate::deps::release::{Dependency, RELEASE_BASE_URL};
     use std::process::Command;
+
+    #[test]
+    fn the_process_is_opted_out_of_runtime_telemetry_before_main() {
+        // The test binary links this crate the way every application does, so this is the constructor having run —
+        // and having survived the link — rather than a value a test set for itself.
+        let (name, value) = TELEMETRY_OPT_OUT;
+
+        assert_eq!(std::env::var(name).as_deref(), Ok(value));
+    }
+
+    #[test]
+    fn the_opt_out_is_the_variable_and_value_the_runtime_reads() {
+        // Pinned as literals: an unrecognised name or value is ignored by the runtime rather than reported, and it
+        // takes any of "1", "true", "yes", "on" or "y", case-insensitively.
+        assert_eq!(TELEMETRY_OPT_OUT, ("ORT_DISABLE_TELEMETRY", "1"));
+    }
 
     /// The descriptor `release` yields for one platform, as the install would have built it.
     fn descriptor(release: &crate::deps::artifact::Release, os: &'static str, arch: &'static str) -> Dependency {

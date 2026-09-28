@@ -27,7 +27,7 @@
 // and it is wrong: the move then is to re-export the unfolded architecture, not to patch this one.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode, WebGpuLayout};
+use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode};
 
 // Why the canvas is a fixed square: a graph with dynamic spatial axes and a dynamic batch does not run on CoreML at
 // all. With static input shapes required — which is what a model declaring no profile gets — the provider declines
@@ -58,7 +58,7 @@ pub(crate) const CANVAS: u32 = 1024;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// and sequential execution at FP16, and at both precisions WebGPU's broken `Pow` left to the CPU and its layout set to
-/// NCHW.
+/// NCHW — with the attention's product left to the CPU as well at FP16.
 pub(crate) fn profile(precision: Precision) -> EpProfile {
     // Transcribed from the reference's `paris.go` and re-confirmed on this project's own sweep. Everything below is an
     // M2 Max against ONNX Runtime 1.26 at the 1024 square.
@@ -119,18 +119,21 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     //     + preferredLayout=NCHW                               98.2ms      90.4ms
     //     CoreML, for comparison                               55.7ms      54.9ms
     //
-    // FP16 on WebGPU is known to be off on the plugin 0.4.0 — 25.2 dB against CoreML's FP16 result, about 13 levels
-    // darker on average — and runs as asked regardless.
-    let webgpu = EpProfile {
-        webgpu_preferred_layout: WebGpuLayout::Nchw,
-        webgpu_force_cpu_nodes: vec![POW.to_string()],
-        ..EpProfile::default()
-    };
+    // FP16 on WebGPU is off on the plugin 0.4.0 — about 25 dB against the CPU provider's FP16 result, some 13 levels
+    // darker on average — and the cause is the plugin's FP16 arithmetic rather than the export: the attention's softmax
+    // spreads its weight over every token, so each weight sits in FP16's subnormal range, and the product with the
+    // values after it (`node_matmul_1`) loses them. Leaving that product to the CPU provider as well lifts FP16 to 34
+    // dB and is *faster*, 46.3 ms to 41.1 ms per graph with NCHW on the same machine, because the plugin's version of
+    // it was the slow part. The rest cannot be reached from here: the softmax itself is expanded by the runtime into
+    // unnamed nodes before the plugin sees it (see `EpProfile::webgpu_force_cpu_nodes`), so FP16 on WebGPU stays
+    // visibly darker than CoreML's. FP32 has no such loss and does not carry the second node.
+    let webgpu = EpProfile { webgpu_prefer_nchw: true, webgpu_force_cpu_nodes: &[POW], ..EpProfile::default() };
 
     match precision {
         Precision::Fp16 => EpProfile {
             coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
             execution_mode: ExecutionMode::Sequential,
+            webgpu_force_cpu_nodes: &[POW, ATTENTION_PRODUCT],
             ..webgpu
         },
         _ => webgpu,
@@ -140,6 +143,9 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
 /// The name of the graph's one `Pow` node, whose WebGPU kernel is broken — both precisions carry it under this name.
 const POW: &str = "node_pow_1";
 
+/// The name of the attention's softmax-weighted product, which loses its subnormal weights on WebGPU at FP16.
+const ATTENTION_PRODUCT: &str = "node_matmul_1";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,13 +153,9 @@ mod tests {
     use crate::models::light_adjustment::LightAdjustmentVariant;
     use crate::models::precision::FloatPrecision;
 
-    /// The WebGPU half of the profile, which both precisions carry.
+    /// The WebGPU half of the profile as FP32 carries it; FP16 adds the attention product.
     fn webgpu() -> EpProfile {
-        EpProfile {
-            webgpu_preferred_layout: WebGpuLayout::Nchw,
-            webgpu_force_cpu_nodes: vec!["node_pow_1".to_string()],
-            ..EpProfile::default()
-        }
+        EpProfile { webgpu_prefer_nchw: true, webgpu_force_cpu_nodes: &["node_pow_1"], ..EpProfile::default() }
     }
 
     #[test]
@@ -166,6 +168,7 @@ mod tests {
             EpProfile {
                 coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
                 execution_mode: ExecutionMode::Sequential,
+                webgpu_force_cpu_nodes: &["node_pow_1", "node_matmul_1"],
                 ..webgpu()
             },
             "Paris at FP16 is not the settings measured for it"
@@ -181,13 +184,6 @@ mod tests {
             webgpu(),
             "Paris at FP32 declared a setting nothing measured"
         );
-    }
-
-    #[test]
-    fn the_node_forced_off_webgpu_is_named_as_it_is_in_the_graph() {
-        // An unrecognised name is ignored by the plugin rather than reported, so a rename here would silently bring
-        // the abort back. Pinned as a literal, as the export names it at both precisions.
-        assert_eq!(POW, "node_pow_1");
     }
 
     #[test]

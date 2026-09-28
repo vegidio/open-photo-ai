@@ -42,8 +42,40 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     //
     // Re-measuring this model requires first confirming its graph is still a single CoreML partition — without the
     // two rewrites above it's 92, and every figure here would then reflect partition handoff, not compute units.
-    cpu_and_gpu_at_fp16(precision)
+    //
+    // The WebGPU nodes at FP16 are correctness, not tuning. The published FP16 export keeps its attention L2 norms in
+    // FP32 — their sums reach 1.4 million, which FP16 cannot hold, and the CPU and CoreML only hid that by promoting
+    // them on their own. What WebGPU still gets wrong after that is its own: it accumulates the channel-attention
+    // `q·kᵀ` product, a sum over every pixel of the tile, in FP16, which leaves the tile at 42 dB against FP32. Left to
+    // the CPU provider, the 20 of those that matter bring it to 71 dB. Gothenburg's list is not this one — each was
+    // found on its own graph. Measured on an M2 Max against the WebGPU plugin 0.4.0 and ONNX Runtime 1.30, per graph:
+    // +3.3% on WebGPU, 537.7 ms to 555.7 ms. FP32 needs none.
+    cpu_and_gpu_at_fp16(precision).with_webgpu_cpu_nodes_at_fp16(precision, WEBGPU_CPU_NODES_FP16)
 }
+
+/// The nodes WebGPU is kept off at FP16, as the graph names them — see `profile`.
+const WEBGPU_CPU_NODES_FP16: &[&str] = &[
+    "/encoder_level1/encoder_level1.0/attn/MatMul",
+    "/encoder_level1/encoder_level1.1/attn/MatMul",
+    "/encoder_level1/encoder_level1.2/attn/MatMul",
+    "/encoder_level1/encoder_level1.3/attn/MatMul",
+    "/encoder_level2/encoder_level2.1/attn/MatMul",
+    "/encoder_level2/encoder_level2.3/attn/MatMul",
+    "/decoder_level2/decoder_level2.0/attn/MatMul",
+    "/decoder_level2/decoder_level2.1/attn/MatMul",
+    "/decoder_level2/decoder_level2.2/attn/MatMul",
+    "/decoder_level2/decoder_level2.3/attn/MatMul",
+    "/decoder_level2/decoder_level2.4/attn/MatMul",
+    "/decoder_level2/decoder_level2.5/attn/MatMul",
+    "/decoder_level1/decoder_level1.0/attn/MatMul",
+    "/decoder_level1/decoder_level1.1/attn/MatMul",
+    "/decoder_level1/decoder_level1.2/attn/MatMul",
+    "/decoder_level1/decoder_level1.3/attn/MatMul",
+    "/refinement/refinement.0/attn/MatMul",
+    "/refinement/refinement.1/attn/MatMul",
+    "/refinement/refinement.2/attn/MatMul",
+    "/refinement/refinement.3/attn/MatMul",
+];
 
 #[cfg(test)]
 mod tests {
@@ -53,15 +85,23 @@ mod tests {
     use crate::models::precision::FloatPrecision;
 
     #[test]
-    fn malmo_declares_the_shared_fp16_profile_through_its_variant() {
+    fn malmo_adds_its_webgpu_nodes_to_the_shared_fp16_profile() {
         // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
         // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
-        for precision in FloatPrecision::ALL {
-            assert_eq!(
-                DenoiseVariant::Malmo(precision).profile(),
-                cpu_and_gpu_at_fp16(precision.into()),
-                "{precision:?}"
-            );
-        }
+        assert_eq!(
+            DenoiseVariant::Malmo(FloatPrecision::Fp16).profile(),
+            cpu_and_gpu_at_fp16(Precision::Fp16).with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, WEBGPU_CPU_NODES_FP16)
+        );
+        assert_eq!(DenoiseVariant::Malmo(FloatPrecision::Fp32).profile(), cpu_and_gpu_at_fp16(Precision::Fp32));
+    }
+
+    #[test]
+    fn the_webgpu_list_is_the_20_nodes_measured() {
+        // Pinned by count and kind (attention `MatMul`s): the plugin ignores a name it does not find, so a list that
+        // went stale against a re-export would bring the FP16 error back with nothing failing.
+        let nodes = WEBGPU_CPU_NODES_FP16;
+
+        assert_eq!(nodes.len(), 20);
+        assert!(nodes.iter().all(|node| node.ends_with("/attn/MatMul")), "{nodes:?}");
     }
 }

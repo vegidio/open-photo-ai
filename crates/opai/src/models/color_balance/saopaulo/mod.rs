@@ -91,7 +91,8 @@ pub(crate) const fn rendering_offset(index: usize) -> u32 {
 
 /// The execution-provider tuning measured for this model, at the precision it carries.
 ///
-/// **The provider defaults, at both precisions — and that is a measurement rather than an omission.**
+/// **The provider defaults, at both precisions — and that is a measurement rather than an omission** — except for the
+/// three convolutions WebGPU computes wrongly, at both precisions.
 pub(crate) fn profile(_precision: Precision) -> EpProfile {
     // Everything below is an M2 Max against the ONNX Runtime this application pins, at the 656 square.
     //
@@ -153,8 +154,23 @@ pub(crate) fn profile(_precision: Precision) -> EpProfile {
     // is a different statement from a model whose profile is precision-independent by construction. The shape matches
     // `rio::profile`, whose two precisions do not agree, so a later measurement that separates them is an arm here
     // rather than a change to the seam that calls it.
-    EpProfile::default()
+    //
+    // **The WebGPU nodes are correctness, not tuning, and they are the same at both precisions**, because the fault is
+    // a kernel's rather than the export's. The plugin computes the weight predictor's three `enc_res.0.0` convolutions
+    // — the only 3x3 convolutions here taking 18 input channels to 8 — wrongly, at FP32 as much as at FP16: the three
+    // weight planes come out as garbage, and so does the blend they drive (14 dB against the CPU at both precisions),
+    // while the renderings beside them are exact. Left to the CPU provider they bring FP32 to 138 dB and FP16 to 62 dB.
+    // Nothing else in the graph was needed. Measured on an M2 Max against the WebGPU plugin 0.4.0 and ONNX Runtime
+    // 1.30, per graph: +9.7% at FP32 (156.0 ms to 171.2 ms) and +12.6% at FP16 (124.2 ms to 139.8 ms) on WebGPU.
+    EpProfile { webgpu_force_cpu_nodes: WEBGPU_CPU_NODES, ..EpProfile::default() }
 }
+
+/// The nodes WebGPU is kept off at both precisions, as the graph names them — see `profile`.
+const WEBGPU_CPU_NODES: &[&str] = &[
+    "/grid/enc_res.0.0/block/block.3/Conv",
+    "/grid/enc_res.0.0/block/block.3_1/Conv",
+    "/grid/enc_res.0.0/block/block.3_2/Conv",
+];
 
 #[cfg(test)]
 mod tests {
@@ -202,9 +218,9 @@ mod tests {
     }
 
     #[test]
-    fn sao_paulo_declares_the_provider_defaults_at_both_precisions() {
+    fn sao_paulo_declares_only_its_webgpu_nodes_at_both_precisions() {
         // The measurement, stated as a claim rather than left as an absence: nothing beats the CoreML defaults at
-        // this canvas (see `profile`).
+        // this canvas (see `profile`), and the one thing declared is the correctness fix WebGPU needs at both.
         //
         // Asked through the variant rather than of `profile` directly, for the reason Rio's own test gives: the
         // variant's match is what a refactor can break, and a profile that stopped reaching this file would still
@@ -212,10 +228,24 @@ mod tests {
         for precision in FloatPrecision::ALL {
             assert_eq!(
                 ColorBalanceVariant::SaoPaulo(precision).profile(),
-                EpProfile::default(),
+                EpProfile { webgpu_force_cpu_nodes: WEBGPU_CPU_NODES, ..EpProfile::default() },
                 "São Paulo at {precision:?} declared a setting the sweep did not find"
             );
         }
+    }
+
+    #[test]
+    fn the_webgpu_list_is_the_weight_predictors_three_convolutions() {
+        // Pinned as literals: the plugin ignores a name it does not find, so a rename in a re-export would bring the
+        // garbage weights back with nothing failing.
+        assert_eq!(
+            WEBGPU_CPU_NODES,
+            [
+                "/grid/enc_res.0.0/block/block.3/Conv",
+                "/grid/enc_res.0.0/block/block.3_1/Conv",
+                "/grid/enc_res.0.0/block/block.3_2/Conv",
+            ]
+        );
     }
 
     #[test]

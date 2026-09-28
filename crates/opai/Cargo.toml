@@ -162,6 +162,10 @@ rand_core = { version = "0.10.1", default-features = false }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 thiserror = "2.0.20"
+
+# Runs `runtime::opt_out_of_runtime_telemetry` before `main`, which is the only point at which the environment can be
+# written soundly — ONNX Runtime reads its telemetry opt-out from it. Already in the tree through Tauri.
+ctor = { version = "0.8.0", default-features = false, features = ["proc_macro"] }
 # `fetch` already requires a Tokio runtime, so this is a feature set rather than a new runtime. `rt`
 # brings `spawn_blocking`, which is where the synchronous, minute-long archive expansion and the equally synchronous
 # session build run; `time` brings the interval the background sweep of unused sessions ticks on.

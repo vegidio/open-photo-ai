@@ -116,8 +116,8 @@ pub(crate) struct EpProfile {
     // Per model and per precision, like `cuda_prefer_nhwc`, because what decides it is which layouts the plugin's WGSL
     // kernels are fastest in at the shapes a graph asks for. NHWC is the plugin's own default; Paris measures -6.1% at
     // FP32 and -7.3% at FP16 from NCHW on an M2 Max, end to end, with identical output.
-    /// The data layout the WebGPU plugin prefers for its layout-sensitive kernels, or its own default.
-    pub(crate) webgpu_preferred_layout: WebGpuLayout,
+    /// Whether the WebGPU plugin should prefer NCHW for its layout-sensitive kernels rather than its own default NHWC.
+    pub(crate) webgpu_prefer_nchw: bool,
 
     // A correctness setting rather than tuning: the escape hatch for a node whose WebGPU kernel is broken, which the
     // plugin otherwise runs and fails on — sometimes by aborting the process, which no fallback can catch. The node then
@@ -128,7 +128,7 @@ pub(crate) struct EpProfile {
     /// Graph nodes, by name, the WebGPU plugin must leave to the CPU provider.
     ///
     /// An unrecognised name is ignored rather than reported.
-    pub(crate) webgpu_force_cpu_nodes: Vec<String>,
+    pub(crate) webgpu_force_cpu_nodes: &'static [&'static str],
 }
 
 // Established by measurement rather than taken from a binding's documentation, because getting it wrong is invisible:
@@ -163,6 +163,25 @@ pub(crate) fn cpu_and_gpu_at_fp16(precision: Precision) -> EpProfile {
     match precision {
         Precision::Fp16 => EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndGpu, ..EpProfile::default() },
         _ => EpProfile::default(),
+    }
+}
+
+// The WebGPU plugin takes `forceCpuNodeNames` as one newline-joined value, and ONNX Runtime refuses any provider-option
+// value past this length with "Config value is longer than maximum length" — the session then does not build at all.
+// Held here so a list that outgrows it fails the suite rather than a user's session.
+/// The longest value ONNX Runtime accepts for one provider option, in bytes.
+#[cfg(test)]
+pub(crate) const PROVIDER_OPTION_LIMIT: usize = 8192;
+
+impl EpProfile {
+    // Written once for the same reason as `cpu_and_gpu_at_fp16`: seven models force nodes off WebGPU at FP16 alone, and
+    // a copy of the precision gate in each is seven places for one arm to pick up the list by mistake.
+    /// This profile with `nodes` forced off WebGPU at FP16, and unchanged at every other precision.
+    pub(crate) fn with_webgpu_cpu_nodes_at_fp16(self, precision: Precision, nodes: &'static [&'static str]) -> Self {
+        match precision {
+            Precision::Fp16 => Self { webgpu_force_cpu_nodes: nodes, ..self },
+            _ => self,
+        }
     }
 }
 
@@ -213,28 +232,6 @@ impl CoreMlSpecialization {
     }
 }
 
-/// The data layout the WebGPU plugin prefers for its layout-sensitive kernels.
-///
-/// No NHWC arm: it is the plugin's own default, which [`Default`](Self::Default) already leaves in place.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum WebGpuLayout {
-    /// The plugin's own default, which is NHWC. Nothing is written into the option map.
-    #[default]
-    Default,
-    /// Channels first.
-    Nchw,
-}
-
-impl WebGpuLayout {
-    /// The value the plugin's `preferredLayout` option takes, or `None` for the plugin's own default.
-    pub(crate) const fn as_str(self) -> Option<&'static str> {
-        match self {
-            Self::Default => None,
-            Self::Nchw => Some("NCHW"),
-        }
-    }
-}
-
 /// Whether ONNX Runtime may run independent branches of a graph on separate threads.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum ExecutionMode {
@@ -263,14 +260,33 @@ mod tests {
         assert!(profile.disabled_optimizers.is_empty(), "an optimizer was disabled before anything was measured");
         assert!(!profile.cuda_prefer_nhwc, "NCHW is the runtime's own default and stays the default here");
         assert!(profile.trt_options.is_empty(), "a TensorRT override was applied before anything was measured");
-        assert_eq!(profile.webgpu_preferred_layout, WebGpuLayout::Default);
-        assert!(profile.webgpu_force_cpu_nodes.is_empty(), "a node was forced off WebGPU before anything was measured");
+        assert!(!profile.webgpu_prefer_nchw, "NHWC is the plugin's own default and stays the default here");
+        assert!(
+            profile.webgpu_force_cpu_nodes.is_empty(),
+            "a node was forced off WebGPU before anything was measured"
+        );
     }
 
     #[test]
-    fn each_webgpu_layout_renders_the_value_the_plugin_takes() {
-        assert_eq!(WebGpuLayout::Default.as_str(), None);
-        assert_eq!(WebGpuLayout::Nchw.as_str(), Some("NCHW"));
+    fn webgpu_cpu_nodes_are_added_at_fp16_only() {
+        const NODES: &[&str] = &["node_a", "node_b"];
+        let base = cpu_and_gpu_at_fp16(Precision::Fp16);
+
+        assert_eq!(
+            base.clone().with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, NODES),
+            EpProfile { webgpu_force_cpu_nodes: NODES, ..base }
+        );
+
+        for precision in [Precision::Fp32, Precision::Int8] {
+            assert_eq!(EpProfile::default().with_webgpu_cpu_nodes_at_fp16(precision, NODES), EpProfile::default());
+        }
+    }
+
+    #[test]
+    fn the_provider_option_limit_is_the_one_onnx_runtime_enforces() {
+        // Pinned as a literal because it is the runtime's number rather than this crate's: on 1.30 an 8,230-byte list
+        // failed to build and a 7,984-byte one built.
+        assert_eq!(PROVIDER_OPTION_LIMIT, 8192);
     }
 
     #[test]

@@ -198,35 +198,38 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn only_rios_fp16_arm_declares_a_profile() {
+    fn only_rios_fp16_arm_declares_tuning() {
         // The half of this seam that is silent when it is wrong, in both directions. A profile left at the default
         // still loads Rio and still corrects the right photograph, 3% slower; a profile carried across to São
         // Paulo, whose own sweep could not separate that setting from its run-to-run spread, is how a model gets
         // pessimised on the strength of a neighbour's numbers — and this family's neighbour disagrees with light
         // adjustment about the Neural Engine, so there is no house answer to fall back on.
         //
-        // **São Paulo's defaults are a measurement rather than an absence**, which is why this asserts the *shape*
-        // of the seam rather than that one arm is unwritten: both arms reach a model's own file, and only one of
-        // the two files answers with anything but the provider's defaults.
+        // **São Paulo's defaults are a measurement rather than an absence.** What it does declare, at both precisions,
+        // is the WebGPU correctness fix `saopaulo` pins — three convolutions the plugin computes wrongly — which is not
+        // tuning and is not Rio's, so it is set aside here and everything else must still be the provider's default.
         for variant in every_variant() {
-            let declared = variant.profile();
+            let mut tuning = variant.profile();
+            tuning.webgpu_force_cpu_nodes = &[];
 
             let measured = matches!(variant, ColorBalanceVariant::Rio(FloatPrecision::Fp16));
             assert_eq!(
-                declared != EpProfile::default(),
+                tuning != EpProfile::default(),
                 measured,
-                "{variant:?} declared {declared:?}, which is not what was measured for it"
+                "{variant:?} declared {tuning:?}, which is not what was measured for it"
             );
         }
 
-        // Asserted beside it, where a tidy-up unifying the two arms would have to walk past it: São Paulo's
-        // options are the provider defaults at **both** precisions, with nothing added and nothing removed, and
-        // Rio's FP16 arm still declares the specialization its own graph earned.
+        // Asserted beside it, where a tidy-up unifying the two arms would have to walk past it: São Paulo carries its
+        // WebGPU nodes at **both** precisions and nothing else, and Rio's FP16 arm still declares the specialization
+        // its own graph earned, with no WebGPU nodes of its own.
         for precision in FloatPrecision::ALL {
-            assert_eq!(
-                ColorBalanceVariant::SaoPaulo(precision).profile(),
-                EpProfile::default(),
-                "São Paulo at {precision:?} carries a setting its own sweep could not separate from noise"
+            let sao_paulo = ColorBalanceVariant::SaoPaulo(precision).profile();
+
+            assert!(!sao_paulo.webgpu_force_cpu_nodes.is_empty(), "São Paulo at {precision:?} lost its WebGPU fix");
+            assert!(
+                ColorBalanceVariant::Rio(precision).profile().webgpu_force_cpu_nodes.is_empty(),
+                "Rio at {precision:?} picked up São Paulo's WebGPU nodes, which are its graph's names, not Rio's"
             );
         }
 
