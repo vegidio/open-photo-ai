@@ -13,7 +13,7 @@ use crate::models::precision::Precision;
 use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
-/// at FP16, the provider defaults at FP32, and two nodes kept off WebGPU at both.
+/// at FP16, and the provider defaults at FP32.
 pub(crate) fn profile(precision: Precision) -> EpProfile {
     // Ported from the reference's `jaipur.go`, not re-measured on this project's build.
     //
@@ -43,19 +43,8 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // that one is not comparable. fastai's PixelShuffle_ICNR blurs with a ReplicationPad2d, and MLProgram supports only
     // `constant` and `reflect` padding, so those five Pads have to be rewritten as a Slice+Concat of the border row and
     // column BEFORE tracing to get one CoreML partition. It is the same trap as Mumbai's.
-    //
-    // The WebGPU pin is a correctness fix rather than tuning. The two 3x3 convolutions at the top of the decoder — 303
-    // channels in and out, at the full canvas — are the one place in the published graphs where the WebGPU plugin hangs
-    // the GPU outright on Mesa's RADV driver: the second consuming the first's output loses the device, and the run
-    // fails with *"[Device] is lost"* (microsoft/onnxruntime#32777). 303 is not a multiple of four, which probably
-    // sends the plugin to its unvectorised convolution; the same two layers at 304 channels are fine, as is either one
-    // alone. They are about half the graph's multiply-adds, so Jaipur gains far less from the GPU than the other models
-    // do, but it gains rather than failing.
-    EpProfile { webgpu_cpu_nodes: WEBGPU_CPU_NODES.to_vec(), ..cpu_and_gpu_at_fp16(precision) }
+    cpu_and_gpu_at_fp16(precision)
 }
-
-/// The decoder's two 303-channel convolutions that hang the GPU on the WebGPU provider.
-const WEBGPU_CPU_NODES: [&str; 2] = ["/m/layers.10/layers.0/layers.0.0/Conv", "/m/layers.10/layers.1/layers.1.0/Conv"];
 
 #[cfg(test)]
 mod tests {
@@ -65,13 +54,13 @@ mod tests {
     use crate::models::precision::FloatPrecision;
 
     #[test]
-    fn jaipur_declares_the_shared_fp16_profile_and_its_webgpu_pins_through_its_variant() {
+    fn jaipur_declares_the_shared_fp16_profile_through_its_variant() {
         // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
         // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
         for precision in FloatPrecision::ALL {
             assert_eq!(
                 ColorizationVariant::Jaipur(precision).profile(),
-                EpProfile { webgpu_cpu_nodes: WEBGPU_CPU_NODES.to_vec(), ..cpu_and_gpu_at_fp16(precision.into()) },
+                cpu_and_gpu_at_fp16(precision.into()),
                 "{precision:?}"
             );
         }

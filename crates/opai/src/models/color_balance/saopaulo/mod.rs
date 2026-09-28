@@ -91,8 +91,7 @@ pub(crate) const fn rendering_offset(index: usize) -> u32 {
 
 /// The execution-provider tuning measured for this model, at the precision it carries.
 ///
-/// **The provider defaults, at both precisions — and that is a measurement rather than an omission** — except for six
-/// nodes kept off WebGPU, which is a correctness fix rather than tuning.
+/// **The provider defaults, at both precisions — and that is a measurement rather than an omission.**
 pub(crate) fn profile(_precision: Precision) -> EpProfile {
     // Everything below is an M2 Max against the ONNX Runtime this application pins, at the 656 square.
     //
@@ -154,28 +153,8 @@ pub(crate) fn profile(_precision: Precision) -> EpProfile {
     // is a different statement from a model whose profile is precision-independent by construction. The shape matches
     // `rio::profile`, whose two precisions do not agree, so a later measurement that separates them is an arm here
     // rather than a change to the seam that calls it.
-    //
-    // The one declaration is for WebGPU, and it is a correctness fix rather than tuning. The grid branch's residual
-    // block has six small 3x3 convolutions whose inputs are 9 and 18 channels wide, and the WebGPU plugin computes them
-    // wrongly on Vulkan — not a failure, a plausible photograph: at a bias of 0.7 on the embedded sample, 98% of pixels
-    // differ from the CPU's by more than two levels and 74% by more than ten, an error two and a half times the size of
-    // the correction the model makes. Neither channel count is a multiple of four, which probably sends the plugin to
-    // its unvectorised convolution; the network's first convolution, 3 channels in, is unaffected. With these six on
-    // the CPU the output matches the CPU's within a level, and they are a few thousand weights each, so it costs
-    // nothing measurable. Measured on a Radeon 780M under RADV, and pinned at both precisions because the fault is the
-    // plugin's kernel rather than either export.
-    EpProfile { webgpu_cpu_nodes: WEBGPU_CPU_NODES.to_vec(), ..EpProfile::default() }
+    EpProfile::default()
 }
-
-/// The grid branch's six residual-block convolutions the WebGPU provider computes wrongly.
-const WEBGPU_CPU_NODES: [&str; 6] = [
-    "/grid/enc_res.0.0/block/block.1/Conv",
-    "/grid/enc_res.0.0/block/block.3/Conv",
-    "/grid/enc_res.0.0/block/block.1_1/Conv",
-    "/grid/enc_res.0.0/block/block.3_1/Conv",
-    "/grid/enc_res.0.0/block/block.1_2/Conv",
-    "/grid/enc_res.0.0/block/block.3_2/Conv",
-];
 
 #[cfg(test)]
 mod tests {
@@ -233,8 +212,8 @@ mod tests {
         for precision in FloatPrecision::ALL {
             assert_eq!(
                 ColorBalanceVariant::SaoPaulo(precision).profile(),
-                EpProfile { webgpu_cpu_nodes: WEBGPU_CPU_NODES.to_vec(), ..EpProfile::default() },
-                "São Paulo at {precision:?} declared a setting the sweep did not find, or lost its WebGPU pins"
+                EpProfile::default(),
+                "São Paulo at {precision:?} declared a setting the sweep did not find"
             );
         }
     }

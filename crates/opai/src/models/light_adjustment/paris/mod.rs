@@ -57,7 +57,7 @@ use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode};
 pub(crate) const CANVAS: u32 = 1024;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
-/// and sequential execution at FP16, the provider defaults at FP32, and the final `Pow` kept off WebGPU at both.
+/// and sequential execution at FP16, and the provider defaults at FP32.
 pub(crate) fn profile(precision: Precision) -> EpProfile {
     // Transcribed from the reference's `paris.go` and re-confirmed on this project's own sweep. Everything below is an
     // M2 Max against ONNX Runtime 1.26 at the 1024 square.
@@ -100,25 +100,15 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     //
     // The graph compiles as **one CoreML partition** at both precisions — 76 of 77 nodes at FP16, 75 of 75 at FP32 —
     // which is what the fixed square is for, and is checked the same way Lyon's precondition is.
-    //
-    // The WebGPU pin is the one setting at both precisions, and it is a correctness fix rather than tuning. The graph
-    // ends by raising the image to an exponent the network predicted — a learned gamma, so the exponent is a tensor
-    // broadcast over the whole image — and the WebGPU plugin cannot run that `Pow`: it fails at `Run`. On `Auto` the
-    // ladder would then rerun the whole graph on the CPU; any other request simply fails. Pinned, only that one
-    // elementwise op at the very end of the graph leaves the GPU, which costs nothing measurable.
     match precision {
         Precision::Fp16 => EpProfile {
             coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
             execution_mode: ExecutionMode::Sequential,
-            webgpu_cpu_nodes: WEBGPU_CPU_NODES.to_vec(),
             ..EpProfile::default()
         },
-        _ => EpProfile { webgpu_cpu_nodes: WEBGPU_CPU_NODES.to_vec(), ..EpProfile::default() },
+        _ => EpProfile::default(),
     }
 }
-
-/// The nodes the WebGPU provider cannot run: the learned-gamma `Pow` the graph ends with.
-const WEBGPU_CPU_NODES: [&str; 1] = ["node_pow_1"];
 
 #[cfg(test)]
 mod tests {
@@ -137,7 +127,6 @@ mod tests {
             EpProfile {
                 coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
                 execution_mode: ExecutionMode::Sequential,
-                webgpu_cpu_nodes: WEBGPU_CPU_NODES.to_vec(),
                 ..EpProfile::default()
             },
             "Paris at FP16 is not the pair of settings measured for it"
@@ -150,8 +139,8 @@ mod tests {
         // measurement to a precision that did not earn it — see `profile`'s FP32 figures.
         assert_eq!(
             LightAdjustmentVariant::Paris(FloatPrecision::Fp32).profile(),
-            EpProfile { webgpu_cpu_nodes: WEBGPU_CPU_NODES.to_vec(), ..EpProfile::default() },
-            "Paris at FP32 declared a setting nothing measured, or lost its WebGPU pin"
+            EpProfile::default(),
+            "Paris at FP32 declared a setting nothing measured"
         );
     }
 

@@ -151,25 +151,6 @@ pub(crate) struct ProviderOptions {
     // stable order.
     /// The options, by ONNX Runtime's own key.
     pub(crate) options: BTreeMap<String, String>,
-    /// Whether the model's profile refuses this provider, so the attach fails and the fallback takes the graph to the
-    /// CPU. Only WebGPU is ever declined; see [`EpProfile::webgpu_declined`].
-    pub(crate) declined: bool,
-}
-
-/// The key of the WebGPU plugin option naming the nodes it must leave to the CPU, one per line.
-pub(crate) const WEBGPU_FORCE_CPU_NODES: &str = "forceCpuNodeNames";
-
-/// The WebGPU plugin options for a model with this profile: the plugin's own defaults, plus the nodes the profile
-/// pins to the CPU.
-fn webgpu_options(profile: &EpProfile) -> BTreeMap<String, String> {
-    // Nothing is pinned for speed: the plugin's defaults are what every timing in the WebGPU sweep was taken with. The
-    // one entry is a correctness fix, and it is left out entirely rather than written empty for a model with nothing
-    // to pin, so such a model reaches the plugin exactly as before.
-    if profile.webgpu_cpu_nodes.is_empty() {
-        return BTreeMap::new();
-    }
-
-    options_from([(WEBGPU_FORCE_CPU_NODES, profile.webgpu_cpu_nodes.join("\n").as_str())])
 }
 
 /// Builds a map from pairs of string slices, which is what every option map below is.
@@ -376,11 +357,11 @@ pub(crate) fn plan(chain: ChainResolution, profile: &EpProfile, paths: &CachePat
                 Accelerator::TensorRt => tensorrt_options(paths, profile),
                 Accelerator::Cuda => cuda_options(profile),
                 Accelerator::CoreMl => coreml_options(paths, profile),
-                Accelerator::WebGpu => webgpu_options(profile),
+                // Nothing pinned yet: the plugin's own defaults are what it was measured with.
+                Accelerator::WebGpu => BTreeMap::new(),
             };
-            let declined = provider == Accelerator::WebGpu && profile.webgpu_declined;
 
-            ProviderOptions { provider, options, declined }
+            ProviderOptions { provider, options }
         })
         .collect();
 
@@ -984,60 +965,5 @@ mod tests {
 
         assert_eq!(plan.resolved(), ExecutionProvider::CoreMl);
         assert_eq!(option(&plan.providers[0].options, "MLComputeUnits"), "CPUAndNeuralEngine");
-    }
-
-    /// A machine whose only accelerator is the WebGPU plugin: an AMD or Intel GPU.
-    fn webgpu_only() -> SupportedProviders {
-        SupportedProviders { webgpu: true, ..machine_supporting(false, false, false) }
-    }
-
-    #[test]
-    fn a_model_with_nothing_pinned_reaches_webgpu_with_the_plugins_own_defaults() {
-        let plan = resolve(ExecutionProvider::Auto, webgpu_only(), &EpProfile::default(), &paths());
-
-        assert_eq!(plan.resolved(), ExecutionProvider::WebGpu);
-        assert_eq!(
-            plan.providers,
-            vec![ProviderOptions { provider: Accelerator::WebGpu, options: BTreeMap::new(), declined: false }]
-        );
-    }
-
-    #[test]
-    fn pinned_nodes_reach_the_plugin_one_per_line() {
-        // One per line is the plugin's own format for the list; a comma would read as one name matching nothing.
-        let profile = EpProfile { webgpu_cpu_nodes: vec!["first/Conv", "second/Conv"], ..EpProfile::default() };
-
-        let plan = resolve(ExecutionProvider::WebGpu, webgpu_only(), &profile, &paths());
-
-        assert_eq!(option(&plan.providers[0].options, WEBGPU_FORCE_CPU_NODES), "first/Conv\nsecond/Conv");
-        assert!(!plan.providers[0].declined);
-    }
-
-    #[test]
-    fn a_declined_model_is_still_planned_for_webgpu_so_its_refusal_is_a_reported_downgrade() {
-        // Planned and marked rather than dropped from the chain: a plan that quietly left WebGPU out would build a CPU
-        // session under the WebGPU key and report a WebGPU run that never happened.
-        let profile = EpProfile { webgpu_declined: true, ..EpProfile::default() };
-
-        let plan = resolve(ExecutionProvider::Auto, webgpu_only(), &profile, &paths());
-
-        assert_eq!(plan.resolved(), ExecutionProvider::WebGpu);
-        assert!(plan.providers[0].declined);
-    }
-
-    #[test]
-    fn the_webgpu_settings_never_reach_another_provider() {
-        let profile = EpProfile { webgpu_cpu_nodes: vec!["first/Conv"], webgpu_declined: true, ..EpProfile::default() };
-
-        let plan = resolve(ExecutionProvider::Auto, nvidia(), &profile, &paths());
-
-        for provider in &plan.providers {
-            assert!(!provider.declined, "{:?} was declined by a WebGPU setting", provider.provider);
-            assert!(
-                !provider.options.contains_key(WEBGPU_FORCE_CPU_NODES),
-                "{:?} got the WebGPU pins",
-                provider.provider
-            );
-        }
     }
 }

@@ -26,8 +26,7 @@ pub(crate) struct EpProfile {
     // profiles actually set; the eight it keeps permanently unset — `Fp16`, `TrtShapes`, `TrtWorkspaceBytes`,
     // `CudaOptions`, `Extra`, `GraphOptimization`, `DynamicShapes` and `ExcludeEPs` — are omitted along with the
     // chain-substitution logic `ExcludeEPs` alone justifies. Their default behaviour is reproduced exactly, so no model
-    // runs differently for their absence, and a typed field is added the day a model needs one. The two WebGPU fields
-    // at the end are that day for the WebGPU provider, which the reference never had.
+    // runs differently for their absence, and a typed field is added the day a model needs one.
 
     // Per model because the right answer follows the graph's op mix rather than the machine. The Neural Engine is
     // FP16-only and is built for dense convolution and matmul; a graph heavy in normalization, reshape and transpose
@@ -113,35 +112,6 @@ pub(crate) struct EpProfile {
     /// and the fallback moves the graph to the next provider in the chain as a reported downgrade. A typo here costs
     /// the GPU rather than a setting.
     pub(crate) trt_options: BTreeMap<String, String>,
-
-    // A correctness setting rather than tuning, which is what sets it apart from every field above. The WebGPU plugin
-    // computes a handful of nodes in the published graphs wrongly or not at all on Vulkan — measured on a Radeon 680M
-    // and 780M under Mesa's RADV — and none of the failures surfaces at session build: one node fails at `Run`, another
-    // hangs the GPU before anything reports, and a third returns a plausible image that is wrong, which no fallback can
-    // see. Pinning just those nodes to the CPU keeps the rest of the graph on the GPU, which is far cheaper than
-    // declining the model or rerunning it elsewhere.
-    /// Nodes the WebGPU provider must leave to the CPU, by their name in the graph.
-    ///
-    /// Written into the plugin's `forceCpuNodeNames` option, one name per line. A name that matches no node is ignored
-    /// rather than reported, so each one is checked against the published graph by a test beside the model.
-    pub(crate) webgpu_cpu_nodes: Vec<&'static str>,
-
-    /// Whether this model must not be attached to the WebGPU provider at all, at either precision.
-    ///
-    /// The attach then fails at session build, so the fallback moves the graph to the CPU as a reported downgrade,
-    /// the same path a provider that cannot open a model takes.
-    pub(crate) webgpu_declined: bool,
-}
-
-impl EpProfile {
-    /// This profile with the WebGPU correctness settings taken out: what was *measured* for speed, alone.
-    ///
-    /// For the suites asserting which models carry a measured profile, which the WebGPU pins would otherwise read as
-    /// tuning nobody measured. Which models carry those is asserted on its own, across the library.
-    #[cfg(test)]
-    pub(crate) fn tuning(&self) -> Self {
-        Self { webgpu_cpu_nodes: Vec::new(), webgpu_declined: false, ..self.clone() }
-    }
 }
 
 // Established by measurement rather than taken from a binding's documentation, because getting it wrong is invisible:
@@ -254,8 +224,6 @@ mod tests {
         assert!(profile.disabled_optimizers.is_empty(), "an optimizer was disabled before anything was measured");
         assert!(!profile.cuda_prefer_nhwc, "NCHW is the runtime's own default and stays the default here");
         assert!(profile.trt_options.is_empty(), "a TensorRT override was applied before anything was measured");
-        assert!(profile.webgpu_cpu_nodes.is_empty(), "a node was pinned off WebGPU before anything was measured");
-        assert!(!profile.webgpu_declined, "WebGPU was declined before anything was measured");
     }
 
     #[test]
