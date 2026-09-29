@@ -3,6 +3,7 @@
 
 // Deleting the model is deleting this directory plus the arms in `SharpenVariant` that name it.
 
+use crate::models::filter::Guard;
 use crate::models::precision::Precision;
 use crate::providers::profile::EpProfile;
 
@@ -16,7 +17,7 @@ use crate::providers::profile::EpProfile;
 // in `models::filter` — and not that 3.0 is where to catch it. The live check reports how many tiles the guard
 // kept on the photograph it runs; one that trips it can be added as a fixture without the contract moving.
 /// The magnitude past which a tile's raw output is treated as a blow-up and the tile keeps its own input.
-pub(crate) const GUARD: f32 = 3.0;
+pub(crate) const GUARD: Guard = Guard::magnitude(3.0);
 
 /// The execution-provider tuning measured for this model, at the precision it carries: the provider defaults at both
 /// precisions, because nothing measured beat them, except for the nodes WebGPU cannot run correctly at FP16.
@@ -77,7 +78,7 @@ mod tests {
     fn the_guard_is_the_references_threshold() {
         // Pinned as a literal, for the reason `GUARD` gives: it is carried over rather than derived, so nothing else
         // would notice it moving.
-        assert_eq!(GUARD, 3.0);
+        assert_eq!(GUARD, Guard::magnitude(3.0));
 
         for precision in FloatPrecision::ALL {
             assert_eq!(SharpenVariant::Petersburg(precision).guard(), Some(GUARD), "{precision:?}");

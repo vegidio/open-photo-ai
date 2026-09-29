@@ -6,8 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { runBatch } from "@/features/export/batch";
-import { pickDirectory } from "@/ipc/export";
 import { useExportFormats } from "@/hooks/useExportFormats";
+import { pickDirectory } from "@/ipc/export";
 import { FORMAT_CHOICES, type FormatChoice, queueQualityFor } from "@/lib/export";
 import { cn } from "@/lib/utils";
 import { useExportBatchStore } from "@/stores/exportBatch";

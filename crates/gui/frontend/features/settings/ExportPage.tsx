@@ -1,8 +1,8 @@
 import { useState } from "react";
+import type { ParseKeys } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import type { ParseKeys } from "i18next";
 import { useExportFormats } from "@/hooks/useExportFormats";
 import { clampQuality } from "@/stores/settings";
 import { useSettingsDraft } from "./draft";

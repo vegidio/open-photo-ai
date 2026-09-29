@@ -7,8 +7,8 @@ import type { Family, FamilyEntry, Precision, VariantEntry } from "@/ipc/catalog
 import type { CropInfo } from "@/ipc/crop";
 import type { ExportFormats } from "@/ipc/export";
 import type { ImageRecord } from "@/ipc/images";
-import { applyOrder } from "@/lib/enhancements";
 import type { SetupError, SetupEvent, SupportedProviders } from "@/ipc/setup";
+import { applyOrder } from "@/lib/enhancements";
 import { AppProviders } from "@/providers";
 import { useCropStore } from "@/stores/crop";
 import { useFileStore } from "@/stores/files";

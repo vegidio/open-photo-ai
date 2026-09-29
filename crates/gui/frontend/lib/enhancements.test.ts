@@ -1,8 +1,8 @@
 import { describe, expect, it, type Mock, vi } from "vitest";
 import { suggestedScale } from "@/ipc/autopilot";
 import type { Family, FamilyEntry } from "@/ipc/catalogue";
-import type { Operation } from "@/ipc/enhance";
 import type { CropInfo } from "@/ipc/crop";
+import type { Operation } from "@/ipc/enhance";
 import type { ImageRecord } from "@/ipc/images";
 import { CATALOGUE, HOLIDAY } from "@/test/support";
 import {

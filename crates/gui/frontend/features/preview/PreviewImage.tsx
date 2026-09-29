@@ -25,35 +25,27 @@ type PaneProps = {
     // everything else - so anything this component read off it would be reading the wrong image's
     // data. Taking what is actually used means there is nothing to fabricate.
     /**
-     * The photograph this pane is drawing - the settled one, not necessarily the current one.
-     *
-     * The **dimensions alone**, not the record they came off. Partial because a file whose header
-     * could not be parsed publishes neither, and is still served and still drawn - the decoded
-     * image's own size is the fallback.
+     * The settled photograph's dimensions. Partial because an unparseable header publishes neither;
+     * the decoded image's own size is the fallback.
      */
     published?: Partial<Size>;
-    /** Where the pixels come from, or `undefined` for a file whose bytes could not be read. */
+    /** Where the pixels come from, or `undefined` if the file's bytes could not be read. */
     source?: string;
-    /** What the image is drawn as, for anything reading the page rather than looking at it. */
+    /** The image's alt text. */
     alt: string;
-    /** Which of the two this pane is, in the user's own language. */
+    /** This pane's label, in the user's language. */
     label: string;
-    /** How this pane is placed: a flex half in two of the modes, the clipped overlay in the third. */
+    /** How the pane is placed: a flex half, or the clipped overlay in split mode. */
     className?: string;
     /** Which corner the chip sits in, and how loud it reads. */
     chipClassName: string;
-    /** How far the chip rides above the pane's bottom edge, which the drawer's body pushes up. */
+    /** How far the chip rides above the pane's bottom edge (the drawer pushes it up). */
     chipBottom: number;
     // A style rather than a class: the clip and the divider's own `left` are one number, and a Tailwind
     // arbitrary value cannot carry a number that changes under the pointer.
-    /** What the split comparison clips this pane to, and nothing else. */
+    /** The clip applied by the split comparison, and nothing else. */
     style?: CSSProperties;
-    /**
-     * Whether this pane is the one that reports what the canvas is showing to the sidebar.
-     *
-     * Exactly one pane sets it - the enhanced one, which is the only one drawn in all three
-     * comparisons. See the store's `setViewport` for why there is no second writer to reconcile.
-     */
+    /** Whether this pane reports the canvas's viewport to the sidebar. Only the enhanced pane does. */
     publishViewport?: boolean;
     // The enhanced pane is handed the **source's** identity while drawing the result's pixels, which is
     // the one thing that keeps the comparison a comparison: two panes at different zooms showing
@@ -68,10 +60,10 @@ type PaneProps = {
     transformKey?: string;
 };
 
-/** How far a pane's chip floats above whatever is beneath it, which is the design's own gap. */
+/** The gap between a pane's chip and whatever is beneath it. */
 const CHIP_GAP = 10;
 
-/** Where a pane starts before it has measured itself, which in jsdom is also where it stays. */
+/** A pane's size before it has been measured (which stays true in jsdom). */
 const UNMEASURED: Size = { width: 0, height: 0 };
 
 // The identity is carried with it because it is what makes a change of *image* different from a
@@ -85,21 +77,18 @@ const UNMEASURED: Size = { width: 0, height: 0 };
 // Requiring it is also what makes `resolve`'s return type honest: it answers a *position* and never
 // an identity, so it returns `ImageTransform` and this is assembled from the two at the one call site
 // that knows both.
-/** What a pane has actually drawn: the resolved transform, and which photograph it was resolved for. */
+/** What a pane has drawn: the resolved transform and the photograph it was resolved for. */
 type Drawn = { identity: string | undefined; scale: number; x: number; y: number };
 
-/** How large the photograph is on screen at a given magnification. */
+/** The photograph's on-screen size at a given magnification. */
 const scaled = (fitted: Size, scale: number): Size => ({ width: fitted.width * scale, height: fitted.height * scale });
 
 /**
- * Where the photograph goes, given where it was and what has just been asked for.
+ * Resolves the requested transform into the position to draw at.
  *
- * Two cases. At an unchanged scale the stored position is simply held inside the pane. At a changed
- * one, a single point of the photograph is pinned where it already is on screen - the point under
- * the pointer for a wheel zoom, and the middle of the pane for the drawer's slider and its two step
- * buttons, which are not pointed at any part of it.
- *
- * **A change of image counts as an unchanged scale**, whatever the two scales are.
+ * At an unchanged scale (or a changed image) the stored position is just held inside the pane. At a
+ * changed scale, one point of the photograph stays pinned on screen: the point under the pointer for a
+ * wheel zoom, the pane's centre for the slider and step buttons.
  */
 const resolve = (
     transform: ImageTransform,
@@ -138,7 +127,7 @@ const resolve = (
     };
 };
 
-/** One side of the comparison: the photograph, drawn at the size that fits and moved by a transform. */
+/** One side of the comparison: the photograph, fitted to the pane and moved by a transform. */
 const Pane = ({
     source,
     alt,
@@ -434,6 +423,13 @@ const Pane = ({
              * pane mounted hidden, or measured before layout, would otherwise draw a photograph of
              * zero width. `draggable` is off because the browser's own image drag would otherwise
              * start on top of the pan.
+             *
+             * **`will-change: transform` puts the photograph on a compositing layer of its own.**
+             * Without it WKWebView paints the transformed `<img>` into the pane's backing store, and
+             * zooming back out repaints only part of the area the magnified image had covered: stale
+             * tiles are left behind as thin horizontal lines over the canvas. On its own layer the
+             * zoom and pan are a compositor transform and the pane is never repainted. An `<img>` is
+             * composited directly from its decoded pixels, so magnification stays sharp.
              */}
             <img
                 {...(source !== undefined && { src: source })}
@@ -446,6 +442,7 @@ const Pane = ({
                     ...(fitted.width > 0 && { width: fitted.width, height: fitted.height }),
                     transform: `translate(${drawn.x}px, ${drawn.y}px) scale(${drawn.scale})`,
                     transformOrigin: "top left",
+                    willChange: "transform",
                 }}
                 className="block max-w-none select-none"
             />
@@ -469,31 +466,23 @@ const Pane = ({
     );
 };
 
-/** Where the split's divider starts, and how far an arrow key moves it, as percentages of the canvas. */
+/** Where the split divider starts, and how far an arrow key moves it, in percent of the canvas. */
 const DIVIDER_START = 50;
 const DIVIDER_STEP = 2;
 
 /**
- * The current image, drawn the way the chosen comparison draws it.
+ * The current image, drawn in the chosen comparison: full (enhanced pane only), side by side (both
+ * panes at half width), or split (enhanced pane overlaid on the original, revealed from the divider
+ * rightward).
  *
- * Three layouts over the same two panes: full draws the enhanced pane across the canvas, side by side
- * draws both in half of it each, and split draws the enhanced pane over the original and reveals it
- * from the divider rightward.
- *
- * **The enhanced pane draws whatever the current image's enhancements produced**, and the original
- * pane goes on drawing the source - which is what makes the two-pane and split comparisons show a
- * comparison. With no enhancements, with a run that has not landed yet, and after one that was
- * stopped, both panes point at the same URL, and both chips read *Original*.
- *
- * **The right-hand chip is what says a result landed.** It turns over to *Enhanced* exactly when the
- * pane stops drawing the source. A result is held while a later run works
- * (`hooks/useEnhancementRun.ts`), so re-running keeps the chip where it is instead of flickering back.
- *
- * **No bound on the URL**: the canvas asks for the photograph at its own size.
- *
- * **Both panes read one transform**, so magnifying or panning either moves both.
- *
- * **The canvas draws the settled image rather than the current one** (`hooks/useSettledFile.ts`).
+ * - The enhanced pane draws the current enhancement result; the original pane always draws the source.
+ *   With no result yet (none, pending, or stopped) both point at the same URL and both chips read
+ *   *Original*.
+ * - The right-hand chip turns to *Enhanced* exactly when the pane stops drawing the source. A previous
+ *   result is held while a new run works, so the chip doesn't flicker back.
+ * - The URL carries no size bound; the canvas asks for the photograph at its own size.
+ * - Both panes share one transform, so zooming or panning either moves both.
+ * - It draws the settled image rather than the current one (`hooks/useSettledFile.ts`).
  */
 export const PreviewImage = () => {
     const { t } = useTranslation();

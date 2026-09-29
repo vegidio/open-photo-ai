@@ -19,8 +19,8 @@ import type { QualityChoices } from "@/stores/settings";
 import {
     APPLY_ORDER,
     CATALOGUE,
-    frame,
     FRAMING,
+    frame,
     HOLIDAY,
     openFiles,
     PUBLISHED_QUALITY,

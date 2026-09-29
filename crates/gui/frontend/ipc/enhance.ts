@@ -68,7 +68,7 @@ export type RunProgress = {
     chainFraction: number;
     /** `0..1` progress of an active model download, if any. */
     installFraction?: number;
-}
+};
 
 /**
  * Outcome of a run: either enhanced or stopped (never a rejection for a user-initiated stop).
@@ -76,16 +76,16 @@ export type RunProgress = {
  */
 export type Enhancement =
     | {
-    outcome: "enhanced";
-    /** Address for fetching result pixels, derived from source identity + operations applied. */
-    identity: string;
-    width: number;
-    height: number;
-    /** Faces found, for chains with face recovery. Absent if none were sought or detection failed. */
-    faces?: Face[];
-    /** Detection failure message (untranslated); recovery then restored nothing but the chain continued. */
-    facesError?: string;
-}
+          outcome: "enhanced";
+          /** Address for fetching result pixels, derived from source identity + operations applied. */
+          identity: string;
+          width: number;
+          height: number;
+          /** Faces found, for chains with face recovery. Absent if none were sought or detection failed. */
+          faces?: Face[];
+          /** Detection failure message (untranslated); recovery then restored nothing but the chain continued. */
+          facesError?: string;
+      }
     /** Stopped via {@link cancelEnhance} or superseded by a later run — including one that finished but was discarded. */
     | { outcome: "stopped" };
 

@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::super::catalogue::STRENGTH_PARAMETER;
+use super::super::filter::Guard;
 use super::super::precision::{FloatPrecision, Precision};
 use super::super::simple::SimpleVariant;
 
@@ -62,9 +63,9 @@ impl SharpenVariant {
         }
     }
 
-    /// The magnitude past which a tile's raw output is discarded in favour of its input, or `None` for a model that
+    /// How a tile's raw output is judged before it is discarded in favour of its input, or `None` for a model that
     /// is not guarded: Petersburg's is [`petersburg::GUARD`], and Moscow and Novgorod have none.
-    pub(crate) const fn guard(self) -> Option<f32> {
+    pub(crate) const fn guard(self) -> Option<Guard> {
         // Deliberately **not** a field on `SimpleVariant`: that row type is shared across five families, and a
         // threshold there would be a value every other row has to supply and nobody reads. The two Restormer models
         // run unguarded, as they do in the reference.

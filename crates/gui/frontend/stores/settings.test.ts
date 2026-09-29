@@ -1,6 +1,6 @@
-import { PUBLISHED_QUALITY } from "@/test/support";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_LANGUAGE } from "@/i18n/languages";
+import { PUBLISHED_QUALITY } from "@/test/support";
 import { BACKGROUNDS, MAX_QUALITY, MIN_QUALITY, settingsData, settingsDefaults, useSettingsStore } from "./settings.ts";
 
 /** Seeds `localStorage` with a stored settings state and rehydrates the store from it. */

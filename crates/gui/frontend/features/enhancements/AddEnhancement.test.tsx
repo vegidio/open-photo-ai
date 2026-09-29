@@ -1,5 +1,5 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import { forgetCatalogue } from "@/ipc/catalogue";
@@ -9,8 +9,8 @@ import { useSettingsStore } from "@/stores/settings";
 import {
     APPLY_ORDER,
     CATALOGUE,
-    frame,
     FRAMING,
+    frame,
     HOLIDAY,
     openFiles,
     render,

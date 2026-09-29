@@ -36,13 +36,7 @@ const WELL_BORDER = 2;
  * ringed in the accent colour and filled, which is the design's own marking, and each option is a
  * `<button>` with `aria-pressed`.
  */
-export const AspectRatios = ({
-    selected,
-    onSelect,
-}: {
-    selected: string;
-    onSelect: (key: string) => void;
-}) => {
+export const AspectRatios = ({ selected, onSelect }: { selected: string; onSelect: (key: string) => void }) => {
     // **The shape is the icon.** The reference draws Material's `MdCropLandscape` and `MdCropPortrait`
     // glyphs, which say "this is a landscape ratio" and nothing about *which* - 5:4, 4:3 and 3:2 are
     // three copies of one picture there. The design replaces them with a box in each ratio's own

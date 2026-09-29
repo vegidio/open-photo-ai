@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { type Event, listen } from "@tauri-apps/api/event";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import type { CropInfo } from "./crop";
 import { EXPORT_FORMATS } from "@/test/support";
+import type { CropInfo } from "./crop";
 import { mintRun, type Operation } from "./enhance";
 import {
     cancelExport,

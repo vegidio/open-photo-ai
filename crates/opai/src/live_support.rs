@@ -14,7 +14,7 @@ use tempfile::TempDir;
 
 use crate::deps::artifact::ONNX_RUNTIME;
 use crate::deps::release::{Dependency as Descriptor, RELEASE_BASE_URL};
-use crate::models::filter::GUARDED;
+use crate::models::filter::{GUARDED, RESCUED};
 use crate::models::precision::FloatPrecision;
 use crate::models::{Operation, Strength};
 use crate::providers::ExecutionProvider;
@@ -215,7 +215,7 @@ impl StrengthFamily {
                 Strength::new(strength).expect("a live check supplies a strength in range"),
             );
             let options = ProcessOptions { provider, ..Default::default() };
-            let guarded_before = GUARDED.load(Ordering::Relaxed);
+            let (guarded_before, rescued_before) = (GUARDED.load(Ordering::Relaxed), RESCUED.load(Ordering::Relaxed));
             let started = std::time::Instant::now();
 
             let enhanced = opai
@@ -224,10 +224,11 @@ impl StrengthFamily {
                 .unwrap_or_else(|err| panic!("{codename} at {precision:?} on {provider}, strength {strength}: {err}"));
 
             let guarded = GUARDED.load(Ordering::Relaxed) - guarded_before;
+            let rescued = RESCUED.load(Ordering::Relaxed) - rescued_before;
             let produced = enhanced.picture;
 
             println!(
-                "  strength {strength}: {:?} on {:?}, {guarded} tile(s) kept by the guard",
+                "  strength {strength}: {:?} on {:?}, {guarded} tile(s) kept by the guard, {rescued} rescued",
                 started.elapsed(),
                 enhanced.providers.actual
             );
@@ -240,6 +241,7 @@ impl StrengthFamily {
 
             if codename != self.guarded {
                 assert_eq!(guarded, 0, "{codename} is not guarded, yet a tile was kept");
+                assert_eq!(rescued, 0, "{codename} is not guarded, yet a tile was rescued");
             }
 
             if strength == 0.0 {

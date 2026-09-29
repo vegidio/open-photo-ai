@@ -9,7 +9,8 @@
 // What a run is:
 //
 //   tile        the whole photograph through `run_tiled` at the default 256/16 geometry, scale 1, in the caller's range
-//   guard       per tile, where the variant has one: a raw output past the threshold keeps the tile's own input
+//   guard       per tile, where the variant has one: a diverged output is retried where the model has a rescue, and a
+//               tile still diverged keeps its own input
 //   blend       the photograph moved towards — or past — the tiled result by the run's strength
 //
 // **Only the guard is this file's own.** The grid is `imaging`'s and the blend is `imaging::mix`. The reference's
@@ -51,6 +52,100 @@ fn diverged(output: &[f32], threshold: f32) -> bool {
     output.iter().any(|value| value.abs() > threshold)
 }
 
+/// The side of the square blocks [`drift`] compares a tile's input and output over.
+const DRIFT_BLOCK: usize = 16;
+
+/// How far a tile's output has moved away from its input's local brightness and colour: over the tile's
+/// [`DRIFT_BLOCK`]-pixel blocks, the median of each block's largest per-channel shift in mean.
+///
+/// `input` and `output` are one planar CHW tile each, three square planes of one shape.
+fn drift(input: &[f32], output: &[f32]) -> f32 {
+    // A filter removes noise or adds edges, both of which average out over a block, so a working tile barely moves a
+    // block's mean. A diverged one moves most of them: its blow-up is a colour cast over the whole tile. The median
+    // rather than the mean or the largest, so that a few blocks legitimately changed — a street light's halo, an edge
+    // sharpened — cannot pass for a cast.
+    let plane = input.len() / 3;
+    let side = plane.isqrt();
+    let block = DRIFT_BLOCK.min(side);
+
+    if block == 0 {
+        return 0.0;
+    }
+
+    let blocks = side / block;
+    let area = (block * block) as f32;
+    let mut shifts = vec![0.0_f32; blocks * blocks];
+
+    for channel in 0..3 {
+        let (input, output) = (&input[channel * plane..][..plane], &output[channel * plane..][..plane]);
+
+        for (index, shift) in shifts.iter_mut().enumerate() {
+            let (top, left) = ((index / blocks) * block, (index % blocks) * block);
+            let sum: f32 = (top..top + block)
+                .flat_map(|y| (left..left + block).map(move |x| y * side + x))
+                .map(|at| output[at] - input[at])
+                .sum();
+
+            *shift = shift.max((sum / area).abs());
+        }
+    }
+
+    let middle = shifts.len() / 2;
+    *shifts.select_nth_unstable_by(middle, f32::total_cmp).1
+}
+
+/// How a guarded model's tiles are judged, and what is tried before a diverged one keeps its own input.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Guard {
+    /// The magnitude past which a tile's raw output is a blow-up.
+    pub(crate) magnitude: f32,
+    /// The second chance a diverged tile gets, for the models measured to need one; `None` keeps it at once.
+    pub(crate) rescue: Option<Rescue>,
+}
+
+impl Guard {
+    /// A guard that judges a tile by its magnitude alone, and keeps a diverged tile's input at once.
+    pub(crate) const fn magnitude(magnitude: f32) -> Self {
+        Self { magnitude, rescue: None }
+    }
+
+    /// Whether `output` is a tile the model produced correctly from `input`.
+    fn accepts(&self, input: &[f32], output: &[f32]) -> bool {
+        !diverged(output, self.magnitude) && self.rescue.is_none_or(|rescue| drift(input, output) <= rescue.drift)
+    }
+}
+
+/// A diverged tile's second chance: the model shown the tile again, brighter, and the result judged again.
+///
+/// Only for a model that reads `[0, 1]`, where multiplying a tile brightens it about black.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Rescue {
+    /// The [`drift`] past which an output that did not blow up is still treated as diverged.
+    pub(crate) drift: f32,
+    /// The mean brightness a dark tile is lifted towards for its retry.
+    pub(crate) exposure: f32,
+}
+
+impl Rescue {
+    /// The gain a retry of `input` runs at, or `None` where the tile cannot be brightened: already at the exposure,
+    /// or already reaching the top of the range.
+    fn gain(&self, input: &[f32]) -> Option<f32> {
+        // Capped at what takes the tile's brightest value to 1, so the retry is still a tile inside the range the
+        // model was trained on.
+        // Summed in `f64`: two hundred thousand `f32` additions lose enough to move the gain.
+        let mean = (input.iter().map(|&value| f64::from(value)).sum::<f64>() / input.len().max(1) as f64) as f32;
+        let peak = input.iter().copied().fold(0.0_f32, f32::max);
+
+        if mean <= 0.0 || peak <= 0.0 {
+            return None;
+        }
+
+        let gain = (self.exposure / mean).min(1.0 / peak);
+
+        (gain > 1.0).then_some(gain)
+    }
+}
+
 // Test-only, and read by each family's live check to report whether its guard fired on a real photograph. A static
 // rather than a field because a live check goes through `Opai::process`, which builds its pipeline where the test
 // cannot reach it. Shared by every family that runs this file, and the fake-backend suite below trips the guard too,
@@ -59,6 +154,10 @@ fn diverged(output: &[f32], threshold: f32) -> bool {
 #[cfg(test)]
 pub(crate) static GUARDED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+/// How many diverged tiles a rescue has saved since the process started; see [`GUARDED`].
+#[cfg(test)]
+pub(crate) static RESCUED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// The pipeline running one filter operation, as a family's contract seam hands it back.
 pub(crate) fn pipeline<B: Backend>(
     name: String,
@@ -66,7 +165,7 @@ pub(crate) fn pipeline<B: Backend>(
     profile: EpProfile,
     range: Normalisation,
     strength: Strength,
-    guard: Option<f32>,
+    guard: Option<Guard>,
 ) -> Shared<B> {
     Arc::new(Filter::new(name, artifact, profile, range, strength, guard))
 }
@@ -80,8 +179,8 @@ struct Filter {
     range: Normalisation,
     // An `Option` rather than the reference's zero-means-off `float32`, so "no guard" is not a sentinel a later reader
     // has to know about.
-    /// The magnitude past which a tile's raw output is discarded, for the models that need it.
-    guard: Option<f32>,
+    /// How a tile's raw output is judged, and what is tried before it is discarded, for the models that need it.
+    guard: Option<Guard>,
     /// How far the photograph is moved towards the tiled result: past it above 1.
     strength: f32,
 }
@@ -93,8 +192,14 @@ impl Filter {
         profile: EpProfile,
         range: Normalisation,
         strength: Strength,
-        guard: Option<f32>,
+        guard: Option<Guard>,
     ) -> Self {
+        // A retry multiplies the tile, which brightens it about black only in `[0, 1]`.
+        debug_assert!(
+            guard.is_none_or(|guard| guard.rescue.is_none() || range == Normalisation::Unit),
+            "a rescue was handed a model that does not read [0, 1]"
+        );
+
         Self { graph: SingleGraph::new(name, artifact, profile), range, guard, strength: strength.as_f32() }
     }
 }
@@ -135,17 +240,41 @@ impl<B: Backend> ImagePipeline<B> for Filter {
         // shape, so "keep this tile's input" is a copy — and the driver then decodes and blends it like any other,
         // so a kept tile meets its neighbours through the same ramp and at the run's own depth. The reference keeps
         // an 8-bit copy of the tile instead, which quantises a guarded region inside a 16-bit result.
+        //
+        // The retry is the model's own output, shown a brighter copy of the tile and dimmed back: NAFNet diverges on
+        // dark, heavily noisy tiles it was never trained on — a night sky — and the same noise lifted to an exposure
+        // it has seen denoises cleanly. A tile the model handles the first time is never retried, so a rescue changes
+        // nothing about a photograph the guard never fired on.
+        let mut lifted = Vec::new();
         let mut tile = |input: &[f32], output: &mut [f32]| -> Result<(), B::Error> {
             B::run_tile(session, input, output)?;
 
-            if let Some(threshold) = guard
-                && diverged(output, threshold)
-            {
-                output.copy_from_slice(input);
+            let Some(guard) = guard else { return Ok(()) };
 
-                #[cfg(test)]
-                GUARDED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if guard.accepts(input, output) {
+                return Ok(());
             }
+
+            if let Some(rescue) = guard.rescue
+                && let Some(gain) = rescue.gain(input)
+            {
+                lifted.clear();
+                lifted.extend(input.iter().map(|value| value * gain));
+                B::run_tile(session, &lifted, output)?;
+                output.iter_mut().for_each(|value| *value /= gain);
+
+                if guard.accepts(input, output) {
+                    #[cfg(test)]
+                    RESCUED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+                    return Ok(());
+                }
+            }
+
+            output.copy_from_slice(input);
+
+            #[cfg(test)]
+            GUARDED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             Ok(())
         };
@@ -217,6 +346,81 @@ mod tests {
         assert!(!diverged(&[], 3.0));
     }
 
+    /// A 256x256 planar tile whose every value is `value`.
+    fn flat(value: f32) -> Vec<f32> {
+        vec![value; 3 * 256 * 256]
+    }
+
+    #[test]
+    fn an_output_that_matches_its_input_has_not_drifted() {
+        assert_eq!(drift(&flat(0.2), &flat(0.2)), 0.0);
+    }
+
+    #[test]
+    fn a_cast_over_the_whole_tile_drifts_by_its_size_in_the_worst_channel() {
+        // Green lifted by 0.1 and blue lowered by 0.05: the worst channel is the drift, whatever its sign.
+        let input = flat(0.2);
+        let mut output = input.clone();
+        let plane = 256 * 256;
+
+        output[plane..2 * plane].iter_mut().for_each(|value| *value += 0.1);
+        output[2 * plane..].iter_mut().for_each(|value| *value -= 0.05);
+
+        assert!((drift(&input, &output) - 0.1).abs() < 1e-5, "{}", drift(&input, &output));
+    }
+
+    #[test]
+    fn a_change_confined_to_a_few_blocks_is_not_a_drift() {
+        // A street light's halo: one block moved hard, the other 255 untouched. The median does not see it.
+        let input = flat(0.05);
+        let mut output = input.clone();
+
+        for y in 0..16 {
+            for x in 0..16 {
+                output[y * 256 + x] = 0.9;
+            }
+        }
+
+        assert_eq!(drift(&input, &output), 0.0);
+    }
+
+    #[test]
+    fn noise_removed_about_its_own_mean_is_not_a_drift() {
+        // What a denoiser does: a checkerboard of +-0.04 about 0.1 flattened to 0.1. Every block's mean is unchanged.
+        let input: Vec<f32> = (0..3 * 256 * 256).map(|at| if (at + at / 256) % 2 == 0 { 0.14 } else { 0.06 }).collect();
+
+        assert!(drift(&input, &flat(0.1)) < 1e-5, "{}", drift(&input, &flat(0.1)));
+    }
+
+    /// The rescue the gain tests run, lifting towards a mean of 0.25.
+    const LIFT: Rescue = Rescue { drift: 0.01, exposure: 0.25 };
+
+    #[test]
+    fn a_dark_tile_is_lifted_to_the_exposure() {
+        assert!((LIFT.gain(&flat(0.05)).expect("a dark tile is lifted") - 5.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_lift_stops_where_the_brightest_value_reaches_the_top_of_the_range() {
+        // A mean of about 0.05 would ask for 5, but one value at 0.5 allows only 2.
+        let mut input = flat(0.05);
+        input[1234] = 0.5;
+
+        assert!((LIFT.gain(&input).expect("a dark tile is lifted") - 2.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_tile_already_at_the_exposure_or_black_is_not_lifted() {
+        assert_eq!(LIFT.gain(&flat(0.25)), None);
+        assert_eq!(LIFT.gain(&flat(0.6)), None);
+        assert_eq!(LIFT.gain(&flat(0.0)), None);
+
+        // Dark, but with one value already at the top of the range: nothing to lift it by.
+        let mut input = flat(0.05);
+        input[99] = 1.0;
+        assert_eq!(LIFT.gain(&input), None);
+    }
+
     // The fake-backend suite: the whole pipeline — the tile grid at scale 1, the guard, the blend, the progress
     // schedule, the depth dispatch, the cancellation and the refusal — with no ONNX Runtime, no GPU, no model file and
     // no network, which is what keeps every property above checked on every CI platform.
@@ -238,22 +442,22 @@ mod tests {
     /// The guard every guarded model this project ships runs at.
     const THRESHOLD: f32 = 3.0;
 
-    /// A filter over `range` at `strength`, guarded at `guard`.
-    fn filtering_in(range: Normalisation, strength: f64, guard: Option<f32>) -> Shared<Fake> {
+    /// A filter over `range` at `strength`, guarded by `guard`.
+    fn filtering_in(range: Normalisation, strength: f64, guard: Option<Guard>) -> Shared<Fake> {
         let strength = Strength::new(strength).expect("the test supplied a strength in range");
         let artifact = ArtifactId::new(Family::Denoise, "fake", None, Precision::Fp32);
 
         pipeline::<Fake>("Fake (FP32)".into(), artifact, EpProfile::default(), range, strength, guard)
     }
 
-    /// A filter over `[0, 1]` at `strength`, guarded at `guard`.
-    fn filtering(strength: f64, guard: Option<f32>) -> Shared<Fake> {
+    /// A filter over `[0, 1]` at `strength`, guarded by `guard`.
+    fn filtering(strength: f64, guard: Option<Guard>) -> Shared<Fake> {
         filtering_in(Normalisation::Unit, strength, guard)
     }
 
-    /// A filter whose model is guarded.
+    /// A filter whose model is guarded by its magnitude alone.
     fn guarded(strength: f64) -> Shared<Fake> {
-        filtering(strength, Some(THRESHOLD))
+        filtering(strength, Some(Guard::magnitude(THRESHOLD)))
     }
 
     /// Runs `pipeline` over `source` with nothing watching and nothing cancelling it.
@@ -426,6 +630,92 @@ mod tests {
                 "the unguarded model kept ({x}, {y}) rather than using the model's output"
             );
         }
+    }
+
+    // The rescue, through the whole pipeline. The fake halves every tile, which moves every block's mean, so a rescue
+    // whose drift is tight judges every tile the fake produces diverged and one whose drift is loose judges none of
+    // them — which is what lets these tests pick which half of the judgement they exercise.
+
+    /// A rescue that judges only by magnitude, because the fake's halving is far inside its drift.
+    const LOOSE: Rescue = Rescue { drift: 1.0, exposure: 0.25 };
+
+    /// A rescue that judges every one of the fake's tiles diverged.
+    const TIGHT: Rescue = Rescue { drift: 0.01, exposure: 0.25 };
+
+    /// A filter guarded at the shipped magnitude, with `rescue`.
+    fn rescued(rescue: Rescue) -> Shared<Fake> {
+        filtering(1.0, Some(Guard { magnitude: THRESHOLD, rescue: Some(rescue) }))
+    }
+
+    /// Two tiles of night sky: every value at most a tenth of the range, so both can be lifted.
+    fn night() -> DynamicImage {
+        DynamicImage::ImageRgb8(ImageBuffer::from_fn(PAIR.0, PAIR.1, |x, y| {
+            Rgb([(x % 24) as u8 + 2, (y % 24) as u8 + 2, 10])
+        }))
+    }
+
+    #[test]
+    fn a_tile_that_blows_up_is_retried_brighter_and_the_retry_is_used() {
+        // The first run explodes, the retry does not: the tile is the model's, dimmed back to the photograph's
+        // exposure, rather than the photograph's own pixels.
+        let source = night();
+        let sampler = Sampler::new(&source);
+        let handle = session(Some((0, 4.0)));
+        let produced = run(&rescued(LOOSE), &source, &handle, ChannelDepth::Eight);
+        let produced = produced.as_rgb8().expect("eight-bit");
+
+        assert_eq!(handle.session().runs.load(Ordering::Relaxed), 3, "two tiles and one retry");
+
+        for (x, y) in [(0, 0), (10, 150), (200, 30), (400, 100)] {
+            let (got, want) = (produced.get_pixel(x, y).0, darkened::<u8>(&sampler, x, y));
+
+            // Within a level: the retry is multiplied and divided back, which need not round to the same step.
+            assert!(got.iter().zip(want).all(|(got, want)| got.abs_diff(want) <= 1), "({x}, {y}): {got:?} {want:?}");
+        }
+    }
+
+    #[test]
+    fn a_tile_whose_retry_still_diverges_keeps_the_photographs_own_pixels() {
+        // Every run drifts, so each tile is tried twice and then kept.
+        let source = night();
+        let sampler = Sampler::new(&source);
+        let handle = session(None);
+        let produced = run(&rescued(TIGHT), &source, &handle, ChannelDepth::Eight);
+        let produced = produced.as_rgb8().expect("eight-bit");
+
+        assert_eq!(handle.session().runs.load(Ordering::Relaxed), 4, "each of the two tiles was not retried once");
+
+        for (x, y, pixel) in produced.enumerate_pixels() {
+            assert_eq!(pixel.0, original::<u8>(&sampler, x, y), "({x}, {y}) was not kept");
+        }
+    }
+
+    #[test]
+    fn a_tile_that_cannot_be_brightened_is_kept_without_a_retry() {
+        // The ordinary photograph reaches the top of the range, so there is nothing to lift it by.
+        let source = photograph(PAIR.0, PAIR.1);
+        let sampler = Sampler::new(&source);
+        let handle = session(Some((0, 4.0)));
+        let produced = run(&rescued(LOOSE), &source, &handle, ChannelDepth::Eight);
+        let produced = produced.as_rgb8().expect("eight-bit");
+
+        assert_eq!(handle.session().runs.load(Ordering::Relaxed), 2, "a tile with nothing to lift was retried");
+        assert_eq!(
+            produced.get_pixel(10, 150).0,
+            original::<u8>(&sampler, 10, 150),
+            "the diverged tile was not kept"
+        );
+        assert_eq!(produced.get_pixel(400, 100).0, darkened::<u8>(&sampler, 400, 100), "the good tile was not used");
+    }
+
+    #[test]
+    fn a_rescue_leaves_a_tile_the_model_handled_alone() {
+        // Nothing explodes and the drift is loose: every tile is run once and is the model's.
+        let source = night();
+        let handle = session(None);
+        run(&rescued(LOOSE), &source, &handle, ChannelDepth::Eight);
+
+        assert_eq!(handle.session().runs.load(Ordering::Relaxed), 2, "a tile that passed was retried");
     }
 
     #[test]

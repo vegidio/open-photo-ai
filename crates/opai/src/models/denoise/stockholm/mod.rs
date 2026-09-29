@@ -4,20 +4,31 @@
 
 // Deleting the model is deleting this directory plus the arms in `DenoiseVariant` that name it.
 
+use crate::models::filter::{Guard, Rescue};
 use crate::models::precision::Precision;
 use crate::providers::profile::EpProfile;
 
-// Stockholm is NAFNet, which occasionally blows up numerically on a tile unlike anything it was trained on: its raw
-// output on that tile goes to 1000 and beyond, and decoded it would be a solid saturated block in the middle of the
-// photograph. Legitimate output is of order 1 — the graph reads and writes `[0, 1]` — so 3.0 sits safely above
-// anything a working tile produces and far below the blow-up.
+// Stockholm is NAFNet, which diverges on tiles unlike anything it was trained on — dark, heavily noisy ones above
+// all, such as an underexposed night sky. It diverges in two ways:
 //
-// **The threshold is the reference's, carried across on trust.** No photograph known to make Stockholm diverge has
-// been observed in this project, so what is verified here is the mechanism — against a fake model made to explode,
-// in `models::filter` — and not that 3.0 is where to catch it. The live check reports how many tiles the guard
-// kept on the photograph it runs; one that trips it can be added as a fixture without the contract moving.
-/// The magnitude past which a tile's raw output is treated as a blow-up and the tile keeps its own input.
-pub(crate) const GUARD: f32 = 3.0;
+//   blow-up    the raw output goes to 60 and beyond, up to thousands: a solid saturated block once decoded
+//   cast       the output stays in range, but its colour and brightness have moved: a green or magenta square
+//
+// Legitimate output is of order 1 — the graph reads and writes `[0, 1]` — so a magnitude of 3.0 catches the first,
+// and is the reference's threshold. It cannot see the second, which is what the drift is for.
+//
+// Measured on a night photograph (Nikon NEF, 6016x4016, 425 tiles), identically on CPU and CoreML at FP32: 92 tiles
+// blew up and 8 more cast visibly — drifts of 0.03 to 0.25 — which the magnitude alone let through as broken squares.
+// Legitimate tiles drifted at most 0.008 there, and at most 0.005 on the committed fixture, so 0.01 sits above every
+// working tile measured. A second night photograph from the same camera: 62 blow-ups, 14 casts.
+//
+// The retry is what makes those tiles denoised rather than kept noisy. The same noise lifted towards a mean of 0.25
+// is a tile the model knows: with it, the first photograph keeps 1 tile of 425 instead of 92 (and casts none), and
+// the second keeps 1. A tile the model handles unaided is never retried, so on the fixture, where nothing diverges,
+// the output is unchanged. Lifting every tile instead was measured too and is worse: a tile that is dark *and*
+// extremely noisy blows up once lifted, where unaided it denoises cleanly — the lift is a rescue, not a default.
+/// How Stockholm's tiles are judged, and the retry a diverged one gets before it keeps its own input.
+pub(crate) const GUARD: Guard = Guard { magnitude: 3.0, rescue: Some(Rescue { drift: 0.01, exposure: 0.25 }) };
 
 /// The execution-provider tuning measured for this model, at the precision it carries: the provider defaults at both
 /// precisions, because nothing measured beat them, except for the nodes WebGPU cannot run correctly at FP16.
@@ -79,10 +90,11 @@ mod tests {
     use crate::providers::profile::{CoreMlComputeUnits, CoreMlSpecialization, ExecutionMode};
 
     #[test]
-    fn the_guard_is_the_references_threshold() {
-        // Pinned as a literal, for the reason `GUARD` gives: it is carried over rather than derived, so nothing else
-        // would notice it moving.
-        assert_eq!(GUARD, 3.0);
+    fn the_guard_is_the_references_threshold_with_the_measured_rescue() {
+        // Pinned as literals, for the reason `GUARD` gives: the magnitude is carried over and the rescue measured,
+        // neither derived, so nothing else would notice either moving.
+        assert_eq!(GUARD.magnitude, 3.0);
+        assert_eq!(GUARD.rescue, Some(Rescue { drift: 0.01, exposure: 0.25 }));
 
         for precision in FloatPrecision::ALL {
             assert_eq!(DenoiseVariant::Stockholm(precision).guard(), Some(GUARD), "{precision:?}");
