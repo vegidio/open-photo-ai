@@ -79,7 +79,7 @@ async fn a_refused_initialization_reports_no_plan_because_nothing_was_probed() {
     // The claim is taken before the hardware is probed, so a refusal here has nothing to report.
     let refused = (|| -> Result<Plan, InitError> {
         let _claim = instance::claim(&app_dir, GUI)?;
-        let plan = Opai::select_at(&server.base_url, gpu::adapters(), "linux", "x86_64")?;
+        let plan = Opai::select_at(&server.base_url, gpu::adapters(), gpu::cuda(), "linux", "x86_64")?;
         Opai::report_plan(&plan, on_plan.as_ref());
         Ok(plan)
     })();

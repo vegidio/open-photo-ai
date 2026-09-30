@@ -406,7 +406,8 @@ async fn an_unpublished_gpu_platform_reports_the_provider_unsupported_and_still_
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
     let adapters = [adapter("NVIDIA GeForce RTX 4090", "NVIDIA")];
-    let plan = Opai::select_at("http://example.invalid", &adapters, "windows", "aarch64").unwrap();
+    let cuda = gpu::cuda_device("NVIDIA GeForce RTX 4090", (8, 9));
+    let plan = Opai::select_at("http://example.invalid", &adapters, Some(&cuda), "windows", "aarch64").unwrap();
 
     assert!(plan.gpu.is_empty(), "something was selected for a platform nothing is published for");
 

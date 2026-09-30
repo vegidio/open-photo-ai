@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use rust_sak::sysinfo::GpuInfo;
+use rust_sak::sysinfo::{CudaInfo, GpuInfo};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
@@ -12,6 +12,7 @@ use crate::deps::artifact::{CUDA, CUDNN, ONNX_RUNTIME, TENSORRT};
 use crate::deps::release::Dependency as Descriptor;
 use crate::deps::{self, ModelTrust};
 use crate::error::InitError;
+use crate::gpu::{CudaSupport, TensorRtSupport};
 use crate::progress::{OnPlan, OnProgress, PlannedDependency, Reporter};
 use crate::providers::{Provider, SupportedProviders};
 use crate::sessions::Sessions;
@@ -77,17 +78,23 @@ impl Plan {
 }
 
 impl Opai {
-    /// Decides what to install on a machine with `adapters`, and what the resulting provider report says.
+    /// Decides what to install on a machine with `adapters`, whose NVIDIA driver reported `cuda`, and what the
+    /// resulting provider report says.
     ///
-    /// A pure function of the adapter list and platform, testable without real GPU hardware.
+    /// A pure function of the adapter list, the driver's answer and the platform, testable without real GPU hardware.
     ///
     /// # Errors
     ///
     /// Returns [`InitError::UnsupportedPlatform`] only when no **runtime** is published for this platform — an
     /// unpublished GPU library is reported unsupported rather than an error, since it's an optimisation the
     /// user was never going to get anyway.
-    pub(crate) fn select(adapters: &[GpuInfo], os: &'static str, arch: &'static str) -> Result<Plan, InitError> {
-        Self::select_at(deps::release::RELEASE_BASE_URL, adapters, os, arch)
+    pub(crate) fn select(
+        adapters: &[GpuInfo],
+        cuda: Option<&CudaInfo>,
+        os: &'static str,
+        arch: &'static str,
+    ) -> Result<Plan, InitError> {
+        Self::select_at(deps::release::RELEASE_BASE_URL, adapters, cuda, os, arch)
     }
 
     /// The testable half of [`Opai::select`], against an explicit base URL so the suite can point a real install at a
@@ -99,6 +106,7 @@ impl Opai {
     pub(crate) fn select_at(
         base_url: &str,
         adapters: &[GpuInfo],
+        cuda: Option<&CudaInfo>,
         os: &'static str,
         arch: &'static str,
     ) -> Result<Plan, InitError> {
@@ -109,35 +117,51 @@ impl Opai {
         // so its provider is never claimed.
         let published = |release| Descriptor::from_release_at(base_url, release, os, arch).ok();
 
-        if adapters.iter().any(gpu::is_nvidia)
-            && let (Some(cuda), Some(cudnn)) = (published(&CUDA), published(&CUDNN))
-        {
-            // cuDNN after CUDA: it links against the CUDA runtime.
-            gpu.push(cuda);
-            gpu.push(cudnn);
+        let nvidia: Vec<&str> =
+            adapters.iter().filter(|gpu| gpu::is_nvidia(gpu)).map(|gpu| gpu.name.as_str()).collect();
+
+        if !nvidia.is_empty() {
+            // An NVIDIA card is not enough: the pinned CUDA needs a recent driver and a Turing-or-newer device, and
+            // installing it anywhere else costs a ~600 MB download and a failed session build per model, every one
+            // of which falls back anyway.
+            match gpu::cuda_support(cuda) {
+                CudaSupport::Supported => {
+                    if let (Some(cuda), Some(cudnn)) = (published(&CUDA), published(&CUDNN)) {
+                        // cuDNN after CUDA: it links against the CUDA runtime.
+                        gpu.push(cuda);
+                        gpu.push(cudnn);
+                    }
+                }
+                // Worth a record: from outside, "an NVIDIA card but no CUDA" looks identical to a failed install.
+                refusal => tracing::info!(
+                    adapters = %nvidia.join(","),
+                    cuda = CUDA.tag,
+                    reason = %refusal,
+                    "the pinned CUDA release cannot run here; this machine runs without CUDA"
+                ),
+            }
         }
 
         // TensorRT is built on CUDA, so it never installs without it — the condition below is read off the CUDA
-        // row already being in the plan, not a separate flag.
-        if gpu.iter().any(|descriptor| descriptor.provides == Some(Provider::Cuda))
-            && adapters.iter().any(gpu::is_tensorrt_capable)
-            && let Some(tensorrt) = published(&TENSORRT)
-        {
-            // Last: at 1.4-2 GB, larger than the other three combined, so an interrupted first launch already
-            // has the two that unlock CUDA.
-            gpu.push(tensorrt);
-        } else if adapters.iter().any(gpu::is_nvidia) && !adapters.iter().any(gpu::is_tensorrt_capable) {
-            // Worth a record: from outside, "CUDA but no TensorRT" looks identical to a failed TensorRT install.
-            // The pinned release needs compute capability 7.5 (Turing+, the RTX brand), so a GTX card correctly
-            // gets CUDA only.
-            let cards: Vec<&str> =
-                adapters.iter().filter(|gpu| gpu::is_nvidia(gpu)).map(|gpu| gpu.name.as_str()).collect();
-
-            tracing::info!(
-                adapters = %cards.join(","),
-                tensorrt = TENSORRT.name,
-                "no adapter is new enough for the pinned TensorRT release; this machine runs on CUDA"
-            );
+        // row already being in the plan, not a separate flag. That row is also what holds TensorRT to a driver new
+        // enough for it.
+        if gpu.iter().any(|descriptor| descriptor.provides == Some(Provider::Cuda)) {
+            match gpu::tensorrt_support(cuda) {
+                TensorRtSupport::Supported => {
+                    if let Some(tensorrt) = published(&TENSORRT) {
+                        // Last: at 1.4-2 GB, larger than the other three combined, so an interrupted first launch
+                        // already has the two that unlock CUDA.
+                        gpu.push(tensorrt);
+                    }
+                }
+                // Worth a record: from outside, "CUDA but no TensorRT" looks identical to a failed TensorRT install.
+                refusal => tracing::info!(
+                    adapters = %nvidia.join(","),
+                    tensorrt = TENSORRT.tag,
+                    reason = %refusal,
+                    "the pinned TensorRT release cannot run here; this machine runs on CUDA"
+                ),
+            }
         }
 
         Ok(Plan { runtime, gpu })

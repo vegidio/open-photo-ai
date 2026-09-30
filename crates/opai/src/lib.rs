@@ -434,9 +434,10 @@ impl Opai {
     ///
     /// [`version`] and [`fn@catalogue`] read nothing here and work regardless of the claim.
     ///
-    /// What's installed depends on hardware: the ONNX Runtime always; on an NVIDIA machine, CUDA and cuDNN;
-    /// additionally, on an RTX-branded adapter, TensorRT. Installed sequentially (not concurrently), in that
-    /// order, since cuDNN links against the CUDA runtime.
+    /// What's installed depends on hardware: the ONNX Runtime always; on an NVIDIA machine whose driver and
+    /// device meet the pinned CUDA release's minimums, CUDA and cuDNN; additionally, where that device also meets
+    /// the pinned TensorRT release's, TensorRT. Installed sequentially (not concurrently), in that order, since cuDNN
+    /// links against the CUDA runtime.
     ///
     /// A GPU library not published for this platform is reported unsupported rather than attempted; the
     /// runtime itself is not — its absence fails the platform.
@@ -558,7 +559,7 @@ impl Opai {
         // A second initialization in *this* process joins the existing claim rather than contending with it.
         let claim = instance::claim(&app_dir, &app)?;
 
-        let plan = Self::select(gpu::adapters(), std::env::consts::OS, std::env::consts::ARCH)?;
+        let plan = Self::select(gpu::adapters(), gpu::cuda(), std::env::consts::OS, std::env::consts::ARCH)?;
 
         // Here, before `Self::install` — the first thing that transfers or creates anything — is called.
         Self::report_plan(&plan, on_plan.as_ref());

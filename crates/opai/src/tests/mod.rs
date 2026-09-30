@@ -11,10 +11,10 @@ use crate::deps::release::Dependency as Descriptor;
 use crate::providers::Provider;
 use crate::setup::Plan;
 use deps::test_server::{self, TestServer};
-use gpu::adapter;
+use gpu::{adapter, cuda_device};
 use instance::tests::{ACQUIRED, LOCK_FILE_NAME, REFUSED, child_attempt, child_holding, claimed};
 use rust_sak::crypto::sha256_bytes;
-use rust_sak::sysinfo::GpuInfo;
+use rust_sak::sysinfo::{CudaInfo, GpuInfo};
 use std::ffi::OsStr;
 use std::sync::Mutex;
 
@@ -77,7 +77,7 @@ fn runtime_only(server: &TestServer) -> Plan {
     Plan { runtime: fixture(server, &ONNX_RUNTIME, "runtime/1.30.0"), gpu: Vec::new() }
 }
 
-/// All four, as a machine with an RTX card installs them.
+/// All four, as a machine with a Turing-or-newer NVIDIA card installs them.
 fn every_dependency(server: &TestServer) -> Plan {
     Plan {
         runtime: fixture(server, &ONNX_RUNTIME, "runtime/1.30.0"),
@@ -110,9 +110,14 @@ fn recording_plan() -> (Option<OnPlan>, PlanReports) {
 }
 
 /// The one plan report `report_plan` made for the machine `adapters` describes, as `Opai::initialize` makes it.
-fn planned(adapters: &[GpuInfo], os: &'static str, arch: &'static str) -> Vec<PlannedDependency> {
+fn planned(
+    adapters: &[GpuInfo],
+    cuda: Option<&CudaInfo>,
+    os: &'static str,
+    arch: &'static str,
+) -> Vec<PlannedDependency> {
     let (on_plan, seen) = recording_plan();
-    let plan = Opai::select_at("http://example.invalid", adapters, os, arch).unwrap();
+    let plan = Opai::select_at("http://example.invalid", adapters, cuda, os, arch).unwrap();
 
     Opai::report_plan(&plan, on_plan.as_ref());
 
@@ -127,7 +132,12 @@ fn pinned_size(release: &deps::artifact::Release, os: &'static str, arch: &'stat
 }
 
 /// The names of the dependencies `select_at` chose, in install order, with the report derived from them.
-fn selected(adapters: &[GpuInfo], os: &'static str, arch: &'static str) -> (Vec<String>, SupportedProviders) {
-    let plan = Opai::select_at("http://example.invalid", adapters, os, arch).unwrap();
+fn selected(
+    adapters: &[GpuInfo],
+    cuda: Option<&CudaInfo>,
+    os: &'static str,
+    arch: &'static str,
+) -> (Vec<String>, SupportedProviders) {
+    let plan = Opai::select_at("http://example.invalid", adapters, cuda, os, arch).unwrap();
     (plan.all().map(|descriptor| descriptor.name.clone()).collect(), plan.providers())
 }

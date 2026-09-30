@@ -197,7 +197,19 @@ pub(crate) const ONNX_RUNTIME: Release = Release {
     ],
 };
 
+/// The oldest driver [`CUDA`] runs on, as the CUDA version that driver supports: CUDA 13 needs a 580-series driver or
+/// newer. Moves with the major version of [`CUDA`]'s tag.
+pub(crate) const CUDA_MIN_DRIVER: (u32, u32) = (13, 0);
+
+/// The oldest compute capability [`CUDA`] runs on. CUDA 13 dropped Maxwell, Pascal and Volta, leaving Turing (7.5) and
+/// newer; on anything older `cublasCreate` fails with `CUBLAS_STATUS_ARCH_MISMATCH` and every session falls back.
+/// Moves with the major version of [`CUDA`]'s tag.
+pub(crate) const CUDA_MIN_COMPUTE_CAPABILITY: (u32, u32) = (7, 5);
+
 /// The CUDA runtime libraries, pinned to `cuda/13.3.0`.
+///
+/// Installed only where [`gpu::cuda_support`](crate::gpu::cuda_support) says the driver and the device CUDA runs on
+/// meet [`CUDA_MIN_DRIVER`] and [`CUDA_MIN_COMPUTE_CAPABILITY`].
 ///
 /// Published for `linux_x64`, `linux_arm64` and `windows_x64` only — there is no NVIDIA hardware to serve on
 /// macOS, and no `windows_arm64` build exists. A platform with no row here is not an error for a GPU library; it is
@@ -274,8 +286,17 @@ pub(crate) const CUDNN: Release = Release {
     ],
 };
 
+/// The oldest compute capability [`TENSORRT`] builds engines for. TensorRT 10 deprecated Volta in 10.0 and removed it in
+/// 10.5, leaving Turing (7.5) and newer. Moves with [`TENSORRT`]'s tag.
+///
+/// No driver minimum of its own: TensorRT only installs beside [`CUDA`], whose [`CUDA_MIN_DRIVER`] it is built against.
+pub(crate) const TENSORRT_MIN_COMPUTE_CAPABILITY: (u32, u32) = (7, 5);
+
 /// TensorRT, pinned to `tensorrt/10.14.1`. Installed last: at 1.4–2 GB it is larger than the other three put
 /// together, so an interrupted first launch has the two that unlock CUDA already on disk.
+///
+/// Installed only where [`CUDA`] is and [`gpu::tensorrt_support`](crate::gpu::tensorrt_support) says the device the
+/// providers open meets [`TENSORRT_MIN_COMPUTE_CAPABILITY`].
 ///
 /// Published for the same three platforms as [`CUDA`].
 pub(crate) const TENSORRT: Release = Release {

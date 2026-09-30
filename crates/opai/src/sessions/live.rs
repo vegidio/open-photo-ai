@@ -116,7 +116,7 @@ async fn a_published_model_opens_on_cuda() {
 }
 
 #[tokio::test]
-#[ignore = "needs an RTX-branded NVIDIA card, which no CI runner has; run by hand on one with --ignored"]
+#[ignore = "needs a Turing-or-newer NVIDIA card, which no CI runner has; run by hand on one with --ignored"]
 async fn a_published_model_opens_on_tensorrt() {
     opens_on(ExecutionProvider::TensorRt).await;
 }

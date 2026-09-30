@@ -40,11 +40,11 @@ pub(crate) enum Expansion {
 pub enum Dependency {
     /// The ONNX Runtime for this platform.
     Runtime,
-    /// The CUDA runtime libraries, installed only on a machine with an NVIDIA adapter.
+    /// The CUDA runtime libraries, installed only where the NVIDIA driver and device can run the pinned release.
     Cuda,
     /// cuDNN, installed alongside CUDA.
     Cudnn,
-    /// TensorRT, installed only on a machine with an RTX-branded NVIDIA adapter.
+    /// TensorRT, installed only alongside CUDA, on a device the pinned release can build engines for.
     TensorRt,
     /// One AI model's files, installed the first time an operation needing them is run.
     Model(ArtifactId),

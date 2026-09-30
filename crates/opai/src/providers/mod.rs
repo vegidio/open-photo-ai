@@ -176,9 +176,11 @@ pub struct SupportedProviders {
     pub cpu: bool,
     /// macOS 12 or newer.
     pub coreml: bool,
-    /// An NVIDIA adapter was detected *and* the CUDA libraries were installed for this platform.
+    /// The NVIDIA driver and device can run the pinned CUDA release *and* its libraries were installed for this
+    /// platform.
     pub cuda: bool,
-    /// An RTX-branded NVIDIA adapter was detected *and* TensorRT was installed for this platform.
+    /// CUDA is supported, the device can run the pinned TensorRT release *and* TensorRT was installed for this
+    /// platform.
     pub tensorrt: bool,
     /// The WebGPU plugin installed with the runtime registered *and* offered at least one device.
     pub webgpu: bool,
