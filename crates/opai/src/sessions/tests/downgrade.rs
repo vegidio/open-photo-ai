@@ -281,3 +281,106 @@ async fn an_auto_rung_and_an_explicit_request_for_its_provider_are_two_sessions(
 
     assert_eq!(attached(&bench), vec![vec![Accelerator::Cuda, Accelerator::WebGpu], vec![Accelerator::Cuda]]);
 }
+
+/// A bench whose builds on `providers` run the device out of memory, once per entry.
+fn running_out_of_memory(providers: &[ExecutionProvider]) -> Arc<Bench> {
+    Arc::new(Bench { out_of_memory: Mutex::new(providers.to_vec()), ..Bench::default() })
+}
+
+#[tokio::test]
+async fn a_build_that_runs_out_of_memory_is_retried_after_releasing_what_nothing_is_using() {
+    let server = TestServer::start(vec![]).await;
+    let (_root, app_dir) = app();
+    let bench = running_out_of_memory(&[]);
+    let (earlier, building) = (tokyo(), kyoto());
+    let sessions = sessions(&bench, &server, listing_for(&[&earlier, &building]), &app_dir, nvidia_with_webgpu());
+
+    // Built before the shortage arrives, and let go of: what an earlier enhancement leaves resident.
+    drop(
+        sessions
+            .session(&earlier, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+            .await,
+    );
+    lock(&bench.out_of_memory).push(ExecutionProvider::TensorRt);
+
+    let (log, handle) = logging::records_of("info", || async {
+        sessions
+            .session(&building, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+            .await
+    })
+    .await;
+
+    assert_eq!(handle.unwrap().provider(), ExecutionProvider::TensorRt, "the retry did not stay on TensorRT");
+    assert_eq!(bench.built_on()[1..], [ExecutionProvider::TensorRt, ExecutionProvider::TensorRt]);
+    assert_eq!(sessions.cache().resident(), 1, "the idle session was not released");
+
+    let released = records(&log, "released resident sessions");
+    assert_eq!(released.len(), 1, "{log}");
+    assert_eq!(field(released[0], "reason"), Some("out_of_memory"), "{}", released[0]);
+    assert_eq!(field(released[0], "artifacts"), Some(earlier.as_str()), "{}", released[0]);
+}
+
+#[tokio::test]
+async fn a_build_that_runs_out_of_memory_beside_sessions_in_use_falls_back_without_a_retry() {
+    // The diffusion upscaler's case: the decoder is built while the run still holds the encoder and the denoiser.
+    let server = TestServer::start(vec![]).await;
+    let (_root, app_dir) = app();
+    let bench = running_out_of_memory(&[]);
+    let (held, building) = (tokyo(), kyoto());
+    let sessions = sessions(&bench, &server, listing_for(&[&held, &building]), &app_dir, nvidia_with_webgpu());
+
+    let holding = sessions
+        .session(&held, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+        .await
+        .unwrap();
+    lock(&bench.out_of_memory).push(ExecutionProvider::TensorRt);
+
+    let (log, handle) = logging::records_of("info", || async {
+        sessions
+            .session(&building, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+            .await
+    })
+    .await;
+
+    assert_eq!(handle.unwrap().provider(), ExecutionProvider::Cuda);
+    assert_eq!(
+        bench.built_on()[1..],
+        [ExecutionProvider::TensorRt, ExecutionProvider::Cuda],
+        "a build was retried although nothing was released"
+    );
+    assert_eq!(holding.provider(), ExecutionProvider::TensorRt, "the session in use was let go of");
+
+    // Says what was holding the memory, which is the question a reader of the fallback has.
+    let released = records(&log, "released resident sessions");
+    assert_eq!(released.len(), 1, "{log}");
+    assert_eq!(field(released[0], "released"), Some("0"), "{}", released[0]);
+    assert_eq!(field(released[0], "held"), Some(held.as_str()), "{}", released[0]);
+}
+
+#[tokio::test]
+async fn a_retry_that_runs_out_of_memory_again_falls_back() {
+    let server = TestServer::start(vec![]).await;
+    let (_root, app_dir) = app();
+    let bench = running_out_of_memory(&[]);
+    let (earlier, building) = (tokyo(), kyoto());
+    let sessions = sessions(&bench, &server, listing_for(&[&earlier, &building]), &app_dir, nvidia_with_webgpu());
+
+    drop(
+        sessions
+            .session(&earlier, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+            .await,
+    );
+    lock(&bench.out_of_memory).extend([ExecutionProvider::TensorRt, ExecutionProvider::TensorRt]);
+
+    let handle = sessions
+        .session(&building, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+        .await
+        .unwrap();
+
+    assert_eq!(handle.provider(), ExecutionProvider::Cuda);
+    assert_eq!(
+        bench.built_on()[1..],
+        [ExecutionProvider::TensorRt, ExecutionProvider::TensorRt, ExecutionProvider::Cuda],
+        "TensorRT was attempted more than twice"
+    );
+}

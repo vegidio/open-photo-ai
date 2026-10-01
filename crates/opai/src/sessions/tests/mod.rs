@@ -84,6 +84,17 @@ fn build_failure(artifact: &ArtifactId, provider: ExecutionProvider) -> SessionE
     }
 }
 
+/// A build that failed because the device ran out of memory, as `sessions::build` marks one.
+fn out_of_memory_failure(artifact: &ArtifactId, provider: ExecutionProvider) -> SessionError {
+    let source = Arc::new(io::Error::other("TensorRT EP failed to create engine from network"));
+
+    SessionError::Build {
+        artifact: artifact.as_str().to_string(),
+        provider,
+        source: Arc::new(crate::error::OutOfDeviceMemory { source }),
+    }
+}
+
 /// A failure that is not about the provider: the model file cannot be read, which fails the same way on the CPU.
 fn unreadable(model: &Path) -> SessionError {
     SessionError::from(InitError::Io {
@@ -101,6 +112,9 @@ struct Bench {
     fails_on: Vec<ExecutionProvider>,
     /// Where set, every build fails as a model that could not be read rather than one that would not open.
     unreadable: bool,
+    /// Builds that run the device out of memory: each one on a provider listed here fails that way and takes its
+    /// entry out, so a provider listed twice fails twice.
+    out_of_memory: Mutex<Vec<ExecutionProvider>>,
 }
 
 impl Bench {
@@ -135,6 +149,13 @@ fn builder(bench: &Arc<Bench>) -> Builder<Fake> {
         }
         if bench.fails_on.contains(&provider) {
             return Err(build_failure(&artifact, provider));
+        }
+        {
+            let mut out_of_memory = lock(&bench.out_of_memory);
+            if let Some(at) = out_of_memory.iter().position(|listed| *listed == provider) {
+                out_of_memory.remove(at);
+                return Err(out_of_memory_failure(&artifact, provider));
+            }
         }
 
         Ok(Fake(serial))

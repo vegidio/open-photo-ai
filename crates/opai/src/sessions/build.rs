@@ -43,11 +43,12 @@ use ort::session::Session;
 use ort::session::builder::SessionBuilder;
 
 use crate::deps::manifest;
-use crate::error::{InitError, SessionError};
+use crate::error::{InitError, OutOfDeviceMemory, SessionError};
 use crate::models::ArtifactId;
-use crate::providers::Accelerator;
 use crate::providers::options::{CachePaths, ProviderOptions, SessionPlan, SessionSettings};
 use crate::providers::profile::{DISABLED_OPTIMIZER_SEPARATOR, ExecutionMode};
+use crate::providers::{Accelerator, ExecutionProvider};
+use crate::runtime::diagnostics;
 
 /// Held across any session build whose attach list contains TensorRT.
 ///
@@ -105,7 +106,32 @@ pub(crate) fn build(request: BuildRequest) -> Result<Session, SessionError> {
     // is "on disk and would not open", which is the only failure a CPU retry could answer.
     drop(std::fs::File::open(&model).map_err(InitError::io(&model))?);
 
+    // Taken on this thread because that is where the runtime logs a build's own records — see the span above — and
+    // TensorRT builds are serialized, so what is counted between here and the failure is this build's.
+    let mark = diagnostics::out_of_memory_mark();
+
     serialized(attaches_tensorrt(&plan), &paths.timing, || open(&artifact, &plan, &model))
+        .map_err(|error| out_of_memory(error, diagnostics::out_of_memory_since(mark)))
+}
+
+/// `error`, marked as the device running out of memory where it was: a record saying so was logged during the build
+/// (`logged`), or the runtime's own message says so — which is how the CUDA provider reports it.
+fn out_of_memory(error: SessionError, logged: bool) -> SessionError {
+    match error {
+        SessionError::Build { artifact, provider, source }
+            if provider != ExecutionProvider::Cpu && (logged || says_out_of_memory(&source.to_string())) =>
+        {
+            SessionError::Build { artifact, provider, source: Arc::new(OutOfDeviceMemory { source }) }
+        }
+        other => other,
+    }
+}
+
+/// Whether a runtime error's message is a failed device allocation.
+fn says_out_of_memory(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+
+    message.contains("out of memory") || message.contains("outofmemory") || message.contains("failed to allocate")
 }
 
 /// Builds the session itself: providers attached in the plan's order, the session settings applied, the graph
@@ -307,7 +333,6 @@ impl BuilderSettings {
 mod tests {
     use super::*;
     use crate::logging;
-    use crate::providers::ExecutionProvider;
     use crate::providers::profile::EpProfile;
     use std::cell::RefCell;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -595,5 +620,44 @@ mod tests {
         );
         // And the runtime's own fields survive beside them rather than being replaced.
         assert!(diagnostic.contains("location=session_state.cc:1166"), "{diagnostic}");
+    }
+
+    /// A build failure on `provider` whose runtime error says `message`.
+    fn failure(provider: ExecutionProvider, message: &str) -> SessionError {
+        SessionError::Build {
+            artifact: "up_osaka_vae_decoder_fp16".to_string(),
+            provider,
+            source: Arc::new(std::io::Error::other(message.to_string())),
+        }
+    }
+
+    /// The runtime's message for the TensorRT failure from the field, which does not mention memory.
+    const NO_ENGINE: &str = "TensorRT EP failed to create engine from network for fused node: TRTKernel_graph_0";
+
+    #[test]
+    fn a_tensorrt_failure_with_an_out_of_memory_record_is_marked_out_of_memory() {
+        assert!(out_of_memory(failure(ExecutionProvider::TensorRt, NO_ENGINE), true).is_out_of_memory());
+        assert!(!out_of_memory(failure(ExecutionProvider::TensorRt, NO_ENGINE), false).is_out_of_memory());
+    }
+
+    #[test]
+    fn a_cuda_failure_that_says_out_of_memory_is_marked_out_of_memory() {
+        let error = out_of_memory(failure(ExecutionProvider::Cuda, "CUDA failure 2: out of memory"), false);
+
+        assert!(error.is_out_of_memory());
+        assert!(error.to_string().contains("the device ran out of memory"), "{error}");
+    }
+
+    #[test]
+    fn a_cpu_failure_is_never_marked_out_of_memory() {
+        // Releasing GPU sessions does nothing for the CPU, and it is the ladder's last rung anyway.
+        assert!(!out_of_memory(failure(ExecutionProvider::Cpu, "Failed to allocate memory"), true).is_out_of_memory());
+    }
+
+    #[test]
+    fn an_install_failure_is_never_marked_out_of_memory() {
+        let error = SessionError::from(InitError::Stopped);
+
+        assert!(!out_of_memory(error, true).is_out_of_memory());
     }
 }

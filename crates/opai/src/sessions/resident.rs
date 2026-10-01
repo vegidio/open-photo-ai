@@ -304,6 +304,41 @@ impl<S, E> SessionCache<S, E> {
     /// than the interval. The count is read under this lock, and the only thing that can increment it is handing out
     /// a handle, which happens under the same lock.
     pub(super) fn sweep(&self, evict_unused_since: Instant) {
+        let (released, artifacts, _) = self.evict(evict_unused_since);
+
+        // Only when it did something. This runs every few minutes for the life of the process, and a line each time
+        // saying nothing happened is how a log stops being read — the volume rule applied to a background task.
+        if released > 0 {
+            tracing::info!(released, %artifacts, reason = "idle", "released resident sessions");
+        }
+    }
+
+    /// Releases every entry that nothing is using, however recently it was used, because building `artifact` ran the
+    /// device out of memory. Returns how many were released.
+    ///
+    /// What survives is what a run is holding — for a chain, every session of every operation it has opened so far,
+    /// since the chain keeps them all until it returns — and that is not a choice: freeing one would be a native
+    /// use-after-free. So this frees what earlier runs left resident, and says what it could not.
+    pub(crate) fn release_unused(&self, artifact: &ArtifactId) -> usize {
+        let (released, artifacts, held) = self.evict(Instant::now());
+
+        // Written even for nothing: "it ran out of memory and everything resident was in use" is the answer to why the
+        // build then fell back, and it names what was holding the memory.
+        tracing::info!(
+            released,
+            %artifacts,
+            %held,
+            reason = "out_of_memory",
+            building = %artifact,
+            "released resident sessions"
+        );
+
+        released
+    }
+
+    /// Removes every entry nothing is using that has not been used since `evict_unused_since`, and returns how many
+    /// went, which artifacts they were, and which artifacts stayed because something is using them.
+    fn evict(&self, evict_unused_since: Instant) -> (usize, String, String) {
         let mut entries = lock(&self.entries);
 
         // Collected by the `retain` predicate itself rather than by a pass before or after it. A second walk would
@@ -311,24 +346,21 @@ impl<S, E> SessionCache<S, E> {
         // `SessionHandle::drop` touches the entry, not this map — so the two passes could disagree about which
         // entries went, and the record would name something that survived.
         let mut evicted: Vec<String> = Vec::new();
+        let mut held: Vec<String> = Vec::new();
         entries.retain(|(artifact, _, _), entry| {
-            let keep = Arc::strong_count(entry) > 1 || entry.last_used() > evict_unused_since;
+            let in_use = Arc::strong_count(entry) > 1;
+            let keep = in_use || entry.last_used() > evict_unused_since;
             if !keep {
                 evicted.push(artifact.to_string());
+            } else if in_use {
+                held.push(artifact.to_string());
             }
             keep
         });
         self.publish_resident(&entries);
         drop(entries);
 
-        let released = evicted.len();
-        let artifacts = released_artifacts(evicted);
-
-        // Only when it did something. This runs every few minutes for the life of the process, and a line each time
-        // saying nothing happened is how a log stops being read — the volume rule applied to a background task.
-        if released > 0 {
-            tracing::info!(released, %artifacts, reason = "idle", "released resident sessions");
-        }
+        (evicted.len(), released_artifacts(evicted), released_artifacts(held))
     }
 }
 

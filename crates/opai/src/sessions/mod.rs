@@ -60,6 +60,10 @@
 //! being paid again on every run. An explicit request is not remembered: it attempts the provider it asks for every
 //! time, and each fallback re-enters the cache, so a repeated request pays one failed attach rather than a rebuild.
 //!
+//! One failure is tried again on the same rung first: a build that ran the device out of memory, after the sessions
+//! nothing is using have been released — see [`Sessions::build_releasing`]. What a run holds is never released, so a
+//! build beside a chain's own sessions that are still too large falls back as before.
+//!
 //! Only a failure about *building* the session moves down the ladder. A model file that is missing or unreadable fails
 //! the same way on every provider, and is reported as a model that could not be put on disk.
 //!
@@ -307,7 +311,7 @@ impl<S: Send + 'static> Sessions<S> {
             .collect();
 
         for (index, rung) in rungs.iter().enumerate() {
-            match self.build_on(artifact, profile, rung, interest).await {
+            match self.build_releasing(artifact, profile, rung, interest).await {
                 // A stop, which is not a failure and not a downgrade: the transfer this request was waiting on ended
                 // because nothing was left waiting for it, and attempting the next rung would be starting the same
                 // install again on behalf of a request that has already gone away.
@@ -343,6 +347,33 @@ impl<S: Send + 'static> Sessions<S> {
 
         // The ladder always ends on the CPU, which is never declined, and a CPU failure returns above.
         unreachable!("the provider ladder ended without reaching the CPU")
+    }
+
+    /// [`build_on`](Self::build_on), attempted a second time where the first ran the device out of memory and
+    /// releasing the sessions nothing is using freed some.
+    ///
+    /// Once, because a second out-of-memory failure says the memory is held by what a run is using — a chain keeps
+    /// every session it opened until it returns, so a diffusion upscaler's decoder is built beside its encoder, its
+    /// denoiser and every earlier operation's model — and only the next rung can answer that. Nothing released means
+    /// the same, without paying for the attempt.
+    async fn build_releasing(
+        &self,
+        artifact: &ArtifactId,
+        profile: &EpProfile,
+        rung: &ChainResolution,
+        interest: &Interest,
+    ) -> Result<Option<SessionHandle<S>>, SessionError> {
+        let outcome = self.build_on(artifact, profile, rung, interest).await;
+
+        match outcome {
+            Err(error) if error.is_out_of_memory() && self.cache.release_unused(artifact) > 0 => {
+                // `info` rather than `warn`: nothing has been lost yet, and the downgrade it may still end in has its
+                // own record.
+                tracing::info!(%artifact, provider = %rung.resolved(), "retrying the build after releasing memory");
+                self.build_on(artifact, profile, rung, interest).await
+            }
+            outcome => outcome,
+        }
     }
 
     /// The session for `artifact` under `rung`, one resolution of the request's ladder.

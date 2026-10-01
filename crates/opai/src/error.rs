@@ -251,9 +251,10 @@ pub(crate) enum SessionError {
         provider: ExecutionProvider,
         // Erased rather than typed as one, and not for taste: every `ort::Error` constructor goes through the
         // runtime's `CreateStatus`, so one cannot be built at all without a loaded runtime — and the fallback this
-        // variant drives is required to be exercisable on a runner that has none. Nothing downcasts it; what a caller
-        // reads is the message and the chain, both of which survive.
-        /// What the builder reported, which in production is always an [`ort::Error`].
+        // variant drives is required to be exercisable on a runner that has none. The one downcast is to
+        // `OutOfDeviceMemory`, which the build wraps a failure in where the device ran out of memory during it.
+        /// What the builder reported, which in production is an [`ort::Error`], possibly inside an
+        /// [`OutOfDeviceMemory`].
         #[source]
         source: Arc<dyn std::error::Error + Send + Sync>,
     },
@@ -267,6 +268,28 @@ impl SessionError {
             Self::Build { .. } => "session_build",
         }
     }
+
+    /// Whether this is a build that failed because the device ran out of memory while it ran — the one failure that
+    /// releasing other sessions can cure.
+    pub(crate) fn is_out_of_memory(&self) -> bool {
+        match self {
+            Self::Build { source, .. } => source.downcast_ref::<OutOfDeviceMemory>().is_some(),
+            Self::Install(_) => false,
+        }
+    }
+}
+
+/// A session build that failed while the device it was building for was out of memory.
+///
+/// Its own type rather than a flag on [`SessionError::Build`], because what it marks is a fact about the cause: the
+/// runtime's error says only that the provider *"failed to create engine"*, and the allocation that failed is in a
+/// record it logged on the way there. See `runtime::diagnostics`.
+#[derive(Debug, Error)]
+#[error("the device ran out of memory: {source}")]
+pub(crate) struct OutOfDeviceMemory {
+    /// What the runtime reported.
+    #[source]
+    pub(crate) source: Arc<dyn std::error::Error + Send + Sync>,
 }
 
 impl From<InitError> for SessionError {

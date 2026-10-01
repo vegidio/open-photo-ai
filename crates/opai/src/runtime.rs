@@ -16,6 +16,8 @@ use ort::logging::LogLevel;
 use crate::error::InitError;
 use crate::telemetry::unit::{self, Outcome, Unit, unit_span};
 
+pub(crate) mod diagnostics;
+
 /// The first load failure in this process, if there has been one.
 ///
 /// This exists because `ort`'s own load global does not survive one. It loads through
@@ -178,7 +180,10 @@ fn load(name: &str, library: &Path, webgpu: Option<&str>, started: std::time::In
     //
     // `with_telemetry(false)` is kept for Windows, whose ETW telemetry it does govern; on macOS and Linux it only
     // clears a flag, and the opt-out that counts there is `TELEMETRY_OPT_OUT`, checked above.
-    builder.with_name(name).with_telemetry(false).commit();
+    //
+    // The logger is `ort`'s own `tracing` bridge in every respect a reader sees, plus a severity correction and the
+    // out-of-memory mark a failed build is read against; see `diagnostics`.
+    builder.with_name(name).with_telemetry(false).with_logger(diagnostics::logger()).commit();
 
     let environment =
         Environment::current().map_err(|source| InitError::RuntimeStart { path: library.to_path_buf(), source })?;
