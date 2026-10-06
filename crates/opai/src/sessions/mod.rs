@@ -401,7 +401,7 @@ impl<S: Send + 'static> Sessions<S> {
                     };
 
                     let paths = caches::resolve(&self.app_dir, &self.name, artifact)?;
-                    let plan = options::plan(rung.clone(), profile, &paths);
+                    let plan = options::plan(rung.clone(), profile, &paths, crate::gpu::cuda_device_memory());
 
                     // The graph is the artifact's own name, the same rule the descriptor composes a model's version from;
                     // a model too large for the protobuf limit keeps its weights in a sibling the runtime opens itself.

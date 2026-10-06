@@ -64,6 +64,15 @@ pub(crate) fn cuda() -> Option<&'static CudaInfo> {
         .as_ref()
 }
 
+/// The total memory of CUDA's device 0, the one the CUDA and TensorRT providers are pinned to open, in bytes — or
+/// `None` on a machine with no CUDA device, or whose driver did not say.
+///
+/// The card's whole framebuffer, as the driver reports it, not what is free: that changes with every session held
+/// and every other program on the card, so it would size a build for a moment rather than for the device.
+pub(crate) fn cuda_device_memory() -> Option<u64> {
+    cuda()?.devices.first()?.total_memory
+}
+
 /// Whether the pinned CUDA release can run on this machine, and if not, why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CudaSupport {
@@ -200,7 +209,7 @@ pub(crate) fn unnamed_vendor(name: &str) -> GpuInfo {
 pub(crate) fn cuda_device(name: &str, compute_capability: (u32, u32)) -> CudaInfo {
     CudaInfo {
         driver_version: CUDA_MIN_DRIVER,
-        devices: vec![rust_sak::sysinfo::CudaDevice { name: name.to_string(), compute_capability }],
+        devices: vec![rust_sak::sysinfo::CudaDevice { name: name.to_string(), compute_capability, total_memory: None }],
     }
 }
 
@@ -302,6 +311,7 @@ mod tests {
         cuda.devices.push(rust_sak::sysinfo::CudaDevice {
             name: "NVIDIA GeForce RTX 4090".to_string(),
             compute_capability: (8, 9),
+            total_memory: None,
         });
 
         assert!(matches!(tensorrt_support(Some(&cuda)), TensorRtSupport::DeviceTooOld { .. }));
@@ -384,6 +394,7 @@ mod tests {
         cuda.devices.push(rust_sak::sysinfo::CudaDevice {
             name: "NVIDIA GeForce RTX 4090".to_string(),
             compute_capability: (8, 9),
+            total_memory: None,
         });
 
         assert!(matches!(cuda_support(Some(&cuda)), CudaSupport::DeviceTooOld { .. }));

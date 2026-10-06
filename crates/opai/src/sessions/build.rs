@@ -110,8 +110,14 @@ pub(crate) fn build(request: BuildRequest) -> Result<Session, SessionError> {
     // TensorRT builds are serialized, so what is counted between here and the failure is this build's.
     let mark = diagnostics::out_of_memory_mark();
 
-    serialized(attaches_tensorrt(&plan), &paths.timing, || open(&artifact, &plan, &model))
-        .map_err(|error| out_of_memory(error, diagnostics::out_of_memory_since(mark)))
+    let session = serialized(attaches_tensorrt(&plan), &paths.timing, || open(&artifact, &plan, &model))
+        .map_err(|error| out_of_memory(error, diagnostics::out_of_memory_since(mark)));
+
+    // A build is where the runtime's bursts happen, so its end is where their tallies are written — inside the span
+    // above, so they name the model too.
+    diagnostics::flush();
+
+    session
 }
 
 /// `error`, marked as the device running out of memory where it was: a record saying so was logged during the build

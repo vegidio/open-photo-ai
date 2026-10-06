@@ -159,8 +159,23 @@ fn options_from<const N: usize>(entries: [(&str, &str); N]) -> BTreeMap<String, 
 }
 
 // The reference implementation's default, and the only value any model there runs with.
-/// TensorRT's workspace ceiling: 4 GiB.
+/// TensorRT's workspace ceiling: 4 GiB, on a card with the memory to spare it.
 const TRT_WORKSPACE_BYTES: u64 = 4 << 30;
+
+/// The share of the card's memory TensorRT's workspace may take, as a divisor: a quarter.
+const TRT_WORKSPACE_SHARE: u64 = 4;
+
+/// TensorRT's workspace ceiling on a CUDA device with `device_memory` bytes: a quarter of the card, and never more
+/// than [`TRT_WORKSPACE_BYTES`]. A device whose memory is unknown gets the full ceiling, as every device did before.
+///
+/// The ceiling is what each tactic TensorRT times may ask for, and it asks for it from memory the resident sessions
+/// are already holding part of. At 4 GiB on a 6 GB RTX 3050 the builder's requests of 3.9 to 4.2 GB failed by the
+/// hundred — each one written to the log — and one build in four then failed outright, unable to find even 1 KiB.
+/// A tactic over the ceiling is not timed at all, so a lower one costs only those tactics, which a card that size
+/// could not have run anyway. Cards of 16 GB and up keep the 4 GiB they were measured with.
+fn trt_workspace_bytes(device_memory: Option<u64>) -> u64 {
+    device_memory.map_or(TRT_WORKSPACE_BYTES, |bytes| (bytes / TRT_WORKSPACE_SHARE).min(TRT_WORKSPACE_BYTES))
+}
 
 // Measured and rejected rather than unexamined, and both providers fail it in opposite ways.
 //
@@ -188,13 +203,14 @@ const GRAPH_CAPTURE_DISABLED: &str = "0";
 /// [`EpProfile::trt_options`].
 pub(crate) const TRT_BUILDER_OPTIMIZATION_LEVEL: &str = "trt_builder_optimization_level";
 
-/// The TensorRT provider options for a model with this profile and these cache directories: the pinned defaults, with
-/// the profile's raw overlay applied **last** so it can override any of them.
-fn tensorrt_options(paths: &CachePaths, profile: &EpProfile) -> BTreeMap<String, String> {
+/// The TensorRT provider options for a model with this profile and these cache directories, on a CUDA device with
+/// `device_memory` bytes: the pinned defaults, with the profile's raw overlay applied **last** so it can override any
+/// of them.
+fn tensorrt_options(paths: &CachePaths, profile: &EpProfile, device_memory: Option<u64>) -> BTreeMap<String, String> {
     // Each default is measured rather than inherited.
     let mut options = options_from([
         ("device_id", "0"),
-        ("trt_max_workspace_size", &TRT_WORKSPACE_BYTES.to_string()),
+        ("trt_max_workspace_size", &trt_workspace_bytes(device_memory).to_string()),
         // INT8 off and FP16 not forced. A graph already exported at FP16 gains nothing from the flag, and forcing it on
         // a model that was not validated for it silently changes the output — which is why the precision is chosen by
         // selecting the model rather than by a provider option.
@@ -364,18 +380,24 @@ pub(crate) fn resolve(
 ) -> SessionPlan {
     // Infallible, deliberately. Every outcome other than the one asked for is a downgrade rather than an error; the one
     // thing that can fail is parsing a provider *name*, which happens at the boundary long before this.
-    plan(resolve_chain(requested, supported), profile, paths)
+    plan(resolve_chain(requested, supported), profile, paths, None)
 }
 
-/// The plan for running a model with `profile` under `chain`, one rung of a [`ladder`] or the whole of a request.
-pub(crate) fn plan(chain: ChainResolution, profile: &EpProfile, paths: &CachePaths) -> SessionPlan {
+/// The plan for running a model with `profile` under `chain`, one rung of a [`ladder`] or the whole of a request, on a
+/// CUDA device with `device_memory` bytes where there is one and it said.
+pub(crate) fn plan(
+    chain: ChainResolution,
+    profile: &EpProfile,
+    paths: &CachePaths,
+    device_memory: Option<u64>,
+) -> SessionPlan {
     let ChainResolution { requested, attach } = chain;
 
     let providers = attach
         .into_iter()
         .map(|provider| {
             let options = match provider {
-                Accelerator::TensorRt => tensorrt_options(paths, profile),
+                Accelerator::TensorRt => tensorrt_options(paths, profile, device_memory),
                 Accelerator::Cuda => cuda_options(profile),
                 Accelerator::CoreMl => coreml_options(paths, profile),
                 Accelerator::WebGpu => webgpu_options(profile),
@@ -608,7 +630,7 @@ mod tests {
 
     #[test]
     fn tensorrt_carries_every_pinned_default_it_was_measured_with() {
-        let options = tensorrt_options(&paths(), &EpProfile::default());
+        let options = tensorrt_options(&paths(), &EpProfile::default(), None);
 
         assert_eq!(option(&options, "trt_builder_optimization_level"), "5");
         assert_eq!(option(&options, "trt_engine_cache_enable"), "1");
@@ -621,10 +643,34 @@ mod tests {
     }
 
     #[test]
+    fn tensorrt_s_workspace_is_a_quarter_of_the_card_up_to_four_gib() {
+        let workspace = |device_memory| {
+            option(&tensorrt_options(&paths(), &EpProfile::default(), device_memory), "trt_max_workspace_size")
+                .parse::<u64>()
+                .unwrap()
+        };
+
+        // The RTX 3050 whose builds flooded the log at 4 GiB.
+        assert_eq!(workspace(Some(6 << 30)), 3 << 29);
+        assert_eq!(workspace(Some(8 << 30)), 2 << 30);
+        assert_eq!(workspace(Some(16 << 30)), 4 << 30);
+        assert_eq!(workspace(Some(32 << 30)), 4 << 30, "a large card was given more than it was measured with");
+        assert_eq!(workspace(None), 4 << 30, "a card that did not say lost the ceiling it had");
+    }
+
+    #[test]
+    fn a_plan_sizes_tensorrt_s_workspace_to_the_card_it_was_given() {
+        let chain = resolve_chain(ExecutionProvider::TensorRt, machine_supporting(false, true, true));
+        let plan = plan(chain, &EpProfile::default(), &paths(), Some(6 << 30));
+
+        assert_eq!(option(&plan.providers[0].options, "trt_max_workspace_size"), (3u64 << 29).to_string());
+    }
+
+    #[test]
     fn graph_capture_is_disabled_on_both_nvidia_providers() {
         // Measured and rejected rather than unexamined: on TensorRT every run after the capture returns zeros with no
         // error, and on CUDA the capture run itself dies. See `GRAPH_CAPTURE_DISABLED`.
-        assert_eq!(option(&tensorrt_options(&paths(), &EpProfile::default()), "trt_cuda_graph_enable"), "0");
+        assert_eq!(option(&tensorrt_options(&paths(), &EpProfile::default(), None), "trt_cuda_graph_enable"), "0");
         assert_eq!(option(&cuda_options(&EpProfile::default()), "enable_cuda_graph"), "0");
 
         // And it is not reachable through the one overlay a profile has, unless a model asks for it by that key
@@ -641,8 +687,8 @@ mod tests {
         let kyoto = CachePaths { engine: PathBuf::from("/config/models/kyoto"), timing: shared_timing.clone() };
         let tokyo = CachePaths { engine: PathBuf::from("/config/models/tokyo"), timing: shared_timing.clone() };
 
-        let kyoto_options = tensorrt_options(&kyoto, &EpProfile::default());
-        let tokyo_options = tensorrt_options(&tokyo, &EpProfile::default());
+        let kyoto_options = tensorrt_options(&kyoto, &EpProfile::default(), None);
+        let tokyo_options = tensorrt_options(&tokyo, &EpProfile::default(), None);
 
         assert_eq!(option(&kyoto_options, "trt_engine_cache_path"), kyoto.engine.display().to_string());
         assert_eq!(option(&tokyo_options, "trt_engine_cache_path"), tokyo.engine.display().to_string());
@@ -675,7 +721,7 @@ mod tests {
             ..EpProfile::default()
         };
 
-        let options = tensorrt_options(&paths(), &profile);
+        let options = tensorrt_options(&paths(), &profile, None);
 
         assert_eq!(
             option(&options, "trt_builder_optimization_level"),
@@ -791,7 +837,7 @@ mod tests {
 
         for precision in OsakaPrecision::ALL {
             let osaka = Upscale::new(UpscaleVariant::Osaka(precision), scale);
-            let options = tensorrt_options(&paths(), &osaka.profile());
+            let options = tensorrt_options(&paths(), &osaka.profile(), None);
 
             assert_eq!(
                 option(&options, "trt_builder_optimization_level"),
@@ -808,7 +854,7 @@ mod tests {
         }
 
         assert_eq!(
-            option(&tensorrt_options(&paths(), &kyoto.profile()), "trt_builder_optimization_level"),
+            option(&tensorrt_options(&paths(), &kyoto.profile(), None), "trt_builder_optimization_level"),
             "5",
             "Osaka's declaration reached a model that never made it"
         );
@@ -887,13 +933,16 @@ mod tests {
         // declaring nothing gets the provider defaults with nothing added and nothing removed.
         let nothing_measured = EpProfile::default();
 
-        assert_eq!(tensorrt_options(&paths(), &nothing_measured), tensorrt_options(&paths(), &EpProfile::default()));
+        assert_eq!(
+            tensorrt_options(&paths(), &nothing_measured, None),
+            tensorrt_options(&paths(), &EpProfile::default(), None)
+        );
         assert_eq!(option(&cuda_options(&nothing_measured), "prefer_nhwc"), "0");
         assert_eq!(option(&coreml_options(&paths(), &nothing_measured), "MLComputeUnits"), "ALL");
         assert_eq!(option(&coreml_options(&paths(), &nothing_measured), "SpecializationStrategy"), "Default");
 
         // And the maps carry exactly the pinned keys — nothing a profile would have had to remove.
-        assert_eq!(tensorrt_options(&paths(), &nothing_measured).len(), 11);
+        assert_eq!(tensorrt_options(&paths(), &nothing_measured, None).len(), 11);
         assert_eq!(cuda_options(&nothing_measured).len(), 7);
         assert_eq!(coreml_options(&paths(), &nothing_measured).len(), 6);
     }
@@ -911,7 +960,7 @@ mod tests {
         // on a machine with no runtime installed — and, here, against paths that do not exist at all.
         let absent = CachePaths { engine: PathBuf::from("/nowhere/engine"), timing: PathBuf::from("/nowhere/timing") };
 
-        let _ = tensorrt_options(&absent, &EpProfile::default());
+        let _ = tensorrt_options(&absent, &EpProfile::default(), None);
         let _ = coreml_options(&absent, &EpProfile::default());
 
         assert!(!absent.engine.exists(), "configuring TensorRT created its engine directory");
@@ -966,7 +1015,7 @@ mod tests {
 
         // Each carries its own provider's keys rather than a shared map: TensorRT's cache paths are not CUDA's
         // business, and one option update rejected wholesale is what a misplaced key costs.
-        assert_eq!(plan.providers[0].options, tensorrt_options(&paths(), &EpProfile::default()));
+        assert_eq!(plan.providers[0].options, tensorrt_options(&paths(), &EpProfile::default(), None));
         assert_eq!(plan.providers[1].options, cuda_options(&EpProfile::default()));
     }
 
