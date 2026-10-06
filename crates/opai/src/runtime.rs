@@ -270,6 +270,9 @@ fn silence_on_exit(environment: &Arc<Environment>) {
 /// WebGPU unsupported and the rest of the runtime untouched, which is the same place a machine without the plugin is
 /// in.
 fn register_webgpu(environment: &Arc<Environment>, library: &Path, plugin: Option<&str>) -> bool {
+    // Before the support check, so a machine Vulkan offers only a CPU rasteriser to says so too. Empty off Linux.
+    log_vulkan_devices(&rust_sak::sysinfo::vulkan_devices());
+
     if !rust_sak::sysinfo::is_webgpu_supported() {
         // Only Linux is probed: macOS and Windows always report support, and any other platform has no WebGPU at all.
         let reason = if cfg!(target_os = "linux") {
@@ -302,6 +305,28 @@ fn register_webgpu(environment: &Arc<Environment>, library: &Path, plugin: Optio
     devices > 0
 }
 
+/// Writes one record per device Vulkan lists, which on Linux is what the WebGPU plugin chooses its adapter from.
+///
+/// The plugin never says which adapter it took: it asks Dawn for one with its default `high-performance` preference
+/// and logs nothing about the answer, and the device a session is attached to does not decide it. These records are
+/// what makes a WebGPU failure on a machine with two GPUs readable — whether the discrete card was visible to Vulkan
+/// at all, and how much memory each one has.
+fn log_vulkan_devices(devices: &[rust_sak::sysinfo::VulkanDevice]) {
+    for (index, device) in devices.iter().enumerate() {
+        let (major, minor, patch) = device.api_version;
+
+        tracing::info!(
+            index,
+            adapter = %device.name,
+            kind = %device.device_type,
+            vulkan = %format_args!("{major}.{minor}.{patch}"),
+            // `vram` rather than `memory`, which every exported record already carries as the machine's RAM.
+            vram = device.device_local_memory.unwrap_or(0),
+            "Vulkan device"
+        );
+    }
+}
+
 /// The devices the WebGPU plugin registered with `environment`, in the order the runtime reports them.
 ///
 /// One filter for the two questions asked of them — whether the plugin offers any at initialization, and which one a
@@ -316,6 +341,39 @@ mod tests {
     use crate::deps::artifact::{CUDA, CUDNN, ONNX_RUNTIME, TENSORRT};
     use crate::deps::release::{Dependency, RELEASE_BASE_URL};
     use std::process::Command;
+
+    #[test]
+    fn every_vulkan_device_is_written_with_its_kind_and_memory() {
+        use rust_sak::sysinfo::{VulkanDevice, VulkanDeviceType};
+
+        // The Linux machine whose WebGPU run ran out of device memory: an APU's graphics beside an Arc B580.
+        let devices = [
+            VulkanDevice {
+                name: "AMD Radeon Graphics (RADV RAPHAEL_MENDOCINO)".to_string(),
+                device_type: VulkanDeviceType::IntegratedGpu,
+                api_version: (1, 4, 305),
+                device_local_memory: Some(512 << 20),
+            },
+            VulkanDevice {
+                name: "Intel(R) Graphics (BMG G21)".to_string(),
+                device_type: VulkanDeviceType::DiscreteGpu,
+                api_version: (1, 4, 305),
+                device_local_memory: None,
+            },
+        ];
+
+        let (log, ()) = crate::logging::records_of_blocking("info", || log_vulkan_devices(&devices));
+        let lines = crate::logging::records(&log, "Vulkan device");
+
+        assert_eq!(lines.len(), 2, "{log}");
+        assert!(lines[1].contains("adapter=\"Intel(R) Graphics (BMG G21)\""), "{log}");
+        assert_eq!(crate::logging::field(lines[0], "kind"), Some("integrated"));
+        assert_eq!(crate::logging::field(lines[0], "vram"), Some("536870912"));
+        assert_eq!(crate::logging::field(lines[0], "vulkan"), Some("1.4.305"));
+        assert_eq!(crate::logging::field(lines[1], "index"), Some("1"));
+        assert_eq!(crate::logging::field(lines[1], "kind"), Some("discrete"));
+        assert_eq!(crate::logging::field(lines[1], "vram"), Some("0"));
+    }
 
     #[test]
     fn the_process_is_opted_out_of_runtime_telemetry_before_main() {
