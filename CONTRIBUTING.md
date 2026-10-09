@@ -52,12 +52,12 @@ sudo apt install -y build-essential pkg-config libwebkit2gtk-4.1-dev libayatana-
 Run these from the repository root:
 
 ```sh
-just dev gui          # Run the GUI in development mode
-just gui [arm64|x64]  # Build the GUI into build/ (defaults to the host architecture)
-just test             # Run all tests (Rust + frontend)
-just test rust        # Run only the Rust tests
-just test node        # Run only the frontend tests
-just clean            # Delete build output and generated artifacts
+just run gui                # Run the GUI in development mode
+just build gui [arm64|x64]  # Build the GUI into build/ (defaults to the host architecture)
+just test                   # Run all tests (Rust + frontend)
+just test rust              # Run only the Rust tests
+just test node              # Run only the frontend tests
+just clean                  # Delete build output and generated artifacts
 ```
 
 `just test rust` builds the frontend before running `cargo test --workspace`, because the GUI crate embeds `crates/gui/dist` at compile time. If you run `cargo test` directly, run `pnpm build` in `crates/gui` first.

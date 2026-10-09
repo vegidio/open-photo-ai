@@ -185,7 +185,7 @@ If you want to build the GUI you will also need:
 With all the dependencies installed, in the project's root folder run the command:
 
 ```bash
-just <interface> <architecture>
+just build <interface> <architecture>
 ```
 
 Where:
@@ -196,7 +196,7 @@ Where:
 For example, if I wanted to build a GUI version of the app, on architecture x64, I would run the command:
 
 ```bash
-just gui x64
+just build gui x64
 ```
 
 ## 📝 License

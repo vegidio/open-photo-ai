@@ -12,11 +12,11 @@ build_dir := justfile_directory() / "build"
 default:
     @just --list
 
-# Build the GUI for this OS into build/. Pass `arm64` or `x64` to override the host architecture.
-gui arch=host_arch: (_compile (if arch == "arm64" { "aarch64" } else if arch == "x64" { "x86_64" } else { error("arch must be arm64 or x64, got: " + arch) }) + "-" + os_triple)
+# Build a component for this OS into build/. Currently only `gui` is supported. Pass `arm64` or `x64` to override the host architecture.
+build target arch=host_arch: (_check-target target) (_compile (if arch == "arm64" { "aarch64" } else if arch == "x64" { "x86_64" } else { error("arch must be arm64 or x64, got: " + arch) }) + "-" + os_triple)
 
-# Build the GUI like `gui`, then package it as build/opai-gui_<os>_<arch>.zip (.deb and .rpm on Linux, unzipped).
-package arch=host_arch: (gui arch) (_package "opai-gui_" + os() + "_" + arch)
+# Build the GUI like `build gui`, then package it as build/opai-gui_<os>_<arch>.zip (.deb and .rpm on Linux, unzipped).
+package arch=host_arch: (build "gui" arch) (_package "opai-gui_" + os() + "_" + arch)
 
 # Delete build output and all generated build/dev artifacts (target, node_modules, dist, ...).
 [unix]
@@ -41,7 +41,7 @@ test suite="all": (_check-suite suite)
     {{ if suite != "rust" { "just _pnpm test" } else { "" } }}
 
 # Run a component in development mode. Currently only `gui` is supported.
-dev target: (_check-dev target)
+run target: (_check-target target)
     @just _pnpm tauri dev
 
 # Runs pnpm from inside the GUI rather than with `--dir`: corepack picks the pnpm version from the `packageManager`
@@ -54,7 +54,7 @@ _pnpm +args:
 _check-suite suite:
     @{{ if suite =~ '^(all|rust|node)$' { "" } else { error("suite must be rust or node, got: " + suite) } }}
 
-_check-dev target:
+_check-target target:
     @{{ if target == "gui" { "" } else { error("target must be gui, got: " + target) } }}
 
 _compile triple:
