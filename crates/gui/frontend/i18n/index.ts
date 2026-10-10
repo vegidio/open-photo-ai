@@ -8,6 +8,7 @@ import es from "@/i18n/locales/es.json";
 import fr from "@/i18n/locales/fr.json";
 import hi from "@/i18n/locales/hi.json";
 import id from "@/i18n/locales/id.json";
+import it from "@/i18n/locales/it.json";
 import ja from "@/i18n/locales/ja.json";
 import nl from "@/i18n/locales/nl.json";
 import pt from "@/i18n/locales/pt.json";
@@ -29,7 +30,7 @@ export { DEFAULT_LANGUAGE };
  * what the application actually bundles - a catalogue that existed but was never imported here would
  * pass that version of the test and still be missing at runtime.
  */
-export const CATALOGUES = { de, el, en, es, fr, hi, id, ja, nl, pt, ru, sv, zh } as const;
+export const CATALOGUES = { de, el, en, es, fr, hi, id, it, ja, nl, pt, ru, sv, zh } as const;
 
 /** The language tags the application ships a catalogue for. */
 export const SUPPORTED_LANGUAGES = Object.keys(CATALOGUES) as (keyof typeof CATALOGUES)[];
