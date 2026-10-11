@@ -365,16 +365,32 @@ pub(crate) fn input_extensions(traceparent: Traceparent) -> Vec<&'static str> {
 ///
 /// Fails only if the runtime is shutting down — not because of anything wrong with a file.
 pub(crate) async fn describe_and_admit(paths: Vec<PathBuf>, opened: &Opened) -> Result<Vec<ImageRecord>, String> {
-    // Each file is described concurrently on its own blocking thread, since hashing every byte dominates a large
-    // selection — the reference does the same with a worker per CPU.
-    let describing: Vec<_> = paths
-        .into_iter()
-        .map(|path| spawn_blocking(move || (ImageRecord::describe(&path), path)))
+    // Files are described concurrently, since hashing every byte dominates a large selection, but by a worker per CPU
+    // pulling from one queue rather than a thread per file. Each describe holds a file open, and a RAW's whole bytes,
+    // so a thread per file opened hundreds at once: past macOS's 256-descriptor default the rest failed to read
+    // ("Too many open files") and were listed with no identity.
+    let mut described = Vec::with_capacity(paths.len());
+    let workers = workers(paths.len());
+    let queue = std::sync::Arc::new(Mutex::new(paths.into_iter()));
+
+    let describing: Vec<_> = (0..workers)
+        .map(|_| {
+            let queue = queue.clone();
+            spawn_blocking(move || {
+                let mut done = Vec::new();
+                loop {
+                    // Its own statement so the guard drops here: in a `while let` scrutinee it would live through the
+                    // body, and the workers would describe one file at a time.
+                    let next = lock(&queue).next();
+                    let Some(path) = next else { break done };
+                    done.push((ImageRecord::describe(&path), path));
+                }
+            })
+        })
         .collect();
 
-    let mut described = Vec::with_capacity(describing.len());
     for handle in describing {
-        described.push(handle.await.map_err(|error| format!("the files could not be described: {error}"))?);
+        described.extend(handle.await.map_err(|error| format!("the files could not be described: {error}"))?);
     }
 
     // Sorted by path rather than left in completion order, so the same selection lists the same way twice.
@@ -382,6 +398,12 @@ pub(crate) async fn describe_and_admit(paths: Vec<PathBuf>, opened: &Opened) -> 
     opened.admit(&described);
 
     Ok(described.into_iter().map(|(record, _)| record).collect())
+}
+
+/// How many threads describe a selection of `files`: one per CPU, never more than there are files, never none.
+fn workers(files: usize) -> usize {
+    let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    cpus.min(files).max(1)
 }
 
 #[cfg(test)]
@@ -492,6 +514,31 @@ mod tests {
     /// records rather than about what was admitted.
     fn block_on_describe(paths: Vec<PathBuf>) -> Vec<ImageRecord> {
         tauri::async_runtime::block_on(describe_and_admit(paths, &Opened::default())).expect("the runtime is alive")
+    }
+
+    #[test]
+    fn a_selection_is_described_by_a_worker_per_cpu_at_most() {
+        let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+
+        assert_eq!(workers(0), 1);
+        assert_eq!(workers(1), 1);
+        assert_eq!(workers(cpus * 50), cpus, "a large selection must not get a thread, and a descriptor, per file");
+    }
+
+    #[test]
+    fn a_selection_larger_than_the_workers_is_described_in_full() {
+        // The workers share one queue, so every file past the first round must still be picked up and hashed.
+        let dir = tempdir().expect("a temporary directory");
+        let count = workers(usize::MAX) * 3 + 1;
+        let paths: Vec<_> =
+            (0..count).map(|i| write_image(&dir, &format!("{i:04}.png"), 8, 8, ImageFormat::Png)).collect();
+
+        let records = block_on_describe(paths.clone());
+
+        assert_eq!(records.len(), count);
+        assert!(records.iter().all(|record| record.identity.is_some()), "a file was left without an identity");
+        let listed: Vec<_> = records.iter().map(|record| PathBuf::from(&record.path)).collect();
+        assert_eq!(listed, paths, "every file once, ordered by path");
     }
 
     #[test]
