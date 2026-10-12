@@ -12,6 +12,7 @@
 pub(crate) mod acquire;
 pub(crate) mod depth;
 pub(crate) mod execute;
+pub(crate) mod faces;
 #[cfg(test)]
 mod live;
 pub(crate) mod process;

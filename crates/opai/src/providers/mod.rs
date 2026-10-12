@@ -207,7 +207,7 @@ impl SupportedProviders {
     ///
     /// [`Auto`](ExecutionProvider::Auto) and [`Cpu`](ExecutionProvider::Cpu) are `true` on every machine — there is no
     /// machine the runtime cannot run on, so `Auto` always has at least the CPU to resolve to. An accelerator reads the
-    /// flag the install plan set; see [`offers`](Self::offers).
+    /// flag the install plan set; see `offers`.
     pub fn supports(self, provider: ExecutionProvider) -> bool {
         provider.accelerator().is_none_or(|accelerator| self.offers(accelerator))
     }

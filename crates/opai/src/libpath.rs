@@ -95,7 +95,7 @@ pub(crate) fn search_path(dirs: &[PathBuf], inherited: Option<&OsStr>) -> OsStri
 ///   have been downloaded — changes nothing about the `dlopen` calls the runtime makes. On success this **does not
 ///   return**. A replacement that fails is reported and startup continues under the inherited path, which costs the
 ///   GPU providers rather than the launch. Under WSL2 with an NVIDIA GPU, the active Windows driver's directory is
-///   added after the application's own — see [`wsl_cuda_driver_dir`].
+///   added after the application's own — see `wsl_cuda_driver_dir`.
 /// - **Windows**: prepends the directories to `PATH`, which `LoadLibrary` consults at call time, so no restart is
 ///   needed.
 /// - **macOS**: creates the directories and returns. No NVIDIA library is published for it, and the CoreML provider

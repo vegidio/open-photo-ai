@@ -257,7 +257,7 @@ fn emit<R: tauri::Runtime>(app: &tauri::AppHandle<R>, report: RunProgress) {
 
 /// How much of the bar a detection owns, before the chain that asked for it starts.
 ///
-/// A chain carrying a face recovery is two runs underneath — the detection `crate::faces::for_chain` makes and the
+/// A chain carrying a face recovery is two runs underneath — the detection `opai::Opai::find_chain_faces` makes and the
 /// chain itself — and each reports its own `0..1` and lands on exactly 1. Drawn as they arrive that is two sweeps: the
 /// bar fills, empties and fills again, which reads as the enhancement having been applied twice. So the detection is
 /// mapped onto the head of the range and the chain onto what it leaves.

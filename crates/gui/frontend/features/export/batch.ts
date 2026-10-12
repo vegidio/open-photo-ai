@@ -78,7 +78,7 @@ const exportOne = async (
 
     /*
      * The choice among faces, not the faces: a face recovery in the chain finds its own inside the export, under
-     * its stop and on its bar - Rust's `for_chain` - and restores the ones this keeps. A detection that fails is
+     * its stop and on its bar - Rust's `find_chain_faces` - and restores the ones this keeps. A detection that fails is
      * exported over no faces without a notice, as a file whose other enhancements still apply.
      */
     const choice = useFacesStore.getState().choices.get(identity);

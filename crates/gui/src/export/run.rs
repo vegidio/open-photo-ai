@@ -712,13 +712,14 @@ mod tests {
             unreachable!("a stop during the detection runs no chain")
         }
 
-        async fn detect(
+        async fn find_chain_faces(
             &self,
             _source: &Picture,
-            _analysis: &opai::Analysis,
+            operations: Vec<opai::Operation>,
+            select: impl Fn(usize, &opai::Face) -> bool + Send,
             _options: ExecuteOptions,
-        ) -> Result<opai::Executed<opai::Faces>, InferenceError> {
-            Err(InferenceError::Cancelled)
+        ) -> Result<opai::FacedChain, InferenceError> {
+            opai::fill_chain_faces(operations, Err(InferenceError::Cancelled), select)
         }
     }
 

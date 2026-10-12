@@ -50,8 +50,8 @@ pub(crate) struct Requested {
     /// Which of the faces found a face recovery restores — the user's exceptions to the default, by key — and
     /// absent for every other family, or for a recovery nobody has chosen faces for.
     ///
-    /// **Not the faces.** The run finds them itself, inside the same request — see [`crate::faces::for_chain`] — and
-    /// [`resolve`](Self::resolve) builds every face recovery over an empty selection for it to fill in.
+    /// **Not the faces.** The run finds them itself, inside the same request — see [`opai::Opai::find_chain_faces`] —
+    /// and [`resolve`](Self::resolve) builds every face recovery over an empty selection for it to fill in.
     #[serde(default)]
     pub(crate) faces: Option<FaceChoice>,
 }
@@ -453,8 +453,8 @@ mod tests {
 
     #[test]
     fn the_choice_a_recovery_carries_is_read_and_it_resolves_over_no_faces_for_the_run_to_fill() {
-        // The faces are found inside the run — `crate::faces::for_chain` — so what the window names resolves to the
-        // model over an empty selection, and the choice travels beside it.
+        // The faces are found inside the run — `opai::Opai::find_chain_faces` — so what the window names resolves to
+        // the model over an empty selection, and the choice travels beside it.
         let requested = parse(recovery("athens", "fp32"));
 
         assert_eq!(

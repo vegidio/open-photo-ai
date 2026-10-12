@@ -202,7 +202,7 @@ const UPSCALE_2X_MAX_PIXELS: u64 = 4_194_304;
 /// file: the analysis measures the framed picture it was handed, and a front end asks with the framed dimensions.
 ///
 /// The cheapest question there is: it reads two integers and installs nothing. A size with no area answers 4x, the
-/// smallest bucket; an analysis never asks about one, because it returns before reaching this — see [`suggest`].
+/// smallest bucket; an analysis never asks about one, because it returns before reaching this — see [`Opai::suggest`](crate::Opai::suggest).
 pub fn suggested_scale(width: u32, height: u32) -> Option<Scale> {
     // Widened before multiplying: two `u32` extents multiply past `u32` at 65,536 x 65,536 — well inside what a
     // stitched panorama reaches — and a pixel count that wrapped would tell a very large photograph it was very small.

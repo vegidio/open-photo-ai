@@ -10,8 +10,8 @@ use std::future::Future;
 use std::path::PathBuf;
 
 use opai::{
-    Analysis, CancellationToken, Enhanced, ExecuteOptions, Executed, ExecutionProvider, Faces, InferenceError, Opai,
-    OutputDepth, Picture, ProcessOptions,
+    CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, Face, FacedChain, Faces,
+    InferenceError, Opai, OutputDepth, Picture, ProcessOptions,
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ use super::operation::{Requested, UnknownOperation};
 use super::progress::{Handover, Reporting};
 use super::slot::Runs;
 use crate::command::{Answer, CommandError, Ended};
-use crate::faces::{ChainFaces, DetectedFace, for_chain};
+use crate::faces::DetectedFace;
 use crate::images::{Crop, Opened, load_framed};
 
 /// The processor the window chose for this run: an [`ExecutionProvider`], read from the settings store's spelling.
@@ -72,7 +72,7 @@ pub(crate) enum Enhancement {
         #[serde(skip_serializing_if = "Option::is_none")]
         faces: Option<Vec<DetectedFace>>,
         /// Why the faces could not be found, where they could not: `opai`'s own sentence, untranslated. The recovery
-        /// then restored none and the rest of the chain ran — see [`crate::faces::for_chain`].
+        /// then restored none and the rest of the chain ran — see [`Opai::find_chain_faces`].
         #[serde(skip_serializing_if = "Option::is_none")]
         faces_error: Option<String>,
     },
@@ -159,21 +159,19 @@ pub(crate) trait Enhancer {
         options: ProcessOptions,
     ) -> impl Future<Output = Result<Enhanced, InferenceError>> + Send;
 
-    /// Runs `analysis` over `source`, as [`Opai::execute`] does: the detection a chain carrying a face recovery makes
-    /// for its faces — see [`crate::faces::for_chain`].
+    /// Hands every face recovery in `operations` the faces `select` keeps among those found in `source`, as
+    /// [`Opai::find_chain_faces`] does.
     ///
     /// **The default finds nobody**, which is what every fake that is not about faces wants: a chain carrying no face
-    /// recovery never asks, and one that does restores an empty selection. [`Opai`] runs the real detection.
-    fn detect(
+    /// recovery is not asked, and one that does restores an empty selection. [`Opai`] runs the real detection.
+    fn find_chain_faces(
         &self,
         _source: &Picture,
-        _analysis: &Analysis,
+        operations: Vec<opai::Operation>,
+        select: impl Fn(usize, &Face) -> bool + Send,
         _options: ExecuteOptions,
-    ) -> impl Future<Output = Result<Executed<Faces>, InferenceError>> + Send {
-        std::future::ready(Ok(Executed {
-            value: Faces::empty(),
-            providers: opai::ProviderReport { requested: ExecutionProvider::Auto, actual: Vec::new() },
-        }))
+    ) -> impl Future<Output = Result<FacedChain, InferenceError>> + Send {
+        std::future::ready(opai::fill_chain_faces(operations, Ok(Faces::empty()), select))
     }
 }
 
@@ -187,13 +185,14 @@ impl Enhancer for Opai {
         Opai::process(self, source, operations, Some(options))
     }
 
-    fn detect(
+    fn find_chain_faces(
         &self,
         source: &Picture,
-        analysis: &Analysis,
+        operations: Vec<opai::Operation>,
+        select: impl Fn(usize, &Face) -> bool + Send,
         options: ExecuteOptions,
-    ) -> impl Future<Output = Result<Executed<Faces>, InferenceError>> + Send {
-        Opai::execute(self, source, analysis, Some(options))
+    ) -> impl Future<Output = Result<FacedChain, InferenceError>> + Send {
+        Opai::find_chain_faces(self, source, operations, select, Some(options))
     }
 }
 
@@ -259,7 +258,7 @@ pub(crate) struct Prepared {
     pub(crate) picture: Picture,
     /// The chain, with every face recovery handed the faces it keeps.
     pub(crate) operations: Vec<opai::Operation>,
-    /// What finding the faces came to — see [`for_chain`].
+    /// What finding the faces came to — see [`Opai::find_chain_faces`].
     pub(crate) faces: ChainFaces,
     /// The bar the detection reported onto the head of, whose [`Handover::chain`] the chain reports through.
     pub(crate) handover: Option<Handover>,
@@ -298,7 +297,15 @@ pub(crate) async fn prepare_chain<E: Enhancer>(
         ..Default::default()
     };
 
-    let Ok((operations, faces)) = for_chain(enhancer, &picture, requested, operations, detecting).await else {
+    // The window's own choice for each face recovery, read by the recovery's position in the chain as asked for;
+    // a recovery nobody chose for keeps what the library's default keeps.
+    let select = |index: usize, face: &Face| match requested.get(index).and_then(|requested| requested.faces.as_ref()) {
+        Some(choice) => choice.keeps(face),
+        None => opai::default_face_selection(index, face),
+    };
+
+    let Ok(FacedChain { operations, faces }) = enhancer.find_chain_faces(&picture, operations, select, detecting).await
+    else {
         return Ok(None);
     };
 
@@ -324,10 +331,10 @@ pub(crate) async fn prepare_chain<E: Enhancer>(
 ///
 /// # A face recovery finds its own faces
 ///
-/// Step 6 is [`for_chain`]: the chain detects inside this request rather than the window detecting first and asking
-/// second, so the whole of it is one stop and one progress stream, the detection on the head of the bar. The faces
-/// found come back beside the result for the window to count and offer, and a detection that failed comes back as the
-/// reason, with the chain run anyway over no faces.
+/// Step 6 is [`Opai::find_chain_faces`]: the chain detects inside this request rather than the window detecting first
+/// and asking second, so the whole of it is one stop and one progress stream, the detection on the head of the bar.
+/// The faces found come back beside the result for the window to count and offer, and a detection that failed comes
+/// back as the reason, with the chain run anyway over no faces.
 ///
 /// A refused request must not displace the run the user is watching (1, 2 before 3). The slot is written
 /// before decoding (3 before 4) so a displaced run stops immediately rather than after a slow decode, and so
@@ -418,8 +425,8 @@ pub(crate) async fn enhance_with<E: Enhancer>(
 
             let (faces, faces_error) = match faces {
                 ChainFaces::NotAsked => (None, None),
-                ChainFaces::Found(found) => (Some(found), None),
-                ChainFaces::Failed(message) => (None, Some(message)),
+                ChainFaces::Found(found) => (Some(found.iter().copied().map(DetectedFace::from).collect()), None),
+                ChainFaces::Failed(error) => (None, Some(error.to_string())),
             };
 
             Ok(Enhancement::Enhanced { identity, width, height, faces, faces_error })
@@ -442,7 +449,7 @@ mod tests {
     use super::*;
     use crate::enhance::slot::Resident;
     use crate::enhance::test_support::{enhanced, fixture, framed_request, kyoto, request, run_now};
-    use crate::test_support::{boxed, executed};
+    use crate::test_support::boxed;
 
     use opai::{Family, Precision};
 
@@ -1059,13 +1066,14 @@ mod tests {
             Ok(enhanced(source, 8, 6, "cafebabecafebabe"))
         }
 
-        async fn detect(
+        async fn find_chain_faces(
             &self,
             _source: &Picture,
-            _analysis: &Analysis,
+            operations: Vec<opai::Operation>,
+            select: impl Fn(usize, &opai::Face) -> bool + Send,
             _options: ExecuteOptions,
-        ) -> Result<Executed<Faces>, InferenceError> {
-            Ok(executed(Faces::new([Self::face()])))
+        ) -> Result<FacedChain, InferenceError> {
+            opai::fill_chain_faces(operations, Ok(Faces::new([Self::face()])), select)
         }
     }
 
