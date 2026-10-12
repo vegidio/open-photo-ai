@@ -1,0 +1,233 @@
+schema: spec-driven
+
+context: |
+  # Project
+
+  Open Photo AI (OPAI) is an open-source alternative to Topaz Photo AI. This repository is a ground-up
+  rewrite in Rust + Tauri of the previous Go + Wails v3 implementation.
+
+  # Architecture
+
+  The three crates live under `crates/`, and the workspace keeps the same layering as the Go
+  project:
+
+  - `opai` - the core library crate. ALL logic lives here: inference and model execution, downloading
+    and installing dependencies (ONNX Runtime, GPU libraries, models), image decoding/encoding and
+    file manipulation, caching, settings. It knows nothing about any user interface.
+  - `gui` - the Tauri 2 application. Depends on `opai` and contains only code that concerns the GUI:
+    Tauri commands and events, window and app state plumbing, and the React frontend.
+  - `cli` - the terminal application. Depends on `opai` and contains only code that concerns the CLI:
+    argument parsing, terminal output and progress rendering.
+
+  The test for where something belongs: if both `gui` and `cli` would need it, it belongs in `opai`.
+
+  `imaging` is a leaf crate under `opai`, not a fourth layer: the pixel primitives every model is
+  built from (tile grid, padding, tensor conversion, blending, presentation, the tiling driver). It
+  depends on `image` and `thiserror` only and knows nothing of `opai`; the crate boundary is what
+  keeps it that way. It is `publish = false` and only `opai` depends on it.
+  Logic must not be duplicated into, or trapped inside, a front end. Later consumers (a benchmark
+  binary, for instance) are added as further crates depending on `opai`, never by widening a front end.
+
+  # rust-sak comes first
+
+  `rust-sak` (https://github.com/vegidio/rust-sak, cloned locally at ../rust-sak) is a first-party
+  crate. Before writing any infrastructure code - hashing, HTTP, retries, downloads, archive extraction,
+  temp files, config directories, image codecs, caching, telemetry, hardware probes - CHECK `rust-sak`
+  FIRST. Read ../rust-sak/README.md and the per-module READMEs under ../rust-sak/src/. Do not reinvent
+  something it already provides, and do not reach for a third-party crate that duplicates one of its modules.
+
+  What it already covers, and what that replaces here:
+
+  - `crypto`  - SHA-256 and XXH3-64 hashing of bytes, strings and files -> the pinned-hash
+                verification of downloaded dependencies.
+  - `fetch`   - a reusable reqwest client with Fibonacci-backoff retries and RESUMABLE streaming
+                downloads with live progress -> the whole dependency/model download path.
+  - `fs`      - filesystem helpers, RAII temp handles, config dirs, and a hardened ZIP/7z/TAR.XZ
+                extractor that treats every entry as hostile -> extracting the .7z release archives.
+  - `image`   - encode and decode bmp, gif, jpeg, png, tiff, avif, heif and webp behind one uniform
+                API -> image IO. NOTE: this module already wraps avif-rs, heif-rs and webp-rs, so
+                depend on rust-sak's `image` feature rather than on those crates directly.
+  - `image-raw` - camera RAW/DNG decoding on top of `image`, through zenraw over rawler/rawloader ->
+                the RAW half of image loading. It covers 29 of the 47 RAW extensions this app
+                recognises, and is a separate feature because it links zenraw (AGPL-3.0-only) and
+                rawler/rawloader (LGPL-2.1), whose terms a binary built with it must ship under.
+  - `memo`    - memoization with pluggable storage (memory, disk, or memory-over-disk) and concurrent
+                calls coalesced -> the per-operation run cache, including its disk/memory/none
+                fallback modes, which line up with what `memo` already offers.
+  - `o11y`    - logs, metrics and traces to an OpenTelemetry collector over OTLP, exported on a
+                background thread -> telemetry.
+  - `sysinfo` - CPU, memory and GPU probes via each platform's own interface, no subprocesses ->
+                hardware detection and the model memory budgets.
+
+  It has NO default features; enable exactly the ones needed. MSRV 1.95.
+
+  If a `rust-sak` feature is close but incomplete - it does not cover a format, an option or an edge
+  case this project needs - do not work around it locally and do not fork the behaviour into `opai`.
+  Judge whether the missing piece belongs in `rust-sak`: if it is general-purpose and another project
+  could want it, extend `rust-sak` itself, and only then consume it here. Treat that as explicit work -
+  say so in the design, give it its own tasks, and get the go-ahead before pushing to the `rust-sak`
+  repository, since consumers pin it by git tag and a push there is a release. It is NOT published to
+  crates.io - it depends on its `o11y-macros` sibling by path, which `cargo publish` rejects, so a git
+  dependency is the only way to take it. Only when the need is genuinely specific to this app does the
+  code belong in `opai` instead.
+
+  # Change size and slicing
+
+  No change may carry more than 15 tasks. When a feature would need more, do not create one oversized
+  change: divide it into slices of at most 15 tasks each, and make EACH SLICE ITS OWN CHANGE, so it
+  can be proposed, implemented, verified and archived on its own.
+
+  Divide by what a slice delivers, not by task count alone - each one should leave the project in a
+  working, testable state rather than half-wired. Order them so a slice only depends on slices before
+  it. Name them so the series is obvious (for example `add-dep-installer-1-download`,
+  `add-dep-installer-2-extract`).
+
+  Every slice's design.md must contain a section listing the WHOLE series: each slice in order, what
+  it delivers, what it depends on, and which ones are already done. Repeat that list in every slice,
+  not only the first - a change gets archived, and the plan has to stay visible to whoever picks up
+  the next one. Propose only the current slice's change; the remaining slices are proposed when they
+  are reached.
+
+  # Stack
+
+  - Backend: Rust (edition 2024), Tauri 2.
+  - Inference: ONNX Runtime via the `ort` crate (pykeio/ort)
+  - ONNX Runtime binaries are NOT vendored or taken from a package manager. Download them at runtime
+    GitHub release assets on vegidio/open-photo-ai, at
+    https://github.com/vegidio/open-photo-ai/releases/download/{tag}/{asset} - where the tags are
+    namespaced per dependency family (`runtime/1.30.0`, `tensorrt/10.14.1`).
+  - Execution providers: Auto, CPU, CoreML, CUDA, TensorRT - with automatic CPU fallback when a
+    provider fails to build a session. Other providers may be added later; do not design them in now.
+  - Frontend: React, TypeScript, Vite, Shadcn, Tailwind, Zustand, i18next, Biome, Vitest. Reuse the
+    Wails app's frontend as a guideline, and reimplement it where Tauri or a cleaner design
+    calls for it. The design is inspired by the Wails app's frontend, but we will implement a new
+    design using Claude Design: https://claude.ai/design/p/5af0898d-6d54-4b96-b2c7-2e3967dfb75d?file=Open+Photo+AI+%28screens%29.dc.html
+  - RAW decoding: settled, and it went into rust-sak rather than here. This app uses rust-sak's `image-raw`
+    feature, which decodes through zenraw over rawler/rawloader - pure Rust, no C toolchain or system deps.
+
+  # Domain
+
+  Seven enhancement families plus face detection, each keyed by the two-letter id prefix
+  (operation ids look like `dn_stockholm_fp32`):
+
+  - dt detection (New York) - dn denoise (Stockholm, Gothenburg, Malmo)
+  - fr face recovery (Athens, Santorini) - la light adjustment (Paris, Lyon)
+  - cb color balance (Rio, Sao Paulo) - cl colorization (Delhi, Mumbai, Jaipur)
+  - sh sharpen (Moscow, St. Petersburg, Novgorod) - up upscale (Kyoto, Osaka, Tokyo, Saitama)
+
+  Model variants are named after cities and those names are user-facing - keep them.
+
+  Other domain concepts to preserve: Autopilot (automatic image analysis that suggests enhancements),
+  a per-operation run cache keyed by input hash plus the operations already applied, a model
+  registry with per-pool memory budgets and concurrent leases, per-graph-stage precision (fp16/fp32),
+  crop, the export queue, and per-image face selection/toggling.
+
+  # Conventions
+
+  - Errors: `thiserror`, matching rust-sak and the other first-party crates.
+  - macOS, Windows and Linux are all shipping targets; never assume one of them.
+  - Tests live beside the code they cover
+
+  # Module layout
+
+  Three tiers. The test for which one a file belongs to is "who else could use it":
+
+    ONE MODEL     -> models/<family>/<model>/       e.g. models/upscale/osaka/
+                     Its row, its measured EP profile and the prose behind it, its
+                     pipeline, the vocabulary only its contract needs, its tests.
+                     Deleting a model is deleting its directory plus one enum arm
+                     and one model() arm. Nothing else.
+
+    ONE FAMILY    -> a FILE under models/<family>/  e.g. models/upscale/passes.rs
+                     Shared by two or more of that family's models, by nothing outside.
+
+    EVERY FAMILY  -> models/ for vocabulary, a FILE directly under models/ for model code
+                     two families run (models/filter.rs), pipeline/ for the contract every
+                     model implements (the pipeline traits, Backend, the session seam), and
+                     the `imaging` crate for pixel primitives. Never one family's, never one
+                     model's.
+
+  A model's execution code lives WITH THE MODEL. inference/ is orchestration only: planning
+  and running a chain, running a data operation, acquiring sessions, progress and output
+  depth. It reaches a model only through the pipeline contract and names no model.
+
+  The dependency runs one way: inference -> models -> {pipeline, imaging}. NOTHING under
+  models/ names `crate::inference`, in code or in prose. A model that needs something
+  inference/ holds has found an item at the wrong tier: move the item down, never import up.
+
+  A family exposes its models through exactly two seams:
+    1. one match from the variant enum to &'static dyn <Family>Model   (one arm per MODEL)
+    2. one match from the resolved contract to a Pipeline              (one arm per CONTRACT)
+  A new model is a directory plus one arm in seam 1. A new contract within a family is one
+  arm in seam 2. Neither ever reaches process.rs.
+
+  Tests live in the directory of the thing they cover.
+
+  # A file's tier is decided by its callers, and is re-decided every time one is added
+
+  The three tiers describe who uses a file TODAY, not who wrote it. When a second caller
+  appears, the file MOVES:
+
+     a MODEL-tier file a second model in the same family needs      -> family tier
+     a FAMILY-tier file a second family needs                       -> cross-family tier
+     a FAMILY-tier file left with one caller (a model was removed)  -> back down into it
+
+  Two things are never the answer to a second caller:
+
+    * IMPORTING ACROSS A MODEL BOUNDARY. A `use` that reaches from one model's directory
+      into another's is a promotion that has not happened yet. It is a bug, not a shortcut.
+    * COPYING. imaging's lib.rs already records the reference implementation's own
+      conclusion on this: written inside one pipeline it would be rewritten inside the
+      next, and the two would disagree.
+
+  WHEN. The promotion happens in the change that introduces the second caller, and BEFORE
+  that caller is written, so the new model is built against the shared location from its
+  first line. Where the move will not fit that change's 15-task budget it becomes its own
+  slice ordered AHEAD of the one that needs it - never a follow-up afterwards, which is how
+  a "temporary" copy gets made permanent.
+
+  KNOWN CANDIDATES TODAY, parked at model tier because each has exactly one caller and is
+  expected to gain a second:
+    models/upscale/osaka/colorfix.rs   wavelet colour fix for one-step diffusion drift
+    models/upscale/osaka/graph.rs      role-addressed multi-graph resolution, a contract-level idea
+    models/upscale/osaka/latent.rs     VAE stride, patchify and the one-step scheduler
+    models/upscale/osaka/noise.rs      deterministic seeded per-region noise
+    models/upscale/osaka/region.rs     the three-graph region loop
+  All five are already written model-agnostically. The second diffusion model in any family
+  promotes them; it does not reimplement them.
+
+rules:
+  proposal:
+    - Say which crates the change touches (`opai`, `gui`, `cli`), and if it puts logic in a front end, justify why it is not shared logic belonging in `opai`.
+    - If the change needs infrastructure, state what you found in `rust-sak` for it - including "nothing" - before proposing anything else. A proposal that rebuilds a `rust-sak` module is wrong.
+    - 'Estimate the task count before writing anything else. If the feature needs more than 15 tasks, do not propose it as one change: divide it into slices, propose only the current slice as this change, and name it as part of the series.'
+  specs:
+  design:
+    - When the feature is sliced across several changes, include a "Slices" section listing the whole series in order - each slice's name, what it delivers, what it depends on, and whether it is done, current or pending. Include this list in EVERY slice's design.md, not only the first, and mark which slice this change is.
+    - State how the work divides across `opai`, `gui` and `cli`, and keep every piece of logic both front ends would need in `opai`.
+    - Name the `rust-sak` features the design uses and, for anything it does not cover, say whether the gap should be filled by extending `rust-sak` or by code local to this project - and why. Never introduce a third-party crate that duplicates a `rust-sak` module.
+    - Name every other crate the change introduces and why it was chosen over the alternatives.
+    - For anything touching model sessions, memory budgets or execution providers, describe the ownership and lifetime model, not just the call sequence.
+    - State which platforms and execution providers the design was validated against, and which are untested.
+  tasks:
+    - 'Never write more than 15 tasks. This is a hard limit: if the work does not fit, the change is too big and belongs in slices, each its own change - go back and re-scope rather than compressing several steps into one task.'
+    - Cover only this change's own slice. Do not add tasks for work a later slice will do.
+    - When the design calls for extending `rust-sak`, give that its own tasks - change, test, release, then adopt here - rather than hiding it inside a task about this project.
+    - When a change is user-visible, give the frontend its own tasks (components, i18n keys, Tauri command bindings) rather than folding them into backend tasks.
+    - Include a task for `cargo fmt`, `cargo clippy` and the test suite whenever Rust code changes.
+    - When adding i18n keys, add them to every existing locale file, not only `en.json`.
+
+operations:
+  apply:
+    guidance:
+      - Implement only this change's tasks. If the design lists later slices, leave them alone - they are separate changes.
+      - Before writing any infrastructure code, re-check ../rust-sak for it. If you find yourself writing a downloader, a retry loop, an archive extractor, a hasher, an image codec wrapper, a cache or a hardware probe, stop - that is a rust-sak module.
+      - Work on `rust-sak` happens in its own repository at ../rust-sak; do not vendor or copy its code into this project, and confirm before pushing anything to it.
+      - Run `cargo fmt --check`, `cargo clippy` and `cargo test` before calling Rust work complete; run the frontend lint, typecheck and test scripts when the frontend changed.
+      - When reproducing a behaviour, read the corresponding Go and Typescript code in ../open-photo-ai first instead of working from the spec alone - the details that matter are usually in its comments. Match what it does, not how it is written.
+      - Never stub a model or fabricate inference output to make a test pass. If a model file is unavailable, say so and leave the test failing or ignored with a stated reason.
+  archive:
+    guidance:
+      - If this change was one slice of a series, say which slices remain and name the next one to propose, so the series is not dropped half-finished.
+      - Record any parity gap the change knowingly left open, so a later change can pick it up instead of it being forgotten.
+      - If the change added anything to `rust-sak`, note the version it landed in, so this project's dependency on it is traceable.

@@ -1,0 +1,10 @@
+schema: spec-driven
+created: 2026-09-11
+
+# No deltas: every requirement in `specs/initialization` holds before and after, unchanged. This
+# change moves invariants the code holds by hand into the types that can hold them, and gives
+# `InitError::Io` the path it was working on. The spec is written against observable behaviour and
+# names neither the error variants nor the internal types this touches, so there is nothing to
+# restate — re-asserting unchanged requirements as a delta would claim a behaviour change that is
+# not happening.
+skip_specs: true
