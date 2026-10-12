@@ -48,13 +48,6 @@ impl From<ExportFormat> for ImageFormat {
     }
 }
 
-/// The lowest quality a lossy format is written at. Not `0`: a zero reaches the AVIF, HEIF and WebP encoders as a real
-/// setting and produces an unusable image, as the reference found.
-const MIN_QUALITY: u8 = 1;
-
-/// The highest quality a lossy format is written at.
-const MAX_QUALITY: u8 = 100;
-
 /// What a lossy format's quality may be, and what it is written at where the window names none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub(crate) struct QualityRange {
@@ -99,22 +92,19 @@ pub(crate) struct ExportFormats {
     pub(crate) fallback: ExportFormat,
 }
 
-/// The quality `format` is written at where the window names none, or `None` for a format that takes none.
-const fn default_quality(format: ExportFormat) -> Option<u8> {
-    match format {
-        ExportFormat::Avif | ExportFormat::Heic => Some(60),
-        ExportFormat::Jpeg => Some(90),
-        ExportFormat::Webp => Some(75),
-        ExportFormat::Bmp | ExportFormat::Gif | ExportFormat::Png | ExportFormat::Tiff => None,
-    }
+/// The quality `format` is written at where the window names none, or `None` for a format that takes none: the
+/// library's [`opai::image::default_quality`], which every front end writes with.
+fn default_quality(format: ExportFormat) -> Option<u8> {
+    opai::image::default_quality(format.into())
 }
 
 /// The quality range `format` takes, starting at its [`default_quality`], or `None` for a lossless format.
-const fn quality_range(format: ExportFormat) -> Option<QualityRange> {
-    match default_quality(format) {
-        Some(default) => Some(QualityRange { min: MIN_QUALITY, max: MAX_QUALITY, default }),
-        None => None,
-    }
+fn quality_range(format: ExportFormat) -> Option<QualityRange> {
+    default_quality(format).map(|default| QualityRange {
+        min: opai::image::MIN_QUALITY,
+        max: opai::image::MAX_QUALITY,
+        default,
+    })
 }
 
 /// What every format can do: the one table the window's format rules are read from.
@@ -144,31 +134,14 @@ pub(crate) fn capabilities() -> ExportFormats {
     }
 }
 
-/// The encoder settings for `format` at `quality`.
-///
-/// The encoder's own defaults, with the quality set on the four lossy formats and AVIF at speed 6, as the reference
-/// writes it. The lossless formats take no quality, and the window sends none for them.
+/// The encoder settings for `format` at `quality`: the library's
+/// [`recommended_encode_options`](opai::image::recommended_encode_options), so an export writes each format exactly as
+/// every other front end does.
 ///
 /// A lossy format sent no quality is written at its published default. A quality outside `1..=100` is brought inside
 /// it rather than refused.
 pub(crate) fn encode_options(format: ExportFormat, quality: Option<f64>) -> EncodeOptions {
-    // `max(1)` after the cast as well as the clamp before it, because a NaN survives a clamp and casts to zero.
-    let quality = match quality {
-        Some(quality) => (quality.clamp(f64::from(MIN_QUALITY), f64::from(MAX_QUALITY)).round() as u8).max(MIN_QUALITY),
-        None => default_quality(format).unwrap_or(MAX_QUALITY),
-    };
-
-    match EncodeOptions::default_for(format.into()) {
-        EncodeOptions::Jpeg { .. } => EncodeOptions::Jpeg { quality },
-        EncodeOptions::Avif { threads, .. } => EncodeOptions::Avif { quality, speed: 6, threads },
-        EncodeOptions::Heif { preset, chroma, .. } => EncodeOptions::Heif { quality, preset, chroma },
-        EncodeOptions::WebP { quality_alpha, compression, lossless, threads, .. } => {
-            EncodeOptions::WebP { quality, quality_alpha, compression, lossless, threads }
-        }
-        lossless @ (EncodeOptions::Bmp | EncodeOptions::Gif | EncodeOptions::Png { .. } | EncodeOptions::Tiff) => {
-            lossless
-        }
-    }
+    opai::image::recommended_encode_options(format.into(), quality)
 }
 
 #[cfg(test)]

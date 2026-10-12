@@ -65,7 +65,47 @@ The GUI is the easiest way to use the app, with an intuitive interface that allo
 
 ### CLI
 
-Coming soon...
+The CLI enhances one image per command:
+
+```bash
+opai <input> [--upscale [MODEL]] [--scale FACTOR] [--face-recovery [MODEL]] [--quality hd|sd] --output <file>
+```
+
+The input image always comes first. Then pick at least one enhancement:
+
+| Flag                      | Alias  | Accepted values                                | Default                          |
+|---------------------------|--------|------------------------------------------------|----------------------------------|
+| `--upscale [MODEL]`       | `--up` | `kyoto`, `osaka`, `tokyo`, `saitama`           | `tokyo` when no model is given   |
+| `--scale FACTOR`          |        | `1.0` to `8.0`, only together with `--upscale` | what the image needs (see below) |
+| `--face-recovery [MODEL]` | `--fr` | `athens`, `santorini`                          | `athens` when no model is given  |
+| `--quality hd\|sd`        | `-q`   | `hd`, `sd`                                     | `hd`                             |
+| `--output <file>`         | `-o`   | any path ending in a supported extension       | required                         |
+
+The output format follows the extension of `--output`: `bmp`, `gif`, `jpg`/`jpeg`, `png`, `tif`/`tiff`, `avif`, `heic`/
+`heif` or `webp`. Lossy formats use the same quality as an export from the GUI. If the output file already exists, it's
+overwritten.
+
+When it finishes, the command exits with one of these codes:
+
+| Code  | Meaning                                                                          |
+|-------|----------------------------------------------------------------------------------|
+| `0`   | The output was written                                                           |
+| `1`   | Something failed while setting up, enhancing, or writing the file                |
+| `2`   | Invalid arguments, an unreadable input image, or an unsupported output extension |
+| `130` | Stopped with `Ctrl+C`                                                            |
+
+Examples:
+
+```bash
+# Upscale with Tokyo, at the scale the photo needs
+opai photo.jpg --up -o photo-large.png
+
+# Restore faces with Athens, then upscale 2x with Kyoto, and save as WebP
+opai portrait.jpg --fr --up kyoto --scale 2 -o portrait.webp
+
+# Upscale with Osaka using its lighter INT8 build
+opai scan.png --up osaka -q sd -o scan.avif
+```
 
 ## ✨ Enhancements
 

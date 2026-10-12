@@ -70,6 +70,7 @@ mod load;
 mod picture;
 mod probe;
 mod raw;
+mod recommended;
 mod save;
 #[cfg(test)]
 mod test_log;
@@ -84,6 +85,7 @@ pub use load::{load, load_blocking};
 pub use picture::Picture;
 pub use probe::{identify_raw_blocking, probe, probe_blocking, probe_raw, probe_raw_blocking};
 pub use raw::is_raw;
+pub use recommended::{MAX_QUALITY, MIN_QUALITY, default_quality, recommended_encode_options};
 pub use save::{save, save_blocking};
 
 // `rust-sak`'s own vocabulary, re-exported rather than restated. A caller has to name an `ImageFormat` to save and

@@ -129,6 +129,11 @@
 //! [`image`] reads a file into a [`Picture`] (camera RAW included), writes one out, and describes a file
 //! without decoding it — each with an `async` and a `_blocking` form.
 //!
+//! [`image::recommended_encode_options`] is how every front end writes a format unless its user chooses otherwise:
+//! each lossy format at its [`image::default_quality`] (JPEG 90, AVIF and HEIF 60, WebP 75), a requested quality
+//! brought inside [`image::MIN_QUALITY`]`..=`[`image::MAX_QUALITY`], and AVIF at speed 6. Saving with no settings at
+//! all still uses the codec's own defaults.
+//!
 //! # Limits
 //!
 //! - **Alpha does not survive inference.** A transparent source composites against black.

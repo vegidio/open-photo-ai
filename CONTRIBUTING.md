@@ -17,19 +17,20 @@ These changes affect model size, download size, performance and platform support
 
 Please wait until the approach is agreed on in the issue before you start implementing. PRs of this kind that skip this step may be closed.
 
-Opening an issue first is also recommended for large refactors or new UI features. Small bug fixes, typos and translation improvements can go straight to a PR.
+Opening an issue first is also recommended for large refactors or new UI features. Small bug fixes, typos and
+translation improvements can go straight to a PR.
 
 ## Project layout
 
-| Path             | Description                                                                                   |
-|------------------|-----------------------------------------------------------------------------------------------|
-| `crates/opai`    | Core library: inference, models, execution providers, model/dependency download, image IO.    |
-| `crates/imaging` | Pixel primitives: tiling, tensor conversion, padding, blending.                               |
+| Path             | Description                                                                                    |
+|------------------|------------------------------------------------------------------------------------------------|
+| `crates/opai`    | Core library: inference, models, execution providers, model/dependency download, image IO.     |
+| `crates/imaging` | Pixel primitives: tiling, tensor conversion, padding, blending.                                |
 | `crates/gui`     | Desktop app built with Tauri 2. The Rust side is in `src/`; the React frontend in `frontend/`. |
 | `crates/cli`     | Command-line interface.                                                                        |
-| `crates/perf`    | `perftest`, the inference benchmark (see its [README](crates/perf/README.md)).                |
-| `docs/`          | Project website and install scripts.                                                          |
-| `fixtures/`      | Test assets. `fixtures/test.dat` is a JPEG image, despite its extension.                      |
+| `crates/perf`    | `perftest`, the inference benchmark (see its [README](crates/perf/README.md)).                 |
+| `docs/`          | Project website and install scripts.                                                           |
+| `fixtures/`      | Test assets. `fixtures/test.dat` is a JPEG image, despite its extension.                       |
 
 ## Development setup
 
