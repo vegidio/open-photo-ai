@@ -29,6 +29,11 @@ clap = { version = "4.6.7", features = ["derive"] }
 # would take over the whole terminal for two bars, which a command meant for pipelines should not do.
 indicatif = "0.18.6"
 
+# Named directly, not reached through `opai`, because drawing to a terminal is front-end work and `opai` knows nothing
+# about a user interface: `tui` is the gradient progress bar and its live one-line session. Pinned to the same tag as
+# `opai`'s, `gui`'s and `perf`'s: all four tags move together, so the lock file holds a single `rust-sak`.
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.10.6", features = ["tui"] }
+
 # The project's error convention, matching `rust-sak`, `opai`, `gui` and `perf`.
 thiserror = "2.0.20"
 

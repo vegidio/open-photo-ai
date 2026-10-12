@@ -999,6 +999,7 @@ dependencies = [
  "clap",
  "indicatif",
  "opai",
+ "rust-sak",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -4133,8 +4134,8 @@ checksum = "6aa2c4e539b869820a2b82e1aef6ff40aa85e65decdd5185e83fb4b1249cd00f"
 
 [[package]]
 name = "o11y-macros"
-version = "26.10.4"
-source = "git+https://github.com/vegidio/rust-sak?tag=26.10.4#c4bf69e60bce8fd830cf61ced5629d90f43fa5ef"
+version = "26.10.6"
+source = "git+https://github.com/vegidio/rust-sak?tag=26.10.6#a53324709f21516dba823590c9851d9bcdec2618"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5609,8 +5610,8 @@ checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rust-sak"
-version = "26.10.4"
-source = "git+https://github.com/vegidio/rust-sak?tag=26.10.4#c4bf69e60bce8fd830cf61ced5629d90f43fa5ef"
+version = "26.10.6"
+source = "git+https://github.com/vegidio/rust-sak?tag=26.10.6#a53324709f21516dba823590c9851d9bcdec2618"
 dependencies = [
  "avif-rs",
  "cap-std",
@@ -5633,6 +5634,8 @@ dependencies = [
  "objc2-io-kit",
  "pin-project-lite",
  "postcard",
+ "ratatui",
+ "ratatui-crossterm",
  "redb",
  "reqwest",
  "semver",

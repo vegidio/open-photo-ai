@@ -117,11 +117,11 @@ opai = { path = "../opai" }
 # rides on `fetch`, which `opai` already builds, and adds only `semver`, which the graph already holds.
 #
 # A crate outside the core library depending on `rust-sak` directly, with a narrow feature set, is what `perf`
-# also does with its single `fs`. This is one of THREE manifests pinning one git source, with `opai` and `perf`, and
-# ⚠️ ALL THREE TAGS MUST MOVE TOGETHER: two tags of one git source resolve to two entries in `Cargo.lock`, and
-# then `rust-sak`'s `image` module and `opai`'s are built against two copies of the `image` crate — making
-# `DynamicImage` two unrelated types, for an error message that names one type twice.
-rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.10.4", features = ["crypto", "fs", "github", "image"] }
+# also does with its single `fs`, and `cli` with its single `tui`. This is one of FOUR manifests pinning one git
+# source, with `opai`, `perf` and `cli`, and ⚠️ ALL FOUR TAGS MUST MOVE TOGETHER: two tags of one git source resolve to
+# two entries in `Cargo.lock`, and then `rust-sak`'s `image` module and `opai`'s are built against two copies of the
+# `image` crate — making `DynamicImage` two unrelated types, for an error message that names one type twice.
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.10.6", features = ["crypto", "fs", "github", "image"] }
 
 # `src/images/serve.rs` scales an opened photograph down to the size the window is drawing it at, which means naming
 # `DynamicImage` and a `FilterType`.
