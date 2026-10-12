@@ -199,6 +199,12 @@ For example, if I wanted to build a GUI version of the app, on architecture x64,
 just build gui x64
 ```
 
+## ❤️ Sponsors
+
+This project is possible due to the generous contributions from my sponsors. You can see the full list of sponsors [on my GitHub profile](https://github.com/vegidio/vegidio/blob/main/README.md#sponsors).
+
+If you find **Open Photo AI** useful, please consider [becoming a sponsor](https://github.com/sponsors/vegidio) too.
+
 ## 📝 License
 
 **Open Photo AI** is released under the AGPL-3.0 License. See [LICENSE](LICENSE) for details.
