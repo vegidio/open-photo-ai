@@ -21,7 +21,7 @@ mod slot;
 mod test_support;
 
 // `RunProgress` is also what an export re-sends on its own event, wrapped — see `crate::export`.
-pub(crate) use progress::{Handover, Reporting, RunProgress, reporting};
+pub(crate) use progress::{Reporting, RunProgress, reporting};
 // Read by `faces`' tests, which assert on what the window receives for a detection.
 #[cfg(test)]
 pub(crate) use progress::Stage;

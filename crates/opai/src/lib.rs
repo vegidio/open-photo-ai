@@ -74,6 +74,28 @@
 //! reports what it found as [`ChainFaces`]. A failed detection restores nobody and leaves the rest of the chain to
 //! run; only a stop ends it. [`fill_chain_faces`] is the same rules without the detection.
 //!
+//! The detection and the chain are two runs, each reporting its own `0..1`. [`Handover`] reports them on one bar that
+//! moves forward once: the detection takes the first fifth (none, when the store already knew the faces), the chain
+//! the rest, and the detection's reports count as the face recovery's step.
+//!
+//! ```no_run
+//! # async fn run(opai: &opai::Opai, picture: &opai::Picture, chain: Vec<opai::Operation>,
+//! #     on_progress: opai::OnInference) -> Result<(), opai::InferenceError> {
+//! use opai::{ExecuteOptions, FacedChain, Handover, ProcessOptions, default_face_selection};
+//!
+//! let handover = Handover::new(&on_progress, &chain);
+//!
+//! let detection = ExecuteOptions { on_progress: Some(handover.detection()), ..Default::default() };
+//! let FacedChain { operations, .. } =
+//!     opai.find_chain_faces(picture, chain, default_face_selection, Some(detection)).await?;
+//!
+//! // Asked for after the detection has ended, when whether it reported anything is known.
+//! let options = ProcessOptions { on_progress: Some(handover.chain()), ..Default::default() };
+//! let enhanced = opai.process(picture, &operations, Some(options)).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! ## Upscale
 //!
 //! Kyoto, Tokyo and Saitama publish per-factor weights, reached by whole native passes plus one final resample
@@ -189,6 +211,7 @@ pub use image::{EncodeOptions, ImageError, ImageFormat, ImageInfo, ImageIoError,
 pub use inference::depth::OutputDepth;
 pub use inference::execute::{ExecuteOptions, Executed};
 pub use inference::faces::{ChainFaces, FacedChain, default_face_selection, fill_chain_faces};
+pub use inference::handover::Handover;
 pub use inference::process::{Enhanced, ProcessOptions, ProviderReport, ProviderVerdict};
 pub use inference::progress::{InferenceProgress, OnInference, Stage};
 pub use libpath::prepare_library_path;

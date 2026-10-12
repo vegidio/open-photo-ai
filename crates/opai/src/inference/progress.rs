@@ -50,6 +50,13 @@ pub struct InferenceProgress {
     pub stage: Stage,
     /// How far this operation has got, in `0.0..=1.0`, over the install and the run together.
     pub operation_fraction: f64,
+    /// Which operation of the chain this report is about, counted from zero, in the order the chain is **applied**
+    /// rather than the order the caller listed it in.
+    ///
+    /// The same on every report about one operation, whatever its stage. A single-operation run reports `0`.
+    pub operation_index: usize,
+    /// How many operations the chain has. A single-operation run reports `1`.
+    pub operation_count: usize,
     /// How far the whole run has got, in `0.0..=1.0`.
     ///
     /// Never decreases over one run, and reaches exactly `1.0` when it finishes. In particular it does not return to
@@ -201,6 +208,8 @@ impl OperationProgress {
             subject: Arc::clone(&self.subject),
             stage,
             operation_fraction,
+            operation_index: self.index,
+            operation_count: self.operations,
             chain_fraction,
         });
     }
@@ -369,6 +378,56 @@ mod tests {
         operation.running(0.25);
 
         assert_eq!(chain(&seen), vec![0.75, 0.75]);
+    }
+
+    /// The `(index, count)` every report so far carried, in order.
+    fn steps(seen: &Arc<Mutex<Vec<InferenceProgress>>>) -> Vec<(usize, usize)> {
+        seen.lock()
+            .unwrap()
+            .iter()
+            .map(|report| (report.operation_index, report.operation_count))
+            .collect()
+    }
+
+    #[test]
+    fn each_operation_reports_its_position_in_the_chain_and_the_chains_length() {
+        let (progress, seen) = recording(3);
+
+        for index in 0..3 {
+            progress.operation(index, kyoto(2.0)).running(1.0);
+        }
+
+        assert_eq!(steps(&seen), vec![(0, 3), (1, 3), (2, 3)]);
+    }
+
+    #[test]
+    fn every_stage_of_one_operation_reports_the_same_position() {
+        let (progress, seen) = recording(3);
+
+        let installed = Arc::new(progress.operation(1, kyoto(2.0)));
+        let install = installed.installing(&requires(&[2])).unwrap();
+        install(&installing(weights(2), 1.0));
+        installed.running(1.0);
+        progress.operation(1, kyoto(2.0)).cached();
+
+        let reports = seen.lock().unwrap().clone();
+        assert!(matches!(reports[0].stage, Stage::Installing(_)));
+        assert!(matches!(reports[1].stage, Stage::Running));
+        assert!(matches!(reports[2].stage, Stage::Cached));
+        assert!(
+            reports.iter().all(|report| (report.operation_index, report.operation_count) == (1, 3)),
+            "a stage reported another position: {:?}",
+            steps(&seen)
+        );
+    }
+
+    #[test]
+    fn a_single_operation_run_reports_the_first_of_one() {
+        let (progress, seen) = recording(1);
+
+        progress.operation(0, kyoto(2.0)).running(0.5);
+
+        assert_eq!(steps(&seen), vec![(0, 1)]);
     }
 
     #[test]

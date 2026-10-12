@@ -37,8 +37,8 @@ export type EnhancementRun = {
      * How far along the indicator is, in `0..1`: the report's own {@link RunProgress.chainFraction}.
      *
      * One number for a face recovery too. Rust finds the faces inside the run and maps that detection
-     * onto the head of the bar and the chain onto the rest (`Handover` in
-     * `crates/gui/src/enhance/progress.rs`), so the bar moves forward once. Zero for a run that has
+     * onto the head of the bar and the chain onto the rest (`opai::Handover`, in
+     * `crates/opai/src/inference/handover.rs`), so the bar moves forward once. Zero for a run that has
      * reported nothing yet.
      */
     fraction: number;

@@ -1179,6 +1179,8 @@ async fn a_chain_can_be_built_and_run_through_the_public_surface_alone() {
         assert!(!label.is_empty());
         assert!((0.0..=1.0).contains(&report.chain_fraction));
         assert!((0.0..=1.0).contains(&report.operation_fraction));
+        // Which step of the chain this is, for a `[n/N]` counter: the chain here is one operation long.
+        assert_eq!((report.operation_index, report.operation_count), (0, 1));
 
         sink.lock().unwrap().push(report.clone());
     });
@@ -1265,6 +1267,8 @@ async fn a_non_image_operation_can_be_built_and_run_through_the_public_surface_a
     let sink = std::sync::Arc::clone(&seen);
     let on_progress: OnInference = std::sync::Arc::new(move |report: &InferenceProgress| {
         assert!((0.0..=1.0).contains(&report.chain_fraction));
+        // A single analysis is a one-operation run of its own.
+        assert_eq!((report.operation_index, report.operation_count), (0, 1));
         sink.lock().unwrap().push(report.clone());
     });
 

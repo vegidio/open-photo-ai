@@ -17,7 +17,7 @@ use super::destination;
 use super::format::{ExportFormat, encode_options};
 use super::progress::ExportReporting;
 use crate::command::{Answer, CommandError, Ended};
-use crate::enhance::{EnhanceError, Enhancer, Handover, Prepared, Processor, Requested, judge_chain, prepare_chain};
+use crate::enhance::{EnhanceError, Enhancer, Prepared, Processor, Requested, judge_chain, prepare_chain};
 use crate::images::{Crop, Opened};
 
 /// How an export ended.
@@ -193,7 +193,7 @@ pub(crate) async fn export_with<E: Enhancer>(
             let options = ProcessOptions {
                 provider: request.processor.into(),
                 depth: OutputDepth::Source,
-                on_progress: handover.as_ref().map(Handover::chain),
+                on_progress: handover.as_ref().map(opai::Handover::chain),
                 cancel: registration.cancel().clone(),
                 ..Default::default()
             };
@@ -308,6 +308,8 @@ mod tests {
                             subject: Arc::clone(&subject),
                             stage: opai::Stage::Running,
                             operation_fraction: f64::from(step) / 10.0,
+                            operation_index: index,
+                            operation_count: operations.len(),
                             chain_fraction: chain,
                         });
                     }

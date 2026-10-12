@@ -16,7 +16,7 @@ use opai::{
 use serde::{Deserialize, Serialize};
 
 use super::operation::{Requested, UnknownOperation};
-use super::progress::{Handover, Reporting};
+use super::progress::Reporting;
 use super::slot::Runs;
 use crate::command::{Answer, CommandError, Ended};
 use crate::faces::DetectedFace;
@@ -260,15 +260,15 @@ pub(crate) struct Prepared {
     pub(crate) operations: Vec<opai::Operation>,
     /// What finding the faces came to — see [`Opai::find_chain_faces`].
     pub(crate) faces: ChainFaces,
-    /// The bar the detection reported onto the head of, whose [`Handover::chain`] the chain reports through.
-    pub(crate) handover: Option<Handover>,
+    /// The bar the detection reported onto the head of, whose [`opai::Handover::chain`] the chain reports through.
+    pub(crate) handover: Option<opai::Handover>,
 }
 
 /// Decodes and frames a judged chain's source, then finds the faces its face recoveries restore — steps shared by a
 /// canvas run and an export, taken once the caller has claimed whatever a stop reaches the run through.
 ///
 /// The detection runs on `processor` under `cancel`, so it is stopped with the chain and runs where it would, and
-/// reports onto the head of `on_progress`'s bar — see [`Handover`]. `None` is a run stopped during the detection,
+/// reports onto the head of `on_progress`'s bar — see [`opai::Handover`]. `None` is a run stopped during the detection,
 /// before the chain began.
 ///
 /// # Errors
@@ -289,10 +289,12 @@ pub(crate) async fn prepare_chain<E: Enhancer>(
         .await
         .map_err(|error| EnhanceError::UnreadableSource { identity: source.to_string(), message: error.to_string() })?;
 
-    let handover = on_progress.map(Handover::new);
+    // Built over the chain as asked for, before it moves into the detection: a face selection changes no family, so
+    // this is the chain `process` later runs.
+    let handover = on_progress.map(|on_progress| opai::Handover::new(on_progress, &operations));
     let detecting = ExecuteOptions {
         provider: processor.into(),
-        on_progress: handover.as_ref().map(Handover::detection),
+        on_progress: handover.as_ref().map(opai::Handover::detection),
         cancel,
         ..Default::default()
     };
@@ -397,7 +399,7 @@ pub(crate) async fn enhance_with<E: Enhancer>(
     let options = ProcessOptions {
         provider: request.processor.into(),
         depth: OutputDepth::Eight,
-        on_progress: handover.as_ref().map(Handover::chain),
+        on_progress: handover.as_ref().map(opai::Handover::chain),
         cancel,
         ..Default::default()
     };

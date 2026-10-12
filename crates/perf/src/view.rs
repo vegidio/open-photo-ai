@@ -582,6 +582,8 @@ mod tests {
             subject: Arc::new(selected().operation.clone().into()),
             stage: RunStage::Running,
             operation_fraction: fraction,
+            operation_index: 0,
+            operation_count: 1,
             chain_fraction: fraction,
         }
     }
@@ -598,6 +600,8 @@ mod tests {
                 fraction: 0.5,
             }),
             operation_fraction: 0.1,
+            operation_index: 0,
+            operation_count: 1,
             chain_fraction: 0.1,
         }
     }

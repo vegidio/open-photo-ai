@@ -390,6 +390,8 @@ mod tests {
                         subject: Arc::clone(&subject),
                         stage: installing(&subject, fraction),
                         operation_fraction: fraction,
+                        operation_index: 0,
+                        operation_count: 1,
                         // A transfer occupies only the head of the run's own range, as it does for a chain.
                         chain_fraction: fraction / 10.0,
                     });
@@ -402,6 +404,8 @@ mod tests {
                         subject: Arc::clone(&subject),
                         stage: opai::Stage::Running,
                         operation_fraction: fraction,
+                        operation_index: 0,
+                        operation_count: 1,
                         chain_fraction: 0.1 + fraction * 0.9,
                     });
                 }

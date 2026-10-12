@@ -113,6 +113,8 @@ mod tests {
             subject: Arc::new(opai::Subject::Enhancement(Upscale::kyoto(FloatPrecision::Fp32, Scale::clamped(2.0)))),
             stage: opai::Stage::Running,
             operation_fraction: chain,
+            operation_index: 0,
+            operation_count: 1,
             chain_fraction: chain,
         }
     }
