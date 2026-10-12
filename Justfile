@@ -12,8 +12,8 @@ build_dir := justfile_directory() / "build"
 default:
     @just --list
 
-# Build a component for this OS into build/. Currently only `gui` is supported. Pass `arm64` or `x64` to override the host architecture.
-build target arch=host_arch: (_check-target target) (_compile (if arch == "arm64" { "aarch64" } else if arch == "x64" { "x86_64" } else { error("arch must be arm64 or x64, got: " + arch) }) + "-" + os_triple)
+# Build a component (`gui` or `cli`) for this OS into build/. Pass `arm64` or `x64` to override the host architecture.
+build target arch=host_arch: (_check-target target) (_compile (if arch == "arm64" { "aarch64" } else if arch == "x64" { "x86_64" } else { error("arch must be arm64 or x64, got: " + arch) }) + "-" + os_triple target)
 
 # Build the GUI like `build gui`, then package it as build/opai-gui_<os>_<arch>.zip (.deb and .rpm on Linux, unzipped).
 package arch=host_arch: (build "gui" arch) (_package "opai-gui_" + os() + "_" + arch)
@@ -40,9 +40,9 @@ test suite="all": (_check-suite suite)
     {{ if suite != "node" { "cargo test --workspace" } else { "" } }}
     {{ if suite != "rust" { "just _pnpm test" } else { "" } }}
 
-# Run a component in development mode. Currently only `gui` is supported.
-run target: (_check-target target)
-    @just _pnpm tauri dev
+# Run a component (`gui` or `cli`) in development mode. Extra arguments are passed to the CLI, e.g. `just run cli --help`.
+run target *args: (_check-target target)
+    {{ if target == "gui" { "just _pnpm tauri dev" } else { "cargo run -p cli -- " + args } }}
 
 # Runs pnpm from inside the GUI rather than with `--dir`: corepack picks the pnpm version from the `packageManager`
 # field of the package.json in the *current* directory, and never sees `--dir`, so run from the root it starts
@@ -55,10 +55,17 @@ _check-suite suite:
     @{{ if suite =~ '^(all|rust|node)$' { "" } else { error("suite must be rust or node, got: " + suite) } }}
 
 _check-target target:
-    @{{ if target == "gui" { "" } else { error("target must be gui, got: " + target) } }}
+    @{{ if target =~ '^(gui|cli)$' { "" } else { error("target must be gui or cli, got: " + target) } }}
 
-_compile triple:
+_compile triple target:
     rustup target add {{ triple }}
+    @just _compile-{{ target }} {{ triple }}
+
+_compile-cli triple:
+    cargo build --release -p cli --target {{ triple }}
+    @just _stage-cli {{ triple }}
+
+_compile-gui triple:
     @just _pnpm install --frozen-lockfile
     @just _pnpm tauri build --target {{ triple }} {{ bundle_flags }}
     @just _stage {{ triple }}
@@ -84,6 +91,18 @@ _stage triple:
     New-Item -ItemType Directory -Force -Path "{{ build_dir }}" | Out-Null
     Copy-Item -Force "target/{{ triple }}/release/OpenPhotoAI.exe" "{{ build_dir }}/OpenPhotoAI.exe"
     @echo "Built {{ build_dir }}/OpenPhotoAI.exe"
+
+[unix]
+_stage-cli triple:
+    mkdir -p "{{ build_dir }}"
+    cp "target/{{ triple }}/release/opai" "{{ build_dir }}/opai"
+    @echo "Built {{ build_dir }}/opai"
+
+[windows]
+_stage-cli triple:
+    New-Item -ItemType Directory -Force -Path "{{ build_dir }}" | Out-Null
+    Copy-Item -Force "target/{{ triple }}/release/opai.exe" "{{ build_dir }}/opai.exe"
+    @echo "Built {{ build_dir }}/opai.exe"
 
 [macos]
 _package base:
