@@ -20,7 +20,22 @@
  * region or script later means adding the regional tag here and teaching {@link detectLanguage} to
  * prefer an exact match before falling back to the base tag.
  */
-export const LANGUAGE_TAGS = ["de", "el", "en", "es", "fr", "hi", "id", "ja", "nl", "pt", "ru", "sv", "zh"] as const;
+export const LANGUAGE_TAGS = [
+    "de",
+    "el",
+    "en",
+    "es",
+    "fr",
+    "hi",
+    "id",
+    "it",
+    "ja",
+    "nl",
+    "pt",
+    "ru",
+    "sv",
+    "zh",
+] as const;
 
 export type Language = (typeof LANGUAGE_TAGS)[number];
 

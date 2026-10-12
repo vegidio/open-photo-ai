@@ -10,7 +10,7 @@ describe("i18n", () => {
         expect(i18n.t("preview.empty.browse")).toBe("Browse images");
     });
 
-    it("ships the thirteen languages the Wails app had", () => {
+    it("ships the fourteen supported languages", () => {
         expect([...SUPPORTED_LANGUAGES].sort()).toEqual([
             "de",
             "el",
@@ -19,6 +19,7 @@ describe("i18n", () => {
             "fr",
             "hi",
             "id",
+            "it",
             "ja",
             "nl",
             "pt",

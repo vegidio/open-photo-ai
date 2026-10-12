@@ -9,7 +9,7 @@ import { LANGUAGE_TAGS } from "./languages.ts";
  * would flag every one of those languages.
  *
  * Normalising the suffix away is what makes the comparison meaningful: what must match across all
- * 13 files is the set of translatable strings, not the set of literal JSON keys.
+ * 14 files is the set of translatable strings, not the set of literal JSON keys.
  */
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
 
@@ -34,7 +34,7 @@ describe("locale catalogues", () => {
     });
 
     /**
-     * The thirteen tags are spelled twice, and this is what holds the two spellings together.
+     * The fourteen tags are spelled twice, and this is what holds the two spellings together.
      *
      * `i18n/languages.ts` is a leaf - the settings store imports it and `index.ts` imports the store,
      * so it cannot import the catalogues without closing that cycle - which leaves its list and the
