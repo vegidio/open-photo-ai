@@ -2,99 +2,87 @@
 //!
 //! ```text
 //! output format, input header  --> refused here: nothing installed
-//! initialize                   --> install progress; another instance holding the claim ends it
-//! Ctrl-C handler               --> from here a Ctrl-C stops the run instead of killing the process
-//! load, find faces, process    --> per-call progress; a failed detection warns and the run goes on
-//! save                         --> the source's depth, the library's recommended settings
+//! initialize                   --> the 💾 line; a Ctrl-C on it abandons initialization; another instance ends it
+//! Ctrl-C handler               --> from here a SIGINT stops the run instead of killing the process
+//! header, load                 --> 🖼️ and a blank line
+//! find faces, process          --> one bar over both; a failed detection is logged and the run goes on
+//! save                         --> the source's depth, the library's recommended settings; then ✨
 //! ```
+//!
+//! The notes, the face report and what the run executed on go to the log, not to the terminal.
 
 use opai::{
-    APP_NAME, CLI, CancellationToken, ChainFaces, ExecuteOptions, InitOptions, Opai, OutputDepth, ProcessOptions,
-    ProviderVerdict, default_face_selection, image,
+    APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, FacedChain, Handover, InitOptions, Opai,
+    OutputDepth, Picture, ProcessOptions, ProviderVerdict, default_face_selection, image,
 };
 
 use crate::args::Args;
 use crate::error::CliError;
+use crate::look::{self, Look};
 use crate::progress::View;
 use crate::{chain, output};
 
-/// Runs what `args` asks for, and writes its output.
+/// Runs what `args` asks for, drawing as `look` says, and writes its output.
 ///
 /// The one [`Opai`] handle is owned here and dropped before this returns, which releases the single-instance claim and
-/// waits for the run cache's pending writes.
+/// waits for the run cache's pending writes. Every live line is finished before this returns, so the caller's failure
+/// line lands below them.
 ///
 /// # Errors
 ///
 /// [`CliError`], whose [`exit_code`](CliError::exit_code) is the process's status. Nothing is written on any of them.
-pub async fn run(args: Args) -> Result<(), CliError> {
+pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     // Everything that can be refused without the library, before it is initialized: a typo must not cost the first
     // run's download.
     let output = output::resolve(&args.output)?;
     let (width, height) = output::check_input(&args.input)?;
     let plan = chain::plan(&args, width, height);
 
-    let view = View::new();
     for note in &plan.notes {
-        view.say(format!("note: {note}"));
+        tracing::info!("{note}");
     }
 
-    let (on_plan, on_progress) = view.install();
-    let opai = Opai::initialize(
-        APP_NAME,
-        Some(InitOptions {
-            app: Some(CLI.to_string()),
-            on_plan: Some(on_plan),
-            on_progress: Some(on_progress),
-            ..Default::default()
-        }),
-    )
-    .await?;
-
-    // Only now: initialization has no stop of its own, so until it returns a Ctrl-C keeps its default meaning and ends
-    // the process — which is safe, since the claim is released by the system and a transfer resumes onto the bytes
-    // already on disk.
     let cancel = CancellationToken::new();
-    stop_on_ctrl_c(&cancel, &view);
+    let view = View::new(look, cancel.clone());
+
+    // `initialize` has no stop of its own. While the dependency line is drawn, a Ctrl-C is a key press that wakes
+    // `install_interrupted`, and dropping the future here is no worse than the kill it replaces: the claim's guard
+    // releases it and a transfer resumes onto the bytes already on disk. With no line drawn, a Ctrl-C keeps its default
+    // meaning and ends the process.
+    let initialized = tokio::select! {
+        initialized = Opai::initialize(
+            APP_NAME,
+            Some(InitOptions {
+                app: Some(CLI.to_string()),
+                on_progress: Some(view.on_install()),
+                ..Default::default()
+            }),
+        ) => initialized,
+        () = view.install_interrupted() => {
+            view.finish_install();
+            return Err(CliError::Cancelled);
+        }
+    };
+    view.finish_install();
+    let opai = initialized?;
+
+    // In plain mode, and between the live lines, a Ctrl-C is still a SIGINT.
+    stop_on_ctrl_c(&cancel);
+
+    eprintln!("{}", look::header(&args.input, look.color));
+    if look.interactive {
+        eprintln!();
+    }
 
     // A file whose header read cleanly but whose pixels do not decode is still an unreadable input, so it ends as one.
     // The library's message names the path.
     let picture = image::load(&args.input).await.map_err(|error| CliError::Usage(error.to_string()))?;
 
-    let detection = view.inference();
-    let faced = opai
-        .find_chain_faces(
-            &picture,
-            plan.operations,
-            default_face_selection,
-            Some(ExecuteOptions {
-                on_progress: Some(detection.on_progress()),
-                cancel: cancel.clone(),
-                ..Default::default()
-            }),
-        )
-        .await;
-    detection.clear();
-    let faced = faced?;
-
-    if let Some(report) = face_report(&faced.faces) {
-        view.say(report);
-    }
-
-    let processing = view.inference();
-    let enhanced = opai
-        .process(
-            &picture,
-            &faced.operations,
-            Some(ProcessOptions {
-                depth: OutputDepth::Source,
-                on_progress: Some(processing.on_progress()),
-                cancel: cancel.clone(),
-                ..Default::default()
-            }),
-        )
-        .await;
-    processing.clear();
-    let enhanced = enhanced?;
+    // Finished on every outcome, so the failure line lands below the bar and the blank line after it.
+    view.start_bar(plan.operations.len());
+    let enhanced = enhance(&opai, &picture, plan.operations, &view, &cancel).await;
+    view.finish_bar();
+    let (faced, enhanced) = enhanced?;
 
     // A Ctrl-C that landed after the last tile was checked still means "write nothing".
     if cancel.is_cancelled() {
@@ -106,31 +94,80 @@ pub async fn run(args: Args) -> Result<(), CliError> {
         .map_err(|source| CliError::Write(Box::new(source)))?;
 
     let (width, height) = enhanced.picture.dimensions();
-    view.say(format!(
+    tracing::info!(
         "wrote {} ({width}x{height}, {}); {}",
         output.path.display(),
         output.format.name(),
         provenance(faced.operations.is_empty(), &enhanced.providers.verdict())
-    ));
+    );
 
     drop(opai);
+    eprintln!("{}", look::success(&output.path, look.color));
     Ok(())
 }
 
-/// Cancels `cancel` on the first Ctrl-C.
-fn stop_on_ctrl_c(cancel: &CancellationToken, view: &View) {
+/// Finds the faces `operations` needs and runs the chain, both reporting onto the view's one bar.
+async fn enhance(
+    opai: &Opai,
+    picture: &Picture,
+    operations: Vec<opai::Operation>,
+    view: &View,
+    cancel: &CancellationToken,
+) -> Result<(FacedChain, Enhanced), CliError> {
+    // Built before the operations move into `find_chain_faces`; a face selection changes no family, so it is the same
+    // chain `process` runs.
+    let handover = Handover::new(&view.on_bar(), &operations);
+
+    let faced = opai
+        .find_chain_faces(
+            picture,
+            operations,
+            default_face_selection,
+            Some(ExecuteOptions {
+                on_progress: Some(handover.detection()),
+                cancel: cancel.clone(),
+                ..Default::default()
+            }),
+        )
+        .await?;
+
+    if let Some(report) = face_report(&faced.faces) {
+        if matches!(faced.faces, ChainFaces::Failed(_)) {
+            tracing::warn!("{report}");
+        } else {
+            tracing::info!("{report}");
+        }
+    }
+
+    let enhanced = opai
+        .process(
+            picture,
+            &faced.operations,
+            Some(ProcessOptions {
+                depth: OutputDepth::Source,
+                on_progress: Some(handover.chain()),
+                cancel: cancel.clone(),
+                ..Default::default()
+            }),
+        )
+        .await?;
+
+    Ok((faced, enhanced))
+}
+
+/// Cancels `cancel` on the first SIGINT, which arrives only while no live line holds the terminal in raw mode.
+fn stop_on_ctrl_c(cancel: &CancellationToken) {
     let cancel = cancel.clone();
-    let view = view.clone();
 
     tokio::spawn(async move {
         if tokio::signal::ctrl_c().await.is_ok() {
-            view.say("stopping…");
+            tracing::info!("stopping…");
             cancel.cancel();
         }
     });
 }
 
-/// What finding the faces came to, as the line the user is shown, or `None` where no face recovery asked for it.
+/// What finding the faces came to, as the log records it, or `None` where no face recovery asked for it.
 ///
 /// The count restored is the faces [`default_face_selection`] keeps, which is exactly what the step handed the
 /// recovery.
@@ -143,13 +180,11 @@ fn face_report(faces: &ChainFaces) -> Option<String> {
                 faces.iter().enumerate().filter(|(index, face)| default_face_selection(*index, face)).count();
             Some(format!("found {} {}, restoring {restoring}", faces.len(), plural(faces.len(), "face", "faces")))
         }
-        ChainFaces::Failed(error) => {
-            Some(format!("warning: face detection failed, so no face will be restored: {error}"))
-        }
+        ChainFaces::Failed(error) => Some(format!("face detection failed, so no face will be restored: {error}")),
     }
 }
 
-/// What the run executed on, as the completion line says it. `empty` is a chain with nothing in it — an upscale that
+/// What the run executed on, as the log records it. `empty` is a chain with nothing in it — an upscale that
 /// was skipped and nothing else asked for — which the library reports exactly as a run served from the cache.
 fn provenance(empty: bool, verdict: &ProviderVerdict) -> String {
     if empty {
@@ -223,7 +258,7 @@ mod tests {
 
         let report = face_report(&ChainFaces::Failed(failure)).expect("a failure is reported");
 
-        assert!(report.starts_with("warning: face detection failed"), "{report}");
+        assert!(report.starts_with("face detection failed"), "{report}");
         assert!(report.ends_with(&expected), "{report}");
     }
 

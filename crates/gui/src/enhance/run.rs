@@ -334,7 +334,8 @@ pub(crate) async fn prepare_chain<E: Enhancer>(
 /// # A face recovery finds its own faces
 ///
 /// Step 6 is [`Opai::find_chain_faces`]: the chain detects inside this request rather than the window detecting first
-/// and asking second, so the whole of it is one stop and one progress stream, the detection on the head of the bar.
+/// and asking second, so the whole of it is one stop and one progress stream, the detection inside the first
+/// operation's slot of the bar.
 /// The faces found come back beside the result for the window to count and offer, and a detection that failed comes
 /// back as the reason, with the chain run anyway over no faces.
 ///

@@ -24,10 +24,10 @@ opai = { path = "../opai" }
 # `bpaf` are smaller and are not what a Rust developer expects to find.
 clap = { version = "4.6.7", features = ["derive"] }
 
-# The install and inference progress bars. It hides its bars by itself when stderr is not a terminal, which is what a
-# piped run needs, throttles its own redraws, and a `MultiProgress` holds one bar per dependency. `perf`'s `ratatui`
-# would take over the whole terminal for two bars, which a command meant for pipelines should not do.
-indicatif = "0.18.6"
+# The dependency line's styled text, and the colour of the plain lines through its `crossterm` re-export, so no direct
+# `crossterm` dependency is needed. Declared as `perf` declares it, minus `scrolling-regions`, which only `perf`'s
+# full-screen view uses; `rust-sak`'s `tui` already links this same `ratatui`.
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 
 # Named directly, not reached through `opai`, because drawing to a terminal is front-end work and `opai` knows nothing
 # about a user interface: `tui` is the gradient progress bar and its live one-line session. Pinned to the same tag as
@@ -37,9 +37,14 @@ rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.10.6", featu
 # The project's error convention, matching `rust-sak`, `opai`, `gui` and `perf`.
 thiserror = "2.0.20"
 
+# The notes, face report and provider details the terminal no longer shows, recorded instead as `opai` records its
+# own: `opai::logging::init` has installed the `opai.log` sink, so a record from here lands in the same file.
+tracing = "0.1.44"
+
 # `Opai::initialize` and `Opai::process` are `async`, so `main` needs a runtime; `signal` is what turns a Ctrl-C into
-# the cancellation a run stops on. The same crate and features `perf` uses, minus the ones only its live view needs.
-tokio = { version = "1.52.3", features = ["rt-multi-thread", "signal"] }
+# the cancellation a run stops on in plain mode. `macros` and `sync` are the `select!` and the `Notify` that abandon
+# initialization on a Ctrl-C the dependency line reports.
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "signal", "sync"] }
 
 [dev-dependencies]
 # A scratch directory for the input check's tests, as `opai` and `gui` use it.

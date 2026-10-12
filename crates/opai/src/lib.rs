@@ -75,8 +75,9 @@
 //! run; only a stop ends it. [`fill_chain_faces`] is the same rules without the detection.
 //!
 //! The detection and the chain are two runs, each reporting its own `0..1`. [`Handover`] reports them on one bar that
-//! moves forward once: the detection takes the first fifth (none, when the store already knew the faces), the chain
-//! the rest, and the detection's reports count as the face recovery's step.
+//! moves forward once: every operation owns an equal `1 / N` of it, the detection takes the first fifth of the first
+//! operation's slot (none, when the store already knew the faces), and the detection's reports count as the face
+//! recovery's step. A face recovery and an upscale are `0..0.5` and `0.5..1`, detection included.
 //!
 //! ```no_run
 //! # async fn run(opai: &opai::Opai, picture: &opai::Picture, chain: Vec<opai::Operation>,

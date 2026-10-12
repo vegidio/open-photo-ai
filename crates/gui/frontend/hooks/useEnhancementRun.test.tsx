@@ -505,8 +505,8 @@ describe("a chain that restores faces", () => {
     });
 
     it("draws the run's own bar, the detection already on its head", async () => {
-        // Rust maps the detection it makes onto the head of the bar and the chain onto the rest, so the
-        // window draws the report's own fraction and the bar moves forward once.
+        // Rust maps the detection it makes into the first enhancement's slot of the bar, so the window
+        // draws the report's own fraction and the bar moves forward once.
         stack(HOLIDAY.path, recovery());
         mount();
 

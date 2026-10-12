@@ -17,7 +17,7 @@ use crate::sync::lock;
 /// about a run it abandoned — a per-call channel for a displaced run would keep delivering regardless.
 ///
 /// **Two senders, one event.** A chain reports here — including the detection it makes for a face recovery, mapped
-/// onto the head of its own bar by [`opai::Handover`] — and so does the picker's detection [`crate::faces::detect_faces`]
+/// into the face recovery's slot of its own bar by [`opai::Handover`] — and so does the picker's detection [`crate::faces::detect_faces`]
 /// runs: the window draws one indicator, every report already names its run, and a second event would be a second
 /// subscription to unregister for a chip that can only ever show one thing. A detection reports under
 /// [`Family::Detection`], which the frontend names Face Recovery — see design.md D8.

@@ -7,16 +7,31 @@
 //! ```
 //!
 //! Everything the run does is the library's. What lives here is the terminal's own vocabulary — the flags, the mapping
-//! from them to `opai` constructors, the progress bars and the exit status.
+//! from them to `opai` constructors, the lines and the bar the terminal shows, and the exit status.
 //!
 //! # Where the output goes
 //!
-//! Everything this command says — progress, notes, warnings, the completion line and every error — goes to stderr.
-//! stdout is left empty, so nothing a pipeline reads is interleaved with a progress bar.
+//! Everything this command shows goes to stderr, and stdout is left empty. On a terminal:
+//!
+//! ```text
+//! 💾 Downloading dependency ONNX Runtime   34%            <- only when a dependency is downloaded
+//! 🖼️ Applying enhancements to the image photo.jpg
+//!
+//! Face Recovery   [1/2]  ████████████░░░░░░░░░░░░░░░   38.4%
+//!
+//! ✨ Image enhanced successfully; file saved at out.avif  <- or: 🧨 <what went wrong>
+//! ```
+//!
+//! The dependency line and the bar are redrawn in place, and the lines are coloured unless `NO_COLOR` is set. Where
+//! stderr is not a terminal, only the header and the result line are printed, without colour.
+//!
+//! The notes, the face report, what the run executed on and every failure in full go to the log file, `opai.log`.
+//! clap's own `--help`, `--version` and argument errors are printed as clap prints them.
 
 mod args;
 mod chain;
 mod error;
+mod look;
 mod output;
 mod progress;
 mod run;
@@ -45,24 +60,47 @@ fn main() -> ExitCode {
 
     // Not fatal, as in the GUI: only the GPU providers are affected, and a run on the CPU still produces the image.
     if let Err(error) = prepared {
-        eprintln!("opai: could not establish the library search path; GPU providers will be unavailable: {error}");
+        tracing::warn!("could not establish the library search path; GPU providers will be unavailable: {error}");
     }
+
+    // Decided once, before anything is drawn: whether the lines are live, and whether they are coloured.
+    let look = look::Look::for_stderr();
 
     let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
         Ok(runtime) => runtime,
         Err(error) => {
-            eprintln!("opai: could not start the async runtime: {error}");
+            tracing::error!("could not start the async runtime: {error}");
+            eprintln!("{}", look::failure(format_args!("could not start the async runtime: {error}"), look.color));
             return ExitCode::FAILURE;
         }
     };
 
     // The `Opai` handle lives and dies inside `run`, so the single-instance claim is released and the run cache's
-    // pending writes are settled before the process exits.
-    match runtime.block_on(run::run(args)) {
+    // pending writes are settled before the process exits. Every live line is finished by then too, and the blank
+    // line after a bar printed, so the failure line needs nothing before it.
+    match runtime.block_on(run::run(args, look)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("opai: {error}");
+            tracing::error!("{}", full(&error));
+            eprintln!("{}", look::failure(&error, look.color));
             ExitCode::from(error.exit_code())
         }
     }
+}
+
+/// `error` and every error under it, joined by `: ` — the whole of what went wrong, for the log.
+fn full(error: &dyn std::error::Error) -> String {
+    let mut text = error.to_string();
+    let mut source = error.source();
+
+    while let Some(cause) = source {
+        let message = cause.to_string();
+        // A wrapper whose message already ends with its cause's says nothing new by repeating it.
+        if !text.ends_with(&message) {
+            text = format!("{text}: {message}");
+        }
+        source = cause.source();
+    }
+
+    text
 }

@@ -1,169 +1,291 @@
-//! What the terminal shows while a run works: one bar per dependency while initializing, one bar per library call
-//! while enhancing, and every message printed above them without tearing them.
+//! What the terminal shows while a run works: the `💾` dependency line while initializing, and one gradient bar over
+//! the face detection and the whole chain while enhancing.
 //!
-//! The bars are drawn on stderr, and only when stderr is a terminal: indicatif hides them by itself otherwise, so a
-//! log of a piped run holds the messages and no redraw sequences.
+//! ```text
+//! initialize ──► [Live<Line> "💾 …"]   started on the first Downloading/Extracting report; frozen by finish_install
+//! (run prints the header and a blank line)
+//! detection + chain ──► [Live<AnimatedProgress>]   started by start_bar; finish_bar settles it and prints a blank line
+//! ```
+//!
+//! Each line is a `rust_sak::tui` session, which must have stderr to itself, so `run` prints its own lines only
+//! between them. In raw mode a Ctrl-C reaches the session's interrupt rather than the SIGINT handler: during the
+//! dependency line it wakes [`View::install_interrupted`], and during the bar it cancels the run.
+//!
+//! Where stderr is not a terminal every piece here is a no-op, and no session is ever started.
 
-use std::collections::HashMap;
-use std::fmt::Display;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
-use opai::{InferenceProgress, OnInference, OnPlan, OnProgress, Phase, PlannedDependency, Progress, Stage};
+use opai::{CancellationToken, InferenceProgress, OnInference, OnProgress, Phase, Progress};
+use ratatui::text::Line;
+use rust_sak::tui::{AnimatedProgress, Live, LiveLine, Target};
+use tokio::sync::Notify;
 
-/// The resolution of an inference bar: per-mille, so a long run still moves.
-const STEPS: u64 = 1000;
+use crate::look::{self, Look};
 
-/// The terminal's view of a run. Cheap to clone: every clone draws into the same set of bars.
+/// The terminal's view of a run. Cheap to clone: every clone draws the same lines.
 #[derive(Clone)]
 pub struct View {
-    multi: MultiProgress,
+    inner: Arc<Inner>,
+}
+
+struct Inner {
+    look: Look,
+    /// What a Ctrl-C during the bar stops.
+    cancel: CancellationToken,
+    /// Woken by a Ctrl-C during the dependency line.
+    install_interrupt: Arc<Notify>,
+    install: Mutex<Install>,
+    bar: Mutex<Slot<AnimatedProgress>>,
+}
+
+/// The dependency line: the text last computed, and its session once one was started.
+#[derive(Default)]
+struct Install {
+    /// The line the latest download or expansion report reads as, drawn or not.
+    line: Option<Line<'static>>,
+    slot: Slot<Line<'static>>,
+}
+
+/// One live session's state. A start is attempted at most once, so a terminal that refused one is not asked again on
+/// every report.
+struct Slot<L: LiveLine> {
+    attempted: bool,
+    live: Option<Live<L>>,
+}
+
+impl<L: LiveLine> Default for Slot<L> {
+    fn default() -> Self {
+        Self { attempted: false, live: None }
+    }
+}
+
+impl<L: LiveLine> Slot<L> {
+    /// Starts drawing `line` on stderr, unless a start was already attempted. A refusal is logged and leaves the line
+    /// undrawn: losing progress is never a reason to fail a run.
+    fn start(&mut self, what: &str, line: L, on_interrupt: impl Fn() + Send + 'static) {
+        if self.attempted {
+            return;
+        }
+        self.attempted = true;
+
+        match Live::start(Target::Stderr, line, on_interrupt) {
+            Ok(live) => self.live = Some(live),
+            Err(error) => tracing::warn!("could not draw the {what} on the terminal: {error}"),
+        }
+    }
+
+    /// Settles the session, leaving its last frame in the scrollback, and says whether one was drawn.
+    fn finish(&mut self, what: &str) -> bool {
+        let Some(live) = self.live.take() else {
+            return false;
+        };
+
+        if let Err(error) = live.finish() {
+            tracing::warn!("the {what} ended with a terminal error: {error}");
+        }
+        true
+    }
 }
 
 impl View {
-    /// A view drawing on stderr, or drawing nothing where stderr is not a terminal.
-    pub fn new() -> Self {
-        Self { multi: MultiProgress::with_draw_target(ProgressDrawTarget::stderr()) }
+    /// A view drawing as `look` says, whose bar cancels `cancel` on a Ctrl-C.
+    pub fn new(look: Look, cancel: CancellationToken) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                look,
+                cancel,
+                install_interrupt: Arc::new(Notify::new()),
+                install: Mutex::default(),
+                bar: Mutex::default(),
+            }),
+        }
     }
 
-    /// Prints `line` to stderr, above any bar being drawn.
+    /// The install callback [`opai::InitOptions::on_progress`] takes.
     ///
-    /// `suspend` rather than `MultiProgress::println`, because the latter prints nothing at all when the bars are
-    /// hidden, and a piped run still owes the user its messages.
-    pub fn say(&self, line: impl Display) {
-        self.multi.suspend(|| eprintln!("{line}"));
+    /// The dependency line is started by the first report of a download or an expansion, and rewritten by every one
+    /// after it, the next dependency's name replacing the last. An already installed dependency, or a phase this crate
+    /// does not know, draws nothing.
+    pub fn on_install(&self) -> OnProgress {
+        let view = self.clone();
+        Arc::new(move |progress: &Progress| view.install_report(progress))
     }
 
-    /// The two install callbacks [`opai::InitOptions`] takes: the plan lays out one bar per dependency, and each
-    /// progress report moves its dependency's bar.
-    pub fn install(&self) -> (OnPlan, OnProgress) {
-        let bars = Arc::new(Install { multi: self.multi.clone(), bars: Mutex::new(HashMap::new()) });
+    fn install_report(&self, progress: &Progress) {
+        if !matches!(progress.phase, Phase::Downloading | Phase::Extracting) {
+            return;
+        }
 
-        let on_plan: OnPlan = {
-            let bars = Arc::clone(&bars);
-            Arc::new(move |plan: &[PlannedDependency]| {
-                for planned in plan {
-                    bars.bar(planned.dependency.as_str(), planned.size);
-                }
-            })
+        let line = look::dependency_line(progress.dependency.as_str(), progress.fraction, self.inner.look.color);
+        let mut install = lock(&self.inner.install);
+        install.line = Some(line.clone());
+
+        if !self.inner.look.interactive {
+            return;
+        }
+
+        match &install.slot.live {
+            Some(live) => live.handle().update(|drawn| *drawn = line),
+            None => {
+                let interrupt = Arc::clone(&self.inner.install_interrupt);
+                install.slot.start("dependency line", line, move || interrupt.notify_one());
+            }
+        }
+    }
+
+    /// Resolves on a Ctrl-C pressed while the dependency line is drawn.
+    pub async fn install_interrupted(&self) {
+        self.inner.install_interrupt.notified().await;
+    }
+
+    /// Freezes the dependency line where it was last drawn, with the cursor below it.
+    pub fn finish_install(&self) {
+        lock(&self.inner.install).slot.finish("dependency line");
+    }
+
+    /// Starts the bar at `Enhancing [0/planned]`, or draws nothing where `planned` is `0`.
+    pub fn start_bar(&self, planned: usize) {
+        if !self.inner.look.interactive || planned == 0 {
+            return;
+        }
+
+        let mut line = AnimatedProgress::new(look::label(None));
+        line.label_width = look::LABEL_WIDTH;
+        line.counter = Some(look::counter(None, planned));
+        line.color = self.inner.look.color;
+
+        let view = self.clone();
+        lock(&self.inner.bar).start("progress bar", line, move || view.interrupt_bar());
+    }
+
+    /// The inference callback the bar is moved by, meant for [`opai::Handover::new`].
+    pub fn on_bar(&self) -> OnInference {
+        let view = self.clone();
+        Arc::new(move |report: &InferenceProgress| view.bar_report(report))
+    }
+
+    fn bar_report(&self, report: &InferenceProgress) {
+        let bar = lock(&self.inner.bar);
+        let Some(live) = &bar.live else {
+            return;
         };
 
-        let on_progress: OnProgress = Arc::new(move |progress: &Progress| bars.report(progress));
-
-        (on_plan, on_progress)
-    }
-
-    /// A bar for one library call — a face detection, or the whole chain — and the callback that moves it.
-    ///
-    /// The bar is drawn on the first report rather than up front, so a call that reports nothing — a chain with no
-    /// face recovery asks for no detection — leaves nothing on the screen.
-    pub fn inference(&self) -> Run {
-        Run { multi: self.multi.clone(), bar: Arc::new(OnceLock::new()) }
-    }
-}
-
-/// The install bars, one per dependency, keyed by the name the library reports it under.
-struct Install {
-    multi: MultiProgress,
-    bars: Mutex<HashMap<String, ProgressBar>>,
-}
-
-impl Install {
-    /// The bar for `name`, laid out with `size` bytes to go where it is new.
-    fn bar(&self, name: &str, size: u64) -> ProgressBar {
-        let mut bars = self.bars.lock().unwrap_or_else(PoisonError::into_inner);
-
-        bars.entry(name.to_string())
-            .or_insert_with(|| {
-                let bar = self.multi.add(ProgressBar::new(size));
-                bar.set_style(style("{prefix:<16} {msg:<10} [{wide_bar}] {bytes:>10} / {total_bytes:<10}"));
-                bar.set_prefix(name.to_string());
-                bar.set_message("waiting");
-                bar
-            })
-            .clone()
-    }
-
-    fn report(&self, progress: &Progress) {
-        let bar = self.bar(progress.dependency.as_str(), progress.total.unwrap_or(0));
-
-        if progress.phase == Phase::AlreadyInstalled {
-            bar.set_style(style("{prefix:<16} {msg}"));
-            bar.finish_with_message("already installed");
-            return;
-        }
-
-        if progress.fraction >= 1.0 {
-            bar.set_style(style("{prefix:<16} {msg}"));
-            bar.finish_with_message("installed");
-            return;
-        }
-
-        bar.set_message(match progress.phase {
-            Phase::Downloading => "downloading",
-            Phase::Extracting => "expanding",
-            _ => "installing",
+        live.handle().update(|line| {
+            line.label = look::label(Some(report)).to_string();
+            line.counter = Some(look::counter(Some(report), report.operation_count));
+            line.fraction = report.chain_fraction;
         });
-        if let Some(total) = progress.total {
-            bar.set_length(total);
-        }
-        bar.set_position(progress.bytes);
-    }
-}
-
-/// One library call's bar, drawn once the call first reports.
-#[derive(Clone)]
-pub struct Run {
-    multi: MultiProgress,
-    bar: Arc<OnceLock<ProgressBar>>,
-}
-
-impl Run {
-    /// The callback a run's options take.
-    pub fn on_progress(&self) -> OnInference {
-        let run = self.clone();
-        Arc::new(move |progress: &InferenceProgress| run.report(progress))
     }
 
-    /// Takes the bar off the screen, where one was drawn.
-    pub fn clear(&self) {
-        if let Some(bar) = self.bar.get() {
-            bar.finish_and_clear();
+    /// A Ctrl-C while the bar is drawn: the run stops at the library's next check, and the bar keeps drawing until it
+    /// does.
+    fn interrupt_bar(&self) {
+        tracing::info!("stopping…");
+        self.inner.cancel.cancel();
+    }
+
+    /// Settles the bar, leaving its last frame in the scrollback, and prints the blank line after it. Where no bar was
+    /// drawn, prints nothing.
+    pub fn finish_bar(&self) {
+        if lock(&self.inner.bar).finish("progress bar") {
+            eprintln!();
         }
     }
-
-    fn report(&self, progress: &InferenceProgress) {
-        let bar = self.bar.get_or_init(|| {
-            let bar = self.multi.add(ProgressBar::new(STEPS));
-            bar.set_style(style("{msg:<44} [{wide_bar}] {percent:>3}%"));
-            bar
-        });
-
-        bar.set_message(format!("{} — {}", progress.subject.display_name(), stage(&progress.stage)));
-        bar.set_position((progress.chain_fraction.clamp(0.0, 1.0) * STEPS as f64).round() as u64);
-    }
 }
 
-/// What an operation is doing, as its bar says it.
-fn stage(stage: &Stage) -> String {
-    match stage {
-        Stage::Installing(install) => match (install.phase, install.total) {
-            (Phase::Downloading, Some(total)) => {
-                format!("downloading the model {} / {}", HumanBytes(install.bytes), HumanBytes(total))
-            }
-            (Phase::Downloading, None) => format!("downloading the model {}", HumanBytes(install.bytes)),
-            (Phase::Extracting, _) => "expanding the model".to_string(),
-            _ => "preparing the model".to_string(),
-        },
-        Stage::Running => "running".to_string(),
-        Stage::Cached => "from cache".to_string(),
-        _ => "working".to_string(),
-    }
+/// A callback that panicked while holding a lock leaves a line that is still worth drawing.
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// A bar style from `template`, which is fixed in this file and so always parses.
-fn style(template: &str) -> ProgressStyle {
-    ProgressStyle::with_template(template)
-        .unwrap_or_else(|_| ProgressStyle::default_bar())
-        .progress_chars("=> ")
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opai::Dependency;
+
+    fn plain() -> Look {
+        Look { interactive: false, color: false }
+    }
+
+    fn report(dependency: Dependency, phase: Phase, fraction: f64) -> Progress {
+        Progress { dependency, phase, bytes: 0, total: None, fraction }
+    }
+
+    fn line_text(view: &View) -> Option<String> {
+        lock(&view.inner.install)
+            .line
+            .as_ref()
+            .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+    }
+
+    #[test]
+    fn the_dependency_line_follows_the_reports_without_drawing_off_a_terminal() {
+        let view = View::new(plain(), CancellationToken::new());
+        let on_install = view.on_install();
+        let mut seen = Vec::new();
+
+        for progress in [
+            report(Dependency::Runtime, Phase::Downloading, 0.34),
+            report(Dependency::Runtime, Phase::Extracting, 0.9),
+            report(Dependency::Runtime, Phase::Extracting, 1.0),
+            report(Dependency::Cuda, Phase::Downloading, 0.05),
+            report(Dependency::Cuda, Phase::Downloading, 1.0),
+        ] {
+            on_install(&progress);
+            seen.push(line_text(&view).expect("a line for every transfer"));
+        }
+
+        assert_eq!(
+            seen,
+            [
+                "💾 Downloading dependency ONNX Runtime   34%",
+                "💾 Downloading dependency ONNX Runtime   90%",
+                "💾 Downloading dependency ONNX Runtime   100%",
+                format!("💾 Downloading dependency {}   5%", Dependency::Cuda.as_str()).as_str(),
+                format!("💾 Downloading dependency {}   100%", Dependency::Cuda.as_str()).as_str(),
+            ]
+        );
+
+        let install = lock(&view.inner.install);
+        assert!(!install.slot.attempted, "no session is attempted off a terminal");
+        assert!(install.slot.live.is_none());
+    }
+
+    #[test]
+    fn an_already_installed_dependency_draws_nothing() {
+        let view = View::new(plain(), CancellationToken::new());
+
+        view.on_install()(&report(Dependency::Runtime, Phase::AlreadyInstalled, 1.0));
+
+        assert_eq!(line_text(&view), None);
+    }
+
+    #[test]
+    fn the_bar_starts_nothing_off_a_terminal_or_for_an_empty_chain() {
+        let view = View::new(plain(), CancellationToken::new());
+        view.start_bar(2);
+        assert!(!lock(&view.inner.bar).attempted);
+
+        let interactive = View::new(Look { interactive: true, color: false }, CancellationToken::new());
+        interactive.start_bar(0);
+        assert!(!lock(&interactive.inner.bar).attempted);
+    }
+
+    #[test]
+    fn a_ctrl_c_on_the_bar_cancels_the_run() {
+        let cancel = CancellationToken::new();
+        let view = View::new(plain(), cancel.clone());
+
+        view.interrupt_bar();
+
+        assert!(cancel.is_cancelled());
+    }
+
+    #[test]
+    fn finishing_without_a_bar_prints_nothing_and_says_so() {
+        let view = View::new(plain(), CancellationToken::new());
+
+        assert!(!lock(&view.inner.bar).finish("progress bar"));
+        assert!(!lock(&view.inner.install).slot.finish("dependency line"));
+    }
 }
