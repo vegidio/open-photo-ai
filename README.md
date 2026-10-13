@@ -71,52 +71,21 @@ The CLI enhances one image per command:
 opai <input> <enhancement flags...> [--quality hd|sd] --output <file>
 ```
 
-The input image always comes first. Then pick at least one enhancement; each one takes an optional model, and some
-take a parameter of their own:
+For the complete reference of how to use the CLI, see the [CLI Reference](docs/CLI_REFERENCE.md).
 
-| Flag                        | Accepted values                                          | Default                            |
-|-----------------------------|----------------------------------------------------------|------------------------------------|
-| `--denoise`/`--dn`          | `stockholm`, `gothenburg`, `malmo`                       | `stockholm` when no model is given |
-| `--dn-str`                  | `1` to `300`, only together with `--denoise`             | `100`                              |
-| `--face-recovery`/`--fr`    | `athens`, `santorini`                                    | `athens` when no model is given    |
-| `--colorization`/`--cl`     | `delhi`, `mumbai`, `jaipur`                              | `delhi` when no model is given     |
-| `--light-adjustment`/`--la` | `paris`, `lyon`                                          | `paris` when no model is given     |
-| `--la-bias`                 | `-100` to `100`, only together with `--light-adjustment` | `50`                               |
-| `--color-balance`/`--cb`    | `rio`, `saopaulo`                                        | `rio` when no model is given       |
-| `--cb-bias`                 | `-100` to `100`, only together with `--color-balance`    | `50`                               |
-| `--sharpen`/`--sh`          | `moscow`, `petersburg`, `novgorod`                       | `moscow` when no model is given    |
-| `--sh-str`                  | `1` to `300`, only together with `--sharpen`             | `100`                              |
-| `--upscale`/`--up`          | `kyoto`, `osaka`, `tokyo`, `saitama`                     | `tokyo` when no model is given     |
-| `--scale`                   | `1.0` to `8.0`, only together with `--upscale`           | what the image needs (see below)   |
-| `--quality`/`-q`            | `hd`, `sd`                                               | `hd`                               |
-| `--output`/`-o`             | any path ending in a supported extension                 | required                           |
-
-The `--output` flag accepts the following extensions: `bmp`, `gif`, `jpg`/`jpeg`, `png`, `tif`/`tiff`, `avif`, `heic`/
-`heif` or `webp`. Lossy formats use the same quality as an export from the GUI. If the output file already exists, it's
-overwritten.
-
-When it finishes, the command exits with one of these codes:
-
-| Code  | Meaning                                                                          |
-|-------|----------------------------------------------------------------------------------|
-| `0`   | The output was written                                                           |
-| `1`   | Something failed while setting up, enhancing, or writing the file                |
-| `2`   | Invalid arguments, an unreadable input image, or an unsupported output extension |
-| `130` | Stopped with `Ctrl+C`                                                            |
-
-Examples:
+#### Examples:
 
 ```bash
-# Upscale with Tokyo, at the scale the photo needs
+# Upscale using the default model, at the scale the photo needs
 opai photo.jpg --up -o photo-large.png
 
-# Restore faces with Athens, then upscale 2x with Kyoto, and save as WebP
+# Restore faces using the default model, then upscale 2x with Kyoto, and save as WebP
 opai portrait.jpg --fr --up kyoto --scale 2 -o portrait.webp
 
-# Upscale with Osaka using its lighter INT8 build
+# Upscale with Osaka using its SD quality
 opai scan.png --up osaka -q sd -o scan.avif
 
-# Denoise twice as strongly with Gothenburg, then darken slightly with Paris
+# Denoise twice as strongly with Gothenburg, then adjust light with Paris
 opai night.jpg --dn gothenburg --dn-str 200 --la --la-bias -20 -o night-clean.jpg
 ```
 
