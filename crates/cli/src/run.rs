@@ -1,15 +1,21 @@
-//! One run, from the checked arguments to the written file.
+//! One run, from the checked arguments to the written files.
 //!
 //! ```text
-//! output format, input header  --> refused here: nothing installed
-//! initialize                   --> the 💾 line; a Ctrl-C on it abandons initialization; another instance ends it
+//! output, inputs               --> refused here: nothing installed
+//! initialize                   --> once; the 💾 line; a Ctrl-C on it abandons initialization; another instance ends it
 //! Ctrl-C handler               --> from here a SIGINT stops the run instead of killing the process
-//! header, load                 --> 🖼️ and a blank line
-//! find faces, process          --> one bar over both; a failed detection is logged and the run goes on
-//! save                         --> the source's depth, the library's recommended settings; then ✨
+//! for each image:
+//!   header, load               --> 🖼️ and a blank line
+//!   find faces, process        --> one bar over both, planned for the image's own size; a failed detection is
+//!                                  logged and the image goes on
+//!   claim, save, commit        --> the source's depth, the library's recommended settings; then ✨ naming the file
+//!                                  written, or 🧨 naming the image, and the next image runs
 //! ```
 //!
-//! The notes, the face report and what the run executed on go to the log, not to the terminal.
+//! A Ctrl-C stops the whole batch, keeping what was already written. The notes, the face report and what each image
+//! executed on go to the log, not to the terminal.
+
+use std::path::{Path, PathBuf};
 
 use opai::{
     APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, FacedChain, Handover, InitOptions, Opai,
@@ -17,12 +23,14 @@ use opai::{
 };
 
 use crate::args::Args;
+use crate::chain;
 use crate::error::CliError;
+use crate::inputs::{self, Source};
 use crate::look::{self, Look};
+use crate::output::{self, Target};
 use crate::progress::View;
-use crate::{chain, output};
 
-/// Runs what `args` asks for, drawing as `look` says, and writes its output.
+/// Runs what `args` asks for over every image it names, drawing as `look` says, and writes their results.
 ///
 /// The one [`Opai`] handle is owned here and dropped before this returns, which releases the single-instance claim and
 /// waits for the run cache's pending writes. Every live line is finished before this returns, so the caller's failure
@@ -30,17 +38,19 @@ use crate::{chain, output};
 ///
 /// # Errors
 ///
-/// [`CliError`], whose [`exit_code`](CliError::exit_code) is the process's status. Nothing is written on any of them.
+/// [`CliError`], whose [`exit_code`](CliError::exit_code) is the process's status: a refusal or an initialization
+/// failure before any image, a stop, or [`CliError::Batch`] when any image failed. The results already written are
+/// kept on a stop or a failure.
 pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
-    // Everything that can be refused without the library, before it is initialized: a typo must not cost the first
-    // run's download.
-    let output = output::resolve(&args.output)?;
-    let (width, height) = output::check_input(&args.input)?;
-    let plan = chain::plan(&args, width, height);
-
-    for note in &plan.notes {
-        tracing::info!("{note}");
-    }
+    // Everything that can be refused without the library, before it is initialized: a typo in the fortieth path must
+    // not cost the first run's download. The output is read first, so the cheap refusals do not wait for a walk.
+    let target = output::target(&args)?;
+    let skip = match &target {
+        // A directory that does not exist yet holds no earlier results to skip.
+        Target::Directory { path, .. } => std::fs::canonicalize(path).ok(),
+        Target::File { .. } => None,
+    };
+    let sources = inputs::expand(&args.inputs, args.recursive, skip.as_deref())?;
 
     let cancel = CancellationToken::new();
     let view = View::new(look, cancel.clone());
@@ -69,18 +79,69 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     // In plain mode, and between the live lines, a Ctrl-C is still a SIGINT.
     stop_on_ctrl_c(&cancel);
 
-    eprintln!("{}", look::header(&args.input, look.color));
+    let mut failed = 0;
+    // Set only where the stop left an image unwritten or unstarted: a Ctrl-C landing after the last image was written
+    // stopped nothing.
+    let mut stopped = false;
+    for source in &sources {
+        // A Ctrl-C between two images, with no bar to catch it, lands here.
+        if cancel.is_cancelled() {
+            stopped = true;
+            break;
+        }
+
+        match enhance_one(&opai, &args, &target, source, &view, &cancel, look).await {
+            Ok(written) => eprintln!("{}", look::success(&written, look.color)),
+            Err(CliError::Cancelled) => {
+                stopped = true;
+                break;
+            }
+            Err(error) => {
+                failed += 1;
+                tracing::error!("{}: {}", source.path.display(), crate::full(&error));
+                eprintln!("{}", look::failure(failure_reason(&source.path, &error), look.color));
+            }
+        }
+    }
+
+    drop(opai);
+
+    if stopped {
+        Err(CliError::Cancelled)
+    } else if failed > 0 {
+        Err(CliError::Batch { failed, total: sources.len() })
+    } else {
+        Ok(())
+    }
+}
+
+/// Enhances `source` with the chain planned for its own size and writes it, answering the path written.
+async fn enhance_one(
+    opai: &Opai,
+    args: &Args,
+    target: &Target,
+    source: &Source,
+    view: &View,
+    cancel: &CancellationToken,
+    look: Look,
+) -> Result<PathBuf, CliError> {
+    let plan = chain::plan(args, source.width, source.height);
+    for note in &plan.notes {
+        tracing::info!("{}: {note}", source.path.display());
+    }
+
+    eprintln!("{}", look::header(&source.path, look.color));
     if look.interactive {
         eprintln!();
     }
 
-    // A file whose header read cleanly but whose pixels do not decode is still an unreadable input, so it ends as one.
-    // The library's message names the path.
-    let picture = image::load(&args.input).await.map_err(|error| CliError::Usage(error.to_string()))?;
+    // A file whose header read cleanly but whose pixels do not decode fails this image, not the batch. The library's
+    // message names the path.
+    let picture = image::load(&source.path).await.map_err(|error| CliError::Load(Box::new(error)))?;
 
-    // Finished on every outcome, so the failure line lands below the bar and the blank line after it.
+    // Finished on every outcome, so the result line lands below the bar and the blank line after it.
     view.start_bar(plan.operations.len());
-    let enhanced = enhance(&opai, &picture, plan.operations, &view, &cancel).await;
+    let enhanced = enhance(opai, &picture, plan.operations, view, cancel).await;
     view.finish_bar();
     let (faced, enhanced) = enhanced?;
 
@@ -89,21 +150,28 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
         return Err(CliError::Cancelled);
     }
 
-    image::save(enhanced.picture.shared_pixels(), &output.path, output.format, Some(output.options))
-        .await
-        .map_err(|source| CliError::Write(Box::new(source)))?;
+    let (destination, format) = output::destination(target, source);
+    let written = output::write(target, &enhanced.picture, &destination, format, args.overwrite).await?;
 
     let (width, height) = enhanced.picture.dimensions();
     tracing::info!(
         "wrote {} ({width}x{height}, {}); {}",
-        output.path.display(),
-        output.format.name(),
+        written.display(),
+        format.name(),
         provenance(faced.operations.is_empty(), &enhanced.providers.verdict())
     );
 
-    drop(opai);
-    eprintln!("{}", look::success(&output.path, look.color));
-    Ok(())
+    Ok(written)
+}
+
+/// The failure line's reason for the image at `path`: the error as it is where it already names the image, as a failed
+/// decode does, and otherwise prefixed with it, since an inference failure names nothing and a write names the
+/// destination.
+fn failure_reason(path: &Path, error: &CliError) -> String {
+    let message = error.to_string();
+    let image = path.display().to_string();
+
+    if message.contains(&image) { message } else { format!("could not enhance {image}: {message}") }
 }
 
 /// Finds the faces `operations` needs and runs the chain, both reporting onto the view's one bar.
@@ -276,6 +344,28 @@ mod tests {
             actual: vec![ExecutionProvider::Cpu],
         };
         assert_eq!(provenance(false, &downgraded), "ran on CPU (TensorRT could not open every model)");
+    }
+
+    #[test]
+    fn a_failure_line_names_the_image_once() {
+        let path = Path::new("photos/a.jpg");
+
+        let decode = CliError::Load(Box::new(opai::ImageIoError::Read {
+            path: path.into(),
+            source: std::io::Error::other("corrupt"),
+        }));
+        let reason = failure_reason(path, &decode);
+        assert_eq!(reason.matches("photos/a.jpg").count(), 1, "{reason}");
+
+        let write = CliError::Claim {
+            path: "out/a.jpg".into(),
+            source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        };
+        let reason = failure_reason(path, &write);
+        assert!(reason.starts_with("could not enhance photos/a.jpg: cannot write out/a.jpg: "), "{reason}");
+
+        let reason = failure_reason(path, &CliError::Inference(InferenceError::Shutdown));
+        assert!(reason.starts_with("could not enhance photos/a.jpg: "), "{reason}");
     }
 
     #[test]

@@ -119,16 +119,33 @@ fn lock(throttle: &Mutex<Throttle>) -> std::sync::MutexGuard<'_, Throttle> {
     throttle.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// What makes two records "the same" for the throttle: the message with every run of digits replaced by `#`.
+/// What makes two records "the same" for the throttle: the message with every run of digits, and every `0x` hex
+/// literal, replaced by `#`.
 ///
 /// So `Requested size was 3893362688 bytes.` and `Requested size was 4246732800 bytes.` are one pattern, as are the
 /// timestamps TensorRT opens each of its records with — and a different failure, or the same one somewhere else in
-/// the runtime, is another.
+/// the runtime, is another. Hex literals are addresses: a TensorRT engine torn down in a dead CUDA context writes
+/// `Error 700 destroying event '0x7d6219b848d0'` once per event, and with only the digits replaced each one was a
+/// pattern of its own — one machine wrote 406 of them unthrottled.
 fn pattern_of(message: &str) -> String {
     let mut pattern = String::with_capacity(message.len());
     let mut in_digits = false;
+    let mut characters = message.trim_end().chars().peekable();
 
-    for character in message.trim_end().chars() {
+    while let Some(character) = characters.next() {
+        if character == '0' && !in_digits && characters.peek().is_some_and(|next| matches!(next, 'x' | 'X')) {
+            let mut rest = characters.clone();
+            rest.next();
+
+            if rest.peek().is_some_and(char::is_ascii_hexdigit) {
+                while rest.next_if(char::is_ascii_hexdigit).is_some() {}
+                characters = rest;
+                pattern.push('#');
+                in_digits = true;
+                continue;
+            }
+        }
+
         if character.is_ascii_digit() {
             if !in_digits {
                 pattern.push('#');
@@ -418,6 +435,37 @@ mod tests {
         assert_eq!(pattern_of(SKIPPED_TACTIC), pattern_of(&SKIPPED_TACTIC.replace("2147483648", "1")));
         assert_eq!(pattern_of("conv.2 needs 48234496 bytes\n"), "conv.# needs # bytes");
         assert_ne!(pattern_of(SKIPPED_TACTIC), pattern_of(SKIPPED_TACTIC_WINDOWS));
+    }
+
+    #[test]
+    fn hex_addresses_make_no_difference_to_a_pattern() {
+        let teardown = |address: &str| {
+            format!(
+                "[2026-10-11 05:32:59   ERROR] [graphContext.cpp::~MyelinGraphContext::101] Error Code 1: Myelin \
+                 ([impl.cpp:643: unload_cuda] Error 700 destroying event '{address}'. In ~MyelinGraphContext at \
+                 /_src/runtime/myelin/graphContext.cpp:101)"
+            )
+        };
+
+        assert_eq!(pattern_of(&teardown("0x7d6219b848d0")), pattern_of(&teardown("0x7d621bc5ab70")));
+        assert_eq!(pattern_of("event '0x7d6219b848d0' and 0XFF"), "event '#' and #");
+        assert_eq!(pattern_of("tactic 0x000000000000001c"), pattern_of("tactic 0x000000000000001d"));
+        assert_eq!(pattern_of("0x without digits, 10x faster"), "#x without digits, #x faster");
+    }
+
+    #[test]
+    fn a_burst_of_teardown_records_differing_only_by_address_is_written_once() {
+        let throttle = fresh();
+        let (log, ()) = crate::logging::records_of_blocking("info,ort=info", || {
+            for address in ["0x7d6219b848d0", "0x7d621bc5ab70", "0x7d632424cef0"] {
+                let message = format!("Error 700 destroying event '{address}'.");
+                record_through(&throttle, LogLevel::Error, "opai", "here", &message);
+            }
+            flush_through(&throttle);
+        });
+
+        assert_eq!(log.matches("destroying event").count(), 2, "one record and one tally:\n{log}");
+        assert!(log.contains("suppressed=2"), "{log}");
     }
 
     #[test]

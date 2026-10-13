@@ -2,14 +2,17 @@
 //!
 //! | Status | When |
 //! |---|---|
-//! | `0` | the output was written |
-//! | `2` | a usage error: bad arguments, an unreadable input, or an output format nothing writes (clap's own too) |
+//! | `0` | every image was written |
+//! | `2` | a usage error: bad arguments, an unreadable named input, an output that cannot be used as asked, or no image to
+//! enhance (clap's own too) |
 //! | `130` | stopped by Ctrl-C |
-//! | `1` | anything else: initialization, inference, or writing the file |
+//! | `1` | anything else: initialization, or any image that failed to decode, enhance or be written |
+
+use std::path::PathBuf;
 
 use opai::{ImageIoError, InferenceError, InitError};
 
-/// Why a run ended without writing its output.
+/// Why a run, or one image of it, ended without writing its output.
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
     /// The command line, the input or the output's format was refused. The message names the path or the argument.
@@ -25,13 +28,37 @@ pub enum CliError {
     Inference(InferenceError),
 
     /// The user pressed Ctrl-C.
-    #[error("stopped: nothing was written")]
+    #[error("stopped: nothing more was written")]
     Cancelled,
+
+    /// An image whose header read cleanly could not be decoded. The library's message names the path. Boxed, as
+    /// [`Write`](Self::Write) is.
+    #[error(transparent)]
+    Load(Box<ImageIoError>),
 
     /// The result could not be written. The library's message already names the output path, so it is shown as it
     /// is. Boxed, because a codec's error would otherwise make every result in the run as large as itself.
     #[error(transparent)]
     Write(Box<ImageIoError>),
+
+    /// The destination's directory could not be created, or its name held or kept. The filesystem's error names no
+    /// path, so the destination asked for is named here.
+    #[error("cannot write {}: {source}", path.display())]
+    Claim {
+        /// The destination asked for.
+        path: PathBuf,
+        /// What the filesystem refused.
+        source: std::io::Error,
+    },
+
+    /// One or more images of the batch failed, each already reported on its own line.
+    #[error("{failed} of {total} images failed")]
+    Batch {
+        /// How many images failed.
+        failed: usize,
+        /// How many images the run had.
+        total: usize,
+    },
 }
 
 impl From<InferenceError> for CliError {
@@ -50,7 +77,12 @@ impl CliError {
         match self {
             Self::Usage(_) => 2,
             Self::Cancelled => 130,
-            Self::Init(_) | Self::Inference(_) | Self::Write(_) => 1,
+            Self::Init(_)
+            | Self::Inference(_)
+            | Self::Load(_)
+            | Self::Write(_)
+            | Self::Claim { .. }
+            | Self::Batch { .. } => 1,
         }
     }
 }
@@ -106,5 +138,31 @@ mod tests {
         let message = error.to_string();
         assert_eq!(message.matches("missing/out.png").count(), 1, "the path is named exactly once: {message}");
         assert!(!message.contains('\n'), "{message}");
+    }
+
+    #[test]
+    fn a_batch_with_failures_exits_one_saying_how_many() {
+        let error = CliError::Batch { failed: 2, total: 5 };
+
+        assert_eq!(error.exit_code(), 1);
+        assert_eq!(error.to_string(), "2 of 5 images failed");
+    }
+
+    #[test]
+    fn a_failed_claim_exits_one_naming_the_destination() {
+        let error = CliError::Claim {
+            path: "out/a.png".into(),
+            source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        };
+
+        assert_eq!(error.exit_code(), 1);
+        assert!(error.to_string().starts_with("cannot write out/a.png: "), "{error}");
+    }
+
+    #[test]
+    fn an_image_that_does_not_decode_exits_one() {
+        let source = ImageIoError::Write { path: "a.jpg".into(), source: std::io::Error::other("corrupt") };
+
+        assert_eq!(CliError::Load(Box::new(source)).exit_code(), 1);
     }
 }

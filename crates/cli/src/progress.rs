@@ -35,7 +35,7 @@ struct Inner {
     /// Woken by a Ctrl-C during the dependency line.
     install_interrupt: Arc<Notify>,
     install: Mutex<Install>,
-    bar: Mutex<Slot<AnimatedProgress>>,
+    bar: Mutex<Slot<Live<AnimatedProgress>>>,
 }
 
 /// The dependency line: the text last computed, and its session once one was started.
@@ -43,38 +43,65 @@ struct Inner {
 struct Install {
     /// The line the latest download or expansion report reads as, drawn or not.
     line: Option<Line<'static>>,
-    slot: Slot<Line<'static>>,
+    slot: Slot<Live<Line<'static>>>,
 }
 
-/// One live session's state. A start is attempted at most once, so a terminal that refused one is not asked again on
-/// every report.
-struct Slot<L: LiveLine> {
-    attempted: bool,
-    live: Option<Live<L>>,
+/// One live session's state. A start is attempted whenever none is live, so each image draws its own bar, but never
+/// again once the terminal refused one, so a terminal that cannot draw is not asked on every report or every image,
+/// nor once the slot was [closed](Slot::close).
+struct Slot<S> {
+    closed: bool,
+    live: Option<S>,
+    /// How many starts were attempted, for the tests to count.
+    #[cfg(test)]
+    attempts: usize,
 }
 
-impl<L: LiveLine> Default for Slot<L> {
+impl<S> Default for Slot<S> {
     fn default() -> Self {
-        Self { attempted: false, live: None }
+        Self {
+            closed: false,
+            live: None,
+            #[cfg(test)]
+            attempts: 0,
+        }
     }
 }
 
-impl<L: LiveLine> Slot<L> {
-    /// Starts drawing `line` on stderr, unless a start was already attempted. A refusal is logged and leaves the line
-    /// undrawn: losing progress is never a reason to fail a run.
-    fn start(&mut self, what: &str, line: L, on_interrupt: impl Fn() + Send + 'static) {
-        if self.attempted {
+/// What a [`Slot`] holds while drawing: a [`Live`] session, or a test's stand-in for one.
+trait Session {
+    /// Settles the session, leaving its last frame in the scrollback.
+    fn finish(self) -> std::io::Result<()>;
+}
+
+impl<L: LiveLine> Session for Live<L> {
+    fn finish(self) -> std::io::Result<()> {
+        Live::finish(self)
+    }
+}
+
+impl<S: Session> Slot<S> {
+    /// Starts drawing with `open`, unless a session is already live or the slot is closed. A refusal is logged, closes
+    /// the slot and leaves the line undrawn: losing progress is never a reason to fail a run.
+    fn start(&mut self, what: &str, open: impl FnOnce() -> std::io::Result<S>) {
+        if self.closed || self.live.is_some() {
             return;
         }
-        self.attempted = true;
+        #[cfg(test)]
+        {
+            self.attempts += 1;
+        }
 
-        match Live::start(Target::Stderr, line, on_interrupt) {
+        match open() {
             Ok(live) => self.live = Some(live),
-            Err(error) => tracing::warn!("could not draw the {what} on the terminal: {error}"),
+            Err(error) => {
+                self.closed = true;
+                tracing::warn!("could not draw the {what} on the terminal: {error}");
+            }
         }
     }
 
-    /// Settles the session, leaving its last frame in the scrollback, and says whether one was drawn.
+    /// Settles the session, and says whether one was drawn. The slot can then start another.
     fn finish(&mut self, what: &str) -> bool {
         let Some(live) = self.live.take() else {
             return false;
@@ -84,6 +111,12 @@ impl<L: LiveLine> Slot<L> {
             tracing::warn!("the {what} ended with a terminal error: {error}");
         }
         true
+    }
+
+    /// Settles the session, as [`finish`](Self::finish) does, and never starts another.
+    fn close(&mut self, what: &str) {
+        self.finish(what);
+        self.closed = true;
     }
 }
 
@@ -128,7 +161,9 @@ impl View {
             Some(live) => live.handle().update(|drawn| *drawn = line),
             None => {
                 let interrupt = Arc::clone(&self.inner.install_interrupt);
-                install.slot.start("dependency line", line, move || interrupt.notify_one());
+                install
+                    .slot
+                    .start("dependency line", || Live::start(Target::Stderr, line, move || interrupt.notify_one()));
             }
         }
     }
@@ -138,9 +173,10 @@ impl View {
         self.inner.install_interrupt.notified().await;
     }
 
-    /// Freezes the dependency line where it was last drawn, with the cursor below it.
+    /// Freezes the dependency line where it was last drawn, with the cursor below it. A report arriving after this
+    /// draws nothing, so the line appears at most once and never under an image's bar.
     pub fn finish_install(&self) {
-        lock(&self.inner.install).slot.finish("dependency line");
+        lock(&self.inner.install).slot.close("dependency line");
     }
 
     /// Starts the bar at `Enhancing [0/planned]`, or draws nothing where `planned` is `0`.
@@ -155,7 +191,7 @@ impl View {
         line.color = self.inner.look.color;
 
         let view = self.clone();
-        lock(&self.inner.bar).start("progress bar", line, move || view.interrupt_bar());
+        lock(&self.inner.bar).start("progress bar", || Live::start(Target::Stderr, line, move || view.interrupt_bar()));
     }
 
     /// The inference callback the bar is moved by, meant for [`opai::Handover::new`].
@@ -185,7 +221,7 @@ impl View {
     }
 
     /// Settles the bar, leaving its last frame in the scrollback, and prints the blank line after it. Where no bar was
-    /// drawn, prints nothing.
+    /// drawn, prints nothing. The next [`start_bar`](Self::start_bar) draws a new bar, unless the terminal refused one.
     pub fn finish_bar(&self) {
         if lock(&self.inner.bar).finish("progress bar") {
             eprintln!();
@@ -247,7 +283,7 @@ mod tests {
         );
 
         let install = lock(&view.inner.install);
-        assert!(!install.slot.attempted, "no session is attempted off a terminal");
+        assert_eq!(install.slot.attempts, 0, "no session is attempted off a terminal");
         assert!(install.slot.live.is_none());
     }
 
@@ -263,12 +299,62 @@ mod tests {
     #[test]
     fn the_bar_starts_nothing_off_a_terminal_or_for_an_empty_chain() {
         let view = View::new(plain(), CancellationToken::new());
-        view.start_bar(2);
-        assert!(!lock(&view.inner.bar).attempted);
+        for _ in 0..2 {
+            view.start_bar(2);
+            view.finish_bar();
+        }
+        assert_eq!(lock(&view.inner.bar).attempts, 0);
 
         let interactive = View::new(Look { interactive: true, color: false }, CancellationToken::new());
         interactive.start_bar(0);
-        assert!(!lock(&interactive.inner.bar).attempted);
+        assert_eq!(lock(&interactive.inner.bar).attempts, 0);
+    }
+
+    /// A stand-in for a drawn session.
+    struct Drawn;
+
+    impl Session for Drawn {
+        fn finish(self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn each_image_attempts_its_own_bar() {
+        let mut slot = Slot::<Drawn>::default();
+
+        for round in 1..=2 {
+            slot.start("progress bar", || Ok(Drawn));
+            assert_eq!(slot.attempts, round);
+            // A second start while one is live draws nothing new.
+            slot.start("progress bar", || Ok(Drawn));
+            assert_eq!(slot.attempts, round);
+            assert!(slot.finish("progress bar"));
+        }
+    }
+
+    #[test]
+    fn a_terminal_that_refused_a_bar_is_not_asked_again() {
+        let mut slot = Slot::<Drawn>::default();
+
+        for _ in 0..2 {
+            slot.start("progress bar", || Err(std::io::Error::from(std::io::ErrorKind::Unsupported)));
+            assert!(!slot.finish("progress bar"));
+        }
+
+        assert_eq!(slot.attempts, 1);
+    }
+
+    #[test]
+    fn a_closed_slot_starts_nothing_more() {
+        let mut slot = Slot::<Drawn>::default();
+        slot.start("dependency line", || Ok(Drawn));
+
+        slot.close("dependency line");
+        slot.start("dependency line", || Ok(Drawn));
+
+        assert_eq!(slot.attempts, 1);
+        assert!(slot.live.is_none());
     }
 
     #[test]

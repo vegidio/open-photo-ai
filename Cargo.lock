@@ -1004,6 +1004,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "wild",
 ]
 
 [[package]]
@@ -8009,6 +8010,15 @@ name = "whereat"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab90f361db038ba3135da12c938c328fb43a012992101879e3d6ebccb4d7eba8"
+
+[[package]]
+name = "wild"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3131afc8c575281e1e80f36ed6a092aa502c08b18ed7524e86fbbb12bb410e1"
+dependencies = [
+ "glob",
+]
 
 [[package]]
 name = "winapi"

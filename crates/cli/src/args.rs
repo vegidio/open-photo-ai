@@ -2,23 +2,30 @@
 
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use clap::{CommandFactory, Parser, ValueEnum};
 use opai::Scale;
+use opai::export::{ExportFormat, FormatChoice};
 
-/// Enhance one photograph with Open Photo AI.
+/// Enhance photographs with Open Photo AI.
 ///
-/// The enhancements run in one order whatever order the flags are given in: denoise, face recovery, colorization, light
-/// adjustment, colour balance, sharpen, and then upscale. The output's format is the one its extension names, and an
-/// existing file there is overwritten.
+/// Each input is a photograph or a directory of them; a directory contributes the images directly inside it, or its
+/// whole tree with `--recursive`. The enhancements run in one order whatever order the flags are given in: denoise,
+/// face recovery, colorization, light adjustment, colour balance, sharpen, and then upscale.
+///
+/// The output is a file when its extension names a format opai writes and it is not an existing directory; it then
+/// takes exactly one input photograph. Any other output is a directory, created if missing, that mirrors each
+/// directory input. An existing file is never overwritten unless `--overwrite` is given: the result is numbered
+/// `_1`, `_2`, … instead.
 #[derive(Debug, Parser)]
-#[command(name = "opai", version = opai::version(), override_usage = "opai <INPUT> [OPTIONS] --output <FILE>")]
+#[command(name = "opai", version = opai::version(), override_usage = "opai <INPUT>... [OPTIONS] --output <OUTPUT>")]
 pub struct Args {
-    // Positional and first, so a bare enhancement flag is never handed the input as its model name. A user who writes
+    // Positional and first, so a bare enhancement flag is never handed an input as its model name. A user who writes
     // `opai --up photo.jpg` is told `photo.jpg` is not a model, which is clear and costs nothing.
-    /// The photograph to enhance.
-    #[arg(value_name = "INPUT")]
-    pub input: PathBuf,
+    /// The photographs, and the directories of photographs, to enhance.
+    #[arg(value_name = "INPUT", required = true, num_args = 1..)]
+    pub inputs: Vec<PathBuf>,
 
     // The enhancements are declared in the library's apply order, which is the order `--help` lists them in.
     /// Remove the noise from the photograph, with MODEL or Stockholm where none is named.
@@ -135,8 +142,29 @@ pub struct Args {
     #[arg(long, short = 'q', value_enum, default_value_t = Quality::Hd, ignore_case = true)]
     pub quality: Quality,
 
-    /// The file to write. Its extension chooses the format.
-    #[arg(long, short = 'o', value_name = "FILE")]
+    /// Take a directory input's whole tree, not only the images directly inside it.
+    #[arg(long, short = 'r')]
+    pub recursive: bool,
+
+    /// The format every result is written in under an output directory: `preserve` (each source's own, TIFF for camera
+    /// RAW; the default), avif, bmp, gif, heic, jpeg, png, tiff or webp.
+    #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
+    pub format: Option<FormatChoice>,
+
+    /// Written before each source's name under an output directory.
+    #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
+    pub prefix: Option<String>,
+
+    /// Written after each source's name, before the extension, under an output directory.
+    #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
+    pub suffix: Option<String>,
+
+    /// Replace a file already at a destination, once the new one is complete, instead of numbering the result.
+    #[arg(long)]
+    pub overwrite: bool,
+
+    /// The file or directory to write to.
+    #[arg(long, short = 'o', value_name = "OUTPUT")]
     pub output: PathBuf,
 }
 
@@ -206,8 +234,11 @@ pub enum Quality {
 }
 
 /// The command line this process was started with, or the process ended with clap's message and exit status.
+///
+/// Read through `wild`, which expands the wildcards `cmd` and PowerShell leave as written, and on every other platform
+/// hands the arguments over unchanged.
 pub fn parse() -> Args {
-    parse_from(std::env::args_os()).unwrap_or_else(|error| error.exit())
+    parse_from(wild::args_os()).unwrap_or_else(|error| error.exit())
 }
 
 /// `arguments` parsed and checked, every refusal a clap error so it is reported and exits as clap's own are.
@@ -238,6 +269,25 @@ where
     }
 
     Ok(args)
+}
+
+/// A `--format` value, in any case, with the extensions `jpg`, `tif` and `heif` read as the formats they name.
+///
+/// The aliases are this command's: the library's [`FormatChoice`] reads the one spelling the GUI stores, and widening it
+/// would make the GUI's wire accept words its window never sends.
+fn parse_format(text: &str) -> Result<FormatChoice, String> {
+    let word = text.trim().to_lowercase();
+    let word = match word.as_str() {
+        "jpg" => "jpeg",
+        "tif" => "tiff",
+        "heif" => "heic",
+        other => other,
+    };
+
+    FormatChoice::from_str(word).map_err(|_| {
+        let names: Vec<_> = ExportFormat::ALL.into_iter().map(ExportFormat::name).collect();
+        format!("{text:?} is not a format; use preserve, {}", names.join(", "))
+    })
 }
 
 /// A `--scale` value, refused with the accepted range where the library's [`Scale`] refuses it.
@@ -292,7 +342,7 @@ mod tests {
     fn bare_flags_take_their_default_models_and_quality() {
         let args = parse("opai photo.jpg --up --fr -o out.png").expect("parses");
 
-        assert_eq!(args.input, PathBuf::from("photo.jpg"));
+        assert_eq!(args.inputs, [PathBuf::from("photo.jpg")]);
         assert_eq!(args.upscale, Some(UpscaleModel::Tokyo));
         assert_eq!(args.face_recovery, Some(FaceModel::Athens));
         assert_eq!(args.quality, Quality::Hd);
@@ -588,7 +638,7 @@ mod tests {
     fn a_bare_flag_before_another_flag_takes_its_default() {
         let args = parse("opai photo.jpg --up -o x").expect("parses");
 
-        assert_eq!(args.input, PathBuf::from("photo.jpg"));
+        assert_eq!(args.inputs, [PathBuf::from("photo.jpg")]);
         assert_eq!(args.upscale, Some(UpscaleModel::Tokyo));
         assert_eq!(args.output, PathBuf::from("x"));
     }
@@ -599,6 +649,114 @@ mod tests {
 
         assert_eq!(error.kind(), ErrorKind::InvalidValue);
         assert!(error.to_string().contains("photo.jpg"), "{error}");
+    }
+
+    #[test]
+    fn several_inputs_are_taken_in_order() {
+        let args = parse("opai a.jpg b.png scans --dn -o out").expect("parses");
+
+        assert_eq!(args.inputs, ["a.jpg", "b.png", "scans"].map(PathBuf::from));
+        assert!(!args.recursive && !args.overwrite);
+        assert_eq!((args.format, args.prefix, args.suffix), (None, None, None));
+    }
+
+    #[test]
+    fn an_input_is_required() {
+        let error = parse("opai --up -o out").expect_err("no input");
+
+        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn the_batch_flags_are_read() {
+        let args = parse("opai photos -r --up --prefix new- --suffix -opai --overwrite -o out").expect("parses");
+        assert!(args.recursive && args.overwrite);
+        assert_eq!(args.prefix.as_deref(), Some("new-"));
+        assert_eq!(args.suffix.as_deref(), Some("-opai"));
+
+        let args = parse("opai photos --recursive --up -o out").expect("parses");
+        assert!(args.recursive);
+    }
+
+    #[test]
+    fn every_format_spelling_and_alias_is_read_whatever_its_case() {
+        for (word, choice) in [
+            ("preserve", FormatChoice::Preserve),
+            ("PRESERVE", FormatChoice::Preserve),
+            ("avif", ExportFormat::Avif.into()),
+            ("BMP", ExportFormat::Bmp.into()),
+            ("gif", ExportFormat::Gif.into()),
+            ("heic", ExportFormat::Heic.into()),
+            ("HEIF", ExportFormat::Heic.into()),
+            ("jpeg", ExportFormat::Jpeg.into()),
+            ("JPG", ExportFormat::Jpeg.into()),
+            ("Png", ExportFormat::Png.into()),
+            ("tiff", ExportFormat::Tiff.into()),
+            ("Tif", ExportFormat::Tiff.into()),
+            ("WebP", ExportFormat::Webp.into()),
+        ] {
+            let args = parse(&format!("opai photos --up --format {word} -o out")).expect(word);
+            assert_eq!(args.format, Some(choice), "{word}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_format_is_refused_listing_the_accepted_ones() {
+        let error = parse("opai photos --up --format raw -o out").expect_err("raw is not a format");
+
+        assert_eq!(error.kind(), ErrorKind::ValueValidation);
+        assert_eq!(error.exit_code(), 2);
+        let message = error.to_string();
+        for name in ["preserve", "avif", "bmp", "gif", "heic", "jpeg", "png", "tiff", "webp"] {
+            assert!(message.contains(name), "{name} is not listed in: {message}");
+        }
+    }
+
+    /// Every `opai …` command in `docs/CLI_REFERENCE.md`, from its code blocks and its inline code, without trailing
+    /// comments.
+    fn documented_commands() -> Vec<String> {
+        let reference = include_str!("../../../docs/CLI_REFERENCE.md");
+        let mut commands = Vec::new();
+        let mut fenced = false;
+
+        for line in reference.lines() {
+            if line.trim_start().starts_with("```") {
+                fenced = !fenced;
+                continue;
+            }
+
+            let candidates: Vec<&str> =
+                if fenced { vec![line.trim()] } else { line.split('`').skip(1).step_by(2).collect() };
+            for candidate in candidates {
+                let command = candidate.trim_start_matches("NO_COLOR=1 ");
+                let command = command.split(" #").next().unwrap_or_default().trim();
+                if command.starts_with("opai ") {
+                    commands.push(command.to_owned());
+                }
+            }
+        }
+
+        commands
+    }
+
+    #[test]
+    fn every_example_in_the_reference_parses() {
+        // The synopsis, `--version`'s output, and the commands the reference shows failing or ending the parse on
+        // purpose.
+        let version = format!("opai {}", opai::version());
+        let not_runs = ["opai <INPUT>...", "opai --up photo.jpg", "opai --help", "opai --version", version.as_str()];
+
+        let commands = documented_commands();
+        assert!(commands.len() > 20, "the reference's examples were not found: {commands:?}");
+
+        for command in commands {
+            if not_runs.iter().any(|prefix| command.starts_with(prefix)) {
+                continue;
+            }
+            if let Err(error) = parse(&command) {
+                panic!("`{command}` does not parse: {error}");
+            }
+        }
     }
 
     #[test]

@@ -30,9 +30,10 @@ clap = { version = "4.6.7", features = ["derive"] }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 
 # Named directly, not reached through `opai`, because drawing to a terminal is front-end work and `opai` knows nothing
-# about a user interface: `tui` is the gradient progress bar and its live one-line session. Pinned to the same tag as
+# about a user interface: `tui` is the gradient progress bar and its live one-line session; `fs` is `list_path`, which walks a
+# directory input (already compiled for `opai`, which enables it at the same tag). Pinned to the same tag as
 # `opai`'s, `gui`'s and `perf`'s: all four tags move together, so the lock file holds a single `rust-sak`.
-rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.10.6", features = ["tui"] }
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.10.6", features = ["fs", "tui"] }
 
 # The project's error convention, matching `rust-sak`, `opai`, `gui` and `perf`.
 thiserror = "2.0.20"
@@ -45,6 +46,11 @@ tracing = "0.1.44"
 # the cancellation a run stops on in plain mode. `macros` and `sync` are the `select!` and the `Notify` that abandon
 # initialization on a Ctrl-C the dependency line reports.
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "signal", "sync"] }
+
+# `cmd` and PowerShell hand `*.jpg` to the program as written, where a Unix shell expands it; `wild` expands it on
+# Windows and passes the arguments through unchanged everywhere else. A pattern matching nothing is kept as written,
+# so it is refused as a missing input like any other path.
+wild = "2.2.1"
 
 [dev-dependencies]
 # A scratch directory for the input check's tests, as `opai` and `gui` use it.

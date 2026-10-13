@@ -1,13 +1,15 @@
 //! `opai` — the terminal front end for Open Photo AI.
 //!
-//! One photograph in, upscaled and/or face-restored, one file out:
+//! Photographs and directories of them in, each enhanced by the same chain, written to one file or under a directory:
 //!
 //! ```text
-//! opai <input> [--up [MODEL]] [--scale N] [--fr [MODEL]] [-q hd|sd] -o <output>
+//! opai <input>... <enhancement flags> [-r] [--format F] [--prefix P] [--suffix S] [--overwrite] [-q hd|sd] -o <output>
 //! ```
 //!
-//! Everything the run does is the library's. What lives here is the terminal's own vocabulary — the flags, the mapping
-//! from them to `opai` constructors, the lines and the bar the terminal shows, and the exit status.
+//! Everything the run does is the library's, naming each result included (`opai::export`). What lives here is the
+//! terminal's own vocabulary — the flags, the mapping from them to `opai` constructors, expanding the inputs, reading
+//! `-o` as a file or a directory and mirroring directory inputs under it, the lines and the bar the terminal shows,
+//! and the exit status.
 //!
 //! # Where the output goes
 //!
@@ -15,15 +17,16 @@
 //!
 //! ```text
 //! 💾 Downloading dependency ONNX Runtime   34%            <- only when a dependency is downloaded
-//! 🖼️ Applying enhancements to the image photo.jpg
+//! 🖼️ Applying enhancements to the image photo.jpg         <- header, bar and result line once per image
 //!
 //! Face Recovery   [1/2]  ████████████░░░░░░░░░░░░░░░   38.4%
 //!
-//! ✨ Image enhanced successfully; file saved at out.avif  <- or: 🧨 <what went wrong>
+//! ✨ Image enhanced successfully; file saved at out.avif  <- or: 🧨 could not enhance photo.jpg: <why>
+//! 🧨 1 of 3 images failed                                 <- only when an image failed
 //! ```
 //!
 //! The dependency line and the bar are redrawn in place, and the lines are coloured unless `NO_COLOR` is set. Where
-//! stderr is not a terminal, only the header and the result line are printed, without colour.
+//! stderr is not a terminal, only each header and result line are printed, without colour.
 //!
 //! The notes, the face report, what the run executed on and every failure in full go to the log file, `opai.log`.
 //! clap's own `--help`, `--version` and argument errors are printed as clap prints them.
@@ -31,6 +34,7 @@
 mod args;
 mod chain;
 mod error;
+mod inputs;
 mod look;
 mod output;
 mod progress;

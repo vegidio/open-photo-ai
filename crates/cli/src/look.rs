@@ -215,7 +215,7 @@ mod tests {
     fn the_lines_without_colour_are_their_exact_text() {
         assert_eq!(header(Path::new("photo.jpg"), false), "🖼️ Applying enhancements to the image photo.jpg");
         assert_eq!(success(Path::new("out.avif"), false), "✨ Image enhanced successfully; file saved at out.avif");
-        assert_eq!(failure("stopped: nothing was written", false), "🧨 stopped: nothing was written");
+        assert_eq!(failure("stopped: nothing more was written", false), "🧨 stopped: nothing more was written");
     }
 
     #[test]
