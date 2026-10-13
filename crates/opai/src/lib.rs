@@ -157,6 +157,9 @@
 //! brought inside [`image::MIN_QUALITY`]`..=`[`image::MAX_QUALITY`], and AVIF at speed 6. Saving with no settings at
 //! all still uses the codec's own defaults.
 //!
+//! [`export`] decides what an exported photograph is called and where it goes — the format choice and Preserve's TIFF
+//! fallback, the name and folder, and claiming a free numbered name or overwriting only once the file is complete.
+//!
 //! # Limits
 //!
 //! - **Alpha does not survive inference.** A transparent source composites against black.
@@ -179,6 +182,7 @@ mod cache;
 mod config;
 mod deps;
 mod error;
+pub mod export;
 mod gpu;
 mod hardware;
 pub mod image;

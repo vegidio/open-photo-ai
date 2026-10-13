@@ -1,18 +1,20 @@
 import { listen } from "@tauri-apps/api/event";
+import { exportNaming } from "@/lib/export";
 import type { CropInfo } from "./crop";
 import { type EnhanceError, mintRun, type Operation, type Processor, type RunProgress } from "./enhance";
 import { call } from "./invoke";
 import { once } from "./once";
 
-// Written a second time in `crates/gui/src/export/`, as `#[tauri::command]` function names: the first two in
-// `mod.rs`, then `directory.rs` and `written.rs`. A rename on one side alone is not a type error but an `invoke` that
-// rejects at runtime: `export.test.ts` pins this half, and `generate_handler![]` the Rust one by refusing to compile
-// against a function that does not exist.
+// Written a second time in `crates/gui/src/export/`, as `#[tauri::command]` function names: the first two and the
+// last two in `mod.rs`, then `directory.rs` and `written.rs`. A rename on one side alone is not a type error but an
+// `invoke` that rejects at runtime: `export.test.ts` pins this half, and `generate_handler![]` the Rust one by
+// refusing to compile against a function that does not exist.
 const EXPORT_COMMAND = "export";
 const CANCEL_EXPORT_COMMAND = "cancel_export";
 const PICK_DIRECTORY_COMMAND = "pick_directory";
 const REVEAL_EXPORT_COMMAND = "reveal_export";
 const EXPORT_FORMATS_COMMAND = "export_formats";
+const EXPORT_NAMES_COMMAND = "export_names";
 
 /**
  * The event an export's reports arrive under, written a second time in `crates/gui/src/export/progress.rs` as
@@ -29,6 +31,12 @@ const EXPORT_PROGRESS_EVENT = "export:progress";
  * HEIF.
  */
 export type ExportFormat = "bmp" | "gif" | "jpeg" | "png" | "tiff" | "avif" | "heic" | "webp";
+
+/**
+ * What the user picks as the format: the source's own where it can be written - TIFF for one that cannot, such as
+ * camera RAW - or one format for every file. Rust's `FormatChoice`, spelled as it reads it.
+ */
+export type FormatChoice = "preserve" | ExportFormat;
 
 /** What a lossy format's quality may be, and what it is written at before a user moves a slider. */
 export type QualityRange = { min: number; max: number; default: number };
@@ -52,17 +60,43 @@ export type FormatCapability = {
 
 /**
  * Every format an export can be written in and what each can do, and what a Preserve export writes a source none of
- * them writes back as itself - a camera RAW file - as instead. The one table `lib/export.ts` reads its format rules
- * from, published by `export_formats` in `crates/gui/src/export/mod.rs`.
+ * them writes back as itself - a camera RAW file - as instead. Published by `export_formats` in
+ * `crates/gui/src/export/mod.rs`; the window reads the quality ranges from it.
  */
 export type ExportFormats = { formats: FormatCapability[]; fallback: ExportFormat };
 
+/**
+ * What decides the name, folder and format of each file written, as the export settings store it. Rust composes the
+ * name from it and the source's path - see {@link exportNames}.
+ */
+export type ExportNaming = {
+    /** Put in front of every file's name. */
+    prefix: string;
+    /** Put after every file's name, before its extension. */
+    suffix: string;
+    /** The folder to write into, or absent for the directory each source is in. */
+    location?: string;
+    format: FormatChoice;
+};
+
+/** What one queued file is exported as, as {@link exportNames} answers it. */
+export type ExportName = {
+    /** The source's path, as it was asked for. */
+    path: string;
+    /** The file name written. */
+    name: string;
+    /** The path asked for: what is written unless it is taken and the export is not overwriting. */
+    destination: string;
+    /** The format written. */
+    format: ExportFormat;
+    /** The extension written, without its dot. */
+    extension: string;
+};
+
 /** Where an export is written, and how. */
 export type ExportRequest = {
-    /** The file to write. Its name does not decide the format; {@link ExportRequest.format} does. */
-    destination: string;
-    /** What to write. */
-    format: ExportFormat;
+    /** What the file is called, where it goes and what it is written as. */
+    naming: ExportNaming;
     /**
      * The quality, for a format {@link ExportFormats} publishes as taking one - absent for the rest, and for a lossy
      * format meant to be written at its published default. A value outside the range is brought inside it rather than
@@ -135,7 +169,7 @@ export const exportImage = (
     // Before the invoke, for the reason `enhance` gives beside its own. From the one counter every run name comes
     // from, so an export's name can never be a canvas run's or an analysis's.
     const run = mintRun();
-    const { destination, format, quality, overwrite } = request;
+    const { naming, quality, overwrite } = request;
 
     // `crop` is sent as `undefined` rather than omitted, as `enhance` sends it.
     return {
@@ -146,13 +180,22 @@ export const exportImage = (
             operations,
             processor,
             crop,
-            destination,
-            format,
+            naming: exportNaming(naming),
             quality,
             overwrite,
         }),
     };
 };
+
+/**
+ * What each of `paths` is exported as under `naming`, in the order asked: its name, the destination asked for, the
+ * format written and its extension.
+ *
+ * **The naming rule is Rust's** - the same one `export` writes by - so what a row shows is what an export asks for.
+ * Nothing is opened and nothing can fail on the Rust side.
+ */
+export const exportNames = (paths: readonly string[], naming: ExportNaming) =>
+    call<ExportName[]>(EXPORT_NAMES_COMMAND, { paths, naming: exportNaming(naming) });
 
 // Kept because the Rust side answers from a table fixed at compile time, as the catalogue is.
 const formats = once(() => call<ExportFormats>(EXPORT_FORMATS_COMMAND));

@@ -6,7 +6,7 @@ import "@/i18n";
 import { cancelSuggest, type Suggestion, suggest } from "@/ipc/autopilot";
 import type { CropInfo } from "@/ipc/crop";
 import type { Operation } from "@/ipc/enhance";
-import { cancelExport, type Exported, type ExportRequest, exportImage } from "@/ipc/export";
+import { cancelExport, type Exported, type ExportRequest, exportImage, exportNames } from "@/ipc/export";
 import { detectFaces, type Face } from "@/ipc/faces";
 import type { ImageRecord } from "@/ipc/images";
 import { track } from "@/lib/faro";
@@ -41,12 +41,13 @@ vi.mock("@/lib/faro", () => ({
 }));
 
 vi.mock("@/ipc/export", async () => {
-    const { EXPORT_FORMATS } = await import("@/test/support");
+    const { answerExportNames, EXPORT_FORMATS } = await import("@/test/support");
 
     return {
         exportImage: vi.fn(),
         cancelExport: vi.fn(() => Promise.resolve()),
         exportFormats: vi.fn(() => Promise.resolve(EXPORT_FORMATS)),
+        exportNames: vi.fn(answerExportNames),
     };
 });
 vi.mock("@/ipc/autopilot", () => ({ suggest: vi.fn(), cancelSuggest: vi.fn(() => Promise.resolve()) }));
@@ -60,6 +61,7 @@ vi.mock("@/ipc/enhance", async (importOriginal) => ({
 }));
 
 const exported = exportImage as unknown as Mock;
+const named = exportNames as unknown as Mock;
 const stopped = cancelExport as unknown as Mock;
 const asked = suggest as unknown as Mock;
 const withdrawn = cancelSuggest as unknown as Mock;
@@ -223,15 +225,27 @@ describe("the order", () => {
         ]);
     });
 
-    it("writes each file at its destination, in the chosen format", async () => {
-        void run([HOLIDAY], settings({ prefix: "new-", suffix: "-opai", location: "/exports", format: "webp" }));
-        await settle();
+    it("sends the naming Save was pressed with, and asks Rust for the queue's names once", async () => {
+        const chosen = settings({ prefix: "new-", suffix: "-opai", location: "/exports", format: "webp" });
 
-        expect(exporting[0]?.request).toMatchObject({
-            destination: "/exports/new-holiday-opai.webp",
-            format: "webp",
-            overwrite: false,
-        });
+        void run([HOLIDAY, SUNSET], chosen);
+        await settle();
+        await exporting[0]?.answer({ outcome: "exported", path: "/exports/new-holiday-opai.webp", bytes: 1 });
+
+        expect(exporting.map(({ request }) => request)).toEqual([
+            expect.objectContaining({ naming: chosen, overwrite: false }),
+            expect.objectContaining({ naming: chosen, overwrite: false }),
+        ]);
+        expect(named).toHaveBeenCalledExactlyOnceWith([HOLIDAY.path, SUNSET.path], chosen);
+    });
+
+    it("fails every file where the queue cannot be named, and asks for nothing", async () => {
+        named.mockRejectedValueOnce(new Error("the bridge is gone"));
+
+        await run([HOLIDAY, SUNSET]);
+
+        expect(stages()).toEqual(["failed", "failed"]);
+        expect(exporting).toEqual([]);
     });
 
     it("sends the photograph's framing", async () => {
@@ -246,7 +260,11 @@ describe("the order", () => {
     it("says why a file failed, naming the file and folder of a write", async () => {
         const done = run([HOLIDAY]);
         await settle();
-        await exporting[0]?.fail({ kind: "write", path: "/x.png", message: "Permission denied (os error 13)" });
+        await exporting[0]?.fail({
+            kind: "write",
+            path: "/Users/someone/Pictures/holiday.png",
+            message: "Permission denied (os error 13)",
+        });
         await done;
 
         expect(row(HOLIDAY)).toEqual({
@@ -460,10 +478,11 @@ describe("the quality", () => {
         await exporting[1]?.answer({ outcome: "exported", path: "/s.tiff", bytes: 1 });
         await done;
 
-        expect(exporting.map(({ request }) => [request.format, request.quality])).toEqual([
-            ["jpeg", 81],
-            // A RAW source is written as TIFF, which takes no quality, and is sent none.
-            ["tiff", undefined],
+        // The JPEG is written as JPEG, at JPEG's quality. A RAW source is written as TIFF, which takes no quality, and
+        // is sent none. Which format each is written in is Rust's answer, and each export sends the same naming.
+        expect(exporting.map(({ request }) => [request.naming.format, request.quality])).toEqual([
+            ["preserve", 81],
+            ["preserve", undefined],
         ]);
         expect("quality" in (exporting[1]?.request ?? {})).toBe(false);
     });
@@ -475,7 +494,7 @@ describe("the quality", () => {
         await done;
 
         expect(exporting[0]?.request).not.toHaveProperty("quality");
-        expect(exporting[0]?.request.format).toBe("webp");
+        expect(exporting[0]?.request.naming.format).toBe("webp");
     });
 });
 

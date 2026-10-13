@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,13 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { runBatch } from "@/features/export/batch";
+import type { ExportNames } from "@/features/export/useExportNames";
 import { useExportFormats } from "@/hooks/useExportFormats";
 import { pickDirectory } from "@/ipc/export";
 import { FORMAT_CHOICES, type FormatChoice, queueQualityFor } from "@/lib/export";
 import { cn } from "@/lib/utils";
 import { useExportBatchStore } from "@/stores/exportBatch";
 import { exportSettingsData, useExportSettingsStore } from "@/stores/exportSettings";
-import { useFileStore } from "@/stores/files";
 import { useSettingsStore } from "@/stores/settings";
 
 /** What each format reads as in the chooser. JPEG is `JPG`, as the reference and the design spell it. */
@@ -54,24 +54,24 @@ const FIELD = "h-8 bg-background px-2.5 text-[13px] md:text-[13px]";
  * **The whole column is unavailable while a batch runs**, where the reference leaves it live: the batch writes the
  * names it was saved with, and the rows would otherwise show others. See design.md D8.
  */
-export const ExportSettingsPanel = ({ onClose }: { onClose: () => void }) => {
+export const ExportSettingsPanel = ({ names, onClose }: { names: ExportNames | undefined; onClose: () => void }) => {
     const { t } = useTranslation();
     const { prefix, suffix, location, overwrite, format, setPrefix, setSuffix, setLocation, setOverwrite, setFormat } =
         useExportSettingsStore();
     const phase = useExportBatchStore((state) => state.phase);
     const running = phase === "running";
 
-    // The queue's records, for the one lossy format a slider could stand for. Read off the file list by the queue's
-    // paths; the queue is fixed while the dialog is open, and the records do not change under it.
-    const queue = useExportBatchStore((state) => state.queue);
-    const files = useFileStore((state) => state.files);
-    const records = useMemo(() => {
-        const queued = new Set(queue);
-
-        return files.filter((file) => queued.has(file.path));
-    }, [files, queue]);
+    // The format each queued file is written in, as Rust resolved it, for the one lossy format a slider could stand
+    // for. Nothing until both the names and the format table have arrived, and nothing while the names are still
+    // those of an earlier format choice: a slider for the format just left would be the wrong one.
     const formats = useExportFormats();
-    const queueQuality = formats && queueQualityFor(records, format, formats);
+    const queueQuality =
+        formats && names?.format === format
+            ? queueQualityFor(
+                  [...names.byPath.values()].map((name) => name.format),
+                  formats,
+              )
+            : undefined;
 
     const [draft, setDraft] = useState(() => ({ ...useSettingsStore.getState().quality }));
 

@@ -1,7 +1,14 @@
 import { awaitAnalysis } from "@/hooks/useAutopilot";
 import i18n from "@/i18n";
-import { type ExportFormats, type ExportProgress, exportFormats, exportImage } from "@/ipc/export";
-import { describeExportError, destinationFor, type ExportFailure, formatFor, qualityFor } from "@/lib/export";
+import {
+    type ExportFormats,
+    type ExportName,
+    type ExportProgress,
+    exportFormats,
+    exportImage,
+    exportNames,
+} from "@/ipc/export";
+import { describeExportError, type ExportFailure, qualityFor } from "@/lib/export";
 import { withChoice } from "@/lib/faces";
 import { track } from "@/lib/faro";
 import { useCropStore } from "@/stores/crop";
@@ -22,20 +29,21 @@ type Next = "next" | "stop";
  *
  * Everything it runs is read at the moment its turn comes, not when the batch started: the stack, which an Autopilot
  * analysis may just have written, the crop, the choice among faces and the processor. `settings` and `quality` are
- * what Save was pressed with, and `formats` is Rust's table of what each format can do. See design.md D1 and D2.
+ * what Save was pressed with, `formats` is Rust's table of what each format can do, and `name` is what Rust named
+ * this file as under `settings` when Save was pressed.
  */
 const exportOne = async (
     path: string,
     settings: ExportSettingsData,
     quality: QualityChoices,
     formats: ExportFormats,
+    name: ExportName | undefined,
 ): Promise<Next> => {
     const { setStage, setCurrent } = batch();
     const file = useFileStore.getState().files.find((open) => open.path === path);
-    const destination = file ? destinationFor(file, settings, settings.format, formats) : path;
 
     const fail = (failure: ExportFailure) =>
-        setStage(path, { stage: "failed", reason: describeExportError(i18n.t, failure, destination) });
+        setStage(path, { stage: "failed", reason: describeExportError(i18n.t, failure) });
 
     // Put back as not reached, where Abort was pressed during the await just ended: nothing was written for it.
     const halted = () => {
@@ -84,12 +92,12 @@ const exportOne = async (
     const choice = useFacesStore.getState().choices.get(identity);
 
     // A lossless format takes no quality, and is sent none. A lossy one the user never moved is sent none either, and
-    // Rust writes it at the default it publishes.
-    const qualityFormat = qualityFor(file, settings.format, formats)?.format;
+    // Rust writes it at the default it publishes. The format is the one Rust named this file with, which is the one
+    // the export writes: both come from the same naming and the same path.
+    const qualityFormat = name && qualityFor(name.format, formats)?.format;
     const chosenQuality = qualityFormat && quality[qualityFormat];
     const request = {
-        destination,
-        format: formatFor(file, settings.format, formats),
+        naming: settings,
         ...(chosenQuality !== undefined && { quality: chosenQuality }),
         overwrite: settings.overwrite,
     };
@@ -144,16 +152,21 @@ export const runBatch = async (settings: ExportSettingsData, quality: QualityCho
 
     /** Whether the queue was worked through to its end, rather than aborted or stopped. */
     const ranToEnd = async () => {
-        // Asked once, and kept by `exportFormats` for the life of the process: the answer cannot change. A bridge that
-        // cannot answer it fails every file, as it would fail each of their exports.
+        // The formats are asked once, and kept by `exportFormats` for the life of the process: the answer cannot
+        // change. The names are asked once, here, for the settings Save was pressed with, which the column cannot
+        // change while the batch runs. A bridge that cannot answer either fails every file, as it would fail each of
+        // their exports.
         let formats: ExportFormats;
+        let names: Map<string, ExportName>;
         try {
-            formats = await exportFormats();
+            const [published, named] = await Promise.all([exportFormats(), exportNames(queue, settings)]);
+            formats = published;
+            names = new Map(named.map((name) => [name.path, name]));
         } catch (error) {
             for (const path of queue) {
                 batch().setStage(path, {
                     stage: "failed",
-                    reason: describeExportError(i18n.t, { cause: "export", error }, path),
+                    reason: describeExportError(i18n.t, { cause: "export", error }),
                 });
             }
 
@@ -162,7 +175,7 @@ export const runBatch = async (settings: ExportSettingsData, quality: QualityCho
 
         for (const path of queue) {
             if (batch().aborted) return false;
-            if ((await exportOne(path, settings, quality, formats)) === "stop") return false;
+            if ((await exportOne(path, settings, quality, formats, names.get(path))) === "stop") return false;
         }
 
         return true;

@@ -30,12 +30,18 @@ vi.mock("@/hooks/useExportFormats", async () => {
 vi.mock("@tauri-apps/api/core", () => ({
     convertFileSrc: vi.fn((identity: string) => `opai://localhost/${identity}`),
 }));
-vi.mock("@/ipc/export", () => ({
-    pickDirectory: vi.fn(),
-    revealExport: vi.fn(() => Promise.resolve()),
-    cancelExport: vi.fn(() => Promise.resolve()),
-    onExportProgress: vi.fn(() => Promise.resolve(() => {})),
-}));
+// What each row is named is Rust's answer, stood in for by the support module's double.
+vi.mock("@/ipc/export", async () => {
+    const { answerExportNames } = await import("@/test/support");
+
+    return {
+        pickDirectory: vi.fn(),
+        revealExport: vi.fn(() => Promise.resolve()),
+        cancelExport: vi.fn(() => Promise.resolve()),
+        onExportProgress: vi.fn(() => Promise.resolve(() => {})),
+        exportNames: vi.fn(answerExportNames),
+    };
+});
 vi.mock("@/ipc/os", () => ({ isMacOs: () => false, isWindows: () => false }));
 vi.mock("@/ipc/enhance", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/ipc/enhance")>()),
@@ -56,6 +62,12 @@ const LANDSCAPE: ImageRecord = { ...HOLIDAY, path: "/Users/someone/Pictures/land
 
 const onClose = vi.fn();
 const mount = () => render(<ExportDialog onClose={onClose} />);
+
+/** Mounts the dialog and waits for Rust's names, which the rows and the quality slider are drawn from. */
+const mountNamed = async () => {
+    mount();
+    await waitFor(() => expect(document.querySelector("[data-slot='export-row']")).not.toBeNull());
+};
 const batch = () => useExportBatchStore.getState();
 const button = (name: string) => screen.getByRole("button", { name });
 const choose = async (combobox: string, option: string) => {
@@ -243,10 +255,10 @@ describe("the buttons", () => {
 });
 
 describe("the settings", () => {
-    it("are unavailable while running", () => {
+    it("are unavailable while running", async () => {
         pick(HOLIDAY);
         useExportSettingsStore.getState().setFormat("webp");
-        mount();
+        await mountNamed();
         act(() => batch().start());
 
         expect(screen.getByRole("textbox", { name: "Prefix" })).toBeDisabled();
@@ -257,14 +269,14 @@ describe("the settings", () => {
         expect(quality()).toHaveAttribute("data-disabled");
     });
 
-    it("write the affixes as they are typed", () => {
+    it("write the affixes as they are typed", async () => {
         pick(HOLIDAY);
-        mount();
+        await mountNamed();
 
         fireEvent.change(screen.getByRole("textbox", { name: "Suffix" }), { target: { value: "-opai" } });
 
         expect(useExportSettingsStore.getState().suffix).toBe("-opai");
-        expect(screen.getByText("holiday-opai.png")).toBeInTheDocument();
+        expect(await screen.findByText("holiday-opai.png")).toBeInTheDocument();
     });
 
     it("swap the footnote for the warning when overwriting is switched on", () => {
@@ -310,19 +322,19 @@ describe("Save to", () => {
 });
 
 describe("the quality", () => {
-    it("is shown for one lossy format, at that format's quality from Settings", () => {
+    it("is shown for one lossy format, at that format's quality from Settings", async () => {
         useSettingsStore.getState().apply({ quality: { ...PUBLISHED_QUALITY, webp: 64 } });
         useExportSettingsStore.getState().setFormat("webp");
         pick(HOLIDAY, SUNSET);
-        mount();
+        await mountNamed();
 
         expect(quality()).toHaveAttribute("aria-valuenow", "64");
     });
 
-    it("is shown under Preserve where every file is the same lossy format", () => {
+    it("is shown under Preserve where every file is the same lossy format", async () => {
         useExportSettingsStore.getState().setFormat("preserve");
         pick(PORTRAIT, LANDSCAPE);
-        mount();
+        await mountNamed();
 
         expect(quality()).toHaveAttribute("aria-valuenow", String(PUBLISHED_QUALITY.jpeg));
     });
@@ -330,17 +342,18 @@ describe("the quality", () => {
     it("is hidden under a mixed Preserve and for a lossless format", async () => {
         useExportSettingsStore.getState().setFormat("preserve");
         pick(PORTRAIT, HOLIDAY);
-        mount();
+        await mountNamed();
         expect(quality()).not.toBeInTheDocument();
 
         act(() => useExportSettingsStore.getState().setFormat("png"));
+        await screen.findByText(/JPG → PNG/);
         expect(quality()).not.toBeInTheDocument();
     });
 
-    it("is a draft that closing discards", () => {
+    it("is a draft that closing discards", async () => {
         useExportSettingsStore.getState().setFormat("webp");
         pick(HOLIDAY);
-        mount();
+        await mountNamed();
 
         fireEvent.keyDown(quality() as HTMLElement, { key: "ArrowRight" });
         expect(quality()).toHaveAttribute("aria-valuenow", String(PUBLISHED_QUALITY.webp + 1));
@@ -352,11 +365,11 @@ describe("the quality", () => {
         expect(ran).not.toHaveBeenCalled();
     });
 
-    it("is committed to Settings by Save, which runs the batch at it with the settings in force", () => {
+    it("is committed to Settings by Save, which runs the batch at it with the settings in force", async () => {
         useExportSettingsStore.getState().setFormat("webp");
         useExportSettingsStore.getState().setSuffix("-opai");
         pick(HOLIDAY);
-        mount();
+        await mountNamed();
 
         fireEvent.keyDown(quality() as HTMLElement, { key: "ArrowLeft" });
         fireEvent.click(button("Save"));
@@ -369,13 +382,14 @@ describe("the quality", () => {
         );
     });
 
-    it("commits only the format the slider stands for at Save, not a draft left on another", () => {
+    it("commits only the format the slider stands for at Save, not a draft left on another", async () => {
         useExportSettingsStore.getState().setFormat("webp");
         pick(HOLIDAY);
-        mount();
+        await mountNamed();
 
         fireEvent.keyDown(quality() as HTMLElement, { key: "ArrowLeft" });
         act(() => useExportSettingsStore.getState().setFormat("jpeg"));
+        await waitFor(() => expect(quality()).toHaveAttribute("aria-valuenow", String(PUBLISHED_QUALITY.jpeg)));
         fireEvent.keyDown(quality() as HTMLElement, { key: "ArrowRight" });
         fireEvent.click(button("Save"));
 

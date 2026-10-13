@@ -12,6 +12,7 @@ import {
     type ExportRequest,
     exportFormats,
     exportImage,
+    exportNames,
     forgetExportFormats,
     onExportProgress,
     pickDirectory,
@@ -20,8 +21,8 @@ import {
 
 // Mocked at the `invoke` and `listen` boundaries, so the names asserted below are the ones that would actually go on
 // the wire. This is the frontend half of a contract whose Rust half is `#[tauri::command] fn export` and
-// `fn cancel_export` in crates/gui/src/export/mod.rs, `fn pick_directory` in directory.rs, `fn reveal_export` in
-// written.rs, and `EXPORT_PROGRESS_EVENT` in crates/gui/src/export/progress.rs.
+// `fn cancel_export`, `fn export_formats` and `fn export_names` in crates/gui/src/export/mod.rs, `fn pick_directory`
+// in directory.rs, `fn reveal_export` in written.rs, and `EXPORT_PROGRESS_EVENT` in crates/gui/src/export/progress.rs.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
@@ -52,8 +53,7 @@ const framing: CropInfo = {
 
 /** Where and how, as the export dialog will ask. */
 const request: ExportRequest = {
-    destination: "/Users/someone/Pictures/holiday-opai.jpg",
-    format: "jpeg",
+    naming: { prefix: "", suffix: "-opai", format: "jpeg" },
     quality: 90,
     overwrite: false,
 };
@@ -74,15 +74,18 @@ describe("exportImage", () => {
             operations: [kyoto],
             processor: "coreml",
             crop: framing,
-            destination: "/Users/someone/Pictures/holiday-opai.jpg",
-            format: "jpeg",
+            naming: { prefix: "", suffix: "-opai", format: "jpeg" },
             quality: 90,
             overwrite: false,
         });
     });
 
     it("sends no framing as undefined, and an empty chain as it is", () => {
-        const { run } = exportImage("0123456789abcdef", [], "auto", { ...request, format: "heic", overwrite: true });
+        const { run } = exportImage("0123456789abcdef", [], "auto", {
+            naming: { prefix: "new-", suffix: "", location: "/exports", format: "preserve" },
+            quality: 90,
+            overwrite: true,
+        });
 
         expect(invoked).toHaveBeenCalledWith("export", {
             run,
@@ -90,8 +93,7 @@ describe("exportImage", () => {
             operations: [],
             processor: "auto",
             crop: undefined,
-            destination: "/Users/someone/Pictures/holiday-opai.jpg",
-            format: "heic",
+            naming: { prefix: "new-", suffix: "", location: "/exports", format: "preserve" },
             quality: 90,
             overwrite: true,
         });
@@ -133,7 +135,11 @@ describe("exportImage", () => {
     });
 
     it("rejects with the refusal", async () => {
-        const refused: ExportError = { kind: "write", path: request.destination, message: "Permission denied" };
+        const refused: ExportError = {
+            kind: "write",
+            path: "/Users/someone/Pictures/holiday-opai.jpg",
+            message: "Permission denied",
+        };
         invoked.mockRejectedValue(refused);
 
         await expect(exportImage("0123456789abcdef", [kyoto], "cpu", request).done).rejects.toEqual(refused);
@@ -152,10 +158,33 @@ describe("exportFormats", () => {
     });
 });
 
+describe("exportNames", () => {
+    it("calls the command Rust registers, by name, with the paths and only the naming's own fields", async () => {
+        const answer = [
+            {
+                path: "/photos/shot.nef",
+                name: "shot-opai.tiff",
+                destination: "/photos/shot-opai.tiff",
+                format: "tiff",
+                extension: "tiff",
+            },
+        ];
+        invoked.mockResolvedValue(answer);
+        const settings = { prefix: "", suffix: "-opai", format: "preserve" as const, overwrite: true };
+
+        await expect(exportNames(["/photos/shot.nef"], settings)).resolves.toEqual(answer);
+
+        expect(invoked).toHaveBeenCalledExactlyOnceWith("export_names", {
+            paths: ["/photos/shot.nef"],
+            naming: { prefix: "", suffix: "-opai", format: "preserve" },
+        });
+    });
+});
+
 describe("exportImage and a format that takes no quality", () => {
     it("sends no quality where the request carries none", () => {
-        const { destination, format, overwrite } = request;
-        const { run } = exportImage("0123456789abcdef", [], "cpu", { destination, format, overwrite });
+        const { naming, overwrite } = request;
+        const { run } = exportImage("0123456789abcdef", [], "cpu", { naming, overwrite });
 
         expect(invoked).toHaveBeenCalledWith("export", expect.objectContaining({ run, quality: undefined }));
     });

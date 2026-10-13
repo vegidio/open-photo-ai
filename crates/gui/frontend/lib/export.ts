@@ -1,11 +1,9 @@
 import type { TFunction } from "i18next";
 import type { Operation } from "@/ipc/enhance";
-import type { ExportFormat, ExportFormats, QualityRange } from "@/ipc/export";
-import type { ImageRecord } from "@/ipc/images";
+import type { ExportFormat, ExportFormats, ExportNaming, FormatChoice, QualityRange } from "@/ipc/export";
 import { directoryOf, fileName } from "@/lib/paths";
 
-/** What the user picks as the format: the source's own where it can be written, or one format for every file. */
-export type FormatChoice = "preserve" | ExportFormat;
+export type { FormatChoice };
 
 /** Every format a user can pick, in the order the chooser offers them: Preserve, then alphabetical by label. */
 export const FORMAT_CHOICES = [
@@ -23,91 +21,26 @@ export const FORMAT_CHOICES = [
 export const isFormatChoice = (value: unknown): value is FormatChoice =>
     typeof value === "string" && (FORMAT_CHOICES as readonly string[]).includes(value);
 
-/** What decides the name and folder of each file written, as the export settings hold it. */
-export type NamingChoices = {
+/**
+ * Only the naming's own fields of `settings` - the prefix, suffix, folder and format - whatever else it holds, and no
+ * `location` where none is chosen. What `exportNames` and `exportImage` send, and what the dialog asks names for.
+ */
+export const exportNaming = ({
+    prefix,
+    suffix,
+    location,
+    format,
+}: {
     prefix: string;
     suffix: string;
-    /** The folder to write into, or absent for the directory each source is in. */
-    location?: string;
-};
-
-/** What `formats` publishes about `format`, or `undefined` where it publishes nothing. */
-const capabilityOf = (formats: ExportFormats, format: ExportFormat) =>
-    formats.formats.find((published) => published.format === format);
-
-/** The format a Preserve export writes `file` back as, keeping its own extension, or `undefined` where none does. */
-const preservedAs = (file: ImageRecord, formats: ExportFormats) =>
-    formats.formats.find((published) => published.preserves.includes(file.extension));
-
-/**
- * The format `file` is written as under `choice`.
- *
- * Preserve keeps the source's own format where one is published as writing it back, and writes the published
- * fallback - TIFF, for a camera RAW file - otherwise. **The rules are Rust's**, read off `formats`: which extensions a
- * format writes back is `export_formats`' answer, so this names no format of its own.
- */
-export const formatFor = (file: ImageRecord, choice: FormatChoice, formats: ExportFormats): ExportFormat => {
-    if (choice !== "preserve") return choice;
-
-    return preservedAs(file, formats)?.format ?? formats.fallback;
-};
-
-/**
- * The extension `file` is written with under `choice`, without its dot.
- *
- * Preserve keeps the source's own extension where its format is written back, `heif` staying `heif`, and a source
- * written as the fallback gets the fallback's extension. A chosen format writes its published extension: `jpg` for
- * JPEG, the format's own name for the rest.
- */
-export const extensionFor = (file: ImageRecord, choice: FormatChoice, formats: ExportFormats): string => {
-    if (choice === "preserve" && preservedAs(file, formats)) return file.extension;
-
-    const format = formatFor(file, choice, formats);
-
-    return capabilityOf(formats, format)?.extension ?? format;
-};
-
-/** The source's name without its extension. */
-const stemOf = (file: ImageRecord) => {
-    const name = fileName(file.path);
-
-    // The record's extension is lowercase and the name need not be (`IMG_0001.JPG`), so it is cut by length.
-    return file.extension === "" ? name : name.slice(0, name.length - file.extension.length - 1);
-};
-
-/** `name` inside `folder`, joined with the separator the folder is already spelled with. */
-const join = (folder: string, name: string) => {
-    if (folder === "") return name;
-    if (folder.endsWith("/") || folder.endsWith("\\")) return `${folder}${name}`;
-
-    // A folder spelled with backslashes and no slash is a Windows one; everything else joins with a slash, which
-    // Windows accepts as well.
-    const separator = folder.includes("\\") && !folder.includes("/") ? "\\" : "/";
-
-    return `${folder}${separator}${name}`;
-};
-
-/** The name of the file written for `file`: the prefix, the source's name, the suffix and the extension. */
-export const exportNameFor = (
-    file: ImageRecord,
-    choices: NamingChoices,
-    choice: FormatChoice,
-    formats: ExportFormats,
-) => `${choices.prefix}${stemOf(file)}${choices.suffix}.${extensionFor(file, choice, formats)}`;
-
-/**
- * The path the export of `file` asks to write: {@link exportNameFor} inside the chosen folder, or inside the source's
- * own directory where none is chosen.
- *
- * What is asked for, not necessarily what is written: without overwriting, a taken name is written numbered, and the
- * export answers that name.
- */
-export const destinationFor = (
-    file: ImageRecord,
-    choices: NamingChoices,
-    choice: FormatChoice,
-    formats: ExportFormats,
-) => join(choices.location ?? directoryOf(file.path), exportNameFor(file, choices, choice, formats));
+    location?: string | undefined;
+    format: FormatChoice;
+}): ExportNaming => ({
+    prefix,
+    suffix,
+    ...(location !== undefined && { location }),
+    format,
+});
 
 /**
  * The paths reordered so those whose stacks run the same enhancements, in the same order, are exported back to back.
@@ -135,16 +68,14 @@ export const groupByChain = (paths: readonly string[], stackOf: (path: string) =
 };
 
 /**
- * The format whose quality `file` is written at under `choice`, and the range that quality takes - or `undefined`
- * where that format takes none, as `formats` publishes it.
+ * The range of the quality `format` is written at, with the format, or `undefined` where that format takes none, as
+ * `formats` publishes it. `format` is the one Rust resolved for the file - see `exportNames`.
  */
 export const qualityFor = (
-    file: ImageRecord,
-    choice: FormatChoice,
+    format: ExportFormat,
     formats: ExportFormats,
 ): { format: ExportFormat; range: QualityRange } | undefined => {
-    const format = formatFor(file, choice, formats);
-    const range = capabilityOf(formats, format)?.quality;
+    const range = formats.formats.find((published) => published.format === format)?.quality;
 
     return range ? { format, range } : undefined;
 };
@@ -152,19 +83,18 @@ export const qualityFor = (
 /**
  * The one lossy format every queued file is written in, and its range, or `undefined` where there is none.
  *
- * One slider cannot honestly stand for two formats, whose scales are not comparable, so under a mixed Preserve it is
- * hidden and each file is written at its own format's quality. A lossless format, and an empty queue, have nothing to
- * show either.
+ * `written` is the format each queued file is written in, as Rust resolved it. One slider cannot honestly stand for
+ * two formats, whose scales are not comparable, so under a mixed Preserve it is hidden and each file is written at
+ * its own format's quality. A lossless format, and an empty queue, have nothing to show either.
  */
 export const queueQualityFor = (
-    files: Iterable<ImageRecord>,
-    choice: FormatChoice,
+    written: Iterable<ExportFormat>,
     formats: ExportFormats,
 ): { format: ExportFormat; range: QualityRange } | undefined => {
     let common: { format: ExportFormat; range: QualityRange } | undefined;
 
-    for (const file of files) {
-        const quality = qualityFor(file, choice, formats);
+    for (const format of written) {
+        const quality = qualityFor(format, formats);
 
         if (quality === undefined || (common !== undefined && quality.format !== common.format)) return undefined;
         common = quality;
@@ -185,15 +115,16 @@ export type ExportFailure =
     | { cause: "unreadable" }
     | { cause: "analysis"; error?: unknown };
 
-/** The `kind` and `message` of a rejection shaped as the backend's errors are, as far as it has them. */
-const shapeOf = (error: unknown): { kind?: string; message?: string } => {
+/** The `kind`, `message` and `path` of a rejection shaped as the backend's errors are, as far as it has them. */
+const shapeOf = (error: unknown): { kind?: string; message?: string; path?: string } => {
     if (error === null || typeof error !== "object") return typeof error === "string" ? { message: error } : {};
 
-    const { kind, message } = error as { kind?: unknown; message?: unknown };
+    const { kind, message, path } = error as { kind?: unknown; message?: unknown; path?: unknown };
 
     return {
         ...(typeof kind === "string" && { kind }),
         ...(typeof message === "string" && { message }),
+        ...(typeof path === "string" && { path }),
     };
 };
 
@@ -205,22 +136,19 @@ const followedBy = (sentence: string, detail: string | undefined) => (detail ? `
  *
  * The sentence is translated and the detail after it is not. The detail is the operating system's or the library's
  * own, a diagnostic to be copied into a bug report, and a translated one is one nobody reading the report can search
- * for. A write names the file and the folder of `destination`, the path asked for.
+ * for. A write names the file and the folder of the error's own `path`: the destination Rust asked for.
  *
  * A failed model download arrives as `enhance`, whose message names the download; it has no reason of its own.
  */
-export const describeExportError = (t: TFunction, failure: ExportFailure, destination: string): string => {
+export const describeExportError = (t: TFunction, failure: ExportFailure): string => {
     if (failure.cause === "unreadable") return t("export.queue.unreadable");
 
-    const { kind, message } = shapeOf(failure.error);
+    const { kind, message, path } = shapeOf(failure.error);
 
     if (failure.cause === "analysis") return followedBy(t("export.queue.analysisFailed"), message);
 
-    if (kind === "write") {
-        const written = t("export.queue.writeFailed", {
-            name: fileName(destination),
-            folder: directoryOf(destination),
-        });
+    if (kind === "write" && path !== undefined) {
+        const written = t("export.queue.writeFailed", { name: fileName(path), folder: directoryOf(path) });
 
         return followedBy(written, message);
     }

@@ -1,14 +1,17 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { useShallow } from "zustand/react/shallow";
 import "@/i18n";
 import { revealExport } from "@/ipc/export";
+import { exportNaming } from "@/lib/export";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { type Row, useExportBatchStore } from "@/stores/exportBatch";
 import { useExportSettingsStore } from "@/stores/exportSettings";
 import { APPLY_ORDER, HOLIDAY, openFiles, render, resetFileStore, SUNSET } from "@/test/support";
 import { ExportQueue } from "./ExportQueue";
 import { ExportRow } from "./ExportRow";
+import { useExportNames } from "./useExportNames";
 
 // Rust's format table, answered at once: the hook's own fetch is pinned by `ipc/export.test.ts`.
 vi.mock("@/hooks/useExportFormats", async () => {
@@ -19,7 +22,16 @@ vi.mock("@/hooks/useExportFormats", async () => {
 vi.mock("@tauri-apps/api/core", () => ({
     convertFileSrc: vi.fn((identity: string) => `opai://localhost/${identity}`),
 }));
-vi.mock("@/ipc/export", () => ({ revealExport: vi.fn(() => Promise.resolve()), cancelExport: vi.fn() }));
+// What each row is named is Rust's answer, stood in for by the support module's double.
+vi.mock("@/ipc/export", async () => {
+    const { answerExportNames } = await import("@/test/support");
+
+    return {
+        revealExport: vi.fn(() => Promise.resolve()),
+        cancelExport: vi.fn(),
+        exportNames: vi.fn(answerExportNames),
+    };
+});
 vi.mock("@/ipc/os", () => ({ isMacOs: () => true, isWindows: () => false }));
 vi.mock("@/ipc/enhance", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/ipc/enhance")>()),
@@ -32,7 +44,26 @@ const revealed = revealExport as unknown as Mock;
 const at = (row: Row) => act(() => useExportBatchStore.getState().setStage(HOLIDAY.path, row));
 const pill = () => document.querySelector("[data-slot='export-stage']");
 
-const renderRow = () => render(<ExportRow path={HOLIDAY.path} />);
+/** What the dialog does for the queue: asks what each queued file is named under the export settings. */
+const useNames = () =>
+    useExportNames(
+        useExportBatchStore((state) => state.queue),
+        useExportSettingsStore(useShallow(exportNaming)),
+    );
+
+const NamedRow = ({ follow }: { follow?: boolean }) => (
+    <ExportRow path={HOLIDAY.path} name={useNames()?.byPath.get(HOLIDAY.path)} follow={follow ?? false} />
+);
+
+const NamedQueue = () => <ExportQueue names={useNames()} />;
+
+/** Waits for the rows to be named, which is what they wait for before drawing anything. */
+const named = () => waitFor(() => expect(document.querySelector("[data-slot='export-row']")).not.toBeNull());
+
+const renderRow = async (follow?: boolean) => {
+    render(<NamedRow follow={follow ?? false} />);
+    await named();
+};
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -46,7 +77,7 @@ beforeEach(() => {
 });
 
 describe("a row", () => {
-    it("names the file it will write, with its dimensions before and after and its types", () => {
+    it("names the file it will write, with its dimensions before and after and its types", async () => {
         useExportSettingsStore.setState({ prefix: "new-", suffix: "-opai", format: "webp" });
         useEnhancementStore
             .getState()
@@ -56,7 +87,7 @@ describe("a row", () => {
                 APPLY_ORDER,
             );
 
-        renderRow();
+        await renderRow();
 
         expect(screen.getByText("new-holiday-opai.webp")).toBeInTheDocument();
         expect(screen.getByText(/3000 x 2000/)).toBeInTheDocument();
@@ -65,13 +96,33 @@ describe("a row", () => {
         expect(screen.getByText("8.03 MB")).toBeInTheDocument();
     });
 
-    it("follows the settings while idle", () => {
-        renderRow();
+    it("follows the settings while idle", async () => {
+        await renderRow();
         expect(screen.getByText("holiday.png")).toBeInTheDocument();
 
         act(() => useExportSettingsStore.getState().setFormat("jpeg"));
 
-        expect(screen.getByText("holiday.jpg")).toBeInTheDocument();
+        expect(await screen.findByText("holiday.jpg")).toBeInTheDocument();
+
+        act(() => useExportSettingsStore.getState().setSuffix("-opai"));
+
+        expect(await screen.findByText("holiday-opai.jpg")).toBeInTheDocument();
+    });
+
+    it("shows a RAW source written as TIFF under Preserve", async () => {
+        useExportSettingsStore.setState({ format: "preserve" });
+        useExportBatchStore.getState().open([SUNSET.path]);
+
+        render(<NamedQueue />);
+
+        expect(await screen.findByText("sunset over the harbour.tiff")).toBeInTheDocument();
+        expect(screen.getByText(/NEF → TIFF/)).toBeInTheDocument();
+    });
+
+    it("draws nothing until it is named", () => {
+        render(<ExportRow path={HOLIDAY.path} name={undefined} />);
+
+        expect(document.querySelector("[data-slot='export-row']")).toBeNull();
     });
 
     it.each([
@@ -82,14 +133,14 @@ describe("a row", () => {
         [{ stage: "done", path: "/h.png", bytes: 2048 }, "Done"],
         [{ stage: "failed", reason: "no" }, "Failed"],
     ] as [Row, string][])("reads its stage: %j", async (row, label) => {
-        renderRow();
+        await renderRow();
         await at(row);
 
         expect(pill()).toHaveTextContent(label);
     });
 
     it("shows a bar of its own only while it is the row being worked on", async () => {
-        renderRow();
+        await renderRow();
         expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
 
         act(() => useExportBatchStore.getState().setCurrent({ path: HOLIDAY.path, run: "export-1" }));
@@ -101,9 +152,9 @@ describe("a row", () => {
         expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     });
 
-    it("scrolls itself into view when it becomes the row being worked on", () => {
+    it("scrolls itself into view when it becomes the row being worked on", async () => {
         const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
-        render(<ExportRow path={HOLIDAY.path} follow />);
+        await renderRow(true);
         expect(scrolled).not.toHaveBeenCalled();
 
         act(() => useExportBatchStore.getState().setCurrent({ path: HOLIDAY.path, run: "export-1" }));
@@ -116,7 +167,7 @@ describe("a row", () => {
 
 describe("a written row", () => {
     it("shows the size written and reveals the path actually written", async () => {
-        renderRow();
+        await renderRow();
         expect(screen.queryByRole("button", { name: "Show in Finder" })).not.toBeInTheDocument();
 
         await at({ stage: "done", path: "/Users/someone/Pictures/holiday_1.png", bytes: 2048 });
@@ -132,7 +183,7 @@ describe("a written row", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         revealed.mockRejectedValueOnce({ kind: "revealExport", message: "no" });
 
-        renderRow();
+        await renderRow();
         await at({ stage: "done", path: "/h.png", bytes: 1 });
         fireEvent.click(screen.getByRole("button", { name: "Show in Finder" }));
 
@@ -151,7 +202,7 @@ describe("a failed row", () => {
         const writeText = vi.fn(() => Promise.resolve());
         Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 
-        renderRow();
+        await renderRow();
         await at({ stage: "failed", reason });
         const failed = screen.getByRole("button", { name: /Failed/ });
 
@@ -172,7 +223,7 @@ describe("a failed row", () => {
         Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
         const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
-        renderRow();
+        await renderRow();
         await at({ stage: "failed", reason });
         const failed = screen.getByRole("button", { name: /Failed/ });
 
@@ -185,10 +236,11 @@ describe("a failed row", () => {
 });
 
 describe("the queue", () => {
-    it("draws one row per queued path, in queue order, and says the order is the pipeline's", () => {
+    it("draws one row per queued path, in queue order, and says the order is the pipeline's", async () => {
         useExportBatchStore.getState().open([SUNSET.path, HOLIDAY.path]);
 
-        render(<ExportQueue />);
+        render(<NamedQueue />);
+        await named();
 
         expect(screen.getByText("Queue (2)")).toBeInTheDocument();
         expect(screen.getByText("in pipeline order")).toBeInTheDocument();
@@ -198,10 +250,11 @@ describe("the queue", () => {
         ]);
     });
 
-    it("follows the row being worked on until it is scrolled by hand, and again once the next run starts", () => {
+    it("follows the row being worked on until it is scrolled by hand, and again once the next run starts", async () => {
         const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
         const batch = useExportBatchStore.getState();
-        render(<ExportQueue />);
+        render(<NamedQueue />);
+        await named();
         const list = document.querySelector("[data-slot='export-row']")?.parentElement as HTMLElement;
 
         act(() => batch.start());

@@ -7,11 +7,13 @@ import { Progress } from "@/components/ui/progress";
 import { routeProgress } from "@/features/export/batch";
 import { ExportQueue } from "@/features/export/ExportQueue";
 import { ExportSettingsPanel } from "@/features/export/ExportSettingsPanel";
+import { useExportNames } from "@/features/export/useExportNames";
 import { onExportProgress } from "@/ipc/export";
-import { groupByChain } from "@/lib/export";
+import { exportNaming, groupByChain } from "@/lib/export";
 import { report } from "@/lib/report";
 import { useEnhancementStore } from "@/stores/enhancements";
 import { batchSummary, overallFraction, useExportBatchStore } from "@/stores/exportBatch";
+import { useExportSettingsStore } from "@/stores/exportSettings";
 import { useFileStore } from "@/stores/files";
 
 /** A progress subscription that could not be made, which leaves the bars still while the files are still written. */
@@ -39,7 +41,8 @@ const Summary = () => {
  * from its buttons.
  *
  * **Mounted while open.** The queue is snapshotted as it mounts - the picked records in drawer order, grouped by
- * chain - and does not change while it is open. One progress subscription is held for its life.
+ * chain - and does not change while it is open. One progress subscription is held for its life, and what each file
+ * is exported as is asked of Rust here, once for the whole queue, and handed to the rows and the settings column.
  *
  * **It cannot be dismissed while the batch runs**: no close box, and Escape is refused. A click outside never closes
  * it. The one way out of a running batch is Abort. Unmounting aborts anyway, for a window that goes away under it.
@@ -48,6 +51,9 @@ export const ExportDialog = ({ onClose }: { onClose: () => void }) => {
     const { t } = useTranslation();
     const phase = useExportBatchStore((state) => state.phase);
     const overall = useExportBatchStore(overallFraction);
+    const queue = useExportBatchStore((state) => state.queue);
+    const naming = useExportSettingsStore(useShallow(exportNaming));
+    const names = useExportNames(queue, naming);
 
     // Before paint, so the first frame drawn is this dialog's queue rather than the last one's.
     useLayoutEffect(() => {
@@ -103,8 +109,8 @@ export const ExportDialog = ({ onClose }: { onClose: () => void }) => {
                 />
 
                 <div className="flex min-h-0 flex-1">
-                    <ExportQueue />
-                    <ExportSettingsPanel onClose={onClose} />
+                    <ExportQueue names={names} />
+                    <ExportSettingsPanel names={names} onClose={onClose} />
                 </div>
             </DialogContent>
         </Dialog>

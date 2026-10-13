@@ -1,9 +1,10 @@
 //! Writing an open photograph, enhanced, to a file, and stopping an export.
 //!
-//! [`mod@run`] is [`export_with`], the seam the command below is a thin wrapper over. [`mod@destination`] is the
-//! name a file is written under. [`mod@format`] is what the window's format and quality become. [`mod@progress`] is
-//! the event an export reports on. [`mod@written`] is the record of what was written, and the reveal it gates;
-//! [`mod@directory`] is the folder picker the window browses with.
+//! [`mod@run`] is [`export_with`], the seam the command below is a thin wrapper over. [`mod@names`] is the export
+//! settings' naming as the window sends it, and what [`export_names`] answers; the rule itself — formats, names,
+//! claiming a destination — is `opai::export`'s. [`mod@progress`] is the event an export reports on. [`mod@written`]
+//! is the record of what was written, and the reveal it gates; [`mod@directory`] is the folder picker the window
+//! browses with.
 //!
 //! # Why this is its own module and not part of `enhance`
 //!
@@ -21,15 +22,15 @@ use crate::images::{Crop, Opened};
 use crate::setup::Setup;
 use crate::stops::Stops;
 
-mod destination;
 pub(crate) mod directory;
-mod format;
+mod names;
 mod progress;
 mod run;
 pub(crate) mod written;
 
-use format::ExportFormat;
-pub(crate) use format::ExportFormats;
+pub(crate) use names::ExportName;
+use names::ExportNaming;
+use opai::export::ExportFormats;
 use run::{ExportError, Exported, Request, export_with};
 pub(crate) use written::Written;
 
@@ -51,10 +52,11 @@ pub(crate) type Exports = Stops<Export>;
 /// `operations` may be empty, which writes the framed photograph as it is. `crop` is how the user has framed it, or
 /// absent to export the whole photograph.
 ///
-/// `format` decides the bytes, whatever `destination` ends in. `quality` applies to the formats
+/// `naming` is the export settings' prefix, suffix, folder and format choice. The destination is composed from it and
+/// the source's own path by `opai::export`, the rule [`export_names`] shows the rows. `quality` applies to the formats
 /// [`export_formats`] publishes as taking one, is brought inside 1..=100, and is absent for the rest; a lossy format sent
-/// none is written at its published default. Without `overwrite`, a taken destination is written as `name_1.ext` and so
-/// on.
+/// none is written at its published default. Without `overwrite`, a taken destination is written as `name_1.ext` and
+/// so on.
 ///
 /// Answers the path actually written and the bytes written, or that the export was stopped. A path written is
 /// recorded in [`Written`], which is what lets [`reveal_export`](written::reveal_export) show it.
@@ -74,8 +76,7 @@ pub(crate) async fn export(
     operations: Vec<Requested>,
     processor: Processor,
     crop: Option<Crop>,
-    destination: std::path::PathBuf,
-    format: ExportFormat,
+    naming: ExportNaming,
     quality: Option<f64>,
     overwrite: bool,
     setup: State<'_, Setup<Opai>>,
@@ -90,7 +91,7 @@ pub(crate) async fn export(
         let opai = setup.peek(Opai::clone).await.ok_or(EnhanceError::NotReady)?;
         let reporting = progress::reporting(&app, &run);
 
-        let request = Request { run, source, operations, processor, crop, destination, format, quality, overwrite };
+        let request = Request { run, source, operations, processor, crop, naming, quality, overwrite };
 
         // Recorded here rather than in `export_with`, so the seam's tests stay free of this record.
         let answer = export_with(&opai, &opened, &exports, Some(reporting), request).await;
@@ -112,7 +113,21 @@ pub(crate) async fn export(
 /// Nothing here can fail, and the answer never changes.
 #[tauri::command]
 pub(crate) fn export_formats(traceparent: Traceparent) -> ExportFormats {
-    traced_sync(command_span!("export_formats", traceparent), format::capabilities)
+    traced_sync(command_span!("export_formats", traceparent), opai::export::capabilities)
+}
+
+// The command's name is written once more, in `frontend/ipc/export.ts`.
+/// What each of `paths` is exported as under `naming`: its name, the destination asked for, the format written and
+/// its extension, in the order asked.
+///
+/// The rows show this, and Save reads each file's format from it, so what the window shows is what [`export`] asks
+/// for: both compose it through `opai::export` from the same path and naming.
+///
+/// Takes paths rather than identities: it is pure, opening and revealing nothing, so there is nothing to vet. Nothing
+/// here can fail.
+#[tauri::command]
+pub(crate) fn export_names(paths: Vec<String>, naming: ExportNaming, traceparent: Traceparent) -> Vec<ExportName> {
+    traced_sync(command_span!("export_names", traceparent), || names::names(paths, &naming))
 }
 
 // The command's name is written once more, in `frontend/ipc/export.ts`.

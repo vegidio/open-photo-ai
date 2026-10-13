@@ -1,7 +1,9 @@
-//! Where an export is written, and the name it is written under when the one asked for is taken.
+//! Holding the name an export is written under, and the name it is written under when the one asked for is taken.
 //!
 //! [`claim`] answers a [`Claim`]: a path this export alone may write to, held until the export either commits it or
-//! gives it up. See design.md D4.
+//! gives it up.
+//!
+//! **Blocking**: it creates files. A front end with an async runtime to protect calls it on a blocking thread.
 
 use std::fs::OpenOptions;
 use std::io;
@@ -15,10 +17,9 @@ const LAST_NUMBER: u32 = 999;
 ///
 /// **Gives the name back when dropped, unless [`commit`](Self::commit) succeeded.** Every way out of an export after
 /// the claim — a failed write, a stop, a panic — therefore leaves nothing at the name, and leaves a file an overwrite
-/// would have replaced exactly as it was. The same shape a [`Registration`](crate::stops::Registration) takes for the
-/// table of stops.
+/// would have replaced exactly as it was.
 #[derive(Debug)]
-pub(crate) struct Claim {
+pub struct Claim {
     /// Where the export ends up: the destination asked for, or the first free numbered name beside it.
     destination: PathBuf,
     /// The empty file this claim created to hold its place, and the one the export is written into. `destination`
@@ -30,7 +31,7 @@ pub(crate) struct Claim {
 
 impl Claim {
     /// The path to write to.
-    pub(crate) fn path(&self) -> &Path {
+    pub fn path(&self) -> &Path {
         &self.placeholder
     }
 
@@ -43,7 +44,7 @@ impl Claim {
     ///
     /// The filesystem's own, if the rename is refused. The destination is then left as it was, and the written file
     /// is removed.
-    pub(crate) fn commit(mut self) -> io::Result<PathBuf> {
+    pub fn commit(mut self) -> io::Result<PathBuf> {
         if self.placeholder != self.destination {
             // A file the user replaces should not change who may read it. Nothing there yet: the placeholder's own.
             if let Ok(replaced) = std::fs::metadata(&self.destination) {
@@ -89,7 +90,7 @@ impl Drop for Claim {
 ///   that does not exist, or one this application may not write to. Probing a thousand names would not change it.
 /// - [`io::ErrorKind::AlreadyExists`], naming the destination, when every name up to `_999` is taken. Nothing is
 ///   replaced: overwriting is only ever the user's choice.
-pub(crate) fn claim(requested: &Path, overwrite: bool) -> io::Result<Claim> {
+pub fn claim(requested: &Path, overwrite: bool) -> io::Result<Claim> {
     if overwrite {
         let placeholder = create_first_free((1..=LAST_NUMBER).map(|n| hidden(requested, n)))?.ok_or_else(|| {
             io::Error::new(

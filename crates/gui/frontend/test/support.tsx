@@ -5,7 +5,7 @@ import { vi } from "vitest";
 import { SettingsDraftProvider, useDraftState } from "@/features/settings/draft";
 import type { Family, FamilyEntry, Precision, VariantEntry } from "@/ipc/catalogue";
 import type { CropInfo } from "@/ipc/crop";
-import type { ExportFormats } from "@/ipc/export";
+import type { ExportFormats, ExportName, ExportNaming } from "@/ipc/export";
 import type { ImageRecord } from "@/ipc/images";
 import type { SetupError, SetupEvent, SupportedProviders } from "@/ipc/setup";
 import { applyOrder } from "@/lib/enhancements";
@@ -274,7 +274,7 @@ export const CATALOGUE: FamilyEntry[] = [
 ];
 
 /**
- * What `export_formats` answers, as `crates/gui/src/export/format.rs` builds it: every format, what it is written
+ * What `export_formats` answers, as `opai::export::capabilities` builds it: every format, what it is written
  * with, the source extensions a Preserve export writes back as it, and the quality the four lossy ones take.
  */
 export const EXPORT_FORMATS: ExportFormats = {
@@ -290,6 +290,30 @@ export const EXPORT_FORMATS: ExportFormats = {
     ],
     fallback: "tiff",
 };
+
+/**
+ * What `export_names` answers, for the tests that draw or run a queue: `opai::export::destination_for`'s rule, restated
+ * over {@link EXPORT_FORMATS} for these fixtures alone - a test double, never a second implementation the window
+ * reads. The rule itself is pinned by `opai`'s own tests.
+ */
+export const answerExportNames = async (paths: readonly string[], naming: ExportNaming): Promise<ExportName[]> =>
+    paths.map((path) => {
+        const slash = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+        const file = path.slice(slash + 1);
+        const dot = file.lastIndexOf(".");
+        const stem = dot > 0 ? file.slice(0, dot) : file;
+        const own = dot > 0 ? file.slice(dot + 1).toLowerCase() : "";
+        const preserved = EXPORT_FORMATS.formats.find((capability) => capability.preserves.includes(own));
+        const format = naming.format !== "preserve" ? naming.format : (preserved?.format ?? EXPORT_FORMATS.fallback);
+        const extension =
+            naming.format === "preserve" && preserved
+                ? own
+                : (EXPORT_FORMATS.formats.find((capability) => capability.format === format)?.extension ?? format);
+        const name = `${naming.prefix}${stem}${naming.suffix}.${extension}`;
+        const folder = naming.location ?? path.slice(0, Math.max(slash, 0));
+
+        return { path, name, destination: `${folder}/${name}`, format, extension };
+    });
 
 /** What each lossy format in {@link EXPORT_FORMATS} starts at, by format - the quality a user never moved. */
 export const PUBLISHED_QUALITY = Object.fromEntries(

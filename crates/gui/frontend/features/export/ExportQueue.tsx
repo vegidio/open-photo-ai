@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExportRow } from "@/features/export/ExportRow";
+import type { ExportNames } from "@/features/export/useExportNames";
 import { useExportBatchStore } from "@/stores/exportBatch";
 
 /** The keys that scroll a list, which stop it following as a wheel does. */
@@ -10,12 +11,13 @@ const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home
  * The queue: one row per photograph picked when the dialog opened, in the order they are exported.
  *
  * The order is the batch store's snapshot, grouped so photographs needing the same models are next to each other,
- * which the header says. It does not change while the dialog is open.
+ * which the header says. It does not change while the dialog is open. `names` is what each is exported as, as Rust
+ * answers it - see `useExportNames`.
  *
  * **It follows the row being worked on** until the user scrolls it by hand - a wheel, a touch, a grab of the scrollbar
  * or a scroll key - and then leaves the list where they put it until the next run starts.
  */
-export const ExportQueue = () => {
+export const ExportQueue = ({ names }: { names: ExportNames | undefined }) => {
     const { t } = useTranslation();
     const queue = useExportBatchStore((state) => state.queue);
     const running = useExportBatchStore((state) => state.phase === "running");
@@ -59,7 +61,7 @@ export const ExportQueue = () => {
             {/* Scrolled rather than clipped as the mockup's four rows are: a batch can be forty photographs. */}
             <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto scrollbar-thin">
                 {queue.map((path) => (
-                    <ExportRow key={path} path={path} follow={following} />
+                    <ExportRow key={path} path={path} name={names?.byPath.get(path)} follow={following} />
                 ))}
             </div>
         </div>

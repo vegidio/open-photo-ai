@@ -7,7 +7,7 @@
 //! writes it onto each of them from there. See `crate::command`.
 
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use opai::{
     CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, Face, FacedChain, Faces,
@@ -221,6 +221,13 @@ pub(crate) struct Judged<'a> {
     operations: Vec<opai::Operation>,
     /// Where the source is on disk.
     path: PathBuf,
+}
+
+impl Judged<'_> {
+    /// Where the source is on disk: what an export's name is composed from.
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 /// Judges the whole of `requested` and resolves `source`: the refusals a canvas run and an export make before anything

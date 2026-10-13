@@ -1,20 +1,22 @@
-//! The format an export is written in, what each format can do, and the encoder settings the window's quality
-//! becomes.
+//! The format an export is written in, what each format can do, and the encoder settings a quality becomes.
 //!
-//! One place for all three, so the window's words for the formats, which of them take a quality, what each is named
-//! on disk and which source a Preserve export writes back as itself are decided once — and published to the window
-//! through [`export_formats`](super::export_formats) rather than restated there. See design.md D5.
+//! One place for all three, so the formats' names, which of them take a quality, what each is named on disk and which
+//! source a Preserve export writes back as itself are decided once, and every front end reads them from here.
 
-use opai::{EncodeOptions, ImageFormat};
-use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 
-/// The format the window asks for, spelled as it spells it.
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::image::{EncodeOptions, ImageFormat};
+
+/// A format an export is written in, spelled as the front ends spell it.
 ///
-/// Which of them take a quality, and the rest of what the window needs to know about each, is [`capabilities`].
-/// `heic` is the window's word for what the library calls HEIF.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+/// Which of them take a quality, and the rest of what a front end needs to know about each, is [`capabilities`].
+/// `heic` is the front ends' word for what the library calls HEIF.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum ExportFormat {
+pub enum ExportFormat {
     /// Windows Bitmap.
     Bmp,
     /// GIF.
@@ -33,6 +35,43 @@ pub(crate) enum ExportFormat {
     Webp,
 }
 
+impl ExportFormat {
+    /// Every format, in the order [`capabilities`] publishes them: alphabetical by name.
+    pub const ALL: [Self; 8] =
+        [Self::Avif, Self::Bmp, Self::Gif, Self::Heic, Self::Jpeg, Self::Png, Self::Tiff, Self::Webp];
+
+    /// The format's name as the front ends spell it, which is also how it is serialized and parsed.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Bmp => "bmp",
+            Self::Gif => "gif",
+            Self::Jpeg => "jpeg",
+            Self::Png => "png",
+            Self::Tiff => "tiff",
+            Self::Avif => "avif",
+            Self::Heic => "heic",
+            Self::Webp => "webp",
+        }
+    }
+
+    /// The extension a file is given when this format is chosen: `jpg` for JPEG, the format's own name for the rest —
+    /// what the reference's `jpg` value wrote, and what a user expects to see.
+    pub const fn extension(self) -> &'static str {
+        match self {
+            Self::Jpeg => "jpg",
+            other => other.name(),
+        }
+    }
+
+    /// The format a Preserve export writes a source with `extension` back as, keeping that extension, or `None` where
+    /// no format does. `extension` is compared as given, so the caller lowercases it.
+    pub(crate) fn preserving(extension: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|format| crate::image::extensions_of((*format).into()).contains(&extension))
+    }
+}
+
 impl From<ExportFormat> for ImageFormat {
     fn from(format: ExportFormat) -> Self {
         match format {
@@ -48,100 +87,170 @@ impl From<ExportFormat> for ImageFormat {
     }
 }
 
-/// What a lossy format's quality may be, and what it is written at where the window names none.
+impl fmt::Display for ExportFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl FromStr for ExportFormat {
+    type Err = UnknownFormat;
+
+    /// Reads exactly the spelling [`name`](Self::name) gives: `jpg` and `heif` are extensions, not names.
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|format| format.name() == name)
+            .ok_or_else(|| UnknownFormat(name.to_owned()))
+    }
+}
+
+/// A word that names neither a format nor Preserve.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("`{0}` is not a format an export can be written in")]
+pub struct UnknownFormat(pub String);
+
+/// The format a user picks for an export: one format for every file, or each source's own where it can be written.
+///
+/// Spelled as one lowercase word — `preserve`, or an [`ExportFormat`]'s [`name`](ExportFormat::name) — by
+/// [`Display`](fmt::Display), [`FromStr`] and serde alike, so what a front end stores is what crosses its wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FormatChoice {
+    /// The source's own format where one writes it back, and TIFF for the rest — camera RAW, and a file with no
+    /// extension — because TIFF holds everything a RAW source decodes to, depth included. The reference's own
+    /// fallback.
+    Preserve,
+    /// This format, whatever the source.
+    Format(ExportFormat),
+}
+
+impl FormatChoice {
+    /// What a Preserve export writes a source no format writes back as itself.
+    pub const FALLBACK: ExportFormat = ExportFormat::Tiff;
+}
+
+impl From<ExportFormat> for FormatChoice {
+    fn from(format: ExportFormat) -> Self {
+        Self::Format(format)
+    }
+}
+
+impl fmt::Display for FormatChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Preserve => f.write_str("preserve"),
+            Self::Format(format) => format.fmt(f),
+        }
+    }
+}
+
+impl FromStr for FormatChoice {
+    type Err = UnknownFormat;
+
+    fn from_str(word: &str) -> Result<Self, Self::Err> {
+        match word {
+            "preserve" => Ok(Self::Preserve),
+            name => name.parse().map(Self::Format),
+        }
+    }
+}
+
+impl Serialize for FormatChoice {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+impl<'de> Deserialize<'de> for FormatChoice {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+/// What a lossy format's quality may be, and what it is written at where none is named.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub(crate) struct QualityRange {
+pub struct QualityRange {
     /// The lowest quality accepted.
-    pub(crate) min: u8,
+    pub min: u8,
     /// The highest quality accepted.
-    pub(crate) max: u8,
+    pub max: u8,
     /// What the format is written at before a user moves a slider.
     ///
     /// **Per format, deliberately**: the scales are not comparable across encoders — 60 in libheif is a very
     /// different picture to 60 in libjpeg — and these are exactly what the reference's `utils.EncodeImage` hardcodes,
     /// so a user who never moves a slider gets the output the reference produces.
-    pub(crate) default: u8,
+    pub default: u8,
 }
 
-/// What one format can do, as the window is told it.
+/// What one format can do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct FormatCapability {
-    /// The format, as the window names it.
-    pub(crate) format: ExportFormat,
-    /// The extension a file written in it is given when it is chosen: `jpg` for JPEG, the format's own name for the
-    /// rest — what the reference's `jpg` value wrote, and what a user expects to see.
-    pub(crate) extension: &'static str,
+pub struct FormatCapability {
+    /// The format.
+    pub format: ExportFormat,
+    /// The extension a file written in it is given when it is chosen: [`ExportFormat::extension`].
+    pub extension: &'static str,
     /// The source extensions a Preserve export writes back **as this format**, keeping the source's own extension.
     /// The aliases collapse here, as the reference's `IMAGE_FORMAT_BY_EXT` collapses them: `jpg` and `jpeg` are one
     /// format, as are `heic` and `heif`.
-    pub(crate) preserves: &'static [&'static str],
+    pub preserves: &'static [&'static str],
     /// The quality it takes, or `None` for a lossless format, whose encoder ignores one.
-    pub(crate) quality: Option<QualityRange>,
+    pub quality: Option<QualityRange>,
 }
 
 /// Every format an export can be written in, what each can do, and what a Preserve export writes a source none of
 /// them can write back as itself.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ExportFormats {
-    /// Every format, in the order the window's chooser offers them: alphabetical by name.
-    pub(crate) formats: Vec<FormatCapability>,
-    /// What a source no format writes back as itself — a camera RAW file — is written as under Preserve: TIFF,
-    /// because it holds everything a RAW source decodes to, depth included, which is the reference's own fallback.
-    pub(crate) fallback: ExportFormat,
+pub struct ExportFormats {
+    /// Every format, in the order a chooser offers them: alphabetical by name.
+    pub formats: Vec<FormatCapability>,
+    /// What a source no format writes back as itself is written as under Preserve: [`FormatChoice::FALLBACK`].
+    pub fallback: ExportFormat,
 }
 
-/// The quality `format` is written at where the window names none, or `None` for a format that takes none: the
-/// library's [`opai::image::default_quality`], which every front end writes with.
+/// The quality `format` is written at where none is named, or `None` for a format that takes none: the library's
+/// [`crate::image::default_quality`], which every front end writes with.
 fn default_quality(format: ExportFormat) -> Option<u8> {
-    opai::image::default_quality(format.into())
+    crate::image::default_quality(format.into())
 }
 
 /// The quality range `format` takes, starting at its [`default_quality`], or `None` for a lossless format.
 fn quality_range(format: ExportFormat) -> Option<QualityRange> {
     default_quality(format).map(|default| QualityRange {
-        min: opai::image::MIN_QUALITY,
-        max: opai::image::MAX_QUALITY,
+        min: crate::image::MIN_QUALITY,
+        max: crate::image::MAX_QUALITY,
         default,
     })
 }
 
-/// What every format can do: the one table the window's format rules are read from.
+/// What every format can do: the one table a front end's format rules are read from.
 ///
 /// What a Preserve export writes back as each format is the library's own list of the extensions it is written under
-/// — see [`opai::image::extensions_of`] — so the aliases this reads are the ones a picker offered.
-pub(crate) fn capabilities() -> ExportFormats {
-    let capability = |format: ExportFormat, extension| FormatCapability {
-        format,
-        extension,
-        preserves: opai::image::extensions_of(format.into()),
-        quality: quality_range(format),
-    };
-
+/// — see [`crate::image::extensions_of`] — so the aliases this reads are the ones a picker offered.
+pub fn capabilities() -> ExportFormats {
     ExportFormats {
-        formats: vec![
-            capability(ExportFormat::Avif, "avif"),
-            capability(ExportFormat::Bmp, "bmp"),
-            capability(ExportFormat::Gif, "gif"),
-            capability(ExportFormat::Heic, "heic"),
-            capability(ExportFormat::Jpeg, "jpg"),
-            capability(ExportFormat::Png, "png"),
-            capability(ExportFormat::Tiff, "tiff"),
-            capability(ExportFormat::Webp, "webp"),
-        ],
-        fallback: ExportFormat::Tiff,
+        formats: ExportFormat::ALL
+            .into_iter()
+            .map(|format| FormatCapability {
+                format,
+                extension: format.extension(),
+                preserves: crate::image::extensions_of(format.into()),
+                quality: quality_range(format),
+            })
+            .collect(),
+        fallback: FormatChoice::FALLBACK,
     }
 }
 
 /// The encoder settings for `format` at `quality`: the library's
-/// [`recommended_encode_options`](opai::image::recommended_encode_options), so an export writes each format exactly as
-/// every other front end does.
+/// [`recommended_encode_options`](crate::image::recommended_encode_options), so an export writes each format exactly
+/// as every other front end does.
 ///
 /// A lossy format sent no quality is written at its published default. A quality outside `1..=100` is brought inside
 /// it rather than refused.
-pub(crate) fn encode_options(format: ExportFormat, quality: Option<f64>) -> EncodeOptions {
-    opai::image::recommended_encode_options(format.into(), quality)
+pub fn encode_options(format: ExportFormat, quality: Option<f64>) -> EncodeOptions {
+    crate::image::recommended_encode_options(format.into(), quality)
 }
 
 #[cfg(test)]
@@ -307,5 +416,42 @@ mod tests {
             json["formats"][6],
             serde_json::json!({ "format": "tiff", "extension": "tiff", "preserves": ["tiff", "tif"], "quality": null })
         );
+    }
+
+    #[test]
+    fn every_format_choice_round_trips_through_its_one_spelling() {
+        let choices = std::iter::once(FormatChoice::Preserve).chain(ExportFormat::ALL.map(FormatChoice::Format));
+        let spelled = ["preserve", "avif", "bmp", "gif", "heic", "jpeg", "png", "tiff", "webp"];
+
+        for (choice, spelling) in choices.zip(spelled) {
+            assert_eq!(choice.to_string(), spelling);
+            assert_eq!(spelling.parse::<FormatChoice>(), Ok(choice));
+            assert_eq!(serde_json::to_value(choice).expect("serializes"), serde_json::json!(spelling));
+            assert_eq!(serde_json::from_value::<FormatChoice>(serde_json::json!(spelling)).expect("reads"), choice);
+        }
+    }
+
+    #[test]
+    fn an_extension_or_an_unknown_word_is_not_a_format_choice() {
+        for word in ["heif", "jpg", "tif", "raw", "", "JPEG", "Preserve"] {
+            assert_eq!(word.parse::<FormatChoice>(), Err(UnknownFormat(word.to_owned())), "`{word}`");
+            assert!(serde_json::from_value::<FormatChoice>(serde_json::json!(word)).is_err(), "`{word}`");
+        }
+    }
+
+    #[test]
+    fn preserve_writes_back_every_alias_of_a_format_and_nothing_else() {
+        for (extension, format) in [
+            ("jpg", Some(ExportFormat::Jpeg)),
+            ("jpeg", Some(ExportFormat::Jpeg)),
+            ("heif", Some(ExportFormat::Heic)),
+            ("heic", Some(ExportFormat::Heic)),
+            ("tif", Some(ExportFormat::Tiff)),
+            ("webp", Some(ExportFormat::Webp)),
+            ("nef", None),
+            ("", None),
+        ] {
+            assert_eq!(ExportFormat::preserving(extension), format, "`{extension}`");
+        }
     }
 }

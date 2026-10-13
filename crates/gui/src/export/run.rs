@@ -7,14 +7,13 @@
 //! it onto each of them from there. A destination that cannot be claimed or committed is not recorded here either; the
 //! command wrapper records it, once. See `crate::command`.
 
-use std::path::PathBuf;
-
 use opai::{Enhanced, InferenceError, OutputDepth, ProcessOptions};
 use serde::Serialize;
 
+use opai::export::{Named, claim, encode_options};
+
 use super::Exports;
-use super::destination;
-use super::format::{ExportFormat, encode_options};
+use super::names::ExportNaming;
 use super::progress::ExportReporting;
 use crate::command::{Answer, CommandError, Ended};
 use crate::enhance::{EnhanceError, Enhancer, Prepared, Processor, Requested, judge_chain, prepare_chain};
@@ -112,14 +111,13 @@ pub(crate) struct Request {
     pub(crate) processor: Processor,
     /// How the image is framed, or `None` to export the whole photograph.
     pub(crate) crop: Option<Crop>,
-    /// Where to write. Its name does not decide the format; `format` does.
-    pub(crate) destination: PathBuf,
-    /// What to write.
-    pub(crate) format: ExportFormat,
+    /// What the file is called, where it goes and what it is written as, worked out from the source's own path once
+    /// it is resolved.
+    pub(crate) naming: ExportNaming,
     /// The quality, for the formats that take one, or `None` — which a lossless format always is, and a lossy one is
     /// written at its published default for. Brought inside `1..=100` rather than refused.
     pub(crate) quality: Option<f64>,
-    /// Whether a file already at `destination` may be replaced. Without it, a numbered name is written instead.
+    /// Whether a file already at the destination may be replaced. Without it, a numbered name is written instead.
     pub(crate) overwrite: bool,
 }
 
@@ -136,7 +134,7 @@ pub(crate) struct Request {
 ///      `enhancing`
 ///   6. release the held-back report; stopped?  --> `stopped`. The last point a stop takes effect.
 ///   7. report `writing`
-///   8. claim the destination       --> refused: unwritable, naming it
+///   8. name and claim the destination  --> refused: unwritable, naming it
 ///   9. write                       --> refused: unwritable; the claim gives the name back
 ///  10. commit the claim             --> refused: unwritable; an overwrite's destination left as it was
 ///  11. answer its path and bytes
@@ -162,6 +160,8 @@ pub(crate) async fn export_with<E: Enhancer>(
     request: Request,
 ) -> Result<Exported, ExportError> {
     let judged = judge_chain(opened, &request.source, &request.operations)?;
+    // The destination is composed from this at step 8, by the rule the window's rows were named by.
+    let source_path = judged.path().to_path_buf();
 
     let Some(registration) = exports.register(&request.run) else {
         tracing::debug!("an export was stopped before it started");
@@ -231,21 +231,23 @@ pub(crate) async fn export_with<E: Enhancer>(
         reporting.writing();
     }
 
+    let (destination, Named { format, .. }) = request.naming.destination_for(&source_path);
+
     // Claiming and committing the destination are this application's own failures, which the command wrapper records;
     // the save between them is `opai`'s, which records it itself. See `ExportError::ended`.
-    let path = || request.destination.display().to_string();
+    let path = || destination.display().to_string();
     let unwritten = |message: String| ExportError::Write { path: path(), message };
     let unwritable = |message: String| ExportError::Unwritable { path: path(), message };
 
     // Off the runtime's own threads: up to a thousand exclusive creates, on whatever drive the user chose.
-    let requested = request.destination.clone();
-    let claim = crate::task::spawn_blocking(move || destination::claim(&requested, request.overwrite))
+    let requested = destination.clone();
+    let claim = crate::task::spawn_blocking(move || claim(&requested, request.overwrite))
         .await
         .expect("claiming a name cannot panic, and nothing cancels its thread")
         .map_err(|error| unwritable(error.to_string()))?;
 
-    let options = encode_options(request.format, request.quality);
-    let bytes = opai::image::save(picture.shared_pixels(), claim.path(), request.format.into(), Some(options))
+    let options = encode_options(format, request.quality);
+    let bytes = opai::image::save(picture.shared_pixels(), claim.path(), format.into(), Some(options))
         .await
         .map_err(|error| unwritten(error.to_string()))?;
 
@@ -259,9 +261,10 @@ pub(crate) async fn export_with<E: Enhancer>(
 #[cfg(test)]
 mod tests {
     use std::future::Future;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
 
+    use opai::export::{ExportFormat, FormatChoice};
     use opai::{ExecuteOptions, ExecutionProvider, Opai, Picture, Precision};
 
     use super::*;
@@ -388,17 +391,21 @@ mod tests {
             }
         }
 
-        /// A request to export the fixture through `operations` to `name` in the output directory, as PNG, without
-        /// overwriting.
-        fn request(&self, run: &str, operations: Vec<Requested>, name: &str) -> Request {
+        /// A request to export the fixture through `operations` into the output directory as PNG, its name ending in
+        /// `suffix` — `holiday{suffix}.png` — without overwriting.
+        fn request(&self, run: &str, operations: Vec<Requested>, suffix: &str) -> Request {
             Request {
                 run: run.to_string(),
                 source: self.identity.clone(),
                 operations,
                 processor: Processor(opai::ExecutionProvider::CoreMl),
                 crop: None,
-                destination: self.out.path().join(name),
-                format: ExportFormat::Png,
+                naming: ExportNaming {
+                    prefix: String::new(),
+                    suffix: suffix.to_string(),
+                    location: Some(self.out.path().to_path_buf()),
+                    format: ExportFormat::Png.into(),
+                },
                 quality: Some(90.0),
                 overwrite: false,
             }
@@ -424,6 +431,16 @@ mod tests {
 
             names
         }
+    }
+
+    /// `request`, written as `format` instead.
+    fn written_as(format: impl Into<FormatChoice>, request: Request) -> Request {
+        Request { naming: ExportNaming { format: format.into(), ..request.naming }, ..request }
+    }
+
+    /// `request`, written into `folder` instead.
+    fn written_into(folder: &Path, request: Request) -> Request {
+        Request { naming: ExportNaming { location: Some(folder.to_path_buf()), ..request.naming }, ..request }
     }
 
     /// `pixels` written to `path` as `format` and admitted beside the fixture's photograph, answering its identity.
@@ -453,10 +470,10 @@ mod tests {
         let enhancer = Recording::default();
 
         let answer = fixture
-            .export(&enhancer, None, fixture.request("export-1", vec![kyoto()], "photo-opai.png"))
+            .export(&enhancer, None, fixture.request("export-1", vec![kyoto()], "-opai"))
             .expect("an admitted source and a published chain export");
 
-        let destination = fixture.out.path().join("photo-opai.png");
+        let destination = fixture.out.path().join("holiday-opai.png");
         assert_eq!(
             answer,
             Exported::Exported {
@@ -477,27 +494,45 @@ mod tests {
             .export(
                 &Recording::default(),
                 None,
-                Request { crop: Some(crop), ..fixture.request("export-1", Vec::new(), "photo-opai.png") },
+                Request { crop: Some(crop), ..fixture.request("export-1", Vec::new(), "-opai") },
             )
             .expect("an empty chain is a request, not a mistake");
 
-        assert_eq!(decoded(fixture.out.path().join("photo-opai.png")).0, (4, 3), "the framing was not applied");
+        assert_eq!(decoded(fixture.out.path().join("holiday-opai.png")).0, (4, 3), "the framing was not applied");
     }
 
     #[test]
-    fn the_format_decides_the_bytes_whatever_the_name_ends_in() {
+    fn the_format_chosen_decides_the_bytes_and_the_extension() {
         let fixture = Fixture::new();
 
         fixture
             .export(
                 &Recording::default(),
                 None,
-                Request { format: ExportFormat::Jpeg, ..fixture.request("export-1", Vec::new(), "photo-opai.png") },
+                written_as(ExportFormat::Jpeg, fixture.request("export-1", Vec::new(), "-opai")),
             )
             .expect("exportable");
 
-        let bytes = std::fs::read(fixture.out.path().join("photo-opai.png")).expect("written");
-        assert_eq!(&bytes[..3], [0xFF, 0xD8, 0xFF], "a JPEG export named .png was not written as JPEG");
+        assert_eq!(fixture.written(), ["holiday-opai.jpg"]);
+        let bytes = std::fs::read(fixture.out.path().join("holiday-opai.jpg")).expect("written");
+        assert_eq!(&bytes[..3], [0xFF, 0xD8, 0xFF], "a JPEG export was not written as JPEG");
+    }
+
+    #[test]
+    fn preserve_writes_the_source_back_in_its_own_format() {
+        let fixture = Fixture::new();
+
+        fixture
+            .export(
+                &Recording::default(),
+                None,
+                written_as(FormatChoice::Preserve, fixture.request("export-1", Vec::new(), "-opai")),
+            )
+            .expect("exportable");
+
+        assert_eq!(fixture.written(), ["holiday-opai.png"]);
+        let bytes = std::fs::read(fixture.out.path().join("holiday-opai.png")).expect("written");
+        assert_eq!(&bytes[..4], b"\x89PNG", "a Preserve export of a PNG was not written as PNG");
     }
 
     #[test]
@@ -517,7 +552,10 @@ mod tests {
                 .export(
                     &Recording::default(),
                     None,
-                    Request { source: identity.clone(), format, ..fixture.request("export-1", Vec::new(), name) },
+                    Request {
+                        source: identity.clone(),
+                        ..written_as(format, fixture.request("export-1", Vec::new(), "-opai"))
+                    },
                 )
                 .expect("exportable");
 
@@ -540,8 +578,7 @@ mod tests {
                 None,
                 Request {
                     source: identity,
-                    format: ExportFormat::Webp,
-                    ..fixture.request("export-1", Vec::new(), "holiday-opai.webp")
+                    ..written_as(ExportFormat::Webp, fixture.request("export-1", Vec::new(), "-opai"))
                 },
             )
             .expect("an empty chain is a request, not a mistake");
@@ -564,20 +601,20 @@ mod tests {
         let identity = admit(&fixture, &textured, &pixels, opai::ImageFormat::Png);
 
         let size = |format: ExportFormat, quality: f64, name: &str| {
+            let suffix = format!("-{}", name.split('.').next().expect("a name"));
             fixture
                 .export(
                     &Recording::default(),
                     None,
                     Request {
                         source: identity.clone(),
-                        format,
                         quality: Some(quality),
-                        ..fixture.request("export-1", Vec::new(), name)
+                        ..written_as(format, fixture.request("export-1", Vec::new(), &suffix))
                     },
                 )
                 .expect("exportable");
 
-            let written = fixture.out.path().join(name);
+            let written = fixture.out.path().join(format!("textured{suffix}.{}", format.extension()));
             assert_eq!(decoded(&written).0, (128, 96), "{name}");
 
             std::fs::metadata(written).expect("written").len()
@@ -597,13 +634,13 @@ mod tests {
     #[test]
     fn a_taken_destination_is_numbered_and_the_answer_names_what_was_written() {
         let fixture = Fixture::new();
-        std::fs::write(fixture.out.path().join("photo-opai.png"), b"an earlier export").expect("writable");
+        std::fs::write(fixture.out.path().join("holiday-opai.png"), b"an earlier export").expect("writable");
 
         let answer = fixture
-            .export(&Recording::default(), None, fixture.request("export-1", vec![kyoto()], "photo-opai.png"))
+            .export(&Recording::default(), None, fixture.request("export-1", vec![kyoto()], "-opai"))
             .expect("exportable");
 
-        let numbered = fixture.out.path().join("photo-opai_1.png");
+        let numbered = fixture.out.path().join("holiday-opai_1.png");
         assert_eq!(
             answer,
             Exported::Exported {
@@ -612,7 +649,7 @@ mod tests {
             }
         );
         assert_eq!(
-            std::fs::read(fixture.out.path().join("photo-opai.png")).expect("readable"),
+            std::fs::read(fixture.out.path().join("holiday-opai.png")).expect("readable"),
             b"an earlier export"
         );
     }
@@ -620,18 +657,18 @@ mod tests {
     #[test]
     fn overwriting_replaces_the_destination_and_numbers_nothing() {
         let fixture = Fixture::new();
-        std::fs::write(fixture.out.path().join("photo-opai.png"), b"an earlier export").expect("writable");
+        std::fs::write(fixture.out.path().join("holiday-opai.png"), b"an earlier export").expect("writable");
 
         fixture
             .export(
                 &Recording::default(),
                 None,
-                Request { overwrite: true, ..fixture.request("export-1", vec![kyoto()], "photo-opai.png") },
+                Request { overwrite: true, ..fixture.request("export-1", vec![kyoto()], "-opai") },
             )
             .expect("exportable");
 
-        assert_eq!(fixture.written(), ["photo-opai.png"]);
-        assert_eq!(decoded(fixture.out.path().join("photo-opai.png")).0, (16, 12), "the earlier export was kept");
+        assert_eq!(fixture.written(), ["holiday-opai.png"]);
+        assert_eq!(decoded(fixture.out.path().join("holiday-opai.png")).0, (16, 12), "the earlier export was kept");
     }
 
     // ── What is reported ──────────────────────────────────────────────────────────────────────────────────────────
@@ -642,7 +679,7 @@ mod tests {
         let (reporting, sent) = collecting("export-1");
 
         fixture
-            .export(&Recording::default(), Some(reporting), fixture.request("export-1", vec![kyoto()], "a.png"))
+            .export(&Recording::default(), Some(reporting), fixture.request("export-1", vec![kyoto()], "-a"))
             .expect("exportable");
 
         let sent = sent.lock().expect("unpoisoned");
@@ -669,7 +706,7 @@ mod tests {
         let (reporting, sent) = collecting("export-1");
 
         fixture
-            .export(&Recording::default(), Some(reporting), fixture.request("export-1", Vec::new(), "a.png"))
+            .export(&Recording::default(), Some(reporting), fixture.request("export-1", Vec::new(), "-a"))
             .expect("exportable");
 
         assert_eq!(*sent.lock().expect("unpoisoned"), [ExportProgress::Writing { run: "export-1".to_string() }]);
@@ -686,10 +723,7 @@ mod tests {
             .export(
                 &enhancer,
                 None,
-                Request {
-                    source: "0123456789abcdef".to_string(),
-                    ..fixture.request("export-1", vec![kyoto()], "a.png")
-                },
+                Request { source: "0123456789abcdef".to_string(), ..fixture.request("export-1", vec![kyoto()], "-a") },
             )
             .expect_err("an unopened identity is not exportable");
 
@@ -731,7 +765,7 @@ mod tests {
         let recovery = Requested::named(opai::Family::FaceRecovery, "santorini", Precision::Fp32, &[]);
 
         let answer = fixture
-            .export(&StoppedWhileDetecting, None, fixture.request("export-1", vec![recovery], "a.png"))
+            .export(&StoppedWhileDetecting, None, fixture.request("export-1", vec![recovery], "-a"))
             .expect("a stop is not a failure");
 
         assert_eq!(answer, Exported::Stopped);
@@ -745,7 +779,7 @@ mod tests {
             vec![kyoto(), Requested::named(opai::Family::Upscale, "berlin", Precision::Fp32, &[("scale", 2.0)])];
 
         let refused = fixture
-            .export(&enhancer, None, fixture.request("export-1", chain, "a.png"))
+            .export(&enhancer, None, fixture.request("export-1", chain, "-a"))
             .expect_err("a chain naming an unpublished model is refused");
 
         assert!(
@@ -763,7 +797,7 @@ mod tests {
         std::fs::remove_file(fixture.source.path().join("holiday.png")).expect("the fixture exists");
 
         let refused = fixture
-            .export(&Recording::default(), None, fixture.request("export-1", vec![kyoto()], "a.png"))
+            .export(&Recording::default(), None, fixture.request("export-1", vec![kyoto()], "-a"))
             .expect_err("a deleted file cannot be exported");
 
         assert!(
@@ -778,7 +812,7 @@ mod tests {
         let fixture = Fixture::new();
 
         let refused = fixture
-            .export(&Failing, None, fixture.request("export-1", vec![kyoto()], "a.png"))
+            .export(&Failing, None, fixture.request("export-1", vec![kyoto()], "-a"))
             .expect_err("this chain fails");
 
         assert_eq!(
@@ -793,13 +827,13 @@ mod tests {
     #[test]
     fn a_destination_that_cannot_be_written_is_refused_naming_it_and_creates_nothing() {
         let fixture = Fixture::new();
-        let destination = fixture.out.path().join("missing").join("photo-opai.png");
+        let destination = fixture.out.path().join("missing").join("holiday.png");
 
         let refused = fixture
             .export(
                 &Recording::default(),
                 None,
-                Request { destination: destination.clone(), ..fixture.request("export-1", vec![kyoto()], "") },
+                written_into(destination.parent().expect("a folder"), fixture.request("export-1", vec![kyoto()], "")),
             )
             .expect_err("nothing can be written into a missing directory");
 
@@ -828,12 +862,12 @@ mod tests {
             return;
         }
 
-        let destination = locked.join("photo-opai.png");
+        let destination = locked.join("holiday.png");
         let refused = fixture
             .export(
                 &Recording::default(),
                 None,
-                Request { destination: destination.clone(), ..fixture.request("export-1", vec![kyoto()], "") },
+                written_into(destination.parent().expect("a folder"), fixture.request("export-1", vec![kyoto()], "")),
             )
             .expect_err("nothing can be written into a read-only directory");
 
@@ -870,11 +904,7 @@ mod tests {
         let fixture = Fixture::new();
 
         let refused = fixture
-            .export(
-                &TooWide,
-                None,
-                Request { format: ExportFormat::Gif, ..fixture.request("export-1", vec![kyoto()], "a.gif") },
-            )
+            .export(&TooWide, None, written_as(ExportFormat::Gif, fixture.request("export-1", vec![kyoto()], "-a")))
             .expect_err("a GIF this wide cannot be encoded");
 
         assert!(matches!(refused, ExportError::Write { .. }), "{refused:?}");
@@ -884,24 +914,23 @@ mod tests {
     #[test]
     fn a_failed_overwrite_leaves_the_file_it_would_have_replaced_as_it_was() {
         let fixture = Fixture::new();
-        std::fs::write(fixture.out.path().join("a.gif"), b"an earlier export").expect("writable");
+        std::fs::write(fixture.out.path().join("holiday-a.gif"), b"an earlier export").expect("writable");
 
         let refused = fixture
             .export(
                 &TooWide,
                 None,
                 Request {
-                    format: ExportFormat::Gif,
                     overwrite: true,
-                    ..fixture.request("export-1", vec![kyoto()], "a.gif")
+                    ..written_as(ExportFormat::Gif, fixture.request("export-1", vec![kyoto()], "-a"))
                 },
             )
             .expect_err("a GIF this wide cannot be encoded");
 
         assert!(matches!(refused, ExportError::Write { .. }), "{refused:?}");
-        assert_eq!(fixture.written(), ["a.gif"], "a failed overwrite left a file beside its destination");
+        assert_eq!(fixture.written(), ["holiday-a.gif"], "a failed overwrite left a file beside its destination");
         assert_eq!(
-            std::fs::read(fixture.out.path().join("a.gif")).expect("readable"),
+            std::fs::read(fixture.out.path().join("holiday-a.gif")).expect("readable"),
             b"an earlier export",
             "a failed overwrite destroyed the file it would have replaced"
         );
@@ -960,7 +989,7 @@ mod tests {
         fixture.exports.stop("export-1");
 
         let answer = fixture
-            .export(&enhancer, None, fixture.request("export-1", vec![kyoto()], "a.png"))
+            .export(&enhancer, None, fixture.request("export-1", vec![kyoto()], "-a"))
             .expect("a stop is not a failure");
 
         assert_eq!(answer, Exported::Stopped);
@@ -988,18 +1017,18 @@ mod tests {
     #[test]
     fn a_stop_during_the_chain_answers_stopped_and_leaves_no_file_at_any_name() {
         let fixture = Fixture::new();
-        std::fs::write(fixture.out.path().join("photo-opai.png"), b"an earlier export").expect("writable");
+        std::fs::write(fixture.out.path().join("holiday-opai.png"), b"an earlier export").expect("writable");
 
         let answer = fixture
             .export(
                 &StoppedWhileWorking(&fixture.exports, "export-1"),
                 None,
-                fixture.request("export-1", vec![kyoto()], "photo-opai.png"),
+                fixture.request("export-1", vec![kyoto()], "-opai"),
             )
             .expect("a stop is not a failure");
 
         assert_eq!(answer, Exported::Stopped);
-        assert_eq!(fixture.written(), ["photo-opai.png"], "a stopped export left a file at some name");
+        assert_eq!(fixture.written(), ["holiday-opai.png"], "a stopped export left a file at some name");
         assert!(fixture.exports.is_idle(), "a stopped export left its token in the table");
     }
 
@@ -1021,7 +1050,7 @@ mod tests {
         let fixture = Fixture::new();
 
         let answer = fixture
-            .export(&ShuttingDown, None, fixture.request("export-1", vec![kyoto()], "a.png"))
+            .export(&ShuttingDown, None, fixture.request("export-1", vec![kyoto()], "-a"))
             .expect("a shutdown is not the export's failure");
 
         assert_eq!(answer, Exported::Stopped);
@@ -1037,7 +1066,7 @@ mod tests {
             .export(
                 &StoppedMidway(&fixture.exports, "export-1", Recording::default()),
                 None,
-                fixture.request("export-1", vec![kyoto()], "a.png"),
+                fixture.request("export-1", vec![kyoto()], "-a"),
             )
             .expect("a stop is not a failure");
 
@@ -1063,12 +1092,12 @@ mod tests {
             &fixture.opened,
             &exports,
             Some(reporting),
-            fixture.request("export-1", vec![kyoto()], "a.png"),
+            fixture.request("export-1", vec![kyoto()], "-a"),
         ))
         .expect("exportable");
 
         assert!(matches!(answer, Exported::Exported { .. }), "a stop during writing was honoured: {answer:?}");
-        assert_eq!(fixture.written(), ["a.png"]);
+        assert_eq!(fixture.written(), ["holiday-a.png"]);
     }
 
     #[test]
@@ -1082,7 +1111,7 @@ mod tests {
         let token = runs.start("enhance-1", "5ec0ffee5ec0ffee");
 
         fixture
-            .export(&Recording::default(), None, fixture.request("export-1", vec![kyoto()], "a.png"))
+            .export(&Recording::default(), None, fixture.request("export-1", vec![kyoto()], "-a"))
             .expect("exportable");
         fixture.exports.stop("export-2");
         fixture.exports.stop("enhance-1");
@@ -1128,7 +1157,7 @@ mod tests {
                 let identity = opai::image::identity(&path).await.expect("a written file has an identity");
                 let (width, height) = opai::image::load(&path).await.expect("decodable").dimensions();
 
-                for (format, name) in [(ExportFormat::Png, "test-opai.png"), (ExportFormat::Jpeg, "test-opai.jpg")] {
+                for format in [ExportFormat::Png, ExportFormat::Jpeg] {
                     let run = format!("export-{processor:?}-{format:?}");
                     let (reporting, sent) = crate::export::progress::collecting(&run);
                     let started = std::time::Instant::now();
@@ -1144,8 +1173,12 @@ mod tests {
                             operations: vec![kyoto()],
                             processor,
                             crop: None,
-                            destination: dir.path().join(format!("{processor:?}-{name}")),
-                            format,
+                            naming: ExportNaming {
+                                prefix: String::new(),
+                                suffix: "-opai".to_string(),
+                                location: None,
+                                format: format.into(),
+                            },
                             quality: Some(90.0),
                             overwrite: false,
                         },
@@ -1268,8 +1301,9 @@ mod tests {
     #[test]
     fn a_destination_that_cannot_be_claimed_is_recorded_once_by_the_wrapper_and_never_as_an_error() {
         let fixture = Fixture::new();
-        let destination = fixture.out.path().join("missing").join("photo-opai.png");
-        let request = Request { destination: destination.clone(), ..fixture.request("export-1", vec![kyoto()], "") };
+        let destination = fixture.out.path().join("missing").join("holiday.png");
+        let request =
+            written_into(destination.parent().expect("a folder"), fixture.request("export-1", vec![kyoto()], ""));
 
         let (recorded, answer) = traced_export(&fixture, &Recording::default(), request);
         assert!(matches!(answer, Err(ExportError::Unwritable { .. })), "{answer:?}");
@@ -1295,7 +1329,7 @@ mod tests {
         std::fs::remove_file(fixture.source.path().join("holiday.png")).expect("the fixture exists");
 
         let (recorded, answer) =
-            traced_export(&fixture, &Recording::default(), fixture.request("export-1", vec![kyoto()], "a.png"));
+            traced_export(&fixture, &Recording::default(), fixture.request("export-1", vec![kyoto()], "-a"));
         assert!(matches!(answer, Err(ExportError::Chain(EnhanceError::UnreadableSource { .. }))), "{answer:?}");
 
         let wrapper: Vec<_> = recorded.events.iter().filter(|event| event.target == crate::command::TARGET).collect();

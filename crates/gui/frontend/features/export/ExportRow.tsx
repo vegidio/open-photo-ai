@@ -5,18 +5,15 @@ import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { showInLabel } from "@/features/files/FileOptionsMenu";
-import { useExportFormats } from "@/hooks/useExportFormats";
 import { framedDimensions } from "@/ipc/crop";
-import { revealExport } from "@/ipc/export";
+import { type ExportName, revealExport } from "@/ipc/export";
 import { renditionFor } from "@/ipc/images";
 import { upscaleFactor } from "@/lib/enhancements";
-import { exportNameFor, extensionFor } from "@/lib/export";
 import { report } from "@/lib/report";
 import { cn, formatBytes, formatDimensions } from "@/lib/utils";
 import { useImageCrop } from "@/stores/crop";
 import { useFileEnhancements } from "@/stores/enhancements";
 import { type Row, useExportBatchStore } from "@/stores/exportBatch";
-import { useExportSettingsStore } from "@/stores/exportSettings";
 import { useFileByPath } from "@/stores/files";
 
 // The design's thumbnail is 48px, drawn at twice that so it stays sharp on a Retina display.
@@ -130,23 +127,27 @@ const RevealButton = ({ path }: { path: string }) => {
  * One queued file: its thumbnail, the name it will be written under, its dimensions before and after, its sizes, its
  * types and its stage.
  *
- * **What it shows is read live** - the name from the export settings, the dimensions from the stack and the framing -
- * so a change while idle is seen at once, and the column being disabled while running keeps the names the ones
- * being written. See design.md D1.
+ * **What it shows is read live** - the dimensions from the stack and the framing, and `name` from what Rust answers
+ * for the export settings (see `useExportNames`) - so a change while idle is seen at once, and the column being
+ * disabled while running keeps the names the ones being written.
  *
  * Only the row being worked on has a bar of its own, and only a written row a way to reveal its file. While `follow`
  * holds, the row being worked on also keeps itself in view.
  */
-export const ExportRow = ({ path, follow = false }: { path: string; follow?: boolean }) => {
+export const ExportRow = ({
+    path,
+    name,
+    follow = false,
+}: {
+    path: string;
+    name?: ExportName | undefined;
+    follow?: boolean;
+}) => {
     const file = useFileByPath(path);
     const row = useExportBatchStore((state) => state.rows.get(path)) ?? QUEUED;
     const current = useExportBatchStore((state) => state.current?.path === path);
     const stack = useFileEnhancements(path);
     const crop = useImageCrop(file?.identity);
-    const prefix = useExportSettingsStore((state) => state.prefix);
-    const suffix = useExportSettingsStore((state) => state.suffix);
-    const format = useExportSettingsStore((state) => state.format);
-    const formats = useExportFormats();
     const rowRef = useRef<HTMLDivElement>(null);
 
     // The row being worked on is kept in view, so a batch longer than the queue's height never runs out of sight.
@@ -155,14 +156,13 @@ export const ExportRow = ({ path, follow = false }: { path: string; follow?: boo
     }, [current, follow]);
 
     // Closing a photograph is not reachable behind the dialog; a record gone anyway has nothing to describe. The
-    // formats' rules are Rust's and arrive once, a moment after the dialog opens; a row waits for them rather than
-    // naming a file by a rule of its own.
-    if (!file || !formats) return;
+    // naming rule is Rust's, and its first answer arrives a moment after the dialog opens; a row waits for it rather
+    // than naming a file by a rule of its own.
+    if (!file || !name) return;
 
-    const name = exportNameFor(file, { prefix, suffix }, format, formats);
     const { width, height } = framedDimensions(file, crop);
     const scale = upscaleFactor(stack);
-    const types = `${file.extension.toUpperCase()} → ${extensionFor(file, format, formats).toUpperCase()}`;
+    const types = `${file.extension.toUpperCase()} → ${name.extension.toUpperCase()}`;
     const fraction = row.stage === "enhancing" ? row.fraction : row.stage === "writing" ? 1 : 0;
 
     return (
@@ -178,7 +178,7 @@ export const ExportRow = ({ path, follow = false }: { path: string; follow?: boo
                 <div className="size-12 flex-none overflow-hidden rounded-sm bg-surface-thumbnail">
                     {file.identity && (
                         <img
-                            alt={name}
+                            alt={name.name}
                             src={renditionFor(file, ROW_THUMBNAIL_BOUND, crop)}
                             className="size-full object-cover"
                         />
@@ -186,7 +186,7 @@ export const ExportRow = ({ path, follow = false }: { path: string; follow?: boo
                 </div>
 
                 <div className="flex min-w-0 flex-1 flex-col gap-0.75">
-                    <span className="truncate text-[13px]">{name}</span>
+                    <span className="truncate text-[13px]">{name.name}</span>
                     <span className="flex items-center gap-2 text-foreground-dim text-xs">
                         {width !== undefined && height !== undefined && (
                             <>
@@ -220,7 +220,7 @@ export const ExportRow = ({ path, follow = false }: { path: string; follow?: boo
             </div>
 
             {current && (
-                <Progress value={fraction * 100} aria-label={name} className="h-0.5 rounded-none bg-secondary" />
+                <Progress value={fraction * 100} aria-label={name.name} className="h-0.5 rounded-none bg-secondary" />
             )}
         </div>
     );
