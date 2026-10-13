@@ -88,6 +88,9 @@ context: |
   the next one. Propose only the current slice's change; the remaining slices are proposed when they
   are reached.
 
+  When proposing a new change, check if the change is part of a series and read all the previous slices
+  in the series to understand the context, dependencies and what was already implemented and agreed upon.
+
   # Stack
 
   - Backend: Rust (edition 2024), Tauri 2.
