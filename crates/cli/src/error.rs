@@ -7,8 +7,11 @@
 //! enhance (clap's own too) |
 //! | `130` | stopped by Ctrl-C |
 //! | `1` | anything else: initialization, or any image that failed to decode, enhance or be written |
+//!
+//! A failed image is a [`CliError::Image`], whose status is its cause's. A run of one image ends with that image's own
+//! line; a run of more ends with [`CliError::Batch`], each image's line having been printed already.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use opai::{ImageIoError, InferenceError, InitError};
 
@@ -51,6 +54,17 @@ pub enum CliError {
         source: std::io::Error,
     },
 
+    /// One image of the run failed. The message names the image once: the cause's alone where it already does, as a
+    /// failed decode does, and otherwise prefixed with it, since an inference failure names nothing and a write names
+    /// the destination.
+    #[error("{}", image_reason(path, source))]
+    Image {
+        /// The image, as it was given or found.
+        path: PathBuf,
+        /// Why it failed.
+        source: Box<CliError>,
+    },
+
     /// One or more images of the batch failed, each already reported on its own line.
     #[error("{failed} of {total} images failed")]
     Batch {
@@ -71,10 +85,19 @@ impl From<InferenceError> for CliError {
     }
 }
 
+/// [`CliError::Image`]'s message.
+fn image_reason(path: &Path, source: &CliError) -> String {
+    let message = source.to_string();
+    let image = path.display().to_string();
+
+    if message.contains(&image) { message } else { format!("could not enhance {image}: {message}") }
+}
+
 impl CliError {
     /// The status the process exits with.
     pub fn exit_code(&self) -> u8 {
         match self {
+            Self::Image { source, .. } => source.exit_code(),
             Self::Usage(_) => 2,
             Self::Cancelled => 130,
             Self::Init(_)
@@ -157,6 +180,39 @@ mod tests {
 
         assert_eq!(error.exit_code(), 1);
         assert!(error.to_string().starts_with("cannot write out/a.png: "), "{error}");
+    }
+
+    #[test]
+    fn a_failed_image_names_the_image_once() {
+        let path = Path::new("photos/a.jpg");
+        let image = |source: CliError| CliError::Image { path: path.into(), source: Box::new(source) }.to_string();
+
+        let decode = CliError::Load(Box::new(ImageIoError::Read {
+            path: path.into(),
+            source: std::io::Error::other("corrupt"),
+        }));
+        let reason = image(decode);
+        assert_eq!(reason.matches("photos/a.jpg").count(), 1, "{reason}");
+        assert!(!reason.starts_with("could not enhance"), "{reason}");
+
+        let write = CliError::Claim {
+            path: "out/a.jpg".into(),
+            source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        };
+        let reason = image(write);
+        assert!(reason.starts_with("could not enhance photos/a.jpg: cannot write out/a.jpg: "), "{reason}");
+
+        let reason = image(CliError::Inference(InferenceError::Shutdown));
+        assert!(reason.starts_with("could not enhance photos/a.jpg: "), "{reason}");
+    }
+
+    #[test]
+    fn a_failed_image_exits_with_its_causes_status() {
+        let image = |source: CliError| CliError::Image { path: "a.jpg".into(), source: Box::new(source) };
+
+        assert_eq!(image(CliError::Inference(InferenceError::Shutdown)).exit_code(), 1);
+        assert_eq!(image(CliError::Usage("bad".into())).exit_code(), 2);
+        assert_eq!(image(CliError::Cancelled).exit_code(), 130);
     }
 
     #[test]

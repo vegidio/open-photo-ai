@@ -3,17 +3,20 @@
 //! ```text
 //! output, inputs               --> refused here: nothing installed
 //! initialize                   --> once; the 💾 line; a Ctrl-C on it abandons initialization; another instance ends it
-//! Ctrl-C handler               --> from here a SIGINT stops the run instead of killing the process
+//! Ctrl-C handler               --> from here a SIGINT stops the run instead of killing the process (plain mode)
+//! start the batch's view       --> one live session for every image: the bar over the list
 //! for each image:
-//!   header, load               --> 🖼️ and a blank line
-//!   find faces, process        --> one bar over both, planned for the image's own size; a failed detection is
-//!                                  logged and the image goes on
-//!   claim, save, commit        --> the source's depth, the library's recommended settings; then ✨ naming the file
-//!                                  written, or 🧨 naming the image, and the next image runs
+//!   plan, start its row        --> 🖼️ [n/N] Enhancing image <path>, and a fresh bar
+//!   load, find faces, process  --> one bar over detection and chain, planned for the image's own size; a failed
+//!                                  detection is logged and the image goes on
+//!   claim, save, commit        --> the source's depth, the library's recommended settings
+//!   end its row                --> Enhanced, Failed or Stopped; off a terminal, its one plain line
+//! finish the view, summarize   --> ✨ naming the file for one image or the output for more, then each failure's 🧨
+//!                                  line where the view hid it
 //! ```
 //!
-//! A Ctrl-C stops the whole batch, keeping what was already written. The notes, the face report and what each image
-//! executed on go to the log, not to the terminal.
+//! A Ctrl-C stops the whole batch, keeping what was already written. The notes, the face report, what each image
+//! executed on and every path written go to the log, not to the terminal.
 
 use std::path::{Path, PathBuf};
 
@@ -23,10 +26,10 @@ use opai::{
 };
 
 use crate::args::Args;
-use crate::chain;
+use crate::chain::{self, Plan};
 use crate::error::CliError;
 use crate::inputs::{self, Source};
-use crate::look::{self, Look};
+use crate::look::{self, ImageEnd, Look};
 use crate::output::{self, Target};
 use crate::progress::View;
 
@@ -39,8 +42,8 @@ use crate::progress::View;
 /// # Errors
 ///
 /// [`CliError`], whose [`exit_code`](CliError::exit_code) is the process's status: a refusal or an initialization
-/// failure before any image, a stop, or [`CliError::Batch`] when any image failed. The results already written are
-/// kept on a stop or a failure.
+/// failure before any image, a stop, the image's own [`CliError::Image`] when the only image failed, or
+/// [`CliError::Batch`] when any image of several failed. The results already written are kept on a stop or a failure.
 pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     // Everything that can be refused without the library, before it is initialized: a typo in the fortieth path must
     // not cost the first run's download. The output is read first, so the cheap refusals do not wait for a walk.
@@ -76,74 +79,105 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     view.finish_install();
     let opai = initialized?;
 
-    // In plain mode, and between the live lines, a Ctrl-C is still a SIGINT.
+    // In plain mode a Ctrl-C is still a SIGINT. While the batch's view is drawn it is a key press, which the view
+    // turns into the same cancellation.
     stop_on_ctrl_c(&cancel);
 
-    let mut failed = 0;
+    let mut written = Vec::new();
+    let mut failures = Vec::new();
     // Set only where the stop left an image unwritten or unstarted: a Ctrl-C landing after the last image was written
     // stopped nothing.
     let mut stopped = false;
-    for source in &sources {
-        // A Ctrl-C between two images, with no bar to catch it, lands here.
+
+    view.start_batch(sources.len());
+    for (index, source) in (1..).zip(&sources) {
+        // A Ctrl-C while an image was loaded or written, or between two images, lands here.
         if cancel.is_cancelled() {
             stopped = true;
             break;
         }
 
-        match enhance_one(&opai, &args, &target, source, &view, &cancel, look).await {
-            Ok(written) => eprintln!("{}", look::success(&written, look.color)),
+        let plan = chain::plan(&args, source.width, source.height);
+        for note in &plan.notes {
+            tracing::info!("{}: {note}", source.path.display());
+        }
+        view.start_image(index, &source.path, plan.operations.len());
+
+        match enhance_one(&opai, &args, &target, source, plan, &view, &cancel).await {
+            Ok(path) => {
+                view.end_image(index, &source.path, &ImageEnd::Enhanced);
+                written.push(path);
+            }
             Err(CliError::Cancelled) => {
+                view.end_image(index, &source.path, &ImageEnd::Stopped);
                 stopped = true;
                 break;
             }
             Err(error) => {
-                failed += 1;
                 tracing::error!("{}: {}", source.path.display(), crate::full(&error));
-                eprintln!("{}", look::failure(failure_reason(&source.path, &error), look.color));
+                view.end_image(index, &source.path, &ImageEnd::Failed(error.to_string()));
+                failures.push(CliError::Image { path: source.path.clone(), source: Box::new(error) });
             }
         }
+    }
+    let live = view.finish_batch();
+
+    for line in summary(&written, &args.output, &failures, live, sources.len(), look.color) {
+        eprintln!("{line}");
     }
 
     drop(opai);
 
+    closing(stopped, failures, sources.len())
+}
+
+/// The lines printed once the batch's view is finished, before the closing line: the success line when anything was
+/// written, then each failure's line. Those are listed only under a live view of more than one image: a failure can
+/// have scrolled out of the view; off it, each image's own line already gave its reason; and a single image's failure
+/// is the closing line.
+fn summary(
+    written: &[PathBuf],
+    output: &Path,
+    failures: &[CliError],
+    live: bool,
+    total: usize,
+    color: bool,
+) -> Vec<String> {
+    let success = look::summary(written, output).map(|line| look::success(line, color));
+    let listed = if live && total > 1 { failures } else { &[] };
+
+    success.into_iter().chain(listed.iter().map(|failure| look::failure(failure, color))).collect()
+}
+
+/// How a run of `total` images ends: a stop over anything that failed before it, then the only image's own failure,
+/// then how many of several failed.
+fn closing(stopped: bool, mut failures: Vec<CliError>, total: usize) -> Result<(), CliError> {
     if stopped {
         Err(CliError::Cancelled)
-    } else if failed > 0 {
-        Err(CliError::Batch { failed, total: sources.len() })
-    } else {
+    } else if total == 1 && failures.len() == 1 {
+        Err(failures.remove(0))
+    } else if failures.is_empty() {
         Ok(())
+    } else {
+        Err(CliError::Batch { failed: failures.len(), total })
     }
 }
 
-/// Enhances `source` with the chain planned for its own size and writes it, answering the path written.
+/// Enhances `source` with `plan`, the chain planned for its own size, and writes it, answering the path written.
 async fn enhance_one(
     opai: &Opai,
     args: &Args,
     target: &Target,
     source: &Source,
+    plan: Plan,
     view: &View,
     cancel: &CancellationToken,
-    look: Look,
 ) -> Result<PathBuf, CliError> {
-    let plan = chain::plan(args, source.width, source.height);
-    for note in &plan.notes {
-        tracing::info!("{}: {note}", source.path.display());
-    }
-
-    eprintln!("{}", look::header(&source.path, look.color));
-    if look.interactive {
-        eprintln!();
-    }
-
     // A file whose header read cleanly but whose pixels do not decode fails this image, not the batch. The library's
     // message names the path.
     let picture = image::load(&source.path).await.map_err(|error| CliError::Load(Box::new(error)))?;
 
-    // Finished on every outcome, so the result line lands below the bar and the blank line after it.
-    view.start_bar(plan.operations.len());
-    let enhanced = enhance(opai, &picture, plan.operations, view, cancel).await;
-    view.finish_bar();
-    let (faced, enhanced) = enhanced?;
+    let (faced, enhanced) = enhance(opai, &picture, plan.operations, view, cancel).await?;
 
     // A Ctrl-C that landed after the last tile was checked still means "write nothing".
     if cancel.is_cancelled() {
@@ -164,17 +198,7 @@ async fn enhance_one(
     Ok(written)
 }
 
-/// The failure line's reason for the image at `path`: the error as it is where it already names the image, as a failed
-/// decode does, and otherwise prefixed with it, since an inference failure names nothing and a write names the
-/// destination.
-fn failure_reason(path: &Path, error: &CliError) -> String {
-    let message = error.to_string();
-    let image = path.display().to_string();
-
-    if message.contains(&image) { message } else { format!("could not enhance {image}: {message}") }
-}
-
-/// Finds the faces `operations` needs and runs the chain, both reporting onto the view's one bar.
+/// Finds the faces `operations` needs and runs the chain, both reporting onto the image's one bar.
 async fn enhance(
     opai: &Opai,
     picture: &Picture,
@@ -223,7 +247,7 @@ async fn enhance(
     Ok((faced, enhanced))
 }
 
-/// Cancels `cancel` on the first SIGINT, which arrives only while no live line holds the terminal in raw mode.
+/// Cancels `cancel` on the first SIGINT, which arrives only while no live session holds the terminal in raw mode.
 fn stop_on_ctrl_c(cancel: &CancellationToken) {
     let cancel = cancel.clone();
 
@@ -347,25 +371,91 @@ mod tests {
     }
 
     #[test]
-    fn a_failure_line_names_the_image_once() {
-        let path = Path::new("photos/a.jpg");
+    fn plain_output_is_one_line_per_image_then_the_summary_then_the_closing_line() {
+        // The spec's "Output piped to a file": three images, the second failing.
+        let view = View::new(Look { interactive: false, color: false }, CancellationToken::new());
+        let [a, b, c] = ["photos/a.jpg", "photos/b.jpg", "photos/c.jpg"].map(Path::new);
 
-        let decode = CliError::Load(Box::new(opai::ImageIoError::Read {
-            path: path.into(),
-            source: std::io::Error::other("corrupt"),
-        }));
-        let reason = failure_reason(path, &decode);
-        assert_eq!(reason.matches("photos/a.jpg").count(), 1, "{reason}");
+        view.start_batch(3);
+        let mut lines: Vec<String> = [
+            view.end_line(1, a, &ImageEnd::Enhanced),
+            view.end_line(2, b, &ImageEnd::Failed("disk full".into())),
+            view.end_line(3, c, &ImageEnd::Enhanced),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        let live = view.finish_batch();
 
-        let write = CliError::Claim {
-            path: "out/a.jpg".into(),
-            source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
-        };
-        let reason = failure_reason(path, &write);
-        assert!(reason.starts_with("could not enhance photos/a.jpg: cannot write out/a.jpg: "), "{reason}");
+        let written = [PathBuf::from("out/a.jpg"), PathBuf::from("out/c.jpg")];
+        let failures = vec![failed("photos/b.jpg")];
+        lines.extend(summary(&written, Path::new("out"), &failures, live, 3, false));
+        let closing = closing(false, failures, 3).expect_err("an image failed");
+        lines.push(look::failure(closing, false));
 
-        let reason = failure_reason(path, &CliError::Inference(InferenceError::Shutdown));
-        assert!(reason.starts_with("could not enhance photos/a.jpg: "), "{reason}");
+        assert_eq!(
+            lines,
+            [
+                "🖼️ [1/3] Enhanced image photos/a.jpg",
+                "🧨 [2/3] Failed image photos/b.jpg: disk full",
+                "🖼️ [3/3] Enhanced image photos/c.jpg",
+                "✨ 2 images enhanced successfully; files saved under out",
+                "🧨 1 of 3 images failed",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_live_view_of_several_images_lists_each_failure_under_the_summary() {
+        let failures = [failed("a.jpg"), failed("c.jpg")];
+        let lines = summary(&["out/b.jpg".into()], Path::new("out"), &failures, true, 3, false);
+
+        assert_eq!(lines.len(), 3, "{lines:?}");
+        assert_eq!(lines[0], "✨ Image enhanced successfully; file saved at out/b.jpg");
+        assert!(lines[1].starts_with("🧨 could not enhance a.jpg: "), "{lines:?}");
+        assert!(lines[2].starts_with("🧨 could not enhance c.jpg: "), "{lines:?}");
+    }
+
+    #[test]
+    fn a_single_image_or_plain_output_does_not_list_failures() {
+        let failures = [failed("a.jpg")];
+
+        assert!(summary(&[], Path::new("out.png"), &failures, true, 1, false).is_empty());
+        assert!(summary(&[], Path::new("out"), &failures, false, 3, false).is_empty());
+    }
+
+    fn failed(path: &str) -> CliError {
+        CliError::Image { path: path.into(), source: Box::new(CliError::Inference(InferenceError::Shutdown)) }
+    }
+
+    #[test]
+    fn a_run_with_nothing_failed_succeeds() {
+        assert!(closing(false, Vec::new(), 1).is_ok());
+        assert!(closing(false, Vec::new(), 5).is_ok());
+    }
+
+    #[test]
+    fn a_stop_ends_as_a_stop_even_after_a_failure() {
+        assert!(matches!(closing(true, Vec::new(), 5), Err(CliError::Cancelled)));
+        assert!(matches!(closing(true, vec![failed("a.jpg")], 5), Err(CliError::Cancelled)));
+        assert!(matches!(closing(true, vec![failed("a.jpg")], 1), Err(CliError::Cancelled)));
+    }
+
+    #[test]
+    fn a_single_image_ends_with_its_own_failure() {
+        let error = closing(false, vec![failed("a.jpg")], 1).expect_err("the image failed");
+
+        assert!(matches!(&error, CliError::Image { path, .. } if path.as_path() == Path::new("a.jpg")));
+        assert!(error.to_string().starts_with("could not enhance a.jpg: "), "{error}");
+    }
+
+    #[test]
+    fn several_images_end_with_how_many_failed() {
+        let error = closing(false, vec![failed("a.jpg")], 3).expect_err("an image failed");
+        assert!(matches!(error, CliError::Batch { failed: 1, total: 3 }));
+
+        let error = closing(false, vec![failed("a.jpg"), failed("b.jpg")], 3).expect_err("two images failed");
+        assert!(matches!(error, CliError::Batch { failed: 2, total: 3 }));
     }
 
     #[test]

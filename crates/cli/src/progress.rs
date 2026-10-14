@@ -1,26 +1,41 @@
-//! What the terminal shows while a run works: the `💾` dependency line while initializing, and one gradient bar over
-//! the face detection and the whole chain while enhancing.
+//! What the terminal shows while a run works: the `💾` dependency line while initializing, then one view for the whole
+//! batch, the current image's gradient bar over a list of the most recent images.
 //!
 //! ```text
 //! initialize ──► [Live<Line> "💾 …"]   started on the first Downloading/Extracting report; frozen by finish_install
-//! (run prints the header and a blank line)
-//! detection + chain ──► [Live<AnimatedProgress>]   started by start_bar; finish_bar settles it and prints a blank line
+//! the batch  ──► [Live<BatchLine>]      started by start_batch; finish_batch freezes it and prints a blank line
+//!
+//!                                                                <- blank, only under a drawn dependency line
+//!   Face Recovery   [1/2]  ████████████░░░░░░░░░░░   38.4%      <- the current image's bar, fresh for each image
+//!                                                                <- blank
+//!   🖼️ [6/8] Enhanced image photos/f.jpg                         <- the list: the five most recent images,
+//!   🖼️ [7/8] Enhancing image photos/g.jpg                           start_image pushes a row, end_image settles it
 //! ```
 //!
-//! Each line is a `rust_sak::tui` session, which must have stderr to itself, so `run` prints its own lines only
-//! between them. In raw mode a Ctrl-C reaches the session's interrupt rather than the SIGINT handler: during the
-//! dependency line it wakes [`View::install_interrupted`], and during the bar it cancels the run.
+//! Each is a `rust_sak::tui` session, which must have stderr to itself, so `run` prints its own lines only between and
+//! after them. In raw mode a Ctrl-C reaches the session's interrupt rather than the SIGINT handler: during the
+//! dependency line it wakes [`View::install_interrupted`], and during the batch it cancels the run, whether an image is
+//! being loaded, enhanced or written.
 //!
-//! Where stderr is not a terminal every piece here is a no-op, and no session is ever started.
+//! Where stderr is not a terminal, or the terminal refused the batch's session, no view is drawn and each image prints
+//! one line when it ends, [`look::plain_row`].
 
+use std::collections::VecDeque;
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use opai::{CancellationToken, InferenceProgress, OnInference, OnProgress, Phase, Progress};
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::Line;
+use ratatui::widgets::Widget;
 use rust_sak::tui::{AnimatedProgress, Live, LiveLine, Target};
 use tokio::sync::Notify;
 
-use crate::look::{self, Look};
+use crate::look::{self, ImageEnd, Look, RowState};
+
+/// How many images the list shows: the most recent.
+const LIST_ROWS: usize = 5;
 
 /// The terminal's view of a run. Cheap to clone: every clone draws the same lines.
 #[derive(Clone)]
@@ -30,12 +45,96 @@ pub struct View {
 
 struct Inner {
     look: Look,
-    /// What a Ctrl-C during the bar stops.
+    /// What a Ctrl-C during the batch stops.
     cancel: CancellationToken,
     /// Woken by a Ctrl-C during the dependency line.
     install_interrupt: Arc<Notify>,
     install: Mutex<Install>,
-    bar: Mutex<Slot<Live<AnimatedProgress>>>,
+    batch: Mutex<Batch>,
+}
+
+/// The batch's view: how many images it has, and its session once one was started.
+#[derive(Default)]
+struct Batch {
+    total: usize,
+    slot: Slot<Live<BatchLine>>,
+}
+
+/// What the batch's session draws: a blank row under the dependency line when there is one, the current image's bar, a
+/// blank row, then the most recent images.
+struct BatchLine {
+    /// A blank row above the bar, separating it from a drawn dependency line. Part of the session, so a terminal that
+    /// refuses it is left no stray blank line.
+    gap: bool,
+    /// `None` leaves the bar's row blank: no image started yet, or one with nothing left to run.
+    bar: Option<AnimatedProgress>,
+    /// At most [`LIST_ROWS`], the most recent last.
+    rows: VecDeque<Row>,
+    /// The `N` in `[n/N]`.
+    total: usize,
+    color: bool,
+}
+
+/// One image in the list.
+struct Row {
+    /// Its place in the run, from one.
+    index: usize,
+    /// Its path as it was given or found.
+    path: String,
+    state: RowState,
+}
+
+impl BatchLine {
+    fn new(total: usize, gap: bool, color: bool) -> Self {
+        Self { gap, bar: None, rows: VecDeque::with_capacity(LIST_ROWS), total, color }
+    }
+
+    /// Adds `row` as the most recent, dropping the oldest once the list is full.
+    fn push(&mut self, row: Row) {
+        if self.rows.len() == LIST_ROWS {
+            self.rows.pop_front();
+        }
+        self.rows.push_back(row);
+    }
+
+    /// Sets the state of the image at `index`, if it is still listed.
+    fn set(&mut self, index: usize, state: RowState) {
+        if let Some(row) = self.rows.iter_mut().rev().find(|row| row.index == index) {
+            row.state = state;
+        }
+    }
+}
+
+impl LiveLine for BatchLine {
+    fn render(&mut self, area: Rect, buf: &mut Buffer) {
+        let [_, area] = Layout::vertical([Constraint::Length(u16::from(self.gap)), Constraint::Fill(1)]).areas(area);
+        let [bar, _, list] =
+            Layout::vertical([Constraint::Length(1), Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+        if let Some(progress) = &mut self.bar {
+            progress.render(bar, buf);
+        }
+
+        // In a terminal too short for the whole list, the most recent rows that fit.
+        let shown = self.rows.len().saturating_sub(usize::from(list.height));
+        for (row, area) in self.rows.iter().skip(shown).zip(list.rows()) {
+            look::row(row.index, self.total, &row.path, row.state, self.color).render(area, buf);
+        }
+    }
+
+    fn settled(&self) -> bool {
+        self.bar.as_ref().is_none_or(AnimatedProgress::settled)
+    }
+
+    fn snap(&mut self) {
+        if let Some(bar) = &mut self.bar {
+            bar.snap();
+        }
+    }
+
+    #[allow(clippy::cast_possible_truncation, reason = "at most 3 + LIST_ROWS")]
+    fn height(&self) -> u16 {
+        (usize::from(self.gap) + 2 + self.total.min(LIST_ROWS)) as u16
+    }
 }
 
 /// The dependency line: the text last computed, and its session once one was started.
@@ -44,11 +143,12 @@ struct Install {
     /// The line the latest download or expansion report reads as, drawn or not.
     line: Option<Line<'static>>,
     slot: Slot<Live<Line<'static>>>,
+    /// Whether the line was drawn, once [`View::finish_install`] froze it.
+    drawn: bool,
 }
 
-/// One live session's state. A start is attempted whenever none is live, so each image draws its own bar, but never
-/// again once the terminal refused one, so a terminal that cannot draw is not asked on every report or every image,
-/// nor once the slot was [closed](Slot::close).
+/// One live session's state. A start is attempted whenever none is live, but never again once the terminal refused
+/// one, so a terminal that cannot draw is not asked on every report, nor once the slot was [closed](Slot::close).
 struct Slot<S> {
     closed: bool,
     live: Option<S>,
@@ -101,7 +201,7 @@ impl<S: Session> Slot<S> {
         }
     }
 
-    /// Settles the session, and says whether one was drawn. The slot can then start another.
+    /// Settles the session, and says whether one was drawn.
     fn finish(&mut self, what: &str) -> bool {
         let Some(live) = self.live.take() else {
             return false;
@@ -113,15 +213,15 @@ impl<S: Session> Slot<S> {
         true
     }
 
-    /// Settles the session, as [`finish`](Self::finish) does, and never starts another.
-    fn close(&mut self, what: &str) {
-        self.finish(what);
+    /// Settles the session, as [`finish`](Self::finish) does, says whether one was drawn, and never starts another.
+    fn close(&mut self, what: &str) -> bool {
         self.closed = true;
+        self.finish(what)
     }
 }
 
 impl View {
-    /// A view drawing as `look` says, whose bar cancels `cancel` on a Ctrl-C.
+    /// A view drawing as `look` says, whose batch cancels `cancel` on a Ctrl-C.
     pub fn new(look: Look, cancel: CancellationToken) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -129,7 +229,7 @@ impl View {
                 cancel,
                 install_interrupt: Arc::new(Notify::new()),
                 install: Mutex::default(),
-                bar: Mutex::default(),
+                batch: Mutex::default(),
             }),
         }
     }
@@ -174,58 +274,106 @@ impl View {
     }
 
     /// Freezes the dependency line where it was last drawn, with the cursor below it. A report arriving after this
-    /// draws nothing, so the line appears at most once and never under an image's bar.
+    /// draws nothing, so the line appears at most once and never under the batch's view.
     pub fn finish_install(&self) {
-        lock(&self.inner.install).slot.close("dependency line");
+        let mut install = lock(&self.inner.install);
+        install.drawn = install.slot.close("dependency line");
     }
 
-    /// Starts the bar at `Enhancing [0/planned]`, or draws nothing where `planned` is `0`.
-    pub fn start_bar(&self, planned: usize) {
-        if !self.inner.look.interactive || planned == 0 {
+    /// Starts the batch's view for `total` images on a terminal, a blank row under the dependency line when one was
+    /// drawn. A Ctrl-C while it is drawn cancels the run. Off a terminal, or where the terminal refuses the session,
+    /// prints nothing.
+    pub fn start_batch(&self, total: usize) {
+        let gap = lock(&self.inner.install).drawn;
+        let mut batch = lock(&self.inner.batch);
+        batch.total = total;
+
+        if !self.inner.look.interactive {
             return;
         }
 
-        let mut line = AnimatedProgress::new(look::label(None));
-        line.label_width = look::LABEL_WIDTH;
-        line.counter = Some(look::counter(None, planned));
-        line.color = self.inner.look.color;
-
+        let line = BatchLine::new(total, gap, self.inner.look.color);
         let view = self.clone();
-        lock(&self.inner.bar).start("progress bar", || Live::start(Target::Stderr, line, move || view.interrupt_bar()));
+        batch.slot.start("batch view", || Live::start(Target::Stderr, line, move || view.interrupt()));
     }
 
-    /// The inference callback the bar is moved by, meant for [`opai::Handover::new`].
+    /// Lists the image at `index` (from one) as `Enhancing`, and starts a fresh bar at `Enhancing [0/planned]`, or
+    /// leaves the bar's row blank where `planned` is `0`. A fresh bar starts empty rather than moving back down.
+    pub fn start_image(&self, index: usize, path: &Path, planned: usize) {
+        let batch = lock(&self.inner.batch);
+        let Some(live) = &batch.slot.live else {
+            return;
+        };
+
+        let bar = (planned > 0).then(|| {
+            let mut bar = AnimatedProgress::new(look::label(None));
+            bar.label_width = look::LABEL_WIDTH;
+            bar.counter = Some(look::counter(None, planned));
+            bar.color = self.inner.look.color;
+            bar
+        });
+        let row = Row { index, path: path.display().to_string(), state: RowState::Enhancing };
+
+        live.handle().update(|line| {
+            line.bar = bar;
+            line.push(row);
+        });
+    }
+
+    /// The inference callback the current image's bar is moved by, meant for [`opai::Handover::new`].
     pub fn on_bar(&self) -> OnInference {
         let view = self.clone();
         Arc::new(move |report: &InferenceProgress| view.bar_report(report))
     }
 
     fn bar_report(&self, report: &InferenceProgress) {
-        let bar = lock(&self.inner.bar);
-        let Some(live) = &bar.live else {
+        let batch = lock(&self.inner.batch);
+        let Some(live) = &batch.slot.live else {
             return;
         };
 
         live.handle().update(|line| {
-            line.label = look::label(Some(report)).to_string();
-            line.counter = Some(look::counter(Some(report), report.operation_count));
-            line.fraction = report.chain_fraction;
+            if let Some(bar) = &mut line.bar {
+                bar.label = look::label(Some(report)).to_string();
+                bar.counter = Some(look::counter(Some(report), report.operation_count));
+                bar.fraction = report.chain_fraction;
+            }
         });
     }
 
-    /// A Ctrl-C while the bar is drawn: the run stops at the library's next check, and the bar keeps drawing until it
-    /// does.
-    fn interrupt_bar(&self) {
+    /// Settles the row of the image at `index` as `end` says, or, where no view is drawn, prints its plain line.
+    pub fn end_image(&self, index: usize, path: &Path, end: &ImageEnd) {
+        if let Some(line) = self.end_line(index, path, end) {
+            eprintln!("{line}");
+        }
+    }
+
+    /// What [`end_image`](Self::end_image) prints: nothing while the view is drawn, and the image's plain line
+    /// otherwise, coloured as the look says.
+    pub(crate) fn end_line(&self, index: usize, path: &Path, end: &ImageEnd) -> Option<String> {
+        let batch = lock(&self.inner.batch);
+        if let Some(live) = &batch.slot.live {
+            live.handle().update(|line| line.set(index, end.state()));
+            return None;
+        }
+
+        Some(look::plain_row(index, batch.total, &path.display().to_string(), end, self.inner.look.color))
+    }
+
+    /// A Ctrl-C while the batch is drawn: the run stops at its next check, and the view keeps drawing until it does.
+    fn interrupt(&self) {
         tracing::info!("stopping…");
         self.inner.cancel.cancel();
     }
 
-    /// Settles the bar, leaving its last frame in the scrollback, and prints the blank line after it. Where no bar was
-    /// drawn, prints nothing. The next [`start_bar`](Self::start_bar) draws a new bar, unless the terminal refused one.
-    pub fn finish_bar(&self) {
-        if lock(&self.inner.bar).finish("progress bar") {
+    /// Freezes the batch's view, leaving its last frame in the scrollback, and prints the blank line after it. Says
+    /// whether a view was drawn; where none was, prints nothing.
+    pub fn finish_batch(&self) -> bool {
+        let drawn = lock(&self.inner.batch).slot.close("batch view");
+        if drawn {
             eprintln!();
         }
+        drawn
     }
 }
 
@@ -297,17 +445,135 @@ mod tests {
     }
 
     #[test]
-    fn the_bar_starts_nothing_off_a_terminal_or_for_an_empty_chain() {
+    fn off_a_terminal_no_session_is_attempted_and_each_image_prints_its_plain_line() {
         let view = View::new(plain(), CancellationToken::new());
-        for _ in 0..2 {
-            view.start_bar(2);
-            view.finish_bar();
-        }
-        assert_eq!(lock(&view.inner.bar).attempts, 0);
 
-        let interactive = View::new(Look { interactive: true, color: false }, CancellationToken::new());
-        interactive.start_bar(0);
-        assert_eq!(lock(&interactive.inner.bar).attempts, 0);
+        view.start_batch(3);
+        view.start_image(2, Path::new("photos/b.jpg"), 2);
+        let line = view.end_line(2, Path::new("photos/b.jpg"), &ImageEnd::Failed("corrupt".into()));
+        assert!(!view.finish_batch());
+
+        assert_eq!(line.as_deref(), Some("🧨 [2/3] Failed image photos/b.jpg: corrupt"));
+        assert_eq!(lock(&view.inner.batch).slot.attempts, 0);
+    }
+
+    #[test]
+    fn a_refused_session_falls_back_to_coloured_plain_lines() {
+        let look = Look { interactive: true, color: true };
+        let view = View::new(look, CancellationToken::new());
+        {
+            let mut batch = lock(&view.inner.batch);
+            batch.total = 5;
+            batch.slot.start("batch view", || Err(std::io::Error::from(std::io::ErrorKind::Unsupported)));
+        }
+
+        view.start_image(1, Path::new("a.jpg"), 1);
+        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced);
+
+        assert_eq!(line, Some(look::plain_row(1, 5, "a.jpg", &ImageEnd::Enhanced, true)));
+        assert!(!view.finish_batch());
+    }
+
+    fn row(index: usize) -> Row {
+        Row { index, path: format!("{index}.jpg"), state: RowState::Enhanced }
+    }
+
+    /// Each row of `buf`, its cells joined and its trailing blanks dropped.
+    fn rows(buf: &Buffer) -> Vec<String> {
+        let area = buf.area;
+        (area.top()..area.bottom())
+            .map(|y| {
+                let text: String = (area.left()..area.right()).map(|x| buf[(x, y)].symbol()).collect();
+                text.trim_end().to_string()
+            })
+            .collect()
+    }
+
+    fn draw(line: &mut BatchLine, height: u16) -> Vec<String> {
+        let area = Rect::new(0, 0, 60, height);
+        let mut buf = Buffer::empty(area);
+        line.render(area, &mut buf);
+        rows(&buf)
+    }
+
+    #[test]
+    fn the_view_is_two_rows_taller_than_its_list() {
+        let heights = [1, 3, 5, 8].map(|total| BatchLine::new(total, false, false).height());
+
+        assert_eq!(heights, [3, 5, 7, 7]);
+    }
+
+    #[test]
+    fn under_a_dependency_line_the_view_starts_with_a_blank_row() {
+        let mut line = BatchLine::new(1, true, false);
+        let mut bar = AnimatedProgress::new("Enhancing");
+        bar.counter = Some((0, 1));
+        line.bar = Some(bar);
+        line.push(Row { index: 1, path: "a.jpg".into(), state: RowState::Enhancing });
+
+        assert_eq!(line.height(), 4);
+        let drawn = draw(&mut line, 4);
+        assert_eq!(drawn[0], "");
+        assert!(drawn[1].starts_with("Enhancing"), "{drawn:?}");
+        assert_eq!(drawn[2], "");
+        assert!(drawn[3].contains("[1/1] Enhancing image a.jpg"), "{drawn:?}");
+    }
+
+    #[test]
+    fn the_gap_follows_whether_the_dependency_line_was_drawn() {
+        let view = View::new(plain(), CancellationToken::new());
+        view.on_install()(&report(Dependency::Runtime, Phase::Downloading, 0.5));
+        view.finish_install();
+
+        assert!(!lock(&view.inner.install).drawn, "off a terminal, nothing was drawn");
+    }
+
+    #[test]
+    fn a_sixth_row_scrolls_the_oldest_away() {
+        let mut line = BatchLine::new(8, false, false);
+        for index in 1..=6 {
+            line.push(row(index));
+        }
+
+        let drawn = draw(&mut line, 7);
+
+        assert_eq!(drawn[0], "", "no bar");
+        assert_eq!(drawn[1], "");
+        assert!(drawn[2].contains("[2/8] Enhanced image 2.jpg"), "{drawn:?}");
+        assert!(drawn[6].contains("[6/8] Enhanced image 6.jpg"), "{drawn:?}");
+        assert_eq!(line.rows.len(), LIST_ROWS);
+    }
+
+    #[test]
+    fn a_short_terminal_shows_the_newest_rows() {
+        let mut line = BatchLine::new(8, false, false);
+        for index in 1..=4 {
+            line.push(row(index));
+        }
+        line.set(4, RowState::Failed);
+
+        let drawn = draw(&mut line, 4);
+
+        assert_eq!(drawn.len(), 4);
+        assert!(drawn[2].contains("[3/8] Enhanced image 3.jpg"), "{drawn:?}");
+        assert!(drawn[3].contains("[4/8] Failed image 4.jpg"), "{drawn:?}");
+    }
+
+    #[test]
+    fn the_bar_is_drawn_over_the_list_and_settles_the_line() {
+        let mut line = BatchLine::new(1, false, false);
+        assert!(line.settled(), "no bar is settled");
+
+        let mut bar = AnimatedProgress::new("Enhancing");
+        bar.counter = Some((0, 2));
+        line.bar = Some(bar);
+        line.push(Row { index: 1, path: "a.jpg".into(), state: RowState::Enhancing });
+        let drawn = draw(&mut line, 3);
+
+        assert!(drawn[0].starts_with("Enhancing"), "{drawn:?}");
+        assert!(drawn[0].contains("[0/2]"), "{drawn:?}");
+        assert_eq!(drawn[1], "");
+        assert!(drawn[2].contains("[1/1] Enhancing image a.jpg"), "{drawn:?}");
     }
 
     /// A stand-in for a drawn session.
@@ -320,21 +586,7 @@ mod tests {
     }
 
     #[test]
-    fn each_image_attempts_its_own_bar() {
-        let mut slot = Slot::<Drawn>::default();
-
-        for round in 1..=2 {
-            slot.start("progress bar", || Ok(Drawn));
-            assert_eq!(slot.attempts, round);
-            // A second start while one is live draws nothing new.
-            slot.start("progress bar", || Ok(Drawn));
-            assert_eq!(slot.attempts, round);
-            assert!(slot.finish("progress bar"));
-        }
-    }
-
-    #[test]
-    fn a_terminal_that_refused_a_bar_is_not_asked_again() {
+    fn a_terminal_that_refused_a_session_is_not_asked_again() {
         let mut slot = Slot::<Drawn>::default();
 
         for _ in 0..2 {
@@ -358,20 +610,20 @@ mod tests {
     }
 
     #[test]
-    fn a_ctrl_c_on_the_bar_cancels_the_run() {
+    fn a_ctrl_c_on_the_batch_cancels_the_run() {
         let cancel = CancellationToken::new();
         let view = View::new(plain(), cancel.clone());
 
-        view.interrupt_bar();
+        view.interrupt();
 
         assert!(cancel.is_cancelled());
     }
 
     #[test]
-    fn finishing_without_a_bar_prints_nothing_and_says_so() {
+    fn finishing_without_a_session_prints_nothing_and_says_so() {
         let view = View::new(plain(), CancellationToken::new());
 
-        assert!(!lock(&view.inner.bar).finish("progress bar"));
+        assert!(!lock(&view.inner.batch).slot.finish("batch view"));
         assert!(!lock(&view.inner.install).slot.finish("dependency line"));
     }
 }

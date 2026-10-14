@@ -1,5 +1,5 @@
-//! What the terminal's lines say and how they are coloured: the header, the result lines, the dependency line, and the
-//! bar's label and counter. Pure text, so all of it is tested without a terminal.
+//! What the terminal's lines say and how they are coloured: the dependency line, the bar's label and counter, the list's
+//! rows and their plain lines, the summary and the failure line. Pure text, so all of it is tested without a terminal.
 //!
 //! Whether to draw live lines and whether to colour is decided once, in [`Look`], the way MediaSim decides it: a
 //! terminal, and `NO_COLOR` unset or empty.
@@ -7,19 +7,23 @@
 use std::ffi::OsStr;
 use std::fmt::Display;
 use std::io::IsTerminal;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use opai::{Family, InferenceProgress, Stage};
 use ratatui::crossterm::style::{Color as TermColor, Stylize};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
-/// The input path in the header.
-pub const GREEN: (u8, u8, u8) = (0x00, 0xc2, 0x02);
 /// The dependency's name and the success line.
 pub const YELLOW: (u8, u8, u8) = (0xe5, 0xdb, 0x08);
-/// The failure line.
+/// The failure line, bold, and a `🧨` row, not bold.
 pub const RED: (u8, u8, u8) = (0xf4, 0x43, 0x36);
+/// A row's `n/N`, UMD's blue.
+pub const BLUE: (u8, u8, u8) = (0x82, 0xaa, 0xff);
+/// A row's word `image`, UMD's magenta.
+pub const MAGENTA: (u8, u8, u8) = (0xc7, 0x92, 0xe9);
+/// A row's path, underlined, UMD's cyan.
+pub const CYAN: (u8, u8, u8) = (0x88, 0xdd, 0xff);
 
 /// The bar's label before the run has reported anything, and for a stage this crate does not know.
 const ENHANCING: &str = "Enhancing";
@@ -38,7 +42,7 @@ pub fn use_color(is_terminal: bool, no_color: Option<&OsStr>) -> bool {
 /// How a run draws on stderr.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Look {
-    /// Live lines are drawn and blank lines frame the bar. Otherwise only the header and the result line are printed.
+    /// Live lines are drawn and blank lines frame the view. Otherwise each image prints one plain line when it ends.
     pub interactive: bool,
     /// The lines are coloured.
     pub color: bool,
@@ -56,14 +60,100 @@ impl Look {
     }
 }
 
-/// `🖼️ Applying enhancements to the image <input>`, with the path in green.
-pub fn header(input: &Path, color: bool) -> String {
-    format!("🖼️ Applying enhancements to the image {}", paint(input.display(), GREEN, color))
+/// Where an image's row stands: being worked on, or how it ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowState {
+    /// Being loaded, enhanced or written.
+    Enhancing,
+    /// Its result is written.
+    Enhanced,
+    /// It failed.
+    Failed,
+    /// The run was stopped while working on it.
+    Stopped,
 }
 
-/// `✨ Image enhanced successfully; file saved at <output>`, all in bold yellow.
-pub fn success(output: &Path, color: bool) -> String {
-    paint_bold(format!("✨ Image enhanced successfully; file saved at {}", output.display()), YELLOW, color)
+/// How an image ended, with a failure's reason for its plain line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImageEnd {
+    /// Its result is written.
+    Enhanced,
+    /// It failed, for this reason. The reason need not name the image: the line already does.
+    Failed(String),
+    /// The run was stopped while working on it.
+    Stopped,
+}
+
+impl ImageEnd {
+    /// The row this end leaves.
+    pub const fn state(&self) -> RowState {
+        match self {
+            Self::Enhanced => RowState::Enhanced,
+            Self::Failed(_) => RowState::Failed,
+            Self::Stopped => RowState::Stopped,
+        }
+    }
+}
+
+/// The list's row for the image at `index` (from one) of `total`: `🖼️ [n/N] Enhancing image <path>` or `Enhanced`,
+/// with `n/N` blue, `image` magenta and the path cyan and underlined, or `🧨 [n/N] Failed image <path>` or `Stopped`,
+/// red throughout. `n` is right-aligned to the width of `N`, so the words do not shift when the count gains a digit.
+pub fn row(index: usize, total: usize, path: &str, state: RowState, color: bool) -> Line<'static> {
+    let (emoji, word) = match state {
+        RowState::Enhancing => ("🖼️", "Enhancing"),
+        RowState::Enhanced => ("🖼️", "Enhanced"),
+        RowState::Failed => ("🧨", "Failed"),
+        RowState::Stopped => ("🧨", "Stopped"),
+    };
+    let fg = |(r, g, b): (u8, u8, u8)| if color { Style::new().fg(Color::Rgb(r, g, b)) } else { Style::new() };
+    let red = matches!(state, RowState::Failed | RowState::Stopped);
+    let [plain, count, image, path_style] = if red {
+        [fg(RED); 4]
+    } else {
+        let underline = if color { Modifier::UNDERLINED } else { Modifier::empty() };
+        [Style::new(), fg(BLUE), fg(MAGENTA), fg(CYAN).add_modifier(underline)]
+    };
+    let width = total.to_string().len();
+
+    Line::from(vec![
+        Span::styled(format!("{emoji} ["), plain),
+        Span::styled(format!("{index:>width$}/{total}"), count),
+        Span::styled(format!("] {word} "), plain),
+        Span::styled("image", image),
+        Span::styled(" ", plain),
+        Span::styled(path.to_string(), path_style),
+    ])
+}
+
+/// The line an image prints when it ends and no live view is drawn: the words of its final [`row`], then
+/// `: <reason>` after a failure, coloured as the row is only when `color` is set.
+pub fn plain_row(index: usize, total: usize, path: &str, end: &ImageEnd, color: bool) -> String {
+    let mut line = row(index, total, path, end.state(), color);
+    if let ImageEnd::Failed(reason) = end {
+        let style = line.spans.first().map_or_else(Style::new, |span| span.style);
+        line.spans.push(Span::styled(format!(": {reason}"), style));
+    }
+
+    line.spans.iter().map(|span| ansi(&span.content, span.style)).collect()
+}
+
+/// The summary's success line, uncoloured, or `None` when nothing was written: the file itself for one image, so a
+/// numbered name stays visible, and `output` as given for more.
+pub fn summary(written: &[PathBuf], output: &Path) -> Option<String> {
+    match written {
+        [] => None,
+        [file] => Some(format!("✨ Image enhanced successfully; file saved at {}", file.display())),
+        _ => Some(format!(
+            "✨ {} images enhanced successfully; files saved under {}",
+            written.len(),
+            output.display()
+        )),
+    }
+}
+
+/// `line`, all in bold yellow: the summary's success line.
+pub fn success(line: impl Display, color: bool) -> String {
+    paint_bold(line, YELLOW, color)
 }
 
 /// `🧨 <error>`, all in bold red.
@@ -135,12 +225,17 @@ pub fn counter(report: Option<&InferenceProgress>, planned: usize) -> (usize, us
     report.map_or((0, planned), |report| (report.operation_index + 1, report.operation_count))
 }
 
-fn paint(text: impl Display, (r, g, b): (u8, u8, u8), color: bool) -> String {
-    if color {
-        text.to_string().with(TermColor::Rgb { r, g, b }).to_string()
-    } else {
-        text.to_string()
+/// `text` with the parts of `style` a row uses, its foreground colour and underline, as escape sequences.
+fn ansi(text: &str, style: Style) -> String {
+    let mut styled = text.stylize();
+    if let Some(Color::Rgb(r, g, b)) = style.fg {
+        styled = styled.with(TermColor::Rgb { r, g, b });
     }
+    if style.add_modifier.contains(Modifier::UNDERLINED) {
+        styled = styled.underlined();
+    }
+
+    styled.to_string()
 }
 
 fn paint_bold(text: impl Display, (r, g, b): (u8, u8, u8), color: bool) -> String {
@@ -213,27 +308,134 @@ mod tests {
 
     #[test]
     fn the_lines_without_colour_are_their_exact_text() {
-        assert_eq!(header(Path::new("photo.jpg"), false), "🖼️ Applying enhancements to the image photo.jpg");
-        assert_eq!(success(Path::new("out.avif"), false), "✨ Image enhanced successfully; file saved at out.avif");
+        assert_eq!(success("✨ done", false), "✨ done");
         assert_eq!(failure("stopped: nothing more was written", false), "🧨 stopped: nothing more was written");
-    }
-
-    #[test]
-    fn the_header_paints_only_the_path_green() {
-        let line = header(Path::new("photo.jpg"), true);
-
-        assert_eq!(line, format!("🖼️ Applying enhancements to the image {}", paint("photo.jpg", GREEN, true)));
-        assert!(line.starts_with("🖼️ Applying enhancements to the image \x1b"), "{line:?}");
     }
 
     #[test]
     fn the_result_lines_are_bold_and_coloured_throughout() {
         let (r, g, b) = YELLOW;
         let text = "✨ Image enhanced successfully; file saved at out.avif";
-        assert_eq!(success(Path::new("out.avif"), true), text.with(TermColor::Rgb { r, g, b }).bold().to_string());
+        assert_eq!(success(text, true), text.with(TermColor::Rgb { r, g, b }).bold().to_string());
 
         let (r, g, b) = RED;
         assert_eq!(failure("boom", true), "🧨 boom".with(TermColor::Rgb { r, g, b }).bold().to_string());
+    }
+
+    const STATES: [RowState; 4] = [RowState::Enhancing, RowState::Enhanced, RowState::Failed, RowState::Stopped];
+
+    #[test]
+    fn each_row_state_is_its_exact_text() {
+        let texts = STATES.map(|state| plain(&row(2, 5, "photos/b.jpg", state, false)));
+
+        assert_eq!(
+            texts,
+            [
+                "🖼️ [2/5] Enhancing image photos/b.jpg",
+                "🖼️ [2/5] Enhanced image photos/b.jpg",
+                "🧨 [2/5] Failed image photos/b.jpg",
+                "🧨 [2/5] Stopped image photos/b.jpg",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_position_is_padded_to_the_width_of_the_total() {
+        assert_eq!(plain(&row(2, 15, "a.jpg", RowState::Enhanced, false)), "🖼️ [ 2/15] Enhanced image a.jpg");
+        assert_eq!(plain(&row(12, 15, "a.jpg", RowState::Enhanced, false)), "🖼️ [12/15] Enhanced image a.jpg");
+        assert_eq!(plain(&row(7, 100, "a.jpg", RowState::Failed, false)), "🧨 [  7/100] Failed image a.jpg");
+    }
+
+    #[test]
+    fn a_working_row_colours_the_count_the_word_image_and_the_path() {
+        let rgb = |(r, g, b): (u8, u8, u8)| Style::new().fg(Color::Rgb(r, g, b));
+
+        for state in [RowState::Enhancing, RowState::Enhanced] {
+            let line = row(2, 5, "b.jpg", state, true);
+            let styles: Vec<_> = line.spans.iter().map(|span| span.style).collect();
+
+            assert_eq!(
+                styles,
+                [
+                    Style::new(),
+                    rgb(BLUE),
+                    Style::new(),
+                    rgb(MAGENTA),
+                    Style::new(),
+                    rgb(CYAN).add_modifier(Modifier::UNDERLINED)
+                ]
+            );
+            assert_eq!(line.spans[1].content, "2/5");
+            assert_eq!(line.spans[3].content, "image");
+            assert_eq!(line.spans[5].content, "b.jpg");
+        }
+    }
+
+    #[test]
+    fn a_failed_or_stopped_row_is_red_throughout_and_not_bold() {
+        let (r, g, b) = RED;
+
+        for state in [RowState::Failed, RowState::Stopped] {
+            let line = row(2, 5, "b.jpg", state, true);
+            assert!(line.spans.iter().all(|span| span.style == Style::new().fg(Color::Rgb(r, g, b))), "{line:?}");
+        }
+    }
+
+    #[test]
+    fn a_row_without_colour_has_no_style() {
+        for state in STATES {
+            let line = row(2, 5, "b.jpg", state, false);
+            assert!(line.spans.iter().all(|span| span.style == Style::new()), "{line:?}");
+        }
+    }
+
+    #[test]
+    fn a_plain_row_is_the_final_rows_text_with_a_failures_reason() {
+        for end in [ImageEnd::Enhanced, ImageEnd::Failed("corrupt".into()), ImageEnd::Stopped] {
+            let line = plain(&row(3, 5, "c.jpg", end.state(), true));
+            let reason = match &end {
+                ImageEnd::Failed(reason) => format!(": {reason}"),
+                _ => String::new(),
+            };
+
+            assert_eq!(plain_row(3, 5, "c.jpg", &end, false), format!("{line}{reason}"));
+        }
+
+        assert_eq!(
+            plain_row(3, 5, "c.jpg", &ImageEnd::Failed("corrupt".into()), false),
+            "🧨 [3/5] Failed image c.jpg: corrupt"
+        );
+    }
+
+    #[test]
+    fn a_plain_row_is_coloured_only_when_asked() {
+        let (r, g, b) = RED;
+        let failed = plain_row(3, 5, "c.jpg", &ImageEnd::Failed("corrupt".into()), true);
+        assert!(failed.ends_with(&": corrupt".with(TermColor::Rgb { r, g, b }).to_string()), "{failed:?}");
+
+        let (r, g, b) = CYAN;
+        let enhanced = plain_row(3, 5, "c.jpg", &ImageEnd::Enhanced, true);
+        assert!(
+            enhanced.ends_with(&"c.jpg".with(TermColor::Rgb { r, g, b }).underlined().to_string()),
+            "{enhanced:?}"
+        );
+
+        assert!(!plain_row(3, 5, "c.jpg", &ImageEnd::Enhanced, false).contains('\x1b'));
+    }
+
+    #[test]
+    fn the_summary_names_the_file_for_one_image_and_the_output_for_more() {
+        let output = Path::new("out");
+
+        assert_eq!(summary(&[], output), None);
+        assert_eq!(
+            summary(&["out_1.png".into()], Path::new("out.png")).as_deref(),
+            Some("✨ Image enhanced successfully; file saved at out_1.png")
+        );
+        assert_eq!(
+            summary(&["out/a.png".into(), "out/b.png".into(), "out/c.png".into()], output).as_deref(),
+            Some("✨ 3 images enhanced successfully; files saved under out")
+        );
     }
 
     #[test]

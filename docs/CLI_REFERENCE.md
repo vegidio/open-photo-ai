@@ -157,7 +157,7 @@ The file name is the same one the GUI's export would use: the prefix, the source
 
 **With `--overwrite`**, the existing file is replaced, without a prompt. The new file is written under a hidden name beside it first, and only renamed over it once it's complete, so a failed or stopped write leaves the original exactly as it was and nothing beside it. This makes in-place enhancement safe: `opai photos --dn --overwrite -o photos` replaces each photo with its denoised result, in its own format. This works when the result's name is the source's own name: the name follows the [export rule](#--format-format-default-preserve), so the extension is written in lowercase and camera RAW becomes TIFF. A camera RAW source (`b.nef`) keeps its file and gets `b.tiff` beside it. An uppercase extension (`a.JPG`) is written as `a.jpg`, which replaces the source on a filesystem that ignores case (the macOS and Windows defaults) but sits beside it on one that doesn't (most Linux filesystems). With two inputs writing to the same name, the second result replaces the first.
 
-The success line always names the file actually written, including its number.
+For a single image, the summary line names the file actually written, including its number (`file saved at out_1.png`). For a batch, the [log file](#log-file) records each file written.
 
 ## Enhancements
 
@@ -386,12 +386,13 @@ With an output **file**, the format is the one its extension names. With an outp
    A file **found inside a directory** that has an image extension but can't be read is not a refusal: it's skipped, recorded in the [log file](#log-file), and the rest of the batch goes on. Nothing is written or created when the run is refused.
 2. **Dependencies are installed (first run only).** The first time `opai` runs, it downloads the components it needs: ONNX Runtime, plus CUDA and TensorRT on systems with a supported NVIDIA GPU. A `💾 Downloading dependency …` line shows the progress. These are shared with the GUI, so if the GUI has already downloaded them, nothing is downloaded. This happens once per command, however many images it has.
 3. **Each image, one after another:**
-   1. **The image is loaded.**
+   1. **The image is loaded.** Its row in the list reads `Enhancing`.
    2. **Models are downloaded (first use only).** Each model is downloaded the first time it's used. The progress bar shows `Downloading` while this happens.
    3. **The enhancements run**, in the [fixed order](#processing-order), with a single progress bar for the image. When `--fr` is used, face detection is included in that bar. The upscale factor, when `--scale` isn't given, is chosen from each image's own size.
-   4. **The file is written** and the success line is printed, naming the file written.
+   4. **The file is written**, and the image's row reads `Enhanced`. The [log file](#log-file) records the file written.
+4. **A summary is printed** once every image has run: how many images were written and where, and the reason for each image that failed.
 
-**A batch continues past a failure.** An image that fails to decode, to be enhanced or to be written gets its own `🧨` line naming it, and the next image runs. At the end, the command exits with [code 1](#exit-codes) if any image failed.
+**A batch continues past a failure.** An image that fails to decode, to be enhanced or to be written has its row turn into a red `🧨 … Failed image` row, and the next image runs. At the end, its reason is listed under the view, and the command exits with [code 1](#exit-codes).
 
 ### Hardware acceleration
 
@@ -412,27 +413,51 @@ Only one Open Photo AI process can run at a time, and that includes the GUI. If 
 
 Everything `opai` prints goes to **stderr**. Nothing is written to stdout.
 
-When stderr is a terminal, you see live progress. Each image gets its own header, bar and result line:
+When stderr is a terminal, you see one live view for the whole run, whatever the number of images: the current image's progress bar, a blank row, and a list of the five most recent images. A batch of eight, while its seventh image is being enhanced:
 
 ```
-💾 Downloading dependency ONNX Runtime   34%          ← only when something is being downloaded
-🖼️ Applying enhancements to the image photos/a.jpg
+💾 Downloading dependency ONNX Runtime   100%          ← only when something was downloaded
 
-Face Recovery   [1/2]  ████████████░░░░░░░░░░░░░░░   38.4%
+Upscale         [2/2]  ████████████░░░░░░░░░░░░░░░   38.4%
 
-✨ Image enhanced successfully; file saved at out/a.jpg
-🖼️ Applying enhancements to the image photos/b.jpg
-
-Upscale         [2/2]  ███████████████████████████  100.0%
-
-🧨 could not enhance photos/b.jpg: …
-🧨 1 of 2 images failed
+🖼️ [3/8] Enhanced image photos/c.jpg
+🖼️ [4/8] Enhanced image photos/d.jpg
+🧨 [5/8] Failed image photos/e.jpg
+🖼️ [6/8] Enhanced image photos/f.jpg
+🖼️ [7/8] Enhancing image photos/g.jpg
 ```
 
-- The progress bar shows the enhancement currently running and its position in the image's chain (`[1/2]` means the first of two enhancements).
-- If an image fails, its result line is `🧨` followed by the image and a short description of the error. If any image failed, a last `🧨` line says how many.
+And once the run ends, the view stays as it was last drawn, with the summary under it:
 
-When stderr is **not** a terminal (for example, when redirected to a file or run in CI), there's no progress bar. Only each image's header line and its `✨`/`🧨` line are printed, without colors.
+```
+✨ 7 images enhanced successfully; files saved under out
+🧨 could not enhance photos/e.jpg: …
+🧨 1 of 8 images failed
+```
+
+- **The progress bar** is the current image's: the enhancement running and its position in the image's chain (`[1/2]` means the first of two enhancements). It starts again from empty for each image. While an image with nothing left to run is processed (an upscale skipped because the image is already large enough), the bar's row is blank.
+- **The list** shows one row per image started so far, scrolling to the most recent five. `[n/N]` is the image's place in the run; `n` is padded to the width of `N`, as in `[ 2/15]`. A row reads:
+  - `🖼️ [n/N] Enhancing image <path>` while the image is loaded, enhanced and written;
+  - `🖼️ [n/N] Enhanced image <path>` once its result is written;
+  - `🧨 [n/N] Failed image <path>` once it has failed;
+  - `🧨 [n/N] Stopped image <path>` when you [stopped the run](#stopping-a-run) while it was being worked on.
+
+  In color, `n/N` is blue, the word `image` magenta and the path cyan and underlined; a `🧨` row is red throughout.
+- **The summary** starts with a success line when at least one image was written. For exactly one image it names the file written, so a numbered name is visible: `✨ Image enhanced successfully; file saved at out_1.png`. For more, it names the output directory: `✨ 7 images enhanced successfully; files saved under out`. Then a `🧨` line gives the reason for each image that failed, in the order they ran, since a failure can have scrolled out of the list. Last comes the run's closing `🧨` line, if it didn't succeed (see [Exit codes](#exit-codes)).
+
+With a single image, the view is three rows tall: the bar, a blank row and the image's row.
+
+When stderr is **not** a terminal (for example, when redirected to a file or run in CI), there's no view and no progress bar. Each image prints one line, without colors, when it ends, with the words its row ends with; a failed image's line adds the reason. Then come the summary's success line and the closing line:
+
+```
+🖼️ [1/3] Enhanced image photos/a.jpg
+🧨 [2/3] Failed image photos/b.jpg: cannot write out/b.jpg: …
+🖼️ [3/3] Enhanced image photos/c.jpg
+✨ 2 images enhanced successfully; files saved under out
+🧨 1 of 3 images failed
+```
+
+A terminal that can't draw the live view gets these same lines, in color.
 
 **Colors** are turned off when the [`NO_COLOR`](https://no-color.org) environment variable is set to any non-empty value:
 
@@ -440,13 +465,13 @@ When stderr is **not** a terminal (for example, when redirected to a file or run
 NO_COLOR=1 opai photo.jpg --up -o out.png
 ```
 
-The terminal shows only the basic progress and the result. More detail, such as a skipped upscale, a skipped unreadable file, how many faces were found, the hardware used and full error messages, goes to the [log file](#log-file).
+The terminal shows only the basic progress and the result. More detail, such as each file written, a skipped upscale, a skipped unreadable file, how many faces were found, the hardware used and full error messages, goes to the [log file](#log-file).
 
 ## Stopping a run
 
 Press **Ctrl-C** at any time to stop.
 
-- **While enhancing:** the run stops at the next safe point. Nothing is written for the image being enhanced, and no image after it is started. Files already written for earlier images are **kept**. The line `🧨 stopped: nothing more was written` is printed. Exit code: `130`.
+- **While enhancing:** the run stops at the next safe point. Nothing is written for the image being enhanced, and its row reads `🧨 [n/N] Stopped image <path>`. No image after it is started. Files already written for earlier images are **kept**, and the summary says how many. The reasons of any images that failed before the stop are listed, then the line `🧨 stopped: nothing more was written` is printed. Exit code: `130`, even if images failed before the stop.
 - **While downloading dependencies:** the download stops. Next time, it resumes from where it left off instead of starting over. Nothing is written. Exit code: `130`.
 
 A file that the stopped image would have replaced with `--overwrite`, including its own source in place, is left exactly as it was, with no hidden file beside it.
@@ -461,6 +486,8 @@ A file that the stopped image would have replaced with `--overwrite`, including 
 | `130` | Stopped with Ctrl-C. Results already written for earlier images are kept.                                  |
 
 `--help` and `--version` exit with `0`.
+
+A run that fails ends with one `🧨` line. When images failed in a run of several, it says how many: `🧨 1 of 8 images failed`. When the run has a single image, that image's own reason is the last line, for example `🧨 could not enhance photo.jpg: …`, and no count follows it.
 
 ## Log file
 
@@ -477,7 +504,7 @@ What's in it that the terminal doesn't show:
 - An upscale that was skipped because the image was already large enough.
 - A file found in a directory that was skipped because it couldn't be read, and why.
 - Face detection results, e.g. `found 3 faces, restoring 2`, or `no faces were found; none will be restored`.
-- Each output's size and format, and the hardware it ran on, e.g. `ran on CoreML, CPU` or `served from cache`.
+- Each file written, with its size and format, and the hardware it ran on, e.g. `ran on CoreML, CPU` or `served from cache`.
 - The full error behind any `🧨` line.
 
 **Please attach this file when [reporting a bug](https://github.com/vegidio/open-photo-ai/issues).**
@@ -503,6 +530,7 @@ What's in it that the terminal doesn't show:
 | `🧨 cannot write into out: it is a file, not a directory, …`                   | `-o` would be a directory, but a file already exists there. |
 | `🧨 cannot write out/a.png: …`                                                 | The result couldn't be written there: the directory is missing or not writable, or every numbered name up to `_999` is taken. |
 | `🧨 Open Photo AI is already running …; close it and try again`                | Another `opai` process or the GUI is running. Close it and try again. |
+| `🧨 [2/5] Failed image photos/b.jpg`                                            | That image failed; the rest of the batch went on. Its reason is listed under the view when the run ends. |
 | `🧨 could not enhance photos/b.jpg: …`                                         | That image failed; the rest of the batch went on. The log file has the full error. |
 | `🧨 failed to decode photos/b.jpg: …`                                          | That image's header was readable, but the image itself wasn't; the rest of the batch went on. |
 | `🧨 2 of 5 images failed`                                                      | The summary after a batch with failures. Exit code `1`. |
@@ -525,6 +553,7 @@ The same commands work in PowerShell and `cmd` on Windows, where `opai` expands 
 Things to keep in mind in scripts:
 
 - **Reruns don't overwrite.** Running the same command twice writes `a_1.jpg` next to `a.jpg`, and so on. Pass `--overwrite` if a rerun should replace the earlier results. Scripts written for older versions, which overwrote `-o` silently, now accumulate numbered files.
+- **The output changed (breaking).** Earlier versions printed a header and a `✨ Image enhanced successfully; file saved at …` line for every image. Now each image prints one line when it ends, `🖼️ [n/N] Enhanced image <path>` or `🧨 [n/N] Failed image <path>: <reason>`, and only the summary names files written: the file itself for a single image, or the output directory for more. Read each written path from the [log file](#log-file) instead.
 - **Exit codes:** `2` means the command itself is wrong and won't succeed on retry; nothing was written. `1` means at least one image failed, while the others were written; the `🧨` lines and the log file say which. `130` means the user pressed Ctrl-C.
 - **One instance at a time:** don't start several `opai` commands in parallel; give them all the images instead.
 

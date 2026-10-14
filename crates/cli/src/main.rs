@@ -13,20 +13,26 @@
 //!
 //! # Where the output goes
 //!
-//! Everything this command shows goes to stderr, and stdout is left empty. On a terminal:
+//! Everything this command shows goes to stderr, and stdout is left empty. On a terminal, one live view covers the
+//! whole batch, and the summary follows it:
 //!
 //! ```text
 //! 💾 Downloading dependency ONNX Runtime   34%            <- only when a dependency is downloaded
-//! 🖼️ Applying enhancements to the image photo.jpg         <- header, bar and result line once per image
 //!
-//! Face Recovery   [1/2]  ████████████░░░░░░░░░░░░░░░   38.4%
+//! Face Recovery   [1/2]  ████████████░░░░░░░░░░░░░░░   38.4%   <- the current image's bar
 //!
-//! ✨ Image enhanced successfully; file saved at out.avif  <- or: 🧨 could not enhance photo.jpg: <why>
-//! 🧨 1 of 3 images failed                                 <- only when an image failed
+//! 🖼️ [1/3] Enhanced image photos/a.jpg                    <- the list: the five most recent images
+//! 🧨 [2/3] Failed image photos/b.jpg                      <- red
+//! 🖼️ [3/3] Enhancing image photos/c.jpg
+//!
+//! ✨ 2 images enhanced successfully; files saved under out  <- or, for one image: … file saved at out_1.png
+//! 🧨 could not enhance photos/b.jpg: <why>                 <- each failure, for a batch of more than one
+//! 🧨 1 of 3 images failed                                  <- the closing line; a single image's is its own failure
 //! ```
 //!
-//! The dependency line and the bar are redrawn in place, and the lines are coloured unless `NO_COLOR` is set. Where
-//! stderr is not a terminal, only each header and result line are printed, without colour.
+//! The dependency line and the view are redrawn in place, and the lines are coloured unless `NO_COLOR` is set. Where
+//! stderr is not a terminal, each image prints one line without colour when it ends (`🖼️ [1/3] Enhanced image …`,
+//! `🧨 [2/3] Failed image …: <why>`), then the success line and the closing line.
 //!
 //! The notes, the face report, what the run executed on and every failure in full go to the log file, `opai.log`.
 //! clap's own `--help`, `--version` and argument errors are printed as clap prints them.
@@ -80,8 +86,8 @@ fn main() -> ExitCode {
     };
 
     // The `Opai` handle lives and dies inside `run`, so the single-instance claim is released and the run cache's
-    // pending writes are settled before the process exits. Every live line is finished by then too, and the blank
-    // line after a bar printed, so the failure line needs nothing before it.
+    // pending writes are settled before the process exits. Every live session is finished by then too, and the summary
+    // printed, so the failure line needs nothing before it.
     match runtime.block_on(run::run(args, look)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
