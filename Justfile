@@ -15,8 +15,10 @@ default:
 # Build a component (`gui` or `cli`) for this OS into build/. Pass `arm64` or `x64` to override the host architecture.
 build target arch=host_arch: (_check-target target) (_compile (if arch == "arm64" { "aarch64" } else if arch == "x64" { "x86_64" } else { error("arch must be arm64 or x64, got: " + arch) }) + "-" + os_triple target)
 
-# Build the GUI like `build gui`, then package it as build/opai-gui_<os>_<arch>.zip (.deb and .rpm on Linux, unzipped).
-package arch=host_arch: (build "gui" arch) (_package "opai-gui_" + os() + "_" + arch)
+# Build a component (`gui` or `cli`) like `build`, then package it as build/opai-<target>_<os>_<arch>.zip. The GUI is
+# packaged as .deb and .rpm on Linux instead, unzipped; the CLI is a .zip everywhere.
+package target arch=host_arch: (build target arch)
+    @just _package-{{ target }} "opai-{{ target }}_{{ os() }}_{{ arch }}"
 
 # Delete build output and all generated build/dev artifacts (target, node_modules, dist, ...).
 [unix]
@@ -105,13 +107,13 @@ _stage-cli triple:
     @echo "Built {{ build_dir }}/opai.exe"
 
 [macos]
-_package base:
+_package-gui base:
     cd "{{ build_dir }}" && rm -f "{{ base }}.zip" && zip -9 -r -y -q "{{ base }}.zip" OpenPhotoAI.app
     @echo "Packaged {{ build_dir }}/{{ base }}.zip"
 
 # The .deb and .rpm are already compressed and are released as they are, so they're only renamed.
 [linux]
-_package base:
+_package-gui base:
     cp "{{ build_dir }}/OpenPhotoAI.deb" "{{ build_dir }}/{{ base }}.deb"
     cp "{{ build_dir }}/OpenPhotoAI.rpm" "{{ build_dir }}/{{ base }}.rpm"
     @echo "Packaged {{ build_dir }}/{{ base }}.deb"
@@ -120,7 +122,18 @@ _package base:
 # Test-Path rather than -ErrorAction SilentlyContinue: a silenced error still leaves $? false, and
 # `powershell -Command` turns that into exit code 1 when the zip doesn't exist yet.
 [windows]
-_package base:
+_package-gui base:
     if (Test-Path "{{ build_dir }}/{{ base }}.zip") { Remove-Item -Force "{{ build_dir }}/{{ base }}.zip" }
     Compress-Archive -CompressionLevel Optimal -Path "{{ build_dir }}/OpenPhotoAI.exe" -DestinationPath "{{ build_dir }}/{{ base }}.zip"
+    @echo "Packaged {{ build_dir }}/{{ base }}.zip"
+
+[unix]
+_package-cli base:
+    cd "{{ build_dir }}" && rm -f "{{ base }}.zip" && zip -9 -q "{{ base }}.zip" opai
+    @echo "Packaged {{ build_dir }}/{{ base }}.zip"
+
+[windows]
+_package-cli base:
+    if (Test-Path "{{ build_dir }}/{{ base }}.zip") { Remove-Item -Force "{{ build_dir }}/{{ base }}.zip" }
+    Compress-Archive -CompressionLevel Optimal -Path "{{ build_dir }}/opai.exe" -DestinationPath "{{ build_dir }}/{{ base }}.zip"
     @echo "Packaged {{ build_dir }}/{{ base }}.zip"

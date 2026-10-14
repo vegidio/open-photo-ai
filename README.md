@@ -44,6 +44,18 @@ curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | sh
 irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex
 ```
 
+### Choosing what to install
+
+By default the scripts install both the GUI and the CLI. Set `OPAI_INSTALL` to `gui` or `cli` to install only one of them:
+
+```bash
+# macOS & Linux
+curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | OPAI_INSTALL=cli sh
+
+# Windows (PowerShell)
+$env:OPAI_INSTALL='cli'; irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex
+```
+
 ## 🖼️ Usage
 
 There are two ways to use **Open Photo AI**: using the GUI or the CLI.

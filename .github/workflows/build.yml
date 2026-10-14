@@ -187,8 +187,11 @@ jobs:
           '
           grep -n '^version = ' Cargo.toml
 
-      - name: Build and package
-        run: just package ${{ matrix.arch }}
+      - name: Build and package the GUI
+        run: just package gui ${{ matrix.arch }}
+
+      - name: Build and package the CLI
+        run: just package cli ${{ matrix.arch }}
 
       - name: Save artifacts
         uses: actions/upload-artifact@v4
@@ -198,6 +201,7 @@ jobs:
             build/opai-gui_*.zip
             build/opai-gui_*.deb
             build/opai-gui_*.rpm
+            build/opai-cli_*.zip
           if-no-files-found: error
 
   release:

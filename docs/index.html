@@ -40,6 +40,11 @@
     <h3>Windows (PowerShell)</h3>
     <pre><code>irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex</code></pre>
 
+    <h2>Choose what to install</h2>
+    <p>Both the GUI and the CLI are installed by default. Set <code>OPAI_INSTALL</code> to <code>gui</code> or <code>cli</code> to install only one.</p>
+    <pre><code>curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | OPAI_INSTALL=cli sh</code></pre>
+    <pre><code>$env:OPAI_INSTALL='cli'; irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex</code></pre>
+
     <h2>Pin a version</h2>
     <pre><code>curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | OPAI_VERSION=26.3.0 sh</code></pre>
     <pre><code>$env:OPAI_VERSION='26.3.0'; irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex</code></pre>

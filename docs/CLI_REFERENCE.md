@@ -16,7 +16,6 @@
 - [Exit codes](#exit-codes)
 - [Log file](#log-file)
 - [Common errors](#common-errors)
-- [Scripting and batch processing](#scripting-and-batch-processing)
 
 ## Synopsis
 

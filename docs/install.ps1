@@ -2,20 +2,27 @@
 # Usage:
 #   irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex
 #   $env:OPAI_VERSION='<tag>'; irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex
+#   $env:OPAI_INSTALL='cli'; irm https://vegidio.github.io/open-photo-ai/install.ps1 | iex
 #
 # OPAI_VERSION defaults to 'latest', which is resolved dynamically from
 # the GitHub API (releases/latest) at run time.
+# OPAI_INSTALL picks what to install: 'gui', 'cli' or 'both' (the default).
 
 #Requires -Version 5.1
 $ErrorActionPreference = 'Stop'
 
 $Repo       = 'vegidio/open-photo-ai'
 $Version    = if ($env:OPAI_VERSION)      { $env:OPAI_VERSION }      else { 'latest' }
+$Install    = if ($env:OPAI_INSTALL)      { $env:OPAI_INSTALL.ToLower() } else { 'both' }
 $InstallDir = if ($env:OPAI_INSTALL_DIR)  { $env:OPAI_INSTALL_DIR }  else { Join-Path $env:LOCALAPPDATA 'Programs\open-photo-ai' }
 
 function Write-Info($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Warn($msg) { Write-Host "warn: $msg" -ForegroundColor Yellow }
 function Write-Fail($msg) { Write-Host "error: $msg" -ForegroundColor Red; throw $msg }
+
+if ($Install -notin @('gui', 'cli', 'both')) { Write-Fail "OPAI_INSTALL must be gui, cli or both, got: $Install" }
+$WantGui = $Install -ne 'cli'
+$WantCli = $Install -ne 'gui'
 
 # WOW64 reports x86 in PROCESSOR_ARCHITECTURE; ARCHITEW6432 holds the real arch when present.
 $archEnv = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
@@ -38,7 +45,8 @@ if ($Version -eq 'latest') {
     $Tag = $Version
 }
 
-Write-Info "installing Open Photo AI $Tag (windows/$Arch)"
+$What = if ($Install -eq 'both') { 'gui+cli' } else { $Install }
+Write-Info "installing Open Photo AI $Tag (windows/$Arch, $What)"
 
 $Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("opai-install-" + [System.Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $Tmp -Force | Out-Null
@@ -77,21 +85,29 @@ try {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
 
-    $dir = Get-Asset "opai-gui_windows_${Arch}.zip"
-    $exePath = Install-Binary -srcPath (Join-Path $dir 'OpenPhotoAI.exe') -name 'OpenPhotoAI.exe'
+    if ($WantGui) {
+        $dir = Get-Asset "opai-gui_windows_${Arch}.zip"
+        $exePath = Install-Binary -srcPath (Join-Path $dir 'OpenPhotoAI.exe') -name 'OpenPhotoAI.exe'
 
-    # Start Menu shortcut
-    $startMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
-    $lnk = Join-Path $startMenu 'Open Photo AI.lnk'
-    try {
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut($lnk)
-        $shortcut.TargetPath = $exePath
-        $shortcut.WorkingDirectory = $InstallDir
-        $shortcut.Save()
-        Write-Info "Start Menu shortcut created at $lnk"
-    } catch {
-        Write-Warn "could not create Start Menu shortcut: $($_.Exception.Message)"
+        # Start Menu shortcut
+        $startMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+        $lnk = Join-Path $startMenu 'Open Photo AI.lnk'
+        try {
+            $shell = New-Object -ComObject WScript.Shell
+            $shortcut = $shell.CreateShortcut($lnk)
+            $shortcut.TargetPath = $exePath
+            $shortcut.WorkingDirectory = $InstallDir
+            $shortcut.Save()
+            Write-Info "Start Menu shortcut created at $lnk"
+        } catch {
+            Write-Warn "could not create Start Menu shortcut: $($_.Exception.Message)"
+        }
+    }
+
+    # The CLI goes next to the GUI, in the dir that's added to PATH below.
+    if ($WantCli) {
+        $dir = Get-Asset "opai-cli_windows_${Arch}.zip"
+        Install-Binary -srcPath (Join-Path $dir 'opai.exe') -name 'opai.exe' | Out-Null
     }
 
     # Add install dir to user PATH (no admin required)

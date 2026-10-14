@@ -3,14 +3,17 @@
 # Usage:
 #   curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | sh
 #   curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | OPAI_VERSION=<tag> sh
+#   curl -fsSL https://vegidio.github.io/open-photo-ai/install.sh | OPAI_INSTALL=cli sh
 #
 # OPAI_VERSION defaults to 'latest', which is resolved dynamically from
 # https://github.com/vegidio/open-photo-ai/releases/latest at run time.
+# OPAI_INSTALL picks what to install: 'gui', 'cli' or 'both' (the default).
 
 set -eu
 
 REPO="vegidio/open-photo-ai"
 OPAI_VERSION="${OPAI_VERSION:-latest}"
+OPAI_INSTALL="${OPAI_INSTALL:-both}"
 
 if [ -t 1 ]; then
     BOLD=$(printf '\033[1m')
@@ -32,15 +35,19 @@ usage() {
 Usage: install.sh [options]
 
 Options:
-  --version <tag>  Install a specific version (default: latest)
-  -h, --help       Show this help message
+  --version <tag>            Install a specific version (default: latest)
+  --install <gui|cli|both>   What to install (default: both)
+  -h, --help                 Show this help message
 
 Environment variables:
-  OPAI_VERSION       release tag         (default: latest)
-  OPAI_INSTALL_DIR   install dir, macOS  (default: ~/Applications)
+  OPAI_VERSION       release tag              (default: latest)
+  OPAI_INSTALL       gui, cli or both         (default: both)
+  OPAI_INSTALL_DIR   GUI install dir, macOS   (default: ~/Applications)
+  OPAI_BIN_DIR       CLI install dir          (default: ~/.local/bin)
 
-On Linux the app is installed system-wide as a .deb or .rpm package, picked
-from the distro, so sudo is needed unless the installer runs as root.
+On Linux the GUI is installed system-wide as a .deb or .rpm package, picked
+from the distro, so sudo is needed unless the installer runs as root. The CLI
+is installed for the current user and doesn't need sudo.
 EOF
 }
 
@@ -48,11 +55,20 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --version)     shift; [ $# -gt 0 ] || error "--version requires an argument"; OPAI_VERSION="$1" ;;
         --version=*)   OPAI_VERSION="${1#--version=}" ;;
+        --install)     shift; [ $# -gt 0 ] || error "--install requires an argument"; OPAI_INSTALL="$1" ;;
+        --install=*)   OPAI_INSTALL="${1#--install=}" ;;
         -h|--help)     usage; exit 0 ;;
         *)             error "unknown option: $1 (try --help)" ;;
     esac
     shift
 done
+
+case "$OPAI_INSTALL" in
+    gui)  WANT_GUI=1; WANT_CLI=0; WHAT=gui ;;
+    cli)  WANT_GUI=0; WANT_CLI=1; WHAT=cli ;;
+    both) WANT_GUI=1; WANT_CLI=1; WHAT=gui+cli ;;
+    *) error "OPAI_INSTALL must be gui, cli or both, got: $OPAI_INSTALL" ;;
+esac
 
 case "$(uname -s)" in
     Darwin) OS=macos ;;
@@ -67,9 +83,10 @@ case "$(uname -m)" in
 esac
 
 INSTALL_DIR="${OPAI_INSTALL_DIR:-$HOME/Applications}"
+BIN_DIR="${OPAI_BIN_DIR:-$HOME/.local/bin}"
 
 has curl || error "curl is required but not found"
-if [ "$OS" = macos ]; then
+if [ "$OS" = macos ] || [ "$WANT_CLI" -eq 1 ]; then
     has unzip || error "unzip is required but not found"
 fi
 
@@ -83,7 +100,7 @@ else
     TAG="$OPAI_VERSION"
 fi
 
-info "installing Open Photo AI ${TAG} (${OS}/${ARCH})"
+info "installing Open Photo AI ${TAG} (${OS}/${ARCH}, ${WHAT})"
 
 TMP=$(mktemp -d -t opai-install.XXXXXX)
 trap 'rm -rf "$TMP"' EXIT INT TERM
@@ -265,9 +282,39 @@ install_linux() {
     create_shortcut "$fmt" "$name"
 }
 
-case "$OS" in
-    macos)  install_macos ;;
-    linux)  install_linux ;;
-esac
+# The CLI is a single binary, so it goes to the user's bin dir on both OSes and never needs sudo unless that dir does.
+install_cli() {
+    asset="opai-cli_${OS}_${ARCH}.zip"
+    download_zip "$asset"
+    bin_src="$TMP/${asset%.zip}/opai"
+    [ -f "$bin_src" ] || error "opai binary not found inside $asset"
+    chmod +x "$bin_src"
+
+    mkdir -p "$BIN_DIR" 2>/dev/null || true
+    info "installing opai to ${BIN_DIR}"
+    move_in_place "$bin_src" "${BIN_DIR}/opai"
+    if [ "$OS" = macos ]; then
+        xattr -d com.apple.quarantine "${BIN_DIR}/opai" 2>/dev/null || true
+    fi
+    info "${GREEN}opai installed${RESET} at ${BIN_DIR}/opai"
+
+    case ":${PATH}:" in
+        *":${BIN_DIR}:"*) ;;
+        *) warn "${BIN_DIR} is not in your PATH; add it to your shell profile to run opai:"
+           # shellcheck disable=SC2016 # $PATH is printed literally, for the user to paste.
+           printf '    export PATH="%s:$PATH"\n' "$BIN_DIR" >&2 ;;
+    esac
+}
+
+if [ "$WANT_GUI" -eq 1 ]; then
+    case "$OS" in
+        macos)  install_macos ;;
+        linux)  install_linux ;;
+    esac
+fi
+
+if [ "$WANT_CLI" -eq 1 ]; then
+    install_cli
+fi
 
 printf '%s\n' "${GREEN}done.${RESET}" >&2
