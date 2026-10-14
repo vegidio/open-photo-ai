@@ -34,6 +34,8 @@ first: one or more paths, each a file or a directory, in any mix. The options SH
 - `--color-balance`, alias `--cb`, with an optional model: `rio` or `saopaulo`. With no model it SHALL mean `rio`.
 - `--cb-bias <bias>`: the colour balance bias, a whole number from -100 to 100 inclusive, defaulting to 50. It SHALL be
   accepted only alongside `--color-balance`.
+- `--autopilot`, alias `--ap`: each image's enhancements are chosen by analysing it, as described in "Autopilot
+  chooses each image's enhancements". It SHALL NOT be combined with any of the options above.
 - `--quality`, alias `-q`: `hd` or `sd`, defaulting to `hd`.
 - `--processor`, alias `-p`: the execution provider to run on, defaulting to `auto`. Its values are described in
   "The processor is chosen on the command line".
@@ -52,7 +54,7 @@ opposite direction. A negative bias SHALL be accepted written as a plain number,
 
 The order in which the enhancement flags are given SHALL NOT change the order they are applied in. That order is the
 library's apply order: denoise, face recovery, colorization, light adjustment, colour balance, sharpen, and then
-upscale. The same enhancements and parameters SHALL apply to every image in the run.
+upscale. Without `--autopilot`, the same enhancements and parameters SHALL apply to every image in the run.
 
 Model names, format names and processor names SHALL be matched without regard to case.
 
@@ -151,14 +153,19 @@ Model names, format names and processor names SHALL be matched without regard to
 ### Requirement: At least one enhancement is requested
 
 A run that gives none of `--upscale`, `--face-recovery`, `--denoise`, `--sharpen`, `--colorization`,
-`--light-adjustment` or `--color-balance` SHALL fail with a usage error and SHALL write nothing. The error SHALL list
-every enhancement flag with its alias.
+`--light-adjustment`, `--color-balance` or `--autopilot` SHALL fail with a usage error and SHALL write nothing. The
+error SHALL list every enhancement flag with its alias, and `--autopilot` with its alias.
 
 #### Scenario: No enhancement flag
 
 - **WHEN** the user runs `opai photo.jpg -o out.png`
 - **THEN** the command fails with a usage error saying at least one enhancement is required, and listing all seven
-  enhancement flags
+  enhancement flags and `--autopilot (--ap)`
+
+#### Scenario: Autopilot alone is enough
+
+- **WHEN** the user runs `opai photo.jpg --ap -o out.png`
+- **THEN** the photograph is analysed, enhanced with what it calls for, and written
 
 #### Scenario: A new family alone is enough
 
@@ -305,9 +312,11 @@ Before initializing, and so before anything is downloaded, the command SHALL:
 - refuse `--format`, `--prefix` or `--suffix` when the output is a file
 - refuse an output that is a directory when a file that is not a directory already exists at that path
 - refuse a run left with no image to enhance once the inputs are expanded
+- with `--autopilot`, refuse an `OPAI_AP_*` environment variable whose value is neither empty, `off`, nor a model of
+  its family, naming the variable and the value and listing the accepted models and `off`
 
-A refusal SHALL name the offending path or flag and SHALL exit with the usage status. Nothing SHALL be written or
-created when the run is refused.
+A refusal SHALL name the offending path, flag or variable and SHALL exit with the usage status. Nothing SHALL be
+written or created when the run is refused.
 
 #### Scenario: Missing input
 
@@ -354,6 +363,13 @@ created when the run is refused.
 - **WHEN** `out.xyz` does not exist and the user runs `opai photo.jpg --up -o out.xyz`
 - **THEN** `.xyz` names no format the command writes, so `out.xyz` is read as a directory: it is created, and the
   result is written to `out.xyz/photo.jpg`
+
+#### Scenario: An autopilot variable naming another family's model
+
+- **WHEN** the user runs `OPAI_AP_UPSCALE=paris opai photo.jpg --ap -o out.png`
+- **THEN** the command fails with a usage error naming `OPAI_AP_UPSCALE` and `paris`, and listing `kyoto`, `osaka`,
+  `tokyo`, `saitama` and `off`
+- **AND** nothing is installed or written
 
 ### Requirement: The output is written like a GUI export
 
@@ -549,6 +565,104 @@ of the chain with no face restored. The run SHALL still end with its success lin
 - **WHEN** the face detection fails during a `--fr --up` run
 - **THEN** the log file records a warning carrying the failure, and the photograph is still upscaled and written
 
+### Requirement: Autopilot chooses each image's enhancements
+
+With `--autopilot`, alias `--ap`, the command SHALL analyse each image after loading it, the same analysis the GUI's
+Autopilot runs, and SHALL apply to that image the enhancements the analysis suggests for it, in the library's apply
+order. Different images in one run MAY receive different enhancements.
+
+`--autopilot` SHALL NOT be combined with any flag that chooses an enhancement or its parameters: `--upscale`,
+`--face-recovery`, `--denoise`, `--sharpen`, `--colorization`, `--light-adjustment`, `--color-balance`, `--scale`,
+`--dn-str`, `--sh-str`, `--la-bias` or `--cb-bias`. Giving any of them with `--autopilot` SHALL fail with a usage
+error that names both flags and says they cannot be used together, and nothing SHALL be installed or written. Every
+other option SHALL work with `--autopilot` as it does without it, and `--quality` SHALL select the precision of the
+models autopilot runs as it does for the enhancement flags.
+
+Each suggested enhancement SHALL run with its family's model as follows:
+
+| Family | Environment variable | Default model |
+|---|---|---|
+| Denoise | `OPAI_AP_DENOISE` | Stockholm |
+| Face recovery | `OPAI_AP_FACE` | Athens |
+| Colorization | `OPAI_AP_COLORIZATION` | Delhi |
+| Light adjustment | `OPAI_AP_LIGHT` | Paris |
+| Colour balance | `OPAI_AP_COLOR` | Rio |
+| Sharpen | `OPAI_AP_SHARPEN` | Moscow |
+| Upscale | `OPAI_AP_UPSCALE` | Tokyo |
+
+The default model SHALL be the one the family's enhancement flag runs when given with no model. Where the family's
+variable is set to one of that family's model names, spelled as the enhancement flag accepts it and matched without
+regard to case, that model SHALL run instead. Where it is set to `off`, matched without regard to case, that family
+SHALL NOT be suggested for any image, and its signal SHALL NOT be read. A variable that is unset or set to the empty
+string SHALL leave the default in place.
+
+A denoise or sharpen SHALL run at strength 100, a light adjustment or colour balance at bias 50, and an upscale at the
+scale the analysis suggests for the image.
+
+These variables SHALL be read only by the command line application and only when `--autopilot` is given. Without
+`--autopilot`, they SHALL have no effect and SHALL NOT be checked. The GUI SHALL NOT read them.
+
+An image for which the analysis suggests nothing SHALL still be written, with its content unchanged, as an image whose
+only requested enhancement was a skipped upscale is.
+
+When a signal of the analysis cannot be read, such as the face detector failing to install or open, the image SHALL
+NOT fail: the enhancements suggested by the signals that were read SHALL run, and the command SHALL record the failure
+in its log file as a warning. A Ctrl-C during the analysis SHALL stop the run as described in "A run can be stopped".
+
+The command SHALL record in its log file, for each image, which enhancements the analysis suggested. This SHALL NOT be
+printed to the terminal beyond what the image's row already shows.
+
+#### Scenario: Different images get different enhancements
+
+- **WHEN** the user runs `opai photos --ap -o out`, and `photos` holds a small grainy photograph and a large sharp one
+  with a colour cast
+- **THEN** the first is denoised and upscaled, the second is colour-balanced, and both are written under `out`
+
+#### Scenario: Default models
+
+- **WHEN** the user runs `opai small.jpg --ap -o out.png` with no `OPAI_AP_*` variable set, and the analysis suggests
+  an upscale
+- **THEN** the upscale runs with Tokyo at FP32, at the suggested scale
+
+#### Scenario: A model chosen through the environment
+
+- **WHEN** the user runs `OPAI_AP_UPSCALE=Osaka opai small.jpg --ap -q sd -o out.png`, and the analysis suggests an
+  upscale
+- **THEN** the upscale runs with Osaka's INT8 build
+
+#### Scenario: A family switched off
+
+- **WHEN** the user runs `OPAI_AP_SHARPEN=off opai blurred.jpg --ap -o out.png`
+- **THEN** no sharpen is applied, whatever the photograph's blur, and the other families are still suggested
+
+#### Scenario: Combined with an enhancement flag
+
+- **WHEN** the user runs `opai photo.jpg --ap --up -o out.png`
+- **THEN** the command fails with a usage error saying `--autopilot` cannot be used with `--upscale`, and nothing is
+  installed or written
+
+#### Scenario: Combined with a parameter flag
+
+- **WHEN** the user runs `opai photo.jpg --ap --dn-str 150 -o out.png`
+- **THEN** the command fails with a usage error saying `--autopilot` cannot be used with `--dn-str`
+
+#### Scenario: Variables ignored without autopilot
+
+- **WHEN** the user runs `OPAI_AP_UPSCALE=paris opai photo.jpg --up -o out.png`
+- **THEN** the variable is not checked, and the photograph is upscaled with Tokyo
+
+#### Scenario: Nothing to do
+
+- **WHEN** the user runs `opai large.jpg --ap -o out.png`, and the analysis suggests nothing
+- **THEN** `out.png` is written with the photograph's content unchanged
+- **AND** the command ends with its success line
+
+#### Scenario: The face detector cannot be obtained
+
+- **WHEN** the user runs `opai small-portrait.jpg --ap -o out.png`, and the face detection model cannot be installed
+- **THEN** the image is still upscaled and written, without face recovery
+- **AND** the log file records the failed detection as a warning
+
 ### Requirement: Progress is shown while the command works
 
 Everything the command shows SHALL be written to standard error. Standard output SHALL stay empty.
@@ -592,7 +706,9 @@ When standard error is a terminal, the command SHALL show, in this order:
       the image's path as it was given or found:
       - `🖼️ [<p>%] Preparing to enhance <path>` before the image's run has reported anything, and for the whole time
         an image with no enhancement left to run is processed, because the only one requested was an upscale skipped
-        as unnecessary
+        as unnecessary or because autopilot suggested none
+      - `🖼️ [<p>%] Choosing enhancements for <path>` with `--autopilot`, from when the image is loaded until its
+        analysis has ended, at the percentage `0`
       - `🖼️ [<p>%] Downloading <family> for <path>` while an operation's model is being fetched
       - `🖼️ [<p>%] Applying <family> to <path>` while an operation runs or is served from the run cache, and after
         the last one until the result is written
@@ -723,6 +839,14 @@ asked for.
   unnecessary
 - **THEN** the row reads `🖼️ [  0%] Preparing to enhance large.jpg` until the file is written
 - **AND** then `🖼️ [100%] Enhancements applied to large.jpg`
+
+#### Scenario: An image being analysed
+
+- **WHEN** the user runs `opai photo.jpg --ap -o out.png` on a terminal
+- **THEN** once the image is loaded, its row reads `🖼️ [  0%] Choosing enhancements for photo.jpg`, its path in the
+  same column as every other wording's
+- **AND** once the analysis has ended, the row moves on to `Downloading <family> for` or `Applying <family> to` for each
+  suggested enhancement, or stays at `Preparing to enhance` when none was suggested, until the file is written
 
 #### Scenario: A batch that succeeds
 
