@@ -4,14 +4,17 @@
 //! output, inputs               --> refused here: nothing installed
 //! initialize                   --> once; the 💾 line; a Ctrl-C on it abandons initialization; another instance ends it
 //! check the processor          --> one this machine does not offer is refused here: no image loaded
+//! the processor line           --> 🧠 naming the processor asked for and the quality, then a blank line; every mode
 //! Ctrl-C handler               --> from here a SIGINT stops the run instead of killing the process (plain mode)
-//! start the batch's view       --> one live session for every image: the bar over the list
+//! start the batch's view       --> one live session for every image: the batch's bar over the list
 //! for each image:
-//!   plan, start its row        --> 🖼️ [n/N] Enhancing image <path>, and a fresh bar
-//!   load, find faces, process  --> one bar over detection and chain, planned for the image's own size; a failed
-//!                                  detection is logged and the image goes on
+//!   plan, start its row        --> 🖼️ [  0%] Preparing to enhance <path>; the bar is not touched
+//!   load, find faces, process  --> the row's percentage and words, and the bar, move with each report over detection
+//!                                  and chain, planned for the image's own size; a failed detection is logged and
+//!                                  the image goes on
 //!   claim, save, commit        --> the source's depth, the library's recommended settings
-//!   end its row                --> Enhanced, Failed or Stopped; off a terminal, its one plain line
+//!   end its row                --> Enhancements applied, Failed or Stopped, and the bar's [n/N] counts it;
+//!                                  off a terminal, its one plain line
 //! finish the view, summarize   --> ✨ naming the file for one image or the output for more, then each failure's 🧨
 //!                                  line where the view hid it
 //! ```
@@ -85,6 +88,10 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     let supported = opai.providers();
     check_processor(args.processor, supported.supports(args.processor.into()), &supported.available())?;
 
+    // No session holds stderr here: the dependency line is frozen and the batch's view has not started.
+    eprintln!("{}", look::processor_line(args.processor.into(), args.quality, look.color));
+    eprintln!();
+
     // In plain mode a Ctrl-C is still a SIGINT. While the batch's view is drawn it is a key press, which the view
     // turns into the same cancellation.
     stop_on_ctrl_c(&cancel);
@@ -107,7 +114,7 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
         for note in &plan.notes {
             tracing::info!("{}: {note}", source.path.display());
         }
-        view.start_image(index, &source.path, plan.operations.len());
+        view.start_image(index, &source.path);
 
         match enhance_one(&opai, &args, &target, source, plan, &view, &cancel).await {
             Ok(path) => {
@@ -229,7 +236,8 @@ async fn enhance_one(
     Ok(written)
 }
 
-/// Finds the faces `operations` needs and runs the chain, both on `provider` and reporting onto the image's one bar.
+/// Finds the faces `operations` needs and runs the chain, both on `provider` and reporting onto the image's row
+/// and the batch's bar.
 async fn enhance(
     opai: &Opai,
     picture: &Picture,
@@ -240,7 +248,7 @@ async fn enhance(
 ) -> Result<(FacedChain, Enhanced), CliError> {
     // Built before the operations move into `find_chain_faces`; a face selection changes no family, so it is the same
     // chain `process` runs.
-    let handover = Handover::new(&view.on_bar(), &operations);
+    let handover = Handover::new(&view.on_inference(), &operations);
 
     let faced = opai
         .find_chain_faces(
@@ -346,8 +354,10 @@ const fn plural<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::args::Quality;
+    use crate::progress::tests::{inference, upscale};
     use clap::ValueEnum;
-    use opai::{Confidence, Face, Faces, InferenceError, Point, Rect};
+    use opai::{Confidence, Face, Faces, InferenceError, Point, Rect, Stage};
 
     /// A face whose box is `side` pixels square: restorable up to 512, too large above it.
     fn face(side: f32) -> Face {
@@ -411,20 +421,23 @@ mod tests {
     }
 
     #[test]
-    fn plain_output_is_one_line_per_image_then_the_summary_then_the_closing_line() {
-        // The spec's "Output piped to a file": three images, the second failing.
+    fn plain_output_is_the_processor_line_then_one_line_per_image_then_the_summary_then_the_closing_line() {
+        // The spec's "Output piped to a file": three images on auto at hd, the second failing at 42%.
         let view = View::new(Look { interactive: false, color: false }, CancellationToken::new());
+        let on_inference = view.on_inference();
         let [a, b, c] = ["photos/a.jpg", "photos/b.jpg", "photos/c.jpg"].map(Path::new);
+        let mut lines = vec![look::processor_line(ExecutionProvider::Auto, Quality::Hd, false), String::new()];
 
         view.start_batch(3);
-        let mut lines: Vec<String> = [
-            view.end_line(1, a, &ImageEnd::Enhanced),
-            view.end_line(2, b, &ImageEnd::Failed("disk full".into())),
-            view.end_line(3, c, &ImageEnd::Enhanced),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
+        view.start_image(1, a);
+        on_inference(&inference(upscale(), Stage::Running, 1.0));
+        lines.extend(view.end_line(1, a, &ImageEnd::Enhanced));
+        view.start_image(2, b);
+        on_inference(&inference(upscale(), Stage::Running, 0.42));
+        lines.extend(view.end_line(2, b, &ImageEnd::Failed("disk full".into())));
+        view.start_image(3, c);
+        on_inference(&inference(upscale(), Stage::Running, 1.0));
+        lines.extend(view.end_line(3, c, &ImageEnd::Enhanced));
         let live = view.finish_batch();
 
         let written = [PathBuf::from("out/a.jpg"), PathBuf::from("out/c.jpg")];
@@ -436,9 +449,11 @@ mod tests {
         assert_eq!(
             lines,
             [
-                "🖼️ [1/3] Enhanced image photos/a.jpg",
-                "🧨 [2/3] Failed image photos/b.jpg: disk full",
-                "🖼️ [3/3] Enhanced image photos/c.jpg",
+                "🧠 Running inference using the processor Auto; quality HD",
+                "",
+                "🖼️ [100%] Enhancements applied to       photos/a.jpg",
+                "🧨 [ 42%] Failed to enhance             photos/b.jpg: disk full",
+                "🖼️ [100%] Enhancements applied to       photos/c.jpg",
                 "✨ 2 images enhanced successfully; files saved under out",
                 "🧨 1 of 3 images failed",
             ]

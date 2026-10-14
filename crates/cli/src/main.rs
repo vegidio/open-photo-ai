@@ -9,8 +9,8 @@
 //!
 //! Everything the run does is the library's, naming each result included (`opai::export`). What lives here is the
 //! terminal's own vocabulary — the flags, the mapping from them to `opai` constructors, expanding the inputs, reading
-//! `-o` as a file or a directory and mirroring directory inputs under it, the lines and the bar the terminal shows,
-//! and the exit status.
+//! `-o` as a file or a directory and mirroring directory inputs under it, the lines, the rows and the bar the terminal
+//! shows, and the exit status.
 //!
 //! # Where the output goes
 //!
@@ -18,13 +18,15 @@
 //! whole batch, and the summary follows it:
 //!
 //! ```text
-//! 💾 Downloading dependency ONNX Runtime   34%            <- only when a dependency is downloaded
+//! 💾 Downloading dependency ONNX Runtime... ✓ 100% Complete  <- only when a dependency is downloaded; a spinner
+//!                                                               turns until it reaches 100%
+//! 🧠 Running inference using the processor Auto; quality HD  <- the processor asked for, in every mode
 //!
-//! Face Recovery   [1/2]  ████████████░░░░░░░░░░░░░░░   38.4%   <- the current image's bar
+//! Enhancing [2/3]  ██████████████████████░░░░░░░░░   79.0%   ETA 12s   <- the batch's bar, and the time it has left
 //!
-//! 🖼️ [1/3] Enhanced image photos/a.jpg                    <- the list: the five most recent images
-//! 🧨 [2/3] Failed image photos/b.jpg                      <- red
-//! 🖼️ [3/3] Enhancing image photos/c.jpg
+//! 🖼️ [100%] Enhancements applied to       photos/a.jpg   <- the list: the five most recent images
+//! 🧨 [ 42%] Failed to enhance             photos/b.jpg   <- red
+//! 🖼️ [ 37%] Applying Upscale to           photos/c.jpg
 //!
 //! ✨ 2 images enhanced successfully; files saved under out  <- or, for one image: … file saved at out_1.png
 //! 🧨 could not enhance photos/b.jpg: <why>                 <- each failure, for a batch of more than one
@@ -32,8 +34,9 @@
 //! ```
 //!
 //! The dependency line and the view are redrawn in place, and the lines are coloured unless `NO_COLOR` is set. Where
-//! stderr is not a terminal, each image prints one line without colour when it ends (`🖼️ [1/3] Enhanced image …`,
-//! `🧨 [2/3] Failed image …: <why>`), then the success line and the closing line.
+//! stderr is not a terminal, the processor line and a blank line come first, then each image prints one line without
+//! colour when it ends (`🖼️ [100%] Enhancements applied to …`, `🧨 [ 42%] Failed to enhance …: <why>`), then the
+//! success line and the closing line.
 //!
 //! The notes, the face report, what the run executed on and every failure in full go to the log file, `opai.log`.
 //! clap's own `--help`, `--version` and argument errors are printed as clap prints them.

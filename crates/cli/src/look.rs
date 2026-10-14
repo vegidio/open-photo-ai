@@ -1,5 +1,5 @@
-//! What the terminal's lines say and how they are coloured: the dependency line, the bar's label and counter, the list's
-//! rows and their plain lines, the summary and the failure line. Pure text, so all of it is tested without a terminal.
+//! What the terminal's lines say and how they are coloured: the dependency line, the processor line, the list's rows
+//! and their plain lines, the summary and the failure line. Pure text, so all of it is tested without a terminal.
 //!
 //! Whether to draw live lines and whether to colour is decided once, in [`Look`], the way MediaSim decides it: a
 //! terminal, and `NO_COLOR` unset or empty.
@@ -9,30 +9,25 @@ use std::fmt::Display;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-use opai::{Family, InferenceProgress, Stage};
+use opai::{ExecutionProvider, Family};
 use ratatui::crossterm::style::{Color as TermColor, Stylize};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
-/// The dependency's name and the success line.
+use crate::args::Quality;
+
+/// The success line and the processor line's quality.
 pub const YELLOW: (u8, u8, u8) = (0xe5, 0xdb, 0x08);
 /// The failure line, bold, and a `🧨` row, not bold.
 pub const RED: (u8, u8, u8) = (0xf4, 0x43, 0x36);
-/// A row's `n/N`, UMD's blue.
+/// A row's percentage, UMD's blue.
 pub const BLUE: (u8, u8, u8) = (0x82, 0xaa, 0xff);
-/// A row's word `image`, UMD's magenta.
+/// A row's enhancement or word `enhancements`, and the dependency line's spinner, UMD's magenta.
 pub const MAGENTA: (u8, u8, u8) = (0xc7, 0x92, 0xe9);
 /// A row's path, underlined, UMD's cyan.
 pub const CYAN: (u8, u8, u8) = (0x88, 0xdd, 0xff);
-
-/// The bar's label before the run has reported anything, and for a stage this crate does not know.
-const ENHANCING: &str = "Enhancing";
-/// The bar's label while an operation's model is being fetched. Unlike the GUI's chip, it carries no percentage.
-const DOWNLOADING: &str = "Downloading";
-
-/// The columns the bar's label is padded to, so the bar does not move when the label changes: the widest label
-/// [`label`] returns.
-pub const LABEL_WIDTH: usize = "Face Recovery".len();
+/// The dependency line's `✓` and the processor line's processor, UMD's green.
+pub const GREEN: (u8, u8, u8) = (0x00, 0xc2, 0x02);
 
 /// Whether a stream may be coloured: it must be a terminal, and `NO_COLOR` must be unset or empty.
 pub fn use_color(is_terminal: bool, no_color: Option<&OsStr>) -> bool {
@@ -60,13 +55,24 @@ impl Look {
     }
 }
 
+/// What an image being worked on is doing, as its row names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Activity {
+    /// Its run has reported nothing yet, or it has nothing to run.
+    Preparing,
+    /// The model of an operation of this family is being fetched.
+    Downloading(Family),
+    /// An operation of this family runs, or is served from the run cache.
+    Applying(Family),
+}
+
 /// Where an image's row stands: being worked on, or how it ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowState {
     /// Being loaded, enhanced or written.
-    Enhancing,
+    Working(Activity),
     /// Its result is written.
-    Enhanced,
+    Applied,
     /// It failed.
     Failed,
     /// The run was stopped while working on it.
@@ -88,53 +94,89 @@ impl ImageEnd {
     /// The row this end leaves.
     pub const fn state(&self) -> RowState {
         match self {
-            Self::Enhanced => RowState::Enhanced,
+            Self::Enhanced => RowState::Applied,
             Self::Failed(_) => RowState::Failed,
             Self::Stopped => RowState::Stopped,
         }
     }
 }
 
-/// The list's row for the image at `index` (from one) of `total`: `🖼️ [n/N] Enhancing image <path>` or `Enhanced`,
-/// with `n/N` blue, `image` magenta and the path cyan and underlined, or `🧨 [n/N] Failed image <path>` or `Stopped`,
-/// red throughout. `n` is right-aligned to the width of `N`, so the words do not shift when the count gains a digit.
-pub fn row(index: usize, total: usize, path: &str, state: RowState, color: bool) -> Line<'static> {
-    let (emoji, word) = match state {
-        RowState::Enhancing => ("🖼️", "Enhancing"),
-        RowState::Enhanced => ("🖼️", "Enhanced"),
-        RowState::Failed => ("🧨", "Failed"),
-        RowState::Stopped => ("🧨", "Stopped"),
-    };
+/// An image's progress as its row shows it: `fraction` floored to a whole percentage, held at `99` until the image is
+/// `written`, and `100` once it is, whatever `fraction` reached.
+pub fn image_percent(fraction: f64, written: bool) -> u8 {
+    if written { 100 } else { whole_percent(fraction).min(99) }
+}
+
+/// The columns a row's words take before its path: those of the longest, a download for the longest family name, so
+/// every path starts in the same column.
+const WORDS_WIDTH: usize = "Downloading ".len() + "Face Recovery".len() + " for".len();
+
+/// The list's row for an image at `percent`: `🖼️ [ 42%] Applying Upscale to` and the other words `state` reads as,
+/// padded to [`WORDS_WIDTH`], then the path. The percentage and its `%` are blue, the enhancement or `Enhancements`
+/// magenta and the path cyan and underlined, or a `🧨` row is red throughout. The percentage is right-aligned to three
+/// columns and the words padded, so every path starts in the same column.
+pub fn row(percent: u8, path: &str, state: RowState, color: bool) -> Line<'static> {
     let fg = |(r, g, b): (u8, u8, u8)| if color { Style::new().fg(Color::Rgb(r, g, b)) } else { Style::new() };
     let red = matches!(state, RowState::Failed | RowState::Stopped);
-    let [plain, count, image, path_style] = if red {
+    let [plain, percent_style, word_style, path_style] = if red {
         [fg(RED); 4]
     } else {
         let underline = if color { Modifier::UNDERLINED } else { Modifier::empty() };
         [Style::new(), fg(BLUE), fg(MAGENTA), fg(CYAN).add_modifier(underline)]
     };
-    let width = total.to_string().len();
 
-    Line::from(vec![
+    // The words before the magenta one, the magenta one, and the words after it.
+    let (emoji, before, word, after) = match state {
+        RowState::Working(Activity::Preparing) => ("🖼️", "Preparing to enhance", None, ""),
+        RowState::Working(Activity::Downloading(family)) => ("🖼️", "Downloading ", Some(family_label(family)), " for"),
+        RowState::Working(Activity::Applying(family)) => ("🖼️", "Applying ", Some(family_label(family)), " to"),
+        RowState::Applied => ("🖼️", "", Some("Enhancements"), " applied to"),
+        RowState::Failed => ("🧨", "Failed to enhance", None, ""),
+        RowState::Stopped => ("🧨", "Stopped enhancing", None, ""),
+    };
+    let words = before.len() + word.map_or(0, str::len) + after.len();
+    let padding = " ".repeat(WORDS_WIDTH.saturating_sub(words) + 1);
+
+    let mut spans = vec![
         Span::styled(format!("{emoji} ["), plain),
-        Span::styled(format!("{index:>width$}/{total}"), count),
-        Span::styled(format!("] {word} "), plain),
-        Span::styled("image", image),
-        Span::styled(" ", plain),
-        Span::styled(path.to_string(), path_style),
-    ])
+        Span::styled(format!("{percent:>3}%"), percent_style),
+        Span::styled(format!("] {before}"), plain),
+    ];
+    if let Some(word) = word {
+        spans.push(Span::styled(word, word_style));
+    }
+    spans.push(Span::styled(format!("{after}{padding}"), plain));
+    spans.push(Span::styled(path.to_string(), path_style));
+
+    Line::from(spans)
 }
 
-/// The line an image prints when it ends and no live view is drawn: the words of its final [`row`], then
+/// The line an image prints when it ends and no live view is drawn: the words of its final [`row`] at `percent`, then
 /// `: <reason>` after a failure, coloured as the row is only when `color` is set.
-pub fn plain_row(index: usize, total: usize, path: &str, end: &ImageEnd, color: bool) -> String {
-    let mut line = row(index, total, path, end.state(), color);
+pub fn plain_row(percent: u8, path: &str, end: &ImageEnd, color: bool) -> String {
+    let mut line = row(percent, path, end.state(), color);
     if let ImageEnd::Failed(reason) = end {
         let style = line.spans.first().map_or_else(Style::new, |span| span.style);
         line.spans.push(Span::styled(format!(": {reason}"), style));
     }
 
     line.spans.iter().map(|span| ansi(&span.content, span.style)).collect()
+}
+
+/// `🧠 Running inference using the processor <provider>; quality <HD|SD>`, with the processor green and the quality
+/// yellow. The processor is spelled as `opai` spells it, `Auto` included.
+pub fn processor_line(provider: ExecutionProvider, quality: Quality, color: bool) -> String {
+    let fg = |(r, g, b): (u8, u8, u8)| if color { Style::new().fg(Color::Rgb(r, g, b)) } else { Style::new() };
+
+    [
+        ("🧠 Running inference using the processor ", Style::new()),
+        (provider.as_str(), fg(GREEN)),
+        ("; quality ", Style::new()),
+        (quality.label(), fg(YELLOW)),
+    ]
+    .iter()
+    .map(|(text, style)| ansi(text, *style))
+    .collect()
 }
 
 /// The summary's success line, uncoloured, or `None` when nothing was written: the file itself for one image, so a
@@ -161,53 +203,43 @@ pub fn failure(error: impl Display, color: bool) -> String {
     paint_bold(format!("🧨 {error}"), RED, color)
 }
 
-/// `💾 Downloading dependency <name>   <percent>%`, with the name in yellow and the percentage in bold white.
+/// The dependency line's mark once its install reads `100`: `✓`, green.
+pub fn done_mark(color: bool) -> Span<'static> {
+    let (r, g, b) = GREEN;
+    Span::styled("✓", if color { Style::new().fg(Color::Rgb(r, g, b)) } else { Style::new() })
+}
+
+/// `💾 Downloading dependency <name>... <mark> <percent>% Complete`, with the name and the percentage in bold white
+/// and `mark`, the spinner or [`done_mark`], drawn as given.
 ///
 /// The percentage is `fraction` floored to a whole number, and `100` only once `fraction` is exactly `1.0`, which is
 /// the library's last report for an install.
-pub fn dependency_line(name: &str, fraction: f64, color: bool) -> Line<'static> {
-    let (name_style, percent_style) = if color {
-        let (r, g, b) = YELLOW;
-        (Style::new().fg(Color::Rgb(r, g, b)), Style::new().fg(Color::White).add_modifier(Modifier::BOLD))
-    } else {
-        (Style::new(), Style::new())
-    };
+pub fn dependency_line(name: &str, fraction: f64, mark: Span<'static>, color: bool) -> Line<'static> {
+    let bold = if color { Style::new().fg(Color::White).add_modifier(Modifier::BOLD) } else { Style::new() };
 
     Line::from(vec![
         Span::raw("💾 Downloading dependency "),
-        Span::styled(name.to_string(), name_style),
-        Span::raw("   "),
-        Span::styled(format!("{}%", whole_percent(fraction)), percent_style),
+        Span::styled(name.to_string(), bold),
+        Span::raw("... "),
+        mark,
+        Span::raw(" "),
+        Span::styled(format!("{}%", whole_percent(fraction)), bold),
+        Span::raw(" Complete"),
     ])
 }
 
 /// `fraction` as a whole percentage, floored, and below `100` until `fraction` reaches `1.0`. The small nudge keeps a
 /// fraction such as `0.29`, stored as `0.28999…`, from showing as `28`.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "clamped to 0..=100 first")]
-fn whole_percent(fraction: f64) -> u8 {
+pub fn whole_percent(fraction: f64) -> u8 {
     let fraction = fraction.clamp(0.0, 1.0);
     let percent = (fraction * 100.0 + 1e-6).floor() as u8;
 
     if fraction < 1.0 { percent.min(99) } else { 100 }
 }
 
-/// The bar's label for the latest `report`, or for none yet, in the GUI's English words.
-///
-/// A face detection reads as the face recovery it serves, as it does in the GUI.
-pub fn label(report: Option<&InferenceProgress>) -> &'static str {
-    let Some(report) = report else {
-        return ENHANCING;
-    };
-
-    match report.stage {
-        Stage::Installing(_) => DOWNLOADING,
-        Stage::Running | Stage::Cached => family_label(report.subject.family()),
-        _ => ENHANCING,
-    }
-}
-
 /// The GUI's English chip label for `family`. Total, so a family added to the library fails to compile here until it
-/// is given one.
+/// is given one. A face detection reads as the face recovery it serves, as it does in the GUI.
 const fn family_label(family: Family) -> &'static str {
     match family {
         Family::Detection | Family::FaceRecovery => "Face Recovery",
@@ -220,12 +252,7 @@ const fn family_label(family: Family) -> &'static str {
     }
 }
 
-/// The bar's `[n/N]` counter: `[0/planned]` before any report, then the reported step counted from one.
-pub fn counter(report: Option<&InferenceProgress>, planned: usize) -> (usize, usize) {
-    report.map_or((0, planned), |report| (report.operation_index + 1, report.operation_count))
-}
-
-/// `text` with the parts of `style` a row uses, its foreground colour and underline, as escape sequences.
+/// `text` with the parts of `style` a line uses, its foreground colour and underline, as escape sequences.
 fn ansi(text: &str, style: Style) -> String {
     let mut styled = text.stylize();
     if let Some(Color::Rgb(r, g, b)) = style.fg {
@@ -248,46 +275,14 @@ fn paint_bold(text: impl Display, (r, g, b): (u8, u8, u8), color: bool) -> Strin
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
-    use opai::{
-        Dependency, Detection, FaceRecovery, Faces, FloatPrecision, Operation, Phase, Progress, Scale, Subject,
-        Upscale, UpscaleVariant,
-    };
 
     fn plain(line: &Line<'_>) -> String {
         line.spans.iter().map(|span| span.content.as_ref()).collect()
     }
 
-    fn report(subject: Subject, stage: Stage, (index, count): (usize, usize)) -> InferenceProgress {
-        InferenceProgress {
-            subject: Arc::new(subject),
-            stage,
-            operation_fraction: 0.5,
-            operation_index: index,
-            operation_count: count,
-            chain_fraction: 0.5,
-        }
-    }
-
-    fn face_recovery() -> Subject {
-        Subject::Enhancement(FaceRecovery::santorini(FloatPrecision::Fp32, Faces::empty()))
-    }
-
-    fn upscale() -> Subject {
-        let scale = Scale::new(2.0).expect("a valid scale");
-        Subject::Enhancement(Operation::Upscale(Upscale::new(UpscaleVariant::Kyoto(FloatPrecision::Fp32), scale)))
-    }
-
-    fn installing() -> Stage {
-        Stage::Installing(Progress {
-            dependency: Dependency::Runtime,
-            phase: Phase::Downloading,
-            bytes: 10,
-            total: Some(100),
-            fraction: 0.1,
-        })
+    fn rgb((r, g, b): (u8, u8, u8)) -> Style {
+        Style::new().fg(Color::Rgb(r, g, b))
     }
 
     #[test]
@@ -322,105 +317,161 @@ mod tests {
         assert_eq!(failure("boom", true), "🧨 boom".with(TermColor::Rgb { r, g, b }).bold().to_string());
     }
 
-    const STATES: [RowState; 4] = [RowState::Enhancing, RowState::Enhanced, RowState::Failed, RowState::Stopped];
+    const APPLYING: RowState = RowState::Working(Activity::Applying(Family::Upscale));
 
     #[test]
     fn each_row_state_is_its_exact_text() {
-        let texts = STATES.map(|state| plain(&row(2, 5, "photos/b.jpg", state, false)));
+        let path = "photos/b.jpg";
+        let texts = [
+            row(0, path, RowState::Working(Activity::Preparing), false),
+            row(12, path, RowState::Working(Activity::Downloading(Family::Upscale)), false),
+            row(42, path, RowState::Working(Activity::Applying(Family::FaceRecovery)), false),
+            row(42, path, APPLYING, false),
+            row(100, path, RowState::Applied, false),
+            row(42, path, RowState::Failed, false),
+            row(7, path, RowState::Stopped, false),
+        ]
+        .map(|line| plain(&line));
 
         assert_eq!(
             texts,
             [
-                "🖼️ [2/5] Enhancing image photos/b.jpg",
-                "🖼️ [2/5] Enhanced image photos/b.jpg",
-                "🧨 [2/5] Failed image photos/b.jpg",
-                "🧨 [2/5] Stopped image photos/b.jpg",
+                "🖼️ [  0%] Preparing to enhance          photos/b.jpg",
+                "🖼️ [ 12%] Downloading Upscale for       photos/b.jpg",
+                "🖼️ [ 42%] Applying Face Recovery to     photos/b.jpg",
+                "🖼️ [ 42%] Applying Upscale to           photos/b.jpg",
+                "🖼️ [100%] Enhancements applied to       photos/b.jpg",
+                "🧨 [ 42%] Failed to enhance             photos/b.jpg",
+                "🧨 [  7%] Stopped enhancing             photos/b.jpg",
             ]
         );
     }
 
     #[test]
-    fn the_position_is_padded_to_the_width_of_the_total() {
-        assert_eq!(plain(&row(2, 15, "a.jpg", RowState::Enhanced, false)), "🖼️ [ 2/15] Enhanced image a.jpg");
-        assert_eq!(plain(&row(12, 15, "a.jpg", RowState::Enhanced, false)), "🖼️ [12/15] Enhanced image a.jpg");
-        assert_eq!(plain(&row(7, 100, "a.jpg", RowState::Failed, false)), "🧨 [  7/100] Failed image a.jpg");
-    }
+    fn every_path_starts_in_the_same_column_and_the_longest_words_keep_a_space() {
+        let mut states =
+            vec![RowState::Working(Activity::Preparing), RowState::Applied, RowState::Failed, RowState::Stopped];
+        for family in Family::ALL {
+            states.push(RowState::Working(Activity::Downloading(family)));
+            states.push(RowState::Working(Activity::Applying(family)));
+        }
 
-    #[test]
-    fn a_working_row_colours_the_count_the_word_image_and_the_path() {
-        let rgb = |(r, g, b): (u8, u8, u8)| Style::new().fg(Color::Rgb(r, g, b));
+        for state in states {
+            let text = plain(&row(42, "x.jpg", state, false));
+            let words = text.split("] ").nth(1).and_then(|rest| rest.strip_suffix("x.jpg")).expect("words");
 
-        for state in [RowState::Enhancing, RowState::Enhanced] {
-            let line = row(2, 5, "b.jpg", state, true);
-            let styles: Vec<_> = line.spans.iter().map(|span| span.style).collect();
-
-            assert_eq!(
-                styles,
-                [
-                    Style::new(),
-                    rgb(BLUE),
-                    Style::new(),
-                    rgb(MAGENTA),
-                    Style::new(),
-                    rgb(CYAN).add_modifier(Modifier::UNDERLINED)
-                ]
-            );
-            assert_eq!(line.spans[1].content, "2/5");
-            assert_eq!(line.spans[3].content, "image");
-            assert_eq!(line.spans[5].content, "b.jpg");
+            assert_eq!(words.len(), WORDS_WIDTH + 1, "{text:?}");
+            assert!(words.ends_with(' ') && !words.trim_end().is_empty(), "{text:?}");
         }
     }
 
     #[test]
-    fn a_failed_or_stopped_row_is_red_throughout_and_not_bold() {
-        let (r, g, b) = RED;
+    fn a_detection_reads_as_face_recovery() {
+        let detecting = RowState::Working(Activity::Applying(Family::Detection));
 
+        assert!(plain(&row(3, "a.jpg", detecting, false)).starts_with("🖼️ [  3%] Applying Face Recovery to "));
+    }
+
+    #[test]
+    fn an_applying_row_colours_the_percentage_the_family_and_the_path() {
+        let line = row(42, "b.jpg", APPLYING, true);
+        let spans: Vec<_> = line.spans.iter().map(|span| (span.content.as_ref(), span.style)).collect();
+
+        assert_eq!(
+            spans,
+            [
+                ("🖼️ [", Style::new()),
+                (" 42%", rgb(BLUE)),
+                ("] Applying ", Style::new()),
+                ("Upscale", rgb(MAGENTA)),
+                (" to           ", Style::new()),
+                ("b.jpg", rgb(CYAN).add_modifier(Modifier::UNDERLINED)),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_applied_row_colours_its_percentage_and_the_word_enhancements() {
+        let line = row(100, "b.jpg", RowState::Applied, true);
+
+        assert_eq!(line.spans[1].content, "100%");
+        assert_eq!(line.spans[1].style, rgb(BLUE));
+        assert_eq!(line.spans[3].content, "Enhancements");
+        assert_eq!(line.spans[3].style, rgb(MAGENTA));
+        assert_eq!(line.spans[5].style, rgb(CYAN).add_modifier(Modifier::UNDERLINED));
+    }
+
+    #[test]
+    fn a_failed_or_stopped_row_is_red_throughout_and_not_bold() {
         for state in [RowState::Failed, RowState::Stopped] {
-            let line = row(2, 5, "b.jpg", state, true);
-            assert!(line.spans.iter().all(|span| span.style == Style::new().fg(Color::Rgb(r, g, b))), "{line:?}");
+            let line = row(42, "b.jpg", state, true);
+            assert!(line.spans.iter().all(|span| span.style == rgb(RED)), "{line:?}");
         }
     }
 
     #[test]
     fn a_row_without_colour_has_no_style() {
-        for state in STATES {
-            let line = row(2, 5, "b.jpg", state, false);
+        let states = [
+            RowState::Working(Activity::Preparing),
+            RowState::Working(Activity::Downloading(Family::Upscale)),
+            APPLYING,
+            RowState::Applied,
+            RowState::Failed,
+            RowState::Stopped,
+        ];
+
+        for state in states {
+            let line = row(42, "b.jpg", state, false);
             assert!(line.spans.iter().all(|span| span.style == Style::new()), "{line:?}");
         }
     }
 
     #[test]
+    fn the_image_percentage_is_held_at_99_until_written() {
+        assert_eq!(image_percent(0.0, false), 0);
+        assert_eq!(image_percent(0.429, false), 42);
+        assert_eq!(image_percent(0.999, false), 99);
+        assert_eq!(image_percent(1.0, false), 99);
+        assert_eq!(image_percent(1.0, true), 100);
+        assert_eq!(image_percent(0.0, true), 100, "an image with nothing to run is still all applied");
+    }
+
+    #[test]
     fn a_plain_row_is_the_final_rows_text_with_a_failures_reason() {
         for end in [ImageEnd::Enhanced, ImageEnd::Failed("corrupt".into()), ImageEnd::Stopped] {
-            let line = plain(&row(3, 5, "c.jpg", end.state(), true));
+            let line = plain(&row(42, "c.jpg", end.state(), true));
             let reason = match &end {
                 ImageEnd::Failed(reason) => format!(": {reason}"),
                 _ => String::new(),
             };
 
-            assert_eq!(plain_row(3, 5, "c.jpg", &end, false), format!("{line}{reason}"));
+            assert_eq!(plain_row(42, "c.jpg", &end, false), format!("{line}{reason}"));
         }
 
         assert_eq!(
-            plain_row(3, 5, "c.jpg", &ImageEnd::Failed("corrupt".into()), false),
-            "🧨 [3/5] Failed image c.jpg: corrupt"
+            plain_row(42, "c.jpg", &ImageEnd::Failed("corrupt".into()), false),
+            "🧨 [ 42%] Failed to enhance             c.jpg: corrupt"
+        );
+        assert_eq!(
+            plain_row(100, "c.jpg", &ImageEnd::Enhanced, false),
+            "🖼️ [100%] Enhancements applied to       c.jpg"
         );
     }
 
     #[test]
     fn a_plain_row_is_coloured_only_when_asked() {
         let (r, g, b) = RED;
-        let failed = plain_row(3, 5, "c.jpg", &ImageEnd::Failed("corrupt".into()), true);
+        let failed = plain_row(42, "c.jpg", &ImageEnd::Failed("corrupt".into()), true);
         assert!(failed.ends_with(&": corrupt".with(TermColor::Rgb { r, g, b }).to_string()), "{failed:?}");
 
         let (r, g, b) = CYAN;
-        let enhanced = plain_row(3, 5, "c.jpg", &ImageEnd::Enhanced, true);
+        let enhanced = plain_row(100, "c.jpg", &ImageEnd::Enhanced, true);
         assert!(
             enhanced.ends_with(&"c.jpg".with(TermColor::Rgb { r, g, b }).underlined().to_string()),
             "{enhanced:?}"
         );
 
-        assert!(!plain_row(3, 5, "c.jpg", &ImageEnd::Enhanced, false).contains('\x1b'));
+        assert!(!plain_row(100, "c.jpg", &ImageEnd::Enhanced, false).contains('\x1b'));
     }
 
     #[test]
@@ -439,68 +490,64 @@ mod tests {
     }
 
     #[test]
-    fn the_dependency_line_is_its_exact_text() {
-        let line = dependency_line("ONNX Runtime", 0.34, false);
+    fn the_processor_line_names_what_was_asked_for() {
+        assert_eq!(
+            processor_line(ExecutionProvider::Auto, Quality::Hd, false),
+            "🧠 Running inference using the processor Auto; quality HD"
+        );
+        assert_eq!(
+            processor_line(ExecutionProvider::Cpu, Quality::Sd, false),
+            "🧠 Running inference using the processor CPU; quality SD"
+        );
+    }
 
-        assert_eq!(plain(&line), "💾 Downloading dependency ONNX Runtime   34%");
+    #[test]
+    fn the_processor_line_colours_the_processor_and_the_quality() {
+        let ((gr, gg, gb), (yr, yg, yb)) = (GREEN, YELLOW);
+        let expected = format!(
+            "🧠 Running inference using the processor {}; quality {}",
+            "Auto".with(TermColor::Rgb { r: gr, g: gg, b: gb }),
+            "HD".with(TermColor::Rgb { r: yr, g: yg, b: yb }),
+        );
+
+        assert_eq!(processor_line(ExecutionProvider::Auto, Quality::Hd, true), expected);
+    }
+
+    #[test]
+    fn the_dependency_line_is_its_exact_text() {
+        let line = dependency_line("ONNX Runtime", 0.34, Span::raw("⣾"), false);
+
+        assert_eq!(plain(&line), "💾 Downloading dependency ONNX Runtime... ⣾ 34% Complete");
         assert!(line.spans.iter().all(|span| span.style == Style::new()), "{line:?}");
     }
 
     #[test]
-    fn the_dependency_line_colours_only_the_name_and_the_percentage() {
-        let line = dependency_line("ONNX Runtime", 0.34, true);
-        let (r, g, b) = YELLOW;
+    fn the_dependency_line_makes_the_name_and_the_percentage_bold_white_and_keeps_the_marks_style() {
+        let mark = Span::styled("⣾", rgb(MAGENTA));
+        let line = dependency_line("ONNX Runtime", 0.34, mark.clone(), true);
+        let bold = Style::new().fg(Color::White).add_modifier(Modifier::BOLD);
+        let styles: Vec<_> = line.spans.iter().map(|span| span.style).collect();
 
-        assert_eq!(plain(&line), "💾 Downloading dependency ONNX Runtime   34%");
-        assert_eq!(line.spans[0].style, Style::new());
-        assert_eq!(line.spans[1].style, Style::new().fg(Color::Rgb(r, g, b)));
-        assert_eq!(line.spans[2].style, Style::new());
-        assert_eq!(line.spans[3].style, Style::new().fg(Color::White).add_modifier(Modifier::BOLD));
+        assert_eq!(styles, [Style::new(), bold, Style::new(), mark.style, Style::new(), bold, Style::new()]);
+        assert_eq!(line.spans[1].content, "ONNX Runtime");
+        assert_eq!(line.spans[5].content, "34%");
+    }
+
+    #[test]
+    fn the_done_mark_is_a_green_check() {
+        assert_eq!(done_mark(true), Span::styled("✓", rgb(GREEN)));
+        assert_eq!(done_mark(false), Span::raw("✓"));
     }
 
     #[test]
     fn the_dependency_percentage_reaches_100_only_at_the_end() {
-        assert_eq!(plain(&dependency_line("x", 0.999, false)), "💾 Downloading dependency x   99%");
-        assert_eq!(plain(&dependency_line("x", 0.999_999_999_9, false)), "💾 Downloading dependency x   99%");
-        assert_eq!(plain(&dependency_line("x", 1.0, false)), "💾 Downloading dependency x   100%");
-        assert_eq!(plain(&dependency_line("x", 0.29, false)), "💾 Downloading dependency x   29%");
-        assert_eq!(plain(&dependency_line("x", 0.0, false)), "💾 Downloading dependency x   0%");
-    }
+        let text = |fraction| plain(&dependency_line("x", fraction, Span::raw("*"), false));
 
-    #[test]
-    fn before_any_report_the_bar_is_enhancing_at_step_zero() {
-        assert_eq!(label(None), "Enhancing");
-        assert_eq!(counter(None, 2), (0, 2));
-    }
-
-    #[test]
-    fn an_install_reads_downloading_and_keeps_its_step() {
-        let installing = report(upscale(), installing(), (1, 2));
-
-        assert_eq!(label(Some(&installing)), "Downloading");
-        assert_eq!(counter(Some(&installing), 2), (2, 2));
-    }
-
-    #[test]
-    fn a_running_or_cached_operation_reads_as_its_family() {
-        for stage in [Stage::Running, Stage::Cached] {
-            let recovering = report(face_recovery(), stage.clone(), (0, 2));
-            assert_eq!(label(Some(&recovering)), "Face Recovery");
-            assert_eq!(counter(Some(&recovering), 2), (1, 2));
-
-            let upscaling = report(upscale(), stage, (1, 2));
-            assert_eq!(label(Some(&upscaling)), "Upscale");
-            assert_eq!(counter(Some(&upscaling), 2), (2, 2));
-        }
-    }
-
-    #[test]
-    fn a_detection_reads_as_the_face_recovery_at_its_position() {
-        // As `Handover::detection` rewrites it: attributed to the face recovery, operation 0 of 2.
-        let detecting = report(Subject::Analysis(Detection::for_face_recovery()), Stage::Running, (0, 2));
-
-        assert_eq!(label(Some(&detecting)), "Face Recovery");
-        assert_eq!(counter(Some(&detecting), 2), (1, 2));
+        assert_eq!(text(0.999), "💾 Downloading dependency x... * 99% Complete");
+        assert_eq!(text(0.999_999_999_9), "💾 Downloading dependency x... * 99% Complete");
+        assert_eq!(text(1.0), "💾 Downloading dependency x... * 100% Complete");
+        assert_eq!(text(0.29), "💾 Downloading dependency x... * 29% Complete");
+        assert_eq!(text(0.0), "💾 Downloading dependency x... * 0% Complete");
     }
 
     #[test]
@@ -520,12 +567,5 @@ mod tests {
                 "Upscale"
             ]
         );
-    }
-
-    #[test]
-    fn the_label_width_fits_the_widest_label() {
-        assert_eq!(LABEL_WIDTH, "Face Recovery".len());
-        let widest = Family::ALL.map(family_label).into_iter().chain([ENHANCING, DOWNLOADING]).map(str::len).max();
-        assert_eq!(widest, Some(LABEL_WIDTH));
     }
 }

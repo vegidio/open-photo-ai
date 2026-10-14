@@ -404,15 +404,15 @@ With an output **file**, the format is the one its extension names. With an outp
    - no image is left to enhance once the inputs are expanded, e.g. a directory with no images in it.
 
    A file **found inside a directory** that has an image extension but can't be read is not a refusal: it's skipped, recorded in the [log file](#log-file), and the rest of the batch goes on. Nothing is written or created when the run is refused.
-2. **Dependencies are installed (first run only).** The first time `opai` runs, it downloads the components it needs: ONNX Runtime, plus CUDA and TensorRT on systems with a supported NVIDIA GPU. A `💾 Downloading dependency …` line shows the progress. These are shared with the GUI, so if the GUI has already downloaded them, nothing is downloaded. This happens once per command, however many images it has. Then the [processor](#-p---processor-processor-default-auto) is checked against what this machine offers, and the run is refused with [exit code 2](#exit-codes) if it doesn't offer it.
+2. **Dependencies are installed (first run only).** The first time `opai` runs, it downloads the components it needs: ONNX Runtime, plus CUDA and TensorRT on systems with a supported NVIDIA GPU. A `💾 Downloading dependency <name>... ⣾ 34% Complete` line shows the progress, with a spinner that keeps turning while the download works; it is rewritten when the next dependency starts, and shows a green `✓` once the dependency reaches `100%`. These are shared with the GUI, so if the GUI has already downloaded them, nothing is downloaded. This happens once per command, however many images it has. Then the [processor](#-p---processor-processor-default-auto) is checked against what this machine offers, and the run is refused with [exit code 2](#exit-codes) if it doesn't offer it. Once it's accepted, the line `🧠 Running inference using the processor <processor>; quality <HD|SD>` names the processor you asked for (`Auto` under `-p auto`) and the quality, followed by a blank line.
 3. **Each image, one after another:**
-   1. **The image is loaded.** Its row in the list reads `Enhancing`.
-   2. **Models are downloaded (first use only).** Each model is downloaded the first time it's used. The progress bar shows `Downloading` while this happens.
-   3. **The enhancements run**, in the [fixed order](#processing-order), with a single progress bar for the image. When `--fr` is used, face detection is included in that bar. The upscale factor, when `--scale` isn't given, is chosen from each image's own size.
-   4. **The file is written**, and the image's row reads `Enhanced`. The [log file](#log-file) records the file written.
+   1. **The image is loaded.** Its row in the list reads `🖼️ [  0%] Preparing to enhance <path>`.
+   2. **Models are downloaded (first use only).** Each model is downloaded the first time it's used. The image's row reads `Downloading <enhancement> for <path>` while this happens.
+   3. **The enhancements run**, in the [fixed order](#processing-order). The image's row reads `Applying <enhancement> to <path>`, with one percentage for the whole image. When `--fr` is used, face detection is included in that percentage and reads as `Face Recovery`. The upscale factor, when `--scale` isn't given, is chosen from each image's own size.
+   4. **The file is written**, and the image's row reads `🖼️ [100%] Enhancements applied to <path>`. Until then its percentage stops at `99%`. The [log file](#log-file) records the file written.
 4. **A summary is printed** once every image has run: how many images were written and where, and the reason for each image that failed.
 
-**A batch continues past a failure.** An image that fails to decode, to be enhanced or to be written has its row turn into a red `🧨 … Failed image` row, and the next image runs. At the end, its reason is listed under the view, and the command exits with [code 1](#exit-codes).
+**A batch continues past a failure.** An image that fails to decode, to be enhanced or to be written has its row turn into a red `🧨 [ 42%] Failed to enhance <path>` row, keeping the percentage it had reached, and the next image runs. At the end, its reason is listed under the view, and the command exits with [code 1](#exit-codes).
 
 ### Hardware acceleration
 
@@ -437,18 +437,19 @@ Only one Open Photo AI process can run at a time, and that includes the GUI. If 
 
 Everything `opai` prints goes to **stderr**. Nothing is written to stdout.
 
-When stderr is a terminal, you see one live view for the whole run, whatever the number of images: the current image's progress bar, a blank row, and a list of the five most recent images. A batch of eight, while its seventh image is being enhanced:
+When stderr is a terminal, a `🧠` line names the processor and quality first, then you see one live view for the whole run, whatever the number of images: the batch's progress bar, a blank row, and a list of the five most recent images. A batch of eight, while its seventh image is being enhanced:
 
 ```
-💾 Downloading dependency ONNX Runtime   100%          ← only when something was downloaded
+💾 Downloading dependency ONNX Runtime... ✓ 100% Complete    ← only when something was downloaded
+🧠 Running inference using the processor Auto; quality HD
 
-Upscale         [2/2]  ████████████░░░░░░░░░░░░░░░   38.4%
+Enhancing [6/8]  ███████████████████████░░░░░   80.2%   ETA 1m12s
 
-🖼️ [3/8] Enhanced image photos/c.jpg
-🖼️ [4/8] Enhanced image photos/d.jpg
-🧨 [5/8] Failed image photos/e.jpg
-🖼️ [6/8] Enhanced image photos/f.jpg
-🖼️ [7/8] Enhancing image photos/g.jpg
+🖼️ [100%] Enhancements applied to       photos/c.jpg
+🖼️ [100%] Enhancements applied to       photos/d.jpg
+🧨 [ 42%] Failed to enhance             photos/e.jpg
+🖼️ [100%] Enhancements applied to       photos/f.jpg
+🖼️ [ 42%] Applying Upscale to           photos/g.jpg
 ```
 
 And once the run ends, the view stays as it was last drawn, with the summary under it:
@@ -459,24 +460,32 @@ And once the run ends, the view stays as it was last drawn, with the summary und
 🧨 1 of 8 images failed
 ```
 
-- **The progress bar** is the current image's: the enhancement running and its position in the image's chain (`[1/2]` means the first of two enhancements). It starts again from empty for each image. While an image with nothing left to run is processed (an upscale skipped because the image is already large enough), the bar's row is blank.
-- **The list** shows one row per image started so far, scrolling to the most recent five. `[n/N]` is the image's place in the run; `n` is padded to the width of `N`, as in `[ 2/15]`. A row reads:
-  - `🖼️ [n/N] Enhancing image <path>` while the image is loaded, enhanced and written;
-  - `🖼️ [n/N] Enhanced image <path>` once its result is written;
-  - `🧨 [n/N] Failed image <path>` once it has failed;
-  - `🧨 [n/N] Stopped image <path>` when you [stopped the run](#stopping-a-run) while it was being worked on.
+- **The dependency line** appears only when a dependency is downloaded or expanded. Its spinner keeps turning while the line is drawn, and becomes a `✓` while the percentage reads `100%`. When several dependencies are installed, the same line is rewritten for each one.
+- **The processor line** names the processor you asked for with [`-p`](#-p---processor-processor-default-auto), spelled `Auto`, `CPU`, `CoreML`, `CUDA`, `TensorRT` or `WebGPU`, and the [quality](#-q---quality-hdsd-default-hd), `HD` or `SD`. Under `-p auto` it reads `Auto`, not the hardware `auto` picks; the [log file](#log-file) records that.
+- **The progress bar** covers the whole batch and is always labelled `Enhancing`. `[n/N]` counts the images that have ended, written or failed; `n` is padded to the width of `N`, as in `[02/15]`. It fills as `(n + p) / N`, where `p` is the current image's progress as its row shows it, so it moves forward within each image, never moves backwards when one image ends and the next starts, and reaches `100.0%` only once the last image has ended. It ends with `ETA <time>`, an estimate of the time the batch has left at the rate it has run so far; it reads `ETA --` until at least 1% has run. The first image's model loading (and, on first use, its download) makes the early estimate high, and it settles as the batch goes on.
+- **The list** shows one row per image started so far, scrolling to the most recent five. Each row shows the image's own progress, right-aligned in three columns (`[  0%]`, `[ 42%]`, `[100%]`). It covers face detection and every enhancement, never decreases, and stops at `99%` until the file is written. A row reads as follows, its words padded with spaces so every path starts in the same column:
+  - `🖼️ [  0%] Preparing to enhance <path>` before the image's run has reported anything, and for the whole time an image with nothing left to run is processed (an upscale skipped because the image is already large enough);
+  - `🖼️ [ 12%] Downloading <enhancement> for <path>` while a model is downloaded;
+  - `🖼️ [ 42%] Applying <enhancement> to <path>` while an enhancement runs or is served from the [run cache](#run-cache);
+  - `🖼️ [100%] Enhancements applied to <path>` once its result is written;
+  - `🧨 [ 42%] Failed to enhance <path>` once it has failed;
+  - `🧨 [ 42%] Stopped enhancing <path>` when you [stopped the run](#stopping-a-run) while it was being worked on.
 
-  In color, `n/N` is blue, the word `image` magenta and the path cyan and underlined; a `🧨` row is red throughout.
+  `<enhancement>` is the enhancement's name as the GUI shows it: `Denoise`, `Face Recovery`, `Colorize`, `Light Adjust`, `Color Balance`, `Sharpen` or `Upscale`.
 - **The summary** starts with a success line when at least one image was written. For exactly one image it names the file written, so a numbered name is visible: `✨ Image enhanced successfully; file saved at out_1.png`. For more, it names the output directory: `✨ 7 images enhanced successfully; files saved under out`. Then a `🧨` line gives the reason for each image that failed, in the order they ran, since a failure can have scrolled out of the list. Last comes the run's closing `🧨` line, if it didn't succeed (see [Exit codes](#exit-codes)).
+
+In color, the dependency's name and its percentage are bold white, the spinner magenta and the `✓` green. In the processor line, the processor is green and the quality yellow. The bar is drawn in a color gradient. In a `🖼️` row, the percentage (with its `%`) is blue, the enhancement's name (or the word `Enhancements`) magenta and the path cyan and underlined; a `🧨` row is red throughout. The success line is bold yellow.
 
 With a single image, the view is three rows tall: the bar, a blank row and the image's row.
 
-When stderr is **not** a terminal (for example, when redirected to a file or run in CI), there's no view and no progress bar. Each image prints one line, without colors, when it ends, with the words its row ends with; a failed image's line adds the reason. Then come the summary's success line and the closing line:
+When stderr is **not** a terminal (for example, when redirected to a file or run in CI), there's no dependency line, no view and no progress bar. The processor line comes first, followed by a blank line. Then each image prints one line, without colors, when it ends, with the words its row ends with, its percentage included; a failed image's line adds the reason. Then come the summary's success line and the closing line:
 
 ```
-🖼️ [1/3] Enhanced image photos/a.jpg
-🧨 [2/3] Failed image photos/b.jpg: cannot write out/b.jpg: …
-🖼️ [3/3] Enhanced image photos/c.jpg
+🧠 Running inference using the processor Auto; quality HD
+
+🖼️ [100%] Enhancements applied to       photos/a.jpg
+🧨 [ 42%] Failed to enhance             photos/b.jpg: cannot write out/b.jpg: …
+🖼️ [100%] Enhancements applied to       photos/c.jpg
 ✨ 2 images enhanced successfully; files saved under out
 🧨 1 of 3 images failed
 ```
@@ -495,7 +504,7 @@ The terminal shows only the basic progress and the result. More detail, such as 
 
 Press **Ctrl-C** at any time to stop.
 
-- **While enhancing:** the run stops at the next safe point. Nothing is written for the image being enhanced, and its row reads `🧨 [n/N] Stopped image <path>`. No image after it is started. Files already written for earlier images are **kept**, and the summary says how many. The reasons of any images that failed before the stop are listed, then the line `🧨 stopped: nothing more was written` is printed. Exit code: `130`, even if images failed before the stop.
+- **While enhancing:** the run stops at the next safe point. Nothing is written for the image being enhanced, and its row reads `🧨 [ 42%] Stopped enhancing <path>`, keeping the percentage it had reached. No image after it is started. Files already written for earlier images are **kept**, and the summary says how many. The reasons of any images that failed before the stop are listed, then the line `🧨 stopped: nothing more was written` is printed. Exit code: `130`, even if images failed before the stop.
 - **While downloading dependencies:** the download stops. Next time, it resumes from where it left off instead of starting over. Nothing is written. Exit code: `130`.
 
 A file that the stopped image would have replaced with `--overwrite`, including its own source in place, is left exactly as it was, with no hidden file beside it.
@@ -556,7 +565,7 @@ What's in it that the terminal doesn't show:
 | `🧨 cannot write out/a.png: …`                                                 | The result couldn't be written there: the directory is missing or not writable, or every numbered name up to `_999` is taken. |
 | `🧨 Open Photo AI is already running …; close it and try again`                | Another `opai` process or the GUI is running. Close it and try again. |
 | `🧨 the processor … is not available on this machine; use …`                   | This machine doesn't offer the processor given with `-p` (for example, no supported NVIDIA GPU for `cuda`). Use one of the processors listed, or leave `-p` out. Exit code `2`. |
-| `🧨 [2/5] Failed image photos/b.jpg`                                            | That image failed; the rest of the batch went on. Its reason is listed under the view when the run ends. |
+| `🧨 [ 42%] Failed to enhance photos/b.jpg`                                      | That image failed; the rest of the batch went on. Its reason is listed under the view when the run ends. |
 | `🧨 could not enhance photos/b.jpg: …`                                         | That image failed; the rest of the batch went on. The log file has the full error. |
 | `🧨 failed to decode photos/b.jpg: …`                                          | That image's header was readable, but the image itself wasn't; the rest of the batch went on. |
 | `🧨 2 of 5 images failed`                                                      | The summary after a batch with failures. Exit code `1`. |
@@ -579,7 +588,8 @@ The same commands work in PowerShell and `cmd` on Windows, where `opai` expands 
 Things to keep in mind in scripts:
 
 - **Reruns don't overwrite.** Running the same command twice writes `a_1.jpg` next to `a.jpg`, and so on. Pass `--overwrite` if a rerun should replace the earlier results. Scripts written for older versions, which overwrote `-o` silently, now accumulate numbered files.
-- **The output changed (breaking).** Earlier versions printed a header and a `✨ Image enhanced successfully; file saved at …` line for every image. Now each image prints one line when it ends, `🖼️ [n/N] Enhanced image <path>` or `🧨 [n/N] Failed image <path>: <reason>`, and only the summary names files written: the file itself for a single image, or the output directory for more. Read each written path from the [log file](#log-file) instead.
+- **The output changed (breaking).** Earlier versions printed a header and a `✨ Image enhanced successfully; file saved at …` line for every image. Each image then printed one line when it ended, and only the summary names files written: the file itself for a single image, or the output directory for more. Read each written path from the [log file](#log-file) instead.
+- **The per-image lines changed again (breaking).** The lines `🖼️ [n/N] Enhanced image <path>` and `🧨 [n/N] Failed image <path>: <reason>` are now `🖼️ [100%] Enhancements applied to <path>` and `🧨 [ 42%] Failed to enhance <path>: <reason>`, with spaces between the words and the path so every path starts in the same column: the image's place in the run is no longer printed, and its percentage is. Piped output also starts with the line `🧠 Running inference using the processor <processor>; quality <HD|SD>` and a blank line. The log file still records each path written.
 - **Exit codes:** `2` means the command itself is wrong and won't succeed on retry; nothing was written. `1` means at least one image failed, while the others were written; the `🧨` lines and the log file say which. `130` means the user pressed Ctrl-C.
 - **One instance at a time:** don't start several `opai` commands in parallel; give them all the images instead.
 

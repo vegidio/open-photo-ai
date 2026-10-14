@@ -238,6 +238,16 @@ pub enum Quality {
     Sd,
 }
 
+impl Quality {
+    /// How the processor line names it: `HD` or `SD`.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Hd => "HD",
+            Self::Sd => "SD",
+        }
+    }
+}
+
 // `#[cfg]` is resolved before `ValueEnum` expands, so a value no machine running this OS could ever offer is missing
 // from the parser, its `[possible values: …]` and `--help` alike. Whether this machine offers the rest is `opai`'s to
 // say, once initialization has run.
