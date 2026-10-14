@@ -3,7 +3,8 @@
 //! Photographs and directories of them in, each enhanced by the same chain, written to one file or under a directory:
 //!
 //! ```text
-//! opai <input>... <enhancement flags> [-r] [--format F] [--prefix P] [--suffix S] [--overwrite] [-q hd|sd] -o <output>
+//! opai <input>... <enhancement flags> [-r] [--format F] [--prefix P] [--suffix S] [--overwrite] [-q hd|sd]
+//!      [-p PROCESSOR] -o <output>
 //! ```
 //!
 //! Everything the run does is the library's, naming each result included (`opai::export`). What lives here is the

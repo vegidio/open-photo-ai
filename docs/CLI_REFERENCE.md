@@ -62,6 +62,9 @@ opai photos -r --up --format webp -o photos-large
 
 # Denoise a directory in place, replacing each photo with its result
 opai photos --dn --overwrite -o photos
+
+# Upscale on the CPU only, e.g. to rule out a GPU problem
+opai photo.jpg --up -p cpu -o photo-large.png
 ```
 
 ## Arguments and global options
@@ -120,6 +123,23 @@ Picks which build of each model to run. It applies to **every** enhancement in t
 | `sd`         | FP16        | INT8            | Lighter and usually faster. Slightly lower quality. |
 
 The value is case-insensitive (`-q SD` works).
+
+### `-p, --processor <PROCESSOR>` (default: `auto`)
+
+Picks the hardware every model of the run is asked to run on, face detection included. Which values exist depends on the operating system `opai` was built for:
+
+| Processor        | Runs on                                                                              | macOS | Windows / Linux |
+|------------------|--------------------------------------------------------------------------------------|:-----:|:---------------:|
+| `auto` (default) | The best this machine supports. See [Hardware acceleration](#hardware-acceleration). | ✓     | ✓               |
+| `cpu`            | The CPU only.                                                                        | ✓     | ✓               |
+| `coreml`         | Apple's CoreML (macOS 12 or newer).                                                  | ✓     |                 |
+| `cuda`           | NVIDIA CUDA.                                                                         |       | ✓               |
+| `tensorrt`       | NVIDIA TensorRT.                                                                     |       | ✓               |
+| `webgpu`         | WebGPU: the GPU through Metal, Direct3D 12 or Vulkan.                                | ✓     | ✓               |
+
+The value is case-insensitive (`-p CPU` and `--processor WebGPU` work). `opai --help` lists only the values your build accepts, and any other value is refused straight away, before anything is installed.
+
+A value your build accepts is then checked against what **this machine** offers, once [dependencies are installed](#what-happens-during-a-run). This is the same check the GUI uses to build its list of processors: CUDA needs a supported NVIDIA GPU and driver, TensorRT also needs a GPU that can run it, CoreML needs macOS 12 or newer, and WebGPU needs a GPU the runtime can reach. If the machine doesn't offer the processor, the run stops with one line naming the processors it does offer, for example `🧨 the processor webgpu is not available on this machine; use auto, cpu or coreml`, and exits with [code 2](#exit-codes). No image is loaded and nothing is written.
 
 ## Where the results go
 
@@ -384,7 +404,7 @@ With an output **file**, the format is the one its extension names. With an outp
    - no image is left to enhance once the inputs are expanded, e.g. a directory with no images in it.
 
    A file **found inside a directory** that has an image extension but can't be read is not a refusal: it's skipped, recorded in the [log file](#log-file), and the rest of the batch goes on. Nothing is written or created when the run is refused.
-2. **Dependencies are installed (first run only).** The first time `opai` runs, it downloads the components it needs: ONNX Runtime, plus CUDA and TensorRT on systems with a supported NVIDIA GPU. A `💾 Downloading dependency …` line shows the progress. These are shared with the GUI, so if the GUI has already downloaded them, nothing is downloaded. This happens once per command, however many images it has.
+2. **Dependencies are installed (first run only).** The first time `opai` runs, it downloads the components it needs: ONNX Runtime, plus CUDA and TensorRT on systems with a supported NVIDIA GPU. A `💾 Downloading dependency …` line shows the progress. These are shared with the GUI, so if the GUI has already downloaded them, nothing is downloaded. This happens once per command, however many images it has. Then the [processor](#-p---processor-processor-default-auto) is checked against what this machine offers, and the run is refused with [exit code 2](#exit-codes) if it doesn't offer it.
 3. **Each image, one after another:**
    1. **The image is loaded.** Its row in the list reads `Enhancing`.
    2. **Models are downloaded (first use only).** Each model is downloaded the first time it's used. The progress bar shows `Downloading` while this happens.
@@ -396,7 +416,11 @@ With an output **file**, the format is the one its extension names. With an outp
 
 ### Hardware acceleration
 
-The CLI automatically uses the fastest hardware available, trying in this order: **TensorRT → CUDA → CoreML → WebGPU → CPU**. You can't choose the hardware from the command line. The [log file](#log-file) records which hardware each image used.
+By default (`-p auto`), the CLI uses the fastest hardware available, trying in this order: **TensorRT → CUDA → CoreML → WebGPU → CPU**. To choose the hardware yourself, use [`-p, --processor`](#-p---processor-processor-default-auto). The [log file](#log-file) records which hardware each image used.
+
+- **A processor that can't run a model falls back to the CPU.** If the processor you chose (or `auto` picked) can't open one of the models, that model runs on the CPU and the run goes on. The terminal doesn't say so. The log file does, for example `ran on CPU (TensorRT could not open every model)`.
+- **`-p` doesn't change what is installed.** The first run downloads what this machine needs, whichever processor you choose: `-p cpu` on a machine with a supported NVIDIA GPU still downloads CUDA and TensorRT. They're shared with the GUI and with later `auto` runs.
+- **The [run cache](#run-cache) isn't kept per processor.** Running the same enhancements on the same image again within 24 hours with another `-p` reuses the cached result, and nothing runs on the new processor. The log file says `served from cache`. To compare processors, use another image or change the enhancements.
 
 > [!NOTE]
 > With TensorRT, the first run of each model can take several minutes while TensorRT optimises it. Later runs are much faster.
@@ -482,7 +506,7 @@ A file that the stopped image would have replaced with `--overwrite`, including 
 |-------|-------------------------------------------------------------------------------------------------------------|
 | `0`   | Success. Every image was written.                                                                          |
 | `1`   | The run failed: a setup error (including another instance running), or **any** image that failed to decode, enhance or be written. The other images in the batch were still processed. |
-| `2`   | Usage error: bad arguments, an unreadable or unsupported named input, an output that can't be used as asked, or no image to enhance. Nothing was written. |
+| `2`   | Usage error: bad arguments, an unreadable or unsupported named input, an output that can't be used as asked, no image to enhance, or a [processor](#-p---processor-processor-default-auto) this machine doesn't offer. Nothing was written. |
 | `130` | Stopped with Ctrl-C. Results already written for earlier images are kept.                                  |
 
 `--help` and `--version` exit with `0`.
@@ -521,6 +545,7 @@ What's in it that the terminal doesn't show:
 | `error: invalid value '0.5' for '--la-bias <BIAS>': the bias must be a whole number from -100 to 100` | Strength/bias must be a whole number within range. |
 | `error: the following required arguments were not provided: --denoise [<MODEL>]` | A strength/bias/scale option was used without its enhancement flag (e.g. `--dn-str` without `--dn`, or `--scale` without `--up`). |
 | `error: invalid value 'raw' for '--format <FORMAT>': "raw" is not a format; use preserve, …` | Unknown `--format`. Pick one from the list shown. |
+| `error: invalid value 'cuda' for '--processor <PROCESSOR>'` followed by `[possible values: …]` | That processor doesn't exist for your operating system (`coreml` exists only on macOS; `cuda` and `tensorrt` never on macOS). Pick one from the list shown. |
 | `🧨 cannot read missing.jpg: No such file or directory …`                      | A named input doesn't exist or can't be read. If it's a wildcard, it matched nothing. |
 | `🧨 the codec refused notes.txt: could not determine an image format …`        | A named file isn't an image `opai` can read, or its extension isn't a supported format. |
 | `🧨 cannot list photos: …`                                                     | Part of a directory input's tree can't be read. Fix its permissions, or leave it out. |
@@ -530,6 +555,7 @@ What's in it that the terminal doesn't show:
 | `🧨 cannot write into out: it is a file, not a directory, …`                   | `-o` would be a directory, but a file already exists there. |
 | `🧨 cannot write out/a.png: …`                                                 | The result couldn't be written there: the directory is missing or not writable, or every numbered name up to `_999` is taken. |
 | `🧨 Open Photo AI is already running …; close it and try again`                | Another `opai` process or the GUI is running. Close it and try again. |
+| `🧨 the processor … is not available on this machine; use …`                   | This machine doesn't offer the processor given with `-p` (for example, no supported NVIDIA GPU for `cuda`). Use one of the processors listed, or leave `-p` out. Exit code `2`. |
 | `🧨 [2/5] Failed image photos/b.jpg`                                            | That image failed; the rest of the batch went on. Its reason is listed under the view when the run ends. |
 | `🧨 could not enhance photos/b.jpg: …`                                         | That image failed; the rest of the batch went on. The log file has the full error. |
 | `🧨 failed to decode photos/b.jpg: …`                                          | That image's header was readable, but the image itself wasn't; the rest of the batch went on. |

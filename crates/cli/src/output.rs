@@ -144,7 +144,7 @@ pub async fn write(
     .await
 }
 
-/// [`write`] with the encoding left to `save`, which is handed the path to write into.
+/// [`write()`] with the encoding left to `save`, which is handed the path to write into.
 async fn write_with<F>(
     create_parent: bool,
     destination: &Path,

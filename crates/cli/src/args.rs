@@ -142,6 +142,11 @@ pub struct Args {
     #[arg(long, short = 'q', value_enum, default_value_t = Quality::Hd, ignore_case = true)]
     pub quality: Quality,
 
+    /// The hardware to run on: `auto` (the best this machine has; the default), or one processor by name. One this
+    /// machine does not offer is refused once initialization has finished.
+    #[arg(long, short = 'p', value_enum, default_value_t = Processor::Auto, ignore_case = true)]
+    pub processor: Processor,
+
     /// Take a directory input's whole tree, not only the images directly inside it.
     #[arg(long, short = 'r')]
     pub recursive: bool,
@@ -231,6 +236,59 @@ pub enum Quality {
     Hd,
     /// The lighter build: FP16, or INT8 for Osaka.
     Sd,
+}
+
+// `#[cfg]` is resolved before `ValueEnum` expands, so a value no machine running this OS could ever offer is missing
+// from the parser, its `[possible values: …]` and `--help` alike. Whether this machine offers the rest is `opai`'s to
+// say, once initialization has run.
+/// The execution providers, as the command line names them. Only the ones this OS can ever offer exist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+pub enum Processor {
+    #[default]
+    Auto,
+    Cpu,
+    // The explicit names stop clap from spelling these `core-ml` and `tensor-rt`.
+    #[cfg(target_os = "macos")]
+    #[value(name = "coreml")]
+    CoreMl,
+    #[cfg(not(target_os = "macos"))]
+    Cuda,
+    #[cfg(not(target_os = "macos"))]
+    #[value(name = "tensorrt")]
+    TensorRt,
+    #[value(name = "webgpu")]
+    WebGpu,
+}
+
+impl Processor {
+    /// The name the command line takes for this processor.
+    pub fn name(self) -> String {
+        self.to_possible_value().expect("no processor is skipped").get_name().to_owned()
+    }
+
+    /// The processor `provider` is named by on this build's command line, or `None` where this OS has no value for it.
+    pub fn from_provider(provider: opai::ExecutionProvider) -> Option<Self> {
+        Self::value_variants()
+            .iter()
+            .copied()
+            .find(|processor| opai::ExecutionProvider::from(*processor) == provider)
+    }
+}
+
+impl From<Processor> for opai::ExecutionProvider {
+    fn from(processor: Processor) -> Self {
+        match processor {
+            Processor::Auto => Self::Auto,
+            Processor::Cpu => Self::Cpu,
+            #[cfg(target_os = "macos")]
+            Processor::CoreMl => Self::CoreMl,
+            #[cfg(not(target_os = "macos"))]
+            Processor::Cuda => Self::Cuda,
+            #[cfg(not(target_os = "macos"))]
+            Processor::TensorRt => Self::TensorRt,
+            Processor::WebGpu => Self::WebGpu,
+        }
+    }
 }
 
 /// The command line this process was started with, or the process ended with clap's message and exit status.
@@ -709,6 +767,100 @@ mod tests {
         let message = error.to_string();
         for name in ["preserve", "avif", "bmp", "gif", "heic", "jpeg", "png", "tiff", "webp"] {
             assert!(message.contains(name), "{name} is not listed in: {message}");
+        }
+    }
+
+    /// The processors this OS's build accepts, in the order `--help` lists them.
+    #[cfg(target_os = "macos")]
+    const PROCESSORS: [&str; 4] = ["auto", "cpu", "coreml", "webgpu"];
+    #[cfg(not(target_os = "macos"))]
+    const PROCESSORS: [&str; 5] = ["auto", "cpu", "cuda", "tensorrt", "webgpu"];
+
+    /// The processors this OS's build has no value for.
+    #[cfg(target_os = "macos")]
+    const FOREIGN_PROCESSORS: [&str; 2] = ["cuda", "tensorrt"];
+    #[cfg(not(target_os = "macos"))]
+    const FOREIGN_PROCESSORS: [&str; 1] = ["coreml"];
+
+    #[test]
+    fn no_processor_is_auto() {
+        let args = parse("opai photo.jpg --up -o out.png").expect("parses");
+
+        assert_eq!(args.processor, Processor::Auto);
+    }
+
+    #[test]
+    fn a_processor_is_taken_whatever_its_case() {
+        let args = parse("opai photo.jpg --up -p CPU -o out.png").expect("parses");
+        assert_eq!(args.processor, Processor::Cpu);
+
+        let args = parse("opai photo.jpg --up --processor WebGPU -o out.png").expect("parses");
+        assert_eq!(args.processor, Processor::WebGpu);
+
+        for name in PROCESSORS {
+            let args = parse(&format!("opai photo.jpg --up -p {} -o out.png", name.to_uppercase())).expect(name);
+            assert_eq!(args.processor.name(), name);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn coreml_is_a_processor_on_macos() {
+        let args = parse("opai photo.jpg --up -p coreml -o out.png").expect("parses");
+
+        assert_eq!(args.processor, Processor::CoreMl);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn cuda_and_tensorrt_are_processors_off_macos() {
+        let args = parse("opai photo.jpg --up -p cuda -o out.png").expect("parses");
+        assert_eq!(args.processor, Processor::Cuda);
+
+        let args = parse("opai photo.jpg --up -p TensorRT -o out.png").expect("parses");
+        assert_eq!(args.processor, Processor::TensorRt);
+    }
+
+    #[test]
+    fn a_processor_this_os_never_offers_is_an_unknown_value_listing_this_builds() {
+        for name in FOREIGN_PROCESSORS {
+            let error = parse(&format!("opai photo.jpg --up -p {name} -o out.png")).expect_err(name);
+
+            assert_eq!(error.kind(), ErrorKind::InvalidValue, "{name}: {error}");
+            assert_eq!(error.exit_code(), 2);
+            let message = error.to_string();
+            assert!(message.contains(&format!("[possible values: {}]", PROCESSORS.join(", "))), "{message}");
+        }
+    }
+
+    #[test]
+    fn help_lists_exactly_this_builds_processors() {
+        let help = Args::command().render_help().to_string();
+        let line = help.lines().find(|line| line.contains("--processor")).expect("--processor is in the help");
+
+        assert!(line.trim_start().starts_with("-p, --processor <PROCESSOR>"), "{line}");
+        assert!(help.contains(&format!("[possible values: {}]", PROCESSORS.join(", "))), "{help}");
+        for name in FOREIGN_PROCESSORS {
+            assert!(!help.contains(name), "{name} is in the help: {help}");
+        }
+    }
+
+    #[test]
+    fn every_processor_is_the_provider_of_the_same_name() {
+        use opai::ExecutionProvider;
+
+        let names: Vec<_> = Processor::value_variants().iter().map(|processor| processor.name()).collect();
+        assert_eq!(names, PROCESSORS);
+
+        for processor in Processor::value_variants() {
+            let provider = ExecutionProvider::from(*processor);
+
+            assert_eq!(provider.as_str().to_lowercase(), processor.name(), "{processor:?}");
+            assert_eq!(Processor::from_provider(provider), Some(*processor));
+        }
+        for name in FOREIGN_PROCESSORS {
+            let provider: ExecutionProvider = name.parse().expect("the library publishes it");
+            assert_eq!(Processor::from_provider(provider), None, "{name}");
         }
     }
 

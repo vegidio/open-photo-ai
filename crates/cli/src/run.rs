@@ -3,6 +3,7 @@
 //! ```text
 //! output, inputs               --> refused here: nothing installed
 //! initialize                   --> once; the 💾 line; a Ctrl-C on it abandons initialization; another instance ends it
+//! check the processor          --> one this machine does not offer is refused here: no image loaded
 //! Ctrl-C handler               --> from here a SIGINT stops the run instead of killing the process (plain mode)
 //! start the batch's view       --> one live session for every image: the bar over the list
 //! for each image:
@@ -21,11 +22,12 @@
 use std::path::{Path, PathBuf};
 
 use opai::{
-    APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, FacedChain, Handover, InitOptions, Opai,
-    OutputDepth, Picture, ProcessOptions, ProviderVerdict, default_face_selection, image,
+    APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, FacedChain, Handover,
+    InitOptions, OnInference, Opai, OutputDepth, Picture, ProcessOptions, ProviderVerdict, default_face_selection,
+    image,
 };
 
-use crate::args::Args;
+use crate::args::{Args, Processor};
 use crate::chain::{self, Plan};
 use crate::error::CliError;
 use crate::inputs::{self, Source};
@@ -78,6 +80,10 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     };
     view.finish_install();
     let opai = initialized?;
+
+    // Only now: CUDA, TensorRT and WebGPU are known once the install plan has run and the runtime has loaded.
+    let supported = opai.providers();
+    check_processor(args.processor, supported.supports(args.processor.into()), &supported.available())?;
 
     // In plain mode a Ctrl-C is still a SIGINT. While the batch's view is drawn it is a key press, which the view
     // turns into the same cancellation.
@@ -163,7 +169,32 @@ fn closing(stopped: bool, mut failures: Vec<CliError>, total: usize) -> Result<(
     }
 }
 
-/// Enhances `source` with `plan`, the chain planned for its own size, and writes it, answering the path written.
+/// Refuses `requested` where this machine does not offer it, naming what it does offer. `supported` is the library's
+/// answer for `requested` and `available` its list, so the rule about hardware stays the library's.
+fn check_processor(requested: Processor, supported: bool, available: &[ExecutionProvider]) -> Result<(), CliError> {
+    if supported {
+        return Ok(());
+    }
+
+    // `available` only reports what this OS offers, so a provider with no value in this build cannot occur; it is
+    // skipped rather than unwrapped all the same.
+    let names: Vec<String> = std::iter::once(Processor::Auto)
+        .chain(available.iter().filter_map(|provider| Processor::from_provider(*provider)))
+        .map(Processor::name)
+        .collect();
+    let choices = match names.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
+        _ => names.join(""),
+    };
+
+    Err(CliError::Usage(format!(
+        "the processor {} is not available on this machine; use {choices}",
+        requested.name()
+    )))
+}
+
+/// Enhances `source` with `plan`, the chain planned for its own size, on the processor `args` names, and writes it,
+/// answering the path written.
 async fn enhance_one(
     opai: &Opai,
     args: &Args,
@@ -177,7 +208,7 @@ async fn enhance_one(
     // message names the path.
     let picture = image::load(&source.path).await.map_err(|error| CliError::Load(Box::new(error)))?;
 
-    let (faced, enhanced) = enhance(opai, &picture, plan.operations, view, cancel).await?;
+    let (faced, enhanced) = enhance(opai, &picture, plan.operations, args.processor.into(), view, cancel).await?;
 
     // A Ctrl-C that landed after the last tile was checked still means "write nothing".
     if cancel.is_cancelled() {
@@ -198,11 +229,12 @@ async fn enhance_one(
     Ok(written)
 }
 
-/// Finds the faces `operations` needs and runs the chain, both reporting onto the image's one bar.
+/// Finds the faces `operations` needs and runs the chain, both on `provider` and reporting onto the image's one bar.
 async fn enhance(
     opai: &Opai,
     picture: &Picture,
     operations: Vec<opai::Operation>,
+    provider: ExecutionProvider,
     view: &View,
     cancel: &CancellationToken,
 ) -> Result<(FacedChain, Enhanced), CliError> {
@@ -215,11 +247,7 @@ async fn enhance(
             picture,
             operations,
             default_face_selection,
-            Some(ExecuteOptions {
-                on_progress: Some(handover.detection()),
-                cancel: cancel.clone(),
-                ..Default::default()
-            }),
+            Some(detection_options(provider, handover.detection(), cancel)),
         )
         .await?;
 
@@ -232,19 +260,30 @@ async fn enhance(
     }
 
     let enhanced = opai
-        .process(
-            picture,
-            &faced.operations,
-            Some(ProcessOptions {
-                depth: OutputDepth::Source,
-                on_progress: Some(handover.chain()),
-                cancel: cancel.clone(),
-                ..Default::default()
-            }),
-        )
+        .process(picture, &faced.operations, Some(chain_options(provider, handover.chain(), cancel)))
         .await?;
 
     Ok((faced, enhanced))
+}
+
+/// What face detection is asked for: `provider`, reporting to `on_progress`, stopped by `cancel`.
+fn detection_options(
+    provider: ExecutionProvider,
+    on_progress: OnInference,
+    cancel: &CancellationToken,
+) -> ExecuteOptions {
+    ExecuteOptions { on_progress: Some(on_progress), cancel: cancel.clone(), provider, ..Default::default() }
+}
+
+/// What the chain is asked for: `provider` at the source's depth, reporting to `on_progress`, stopped by `cancel`.
+fn chain_options(provider: ExecutionProvider, on_progress: OnInference, cancel: &CancellationToken) -> ProcessOptions {
+    ProcessOptions {
+        depth: OutputDepth::Source,
+        on_progress: Some(on_progress),
+        cancel: cancel.clone(),
+        provider,
+        ..Default::default()
+    }
 }
 
 /// Cancels `cancel` on the first SIGINT, which arrives only while no live session holds the terminal in raw mode.
@@ -287,8 +326,8 @@ fn provenance(empty: bool, verdict: &ProviderVerdict) -> String {
         providers.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")
     };
 
-    // `AsRequested` and `Downgraded` cannot happen under `Auto`, which is all this command asks for; they are said
-    // anyway so the match stays total.
+    // `Resolved` is an `auto` run's; `AsRequested` and `Downgraded` are a named processor's, the latter where it could
+    // not build a session for some model and that model fell back to the CPU.
     match verdict {
         ProviderVerdict::Resolved(actual) => format!("ran on {}", names(actual)),
         ProviderVerdict::NothingExecuted => "served from cache".to_string(),
@@ -307,7 +346,8 @@ const fn plural<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use opai::{Confidence, ExecutionProvider, Face, Faces, InferenceError, Point, Rect};
+    use clap::ValueEnum;
+    use opai::{Confidence, Face, Faces, InferenceError, Point, Rect};
 
     /// A face whose box is `side` pixels square: restorable up to 512, too large above it.
     fn face(side: f32) -> Face {
@@ -456,6 +496,70 @@ mod tests {
 
         let error = closing(false, vec![failed("a.jpg"), failed("b.jpg")], 3).expect_err("two images failed");
         assert!(matches!(error, CliError::Batch { failed: 2, total: 3 }));
+    }
+
+    #[test]
+    fn detection_and_chain_are_both_asked_for_the_chosen_processor() {
+        let cancel = CancellationToken::new();
+        let on_progress = || -> OnInference { std::sync::Arc::new(|_| {}) };
+
+        for processor in Processor::value_variants() {
+            let provider = ExecutionProvider::from(*processor);
+
+            assert_eq!(detection_options(provider, on_progress(), &cancel).provider, provider);
+            let chain = chain_options(provider, on_progress(), &cancel);
+            assert_eq!(chain.provider, provider);
+            assert_eq!(chain.depth, OutputDepth::Source);
+        }
+    }
+
+    #[test]
+    fn check_processor_passes_auto_and_cpu_on_a_cpu_only_machine() {
+        let cpu_only = [ExecutionProvider::Cpu];
+
+        assert!(check_processor(Processor::Auto, true, &cpu_only).is_ok());
+        assert!(check_processor(Processor::Cpu, true, &cpu_only).is_ok());
+    }
+
+    #[test]
+    fn check_processor_passes_a_supported_accelerator() {
+        assert!(check_processor(Processor::WebGpu, true, &[ExecutionProvider::Cpu, ExecutionProvider::WebGpu]).is_ok());
+    }
+
+    #[test]
+    fn check_processor_refuses_an_unsupported_one_naming_what_this_machine_offers() {
+        let error = check_processor(Processor::WebGpu, false, &[ExecutionProvider::Cpu]).expect_err("no WebGPU");
+
+        assert!(matches!(error, CliError::Usage(_)), "{error:?}");
+        assert_eq!(error.exit_code(), 2);
+        assert_eq!(error.to_string(), "the processor webgpu is not available on this machine; use auto or cpu");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn check_processor_joins_a_longer_list_with_or() {
+        let available = [ExecutionProvider::Cpu, ExecutionProvider::CoreMl];
+        let error = check_processor(Processor::WebGpu, false, &available).expect_err("no WebGPU");
+
+        assert_eq!(
+            error.to_string(),
+            "the processor webgpu is not available on this machine; use auto, cpu or coreml"
+        );
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn check_processor_joins_a_longer_list_with_or() {
+        let error = check_processor(Processor::TensorRt, false, &[ExecutionProvider::Cpu]).expect_err("no TensorRT");
+        assert_eq!(error.to_string(), "the processor tensorrt is not available on this machine; use auto or cpu");
+
+        let available = [ExecutionProvider::Cpu, ExecutionProvider::Cuda, ExecutionProvider::WebGpu];
+        let error = check_processor(Processor::TensorRt, false, &available).expect_err("no TensorRT");
+
+        assert_eq!(
+            error.to_string(),
+            "the processor tensorrt is not available on this machine; use auto, cpu, cuda or webgpu"
+        );
     }
 
     #[test]

@@ -3,8 +3,8 @@
 //! | Status | When |
 //! |---|---|
 //! | `0` | every image was written |
-//! | `2` | a usage error: bad arguments, an unreadable named input, an output that cannot be used as asked, or no image to
-//! enhance (clap's own too) |
+//! | `2` | a usage error: bad arguments, an unreadable named input, an output that cannot be used as asked, no image to
+//! enhance, or a processor this machine does not offer (clap's own too) |
 //! | `130` | stopped by Ctrl-C |
 //! | `1` | anything else: initialization, or any image that failed to decode, enhance or be written |
 //!
@@ -18,7 +18,8 @@ use opai::{ImageIoError, InferenceError, InitError};
 /// Why a run, or one image of it, ended without writing its output.
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
-    /// The command line, the input or the output's format was refused. The message names the path or the argument.
+    /// The command line, the input, the output's format or the processor was refused. The message names the path or the
+    /// argument.
     #[error("{0}")]
     Usage(String),
 
