@@ -27,6 +27,7 @@
 //! executed on and every path written go to the log, not to the terminal.
 
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use opai::{
     APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, FaceSelection,
@@ -34,11 +35,15 @@ use opai::{
     default_face_selection, image,
 };
 
+use tracing::Instrument;
+
+use crate::analytics;
 use crate::args::Selection;
 use crate::args::{Args, Processor, Quality};
 use crate::autopilot::AutopilotModels;
 use crate::chain::{self, Plan};
 use crate::error::CliError;
+use crate::events;
 use crate::inputs::{self, Source};
 use crate::look::{self, ImageEnd, Look};
 use crate::output::{self, Target};
@@ -65,6 +70,7 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
         Target::File { .. } => None,
     };
     let sources = inputs::expand(&args.inputs, args.recursive, skip.as_deref())?;
+    events::files_added(&sources.iter().map(|source| source.path.as_path()).collect::<Vec<_>>());
 
     let cancel = CancellationToken::new();
     let view = View::new(look, cancel.clone());
@@ -93,6 +99,7 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     // Only now: CUDA, TensorRT and WebGPU are known once the install plan has run and the runtime has loaded.
     let supported = opai.providers();
     check_processor(args.processor, supported.supports(args.processor.into()), &supported.available())?;
+    events::app_ready(&args.processor.name(), args.autopilot);
 
     // No session holds stderr here: the dependency line is frozen and the batch's view has not started.
     eprintln!("{}", look::processor_line(args.processor.into(), args.quality, look.color));
@@ -109,6 +116,9 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     let mut stopped = false;
     // `parse` fills the models whenever `--autopilot` is given; the default is only for an `Args` built otherwise.
     let autopilot = args.autopilot.then(|| args.autopilot_models.unwrap_or_default());
+
+    events::export_started(sources.len(), &format_name(&target), &args.processor.name());
+    let began = Instant::now();
 
     view.start_batch(sources.len());
     for (index, source) in (1..).zip(&sources) {
@@ -128,7 +138,21 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
         };
         view.start_image(index, &source.path);
 
-        match enhance_one(&opai, &args, &target, source, index, planner, &view, &cancel).await {
+        // Each image's unit of work, under the name the GUI gives its command for one file's export. No path: the
+        // span's records already name it in the file, and the collector is never sent one.
+        let span = tracing::info_span!(
+            target: analytics::TARGET,
+            "export",
+            outcome = tracing::field::Empty,
+            error = tracing::field::Empty
+        );
+        let result = enhance_one(&opai, &args, &target, source, index, planner, &view, &cancel)
+            .instrument(span.clone())
+            .await;
+        analytics::mark(&span, &result);
+        drop(span);
+
+        match result {
             Ok(path) => {
                 view.end_image(index, &source.path, &ImageEnd::Enhanced);
                 written.push(path);
@@ -146,6 +170,7 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
         }
     }
     let live = view.finish_batch();
+    events::export_finished(sources.len(), written.len(), !stopped, began.elapsed().as_millis());
 
     for line in summary(&written, &args.output, &failures, live, sources.len(), look.color) {
         eprintln!("{line}");
@@ -212,6 +237,15 @@ fn check_processor(requested: Processor, supported: bool, available: &[Execution
     )))
 }
 
+/// The format the run writes, as `export_started` names it: the directory's choice, or the format of the one file.
+fn format_name(target: &Target) -> String {
+    match target {
+        Target::Directory { naming, .. } => events::format_name(naming.format),
+        Target::File { format, .. } => events::export_format_of(*format)
+            .map_or_else(|| format.name().to_string(), |format| format.name().to_string()),
+    }
+}
+
 /// Where an image's chain comes from.
 enum Planner<'a> {
     /// The flags': planned before the image is loaded, from its header's size.
@@ -241,12 +275,17 @@ async fn enhance_one(
     let picture = image::load(&source.path).await.map_err(|error| CliError::Load(Box::new(error)))?;
     let provider = args.processor.into();
 
-    let plan = match planner {
-        Planner::Fixed(plan) => plan,
+    let (plan, from) = match planner {
+        Planner::Fixed(plan) => (plan, events::Source::Manual),
         Planner::Autopilot(models) => {
-            choose(opai, &picture, &source.path, index, models, args.quality, provider, view, cancel).await?
+            let plan =
+                choose(opai, &picture, &source.path, index, models, args.quality, provider, view, cancel).await?;
+            (plan, events::Source::Autopilot)
         }
     };
+    for operation in &plan.operations {
+        events::enhancement_added(operation.family(), from);
+    }
 
     let enhanced = enhance(opai, &picture, &plan.operations, provider, view, cancel).await?;
 
@@ -300,6 +339,7 @@ async fn choose(
 
     let (width, height) = picture.dimensions();
     let (plan, warning) = plan_suggested(path, &suggestions, models, quality, width, height);
+    events::autopilot_run(plan.operations.len());
     if let Some(warning) = warning {
         tracing::warn!("{warning}");
     }

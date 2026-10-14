@@ -165,7 +165,8 @@ pub(crate) fn begin(endpoint: Option<&str>, auth: Option<&str>) -> Result<Sendin
 ///
 /// Geolocation is on, as it was in the Go application: one lookup of the public IP per session, on `o11y`'s own
 /// thread, adding `location.*` to every record sent after it answers. The machine's hardware goes on every record too,
-/// as resource attributes, so any record can be broken down by the machine that sent it.
+/// as resource attributes, so any record can be broken down by the machine that sent it, and so does the application
+/// identity the log sink was installed for (`app`), so a record can be broken down by the front end that sent it.
 fn config(endpoint: &str, auth: &str) -> Config {
     // From the build profile rather than from a third variable: a release build is what users run.
     let environment = if cfg!(debug_assertions) { Environment::Development } else { Environment::Production };
@@ -178,6 +179,12 @@ fn config(endpoint: &str, auth: &str) -> Config {
         // Never under test: the suite's collector is local, and a lookup would put ipinfo.io on the test's path.
         .geolocation(cfg!(not(test)))
         .on_export_error(|error| record_export_failure(&EXPORT_FAILED, error));
+
+    // The identity the file writes as `app=` on every line, so the collector can tell the GUI's records from the CLI's.
+    let builder = match crate::logging::app() {
+        Some(app) => builder.resource_attribute("app", app),
+        None => builder,
+    };
 
     crate::hardware::snapshot()
         .attributes()

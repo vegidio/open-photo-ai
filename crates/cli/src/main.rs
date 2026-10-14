@@ -40,23 +40,39 @@
 //!
 //! The notes, the face report, what the run executed on and every failure in full go to the log file, `opai.log`.
 //! clap's own `--help`, `--version` and argument errors are printed as clap prints them.
+//!
+//! # Telemetry
+//!
+//! As the GUI does, a run sends what the log file receives to the project's collector, beside the usage events in
+//! `events` and a span for the run and for each image, unless `--no-analytics` is given or `OPAI_ANALYTICS` is `0`,
+//! `off`, `false` or `no` (see `analytics`). Nothing is sent before the arguments have parsed.
 
+mod analytics;
 mod args;
 mod autopilot;
 mod chain;
 mod error;
+mod events;
 mod inputs;
 mod look;
 mod output;
 mod progress;
 mod run;
+#[cfg(test)]
+mod test_support;
 
 use std::process::ExitCode;
+use std::time::Instant;
+
+use tracing::Instrument;
 
 // A plain `main` building its runtime by hand rather than `#[tokio::main]`, because the attribute starts the worker
 // threads before the body's first statement — and `prepare_library_path` is only sound while no other thread exists.
 // On Linux it may also replace the process image, which has to happen before any runtime is running.
 fn main() -> ExitCode {
+    // How long the session lasted is what its closing record says.
+    let began = Instant::now();
+
     // Set the CUDA and TensorRT provider library search path.
     //
     // SAFETY: the first statement of `main`, so no thread but this one exists and nothing has yet read or written the
@@ -73,6 +89,10 @@ fn main() -> ExitCode {
     // anything is initialized.
     let args = args::parse();
 
+    // Only once the arguments have parsed, so `--help`, `--version` and a usage error never open a connection.
+    let enabled = analytics::enabled(args.no_analytics, std::env::var_os(analytics::ENV).as_deref());
+    analytics::begin(enabled, opai::telemetry::start);
+
     // Not fatal, as in the GUI: only the GPU providers are affected, and a run on the CPU still produces the image.
     if let Err(error) = prepared {
         tracing::warn!("could not establish the library search path; GPU providers will be unavailable: {error}");
@@ -86,21 +106,39 @@ fn main() -> ExitCode {
         Err(error) => {
             tracing::error!("could not start the async runtime: {error}");
             eprintln!("{}", look::failure(format_args!("could not start the async runtime: {error}"), look.color));
+            analytics::closing(began.elapsed(), opai::telemetry::stop);
             return ExitCode::FAILURE;
         }
     };
 
+    // The run's unit of work, as each GUI command's span is: everything the library does for it is beneath it.
+    let span = tracing::info_span!(
+        target: analytics::TARGET,
+        "run",
+        outcome = tracing::field::Empty,
+        error = tracing::field::Empty
+    );
+
     // The `Opai` handle lives and dies inside `run`, so the single-instance claim is released and the run cache's
     // pending writes are settled before the process exits. Every live session is finished by then too, and the summary
     // printed, so the failure line needs nothing before it.
-    match runtime.block_on(run::run(args, look)) {
+    let result = runtime.block_on(run::run(args, look).instrument(span.clone()));
+    analytics::mark(&span, &result);
+    drop(span);
+
+    let status = match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!("{}", full(&error));
             eprintln!("{}", look::failure(&error, look.color));
             ExitCode::from(error.exit_code())
         }
-    }
+    };
+
+    // Last, so the failure above is in the flush the stop makes.
+    analytics::closing(began.elapsed(), opai::telemetry::stop);
+
+    status
 }
 
 /// `error` and every error under it, joined by `: ` — the whole of what went wrong, for the log.

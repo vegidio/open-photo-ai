@@ -7,6 +7,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tracing::Level as TracingLevel;
 
 use super::*;
+use crate::app::CLI;
 use crate::error::SessionError;
 use crate::image::Picture;
 use crate::inference::process::process;
@@ -255,6 +256,8 @@ fn records_and_spans_reach_the_collector_as_the_file_has_them() {
     let posts = Posts::default();
     let reachable = Arc::new(AtomicBool::new(true));
     runtime.spawn(collector(listener, Arc::clone(&posts), Arc::clone(&reachable)));
+    // What `logging::init` keeps for the front end it installed the sink for; another test may have installed one.
+    let app = crate::logging::APP.get_or_init(|| CLI.to_string()).clone();
 
     let (log, (started, failed_while_dark)) = records_of_blocking("info", || {
         let started = begin(Some(&url), Some("Bearer export-test"));
@@ -361,6 +364,8 @@ fn records_and_spans_reach_the_collector_as_the_file_has_them() {
             .any(|entry| entry["key"] == key && entry["value"]["intValue"].is_string())
     };
     assert!(has_int("cpu.cores") && has_int("memory"), "{resource}");
+    // The front end, as the file writes it on every line, so the dashboards can tell the GUI's records from the CLI's.
+    assert_eq!(attribute(resource, "app"), Some(app.as_str()), "{resource}");
 
     // The record inside a span arrives in that span's trace, and the span arrives as a trace.
     let info = log_record("export test info record").expect("the info record did not arrive");

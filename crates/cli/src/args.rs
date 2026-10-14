@@ -76,6 +76,11 @@ pub struct Args {
     #[arg(long, short = 'o', value_name = "OUTPUT")]
     pub output: PathBuf,
 
+    /// Send no usage or diagnostic data to the project for this run. Setting OPAI_ANALYTICS to 0, off, false or no
+    /// does the same.
+    #[arg(long)]
+    pub no_analytics: bool,
+
     /// The model autopilot runs each family with, read from the `OPAI_AP_*` variables by [`parse`] under
     /// `--autopilot` only, and `None` otherwise.
     #[arg(skip)]
@@ -468,6 +473,12 @@ mod tests {
         assert_eq!(args.quality, Quality::Hd);
         assert_eq!(args.selection.scale, None);
         assert_eq!(args.output, PathBuf::from("out.png"));
+    }
+
+    #[test]
+    fn analytics_is_on_unless_the_flag_turns_it_off() {
+        assert!(!parse("opai photo.jpg --up -o out.png").expect("parses").no_analytics);
+        assert!(parse("opai photo.jpg --up --no-analytics -o out.png").expect("parses").no_analytics);
     }
 
     #[test]

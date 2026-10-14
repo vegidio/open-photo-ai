@@ -59,6 +59,7 @@
 
 use std::fs::OpenOptions;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use rust_sak::fs::{self, FsError};
@@ -99,6 +100,14 @@ pub const FILE_ONLY: &str = "file_only";
 
 /// Whether this process has installed a sink.
 static INSTALLED: AtomicBool = AtomicBool::new(false);
+
+/// The application identity the installed sink writes onto every line, for telemetry to send as a resource attribute.
+pub(crate) static APP: OnceLock<String> = OnceLock::new();
+
+/// The application identity [`init`] installed the sink for, or `None` before a sink is installed.
+pub(crate) fn app() -> Option<&'static str> {
+    APP.get().map(String::as_str)
+}
 
 /// Everything that can stop an application from getting a log file.
 ///
@@ -230,7 +239,11 @@ pub fn init(name: &str, app: &str) -> Result<PathBuf, LogError> {
     // From here on a failure has to clear the latch again, or a front end that reported the failure and carried on
     // would have permanently poisoned a sink it never installed.
     match install(name, app) {
-        Ok(path) => Ok(path),
+        Ok(path) => {
+            // The file writes `app` onto every line; the collector reads it from here, as a resource attribute.
+            let _ = APP.set(app.to_string());
+            Ok(path)
+        }
         Err(error) => {
             INSTALLED.store(false, Ordering::SeqCst);
             Err(error)

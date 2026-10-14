@@ -55,3 +55,6 @@ wild = "2.2.1"
 [dev-dependencies]
 # A scratch directory for the input check's tests, as `opai` and `gui` use it.
 tempfile = "3.27"
+
+# The recorder the telemetry tests read their spans and records back with (`src/test_support.rs`), as `gui`'s does.
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry"] }
