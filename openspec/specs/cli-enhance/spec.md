@@ -35,6 +35,8 @@ first: one or more paths, each a file or a directory, in any mix. The options SH
 - `--cb-bias <bias>`: the colour balance bias, a whole number from -100 to 100 inclusive, defaulting to 50. It SHALL be
   accepted only alongside `--color-balance`.
 - `--quality`, alias `-q`: `hd` or `sd`, defaulting to `hd`.
+- `--processor`, alias `-p`: the execution provider to run on, defaulting to `auto`. Its values are described in
+  "The processor is chosen on the command line".
 - `--recursive`, alias `-r`: a directory input contributes its whole tree rather than only the files directly in it.
 - `--format <format>`: `preserve`, or one of `avif`, `bmp`, `gif`, `heic`, `jpeg`, `png`, `tiff` and `webp`, with
   `jpg`, `tif` and `heif` accepted as the same formats as `jpeg`, `tiff` and `heic`. It SHALL default to `preserve`.
@@ -52,7 +54,7 @@ The order in which the enhancement flags are given SHALL NOT change the order th
 library's apply order: denoise, face recovery, colorization, light adjustment, colour balance, sharpen, and then
 upscale. The same enhancements and parameters SHALL apply to every image in the run.
 
-Model names and format names SHALL be matched without regard to case.
+Model names, format names and processor names SHALL be matched without regard to case.
 
 #### Scenario: Bare flags take their default models
 
@@ -196,6 +198,72 @@ A face recovery SHALL run at maximum fidelity to the original face.
 
 - **WHEN** the user runs `opai photo.jpg --dn gothenburg -q sd -o out.png`
 - **THEN** Gothenburg runs its FP16 build
+
+### Requirement: The processor is chosen on the command line
+
+`--processor`, alias `-p`, SHALL choose the execution provider every model of the run is asked to run on, face
+detection included. Its values SHALL be:
+
+| Value | Provider | Accepted in builds for |
+|---|---|---|
+| `auto` (default) | the best provider this machine supports, trying TensorRT, CUDA, CoreML, WebGPU and then the CPU | every OS |
+| `cpu` | the CPU | every OS |
+| `coreml` | CoreML | macOS only |
+| `cuda` | CUDA | Windows and Linux only |
+| `tensorrt` | TensorRT | Windows and Linux only |
+| `webgpu` | WebGPU | every OS |
+
+A value that is not accepted by the build for the running OS SHALL be refused by the argument parser as an unknown
+value: clap's own error, with no failure line, and the usage status. `--help` and the parser's list of possible
+values SHALL name only the values the running build accepts.
+
+An accepted value SHALL then be checked against the providers this machine offers once initialization has
+finished. This is the same report the GUI builds its processor list from. `auto` and `cpu` SHALL always pass. A
+value this machine does not offer SHALL be refused before any image is loaded. The refusal SHALL be one failure line
+naming the processor asked for and the processors this machine offers, and the command SHALL exit with the usage
+status. Nothing SHALL be written.
+
+A processor that passes the check but fails to run a model SHALL fall back to the CPU for that model, as the library
+does, and the run SHALL go on. The log file SHALL record the fallback. The terminal SHALL NOT report it.
+
+The processor SHALL NOT change what initialization installs. The installed dependencies SHALL be what this machine
+needs, whichever processor is chosen.
+
+#### Scenario: No processor given
+
+- **WHEN** the user runs `opai photo.jpg --up -o out.png`
+- **THEN** the run uses the best provider this machine supports, as it did before this flag existed
+
+#### Scenario: Forcing the CPU
+
+- **WHEN** the user runs `opai photo.jpg --up -p cpu -o out.png` on a machine with an accelerator
+- **THEN** every model of the run, face detection included, is asked to run on the CPU, and the log file records that
+  the image ran on CPU
+
+#### Scenario: Case does not matter
+
+- **WHEN** the user runs `opai photo.jpg --up --processor CoreML -o out.png` on macOS
+- **THEN** the run uses CoreML
+
+#### Scenario: A processor this OS can never offer
+
+- **WHEN** the user runs `opai photo.jpg --up -p cuda -o out.png` with a macOS build
+- **THEN** the argument parser's own error is printed, listing the possible values `auto`, `cpu`, `coreml` and
+  `webgpu`, with no failure line, and the exit status is 2
+- **AND** nothing is installed
+
+#### Scenario: A processor this machine does not offer
+
+- **WHEN** the user runs `opai photo.jpg --up -p tensorrt -o out.png` on a Linux machine with no NVIDIA GPU, whose
+  machine offers the CPU only
+- **THEN** initialization finishes, and the command ends with one failure line naming `tensorrt` and the processors
+  this machine offers, `auto` and `cpu`
+- **AND** no image is loaded, nothing is written, and the exit status is 2
+
+#### Scenario: Help lists only this build's processors
+
+- **WHEN** the user runs `opai --help` with a Windows build
+- **THEN** `--processor` lists `auto`, `cpu`, `cuda`, `tensorrt` and `webgpu`, and does not list `coreml`
 
 ### Requirement: The upscale factor defaults to what the photograph needs
 
@@ -555,7 +623,8 @@ carries its reason.
 When standard error is a terminal that cannot draw the live view, the command SHALL print the lines it would print
 when standard error is not a terminal, coloured as on a colour terminal.
 
-The command SHALL run on the best execution provider this machine supports. It SHALL record in its log file, for each
+The command SHALL run on the execution provider chosen with `--processor`, as "The processor is chosen on the
+command line" describes. It SHALL record in its log file, for each
 image, the path written, the size and format of the image written, and the provider or providers the run used. If
 every step was served from the run cache, it SHALL record that instead. If no enhancement was left to run, it SHALL
 record that no enhancement ran, rather than that the run was served from the cache. None of this SHALL be printed to
@@ -701,14 +770,14 @@ left as it was.
 The command SHALL exit with:
 
 - `0` when every image was written
-- `2` for a usage error: bad arguments, an unreadable named input, an output that cannot be used as asked, or no
-  image to enhance
+- `2` for a usage error: bad arguments, an unreadable named input, an output that cannot be used as asked, no image
+  to enhance, or a processor this machine does not offer
 - `130` when stopped by Ctrl-C
 - `1` for any other failure: initialization, or any image that failed to decode, enhance or be written
 
 Every failure SHALL end with one failure line on standard error, `🧨 <reason>`, where the reason is a short message
 saying what went wrong. On a colour terminal the failure line SHALL be bold red throughout. This applies to every
-failure the command reports itself, including refusals of the inputs or output, another instance holding the claim,
+failure the command reports itself, including refusals of the inputs, the output or the processor, another instance holding the claim,
 and a stop by Ctrl-C. Argument errors detected while parsing the command line, and `--help` and `--version`, SHALL be
 printed as the argument parser prints them, with no failure line.
 
