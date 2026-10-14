@@ -42,6 +42,7 @@
 //! clap's own `--help`, `--version` and argument errors are printed as clap prints them.
 
 mod args;
+mod autopilot;
 mod chain;
 mod error;
 mod inputs;

@@ -8,8 +8,12 @@
 //! Ctrl-C handler               --> from here a SIGINT stops the run instead of killing the process (plain mode)
 //! start the batch's view       --> one live session for every image: the batch's bar over the list
 //! for each image:
-//!   plan, start its row        --> 🖼️ [  0%] Preparing to enhance <path>; the bar is not touched
-//!   load, find faces, process  --> the row's percentage and words, and the bar, move with each report over detection
+//!   plan, start its row        --> 🖼️ [  0%] Preparing to enhance <path>; the bar is not touched. Under --ap the
+//!                                  plan waits for the image itself
+//!   load                       --> under --ap: 🖼️ [  0%] Choosing enhancements for <path> while the analysis runs,
+//!                                  then the chain planned from its suggestions and the OPAI_AP_* models; a signal it
+//!                                  could not read is logged and the image goes on
+//!   find faces, process        --> the row's percentage and words, and the bar, move with each report over detection
 //!                                  and chain, planned for the image's own size; a failed detection is logged and
 //!                                  the image goes on
 //!   claim, save, commit        --> the source's depth, the library's recommended settings
@@ -26,12 +30,13 @@ use std::path::{Path, PathBuf};
 
 use opai::{
     APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, FacedChain, Handover,
-    InitOptions, OnInference, Opai, OutputDepth, Picture, ProcessOptions, ProviderVerdict, default_face_selection,
-    image,
+    InitOptions, OnInference, Opai, OutputDepth, Picture, ProcessOptions, ProviderVerdict, Suggestions,
+    default_face_selection, image,
 };
 
-use crate::args::{Args, Processor};
-use crate::chain::{self, Plan};
+use crate::args::{Args, Processor, Quality};
+use crate::autopilot::AutopilotModels;
+use crate::chain::{self, Plan, Selection};
 use crate::error::CliError;
 use crate::inputs::{self, Source};
 use crate::look::{self, ImageEnd, Look};
@@ -101,6 +106,8 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     // Set only where the stop left an image unwritten or unstarted: a Ctrl-C landing after the last image was written
     // stopped nothing.
     let mut stopped = false;
+    // `parse` fills the models whenever `--autopilot` is given; the default is only for an `Args` built otherwise.
+    let autopilot = args.autopilot.then(|| args.autopilot_models.unwrap_or_default());
 
     view.start_batch(sources.len());
     for (index, source) in (1..).zip(&sources) {
@@ -110,13 +117,17 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
             break;
         }
 
-        let plan = chain::plan(&args, source.width, source.height);
-        for note in &plan.notes {
-            tracing::info!("{}: {note}", source.path.display());
-        }
+        let planner = match &autopilot {
+            Some(models) => Planner::Autopilot(models),
+            None => {
+                let plan = chain::plan(&Selection::from_args(&args), args.quality, source.width, source.height);
+                log_notes(&source.path, &plan);
+                Planner::Fixed(plan)
+            }
+        };
         view.start_image(index, &source.path);
 
-        match enhance_one(&opai, &args, &target, source, plan, &view, &cancel).await {
+        match enhance_one(&opai, &args, &target, source, index, planner, &view, &cancel).await {
             Ok(path) => {
                 view.end_image(index, &source.path, &ImageEnd::Enhanced);
                 written.push(path);
@@ -200,22 +211,43 @@ fn check_processor(requested: Processor, supported: bool, available: &[Execution
     )))
 }
 
-/// Enhances `source` with `plan`, the chain planned for its own size, on the processor `args` names, and writes it,
-/// answering the path written.
+/// Where an image's chain comes from.
+enum Planner<'a> {
+    /// The flags': planned before the image is loaded, from its header's size.
+    Fixed(Plan),
+    /// Autopilot's: planned once the loaded image has been analysed, with these models.
+    Autopilot(&'a AutopilotModels),
+}
+
+/// Enhances `source`, the image at `index`, with the chain `planner` gives for its own size, on the processor `args`
+/// names, and writes it, answering the path written.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one run's state, threaded through rather than bundled for one caller"
+)]
 async fn enhance_one(
     opai: &Opai,
     args: &Args,
     target: &Target,
     source: &Source,
-    plan: Plan,
+    index: usize,
+    planner: Planner<'_>,
     view: &View,
     cancel: &CancellationToken,
 ) -> Result<PathBuf, CliError> {
     // A file whose header read cleanly but whose pixels do not decode fails this image, not the batch. The library's
     // message names the path.
     let picture = image::load(&source.path).await.map_err(|error| CliError::Load(Box::new(error)))?;
+    let provider = args.processor.into();
 
-    let (faced, enhanced) = enhance(opai, &picture, plan.operations, args.processor.into(), view, cancel).await?;
+    let plan = match planner {
+        Planner::Fixed(plan) => plan,
+        Planner::Autopilot(models) => {
+            choose(opai, &picture, &source.path, index, models, args.quality, provider, view, cancel).await?
+        }
+    };
+
+    let (faced, enhanced) = enhance(opai, &picture, plan.operations, provider, view, cancel).await?;
 
     // A Ctrl-C that landed after the last tile was checked still means "write nothing".
     if cancel.is_cancelled() {
@@ -234,6 +266,71 @@ async fn enhance_one(
     );
 
     Ok(written)
+}
+
+/// Analyses `picture`, the image at `index` read from `path`, for the families `models` leaves on, and plans the chain
+/// its suggestions call for at `quality`, with the row reading `Choosing enhancements for` meanwhile.
+///
+/// A stop during the analysis is a stop. A signal it could not read is logged, and the image gets what the others
+/// suggested.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one run's state, threaded through rather than bundled for one caller"
+)]
+async fn choose(
+    opai: &Opai,
+    picture: &Picture,
+    path: &Path,
+    index: usize,
+    models: &AutopilotModels,
+    quality: Quality,
+    provider: ExecutionProvider,
+    view: &View,
+    cancel: &CancellationToken,
+) -> Result<Plan, CliError> {
+    view.choosing(index);
+
+    // No progress relayed: the only reporting work is the face detection, and the row has no chain yet to map it
+    // onto. The chain's own detection is then served from the store this one warmed.
+    let families = models.families();
+    let options = ExecuteOptions { on_progress: None, cancel: cancel.clone(), provider, ..Default::default() };
+    let suggestions = opai.suggest(picture, Some(&families), Some(options)).await?;
+    view.chosen(index);
+
+    let (width, height) = picture.dimensions();
+    let (plan, warning) = plan_suggested(path, &suggestions, models, quality, width, height);
+    if let Some(warning) = warning {
+        tracing::warn!("{warning}");
+    }
+    log_notes(path, &plan);
+
+    Ok(plan)
+}
+
+/// The chain `suggestions` calls for over the `width` x `height` image at `path`, and the warning to log when a signal
+/// of the analysis could not be read. What the other signals suggested is planned either way.
+fn plan_suggested(
+    path: &Path,
+    suggestions: &Suggestions,
+    models: &AutopilotModels,
+    quality: Quality,
+    width: u32,
+    height: u32,
+) -> (Plan, Option<String>) {
+    let warning = suggestions
+        .incomplete
+        .as_ref()
+        .map(|error| format!("{}: the analysis could not read every signal: {error}", path.display()));
+    let plan = chain::plan(&Selection::from_suggestions(&suggestions.suggested, models), quality, width, height);
+
+    (plan, warning)
+}
+
+/// Records `plan`'s notes about the image at `path` in the log.
+fn log_notes(path: &Path, plan: &Plan) {
+    for note in &plan.notes {
+        tracing::info!("{}: {note}", path.display());
+    }
 }
 
 /// Finds the faces `operations` needs and runs the chain, both on `provider` and reporting onto the image's row
@@ -580,5 +677,36 @@ mod tests {
     #[test]
     fn an_empty_chain_is_not_reported_as_cached() {
         assert_eq!(provenance(true, &ProviderVerdict::NothingExecuted), "no enhancement ran");
+    }
+
+    #[test]
+    fn a_detector_that_could_not_be_obtained_leaves_the_other_suggestions_and_a_warning() {
+        let scale = opai::Scale::new(4.0).expect("in range");
+        let detector = InferenceError::Open {
+            artifact: "dt_newyork_fp32".to_owned(),
+            provider: ExecutionProvider::Cpu,
+            source: std::sync::Arc::new(std::io::Error::other("corrupt model")),
+        };
+        let suggestions =
+            Suggestions { suggested: vec![opai::Suggestion::Upscale { scale }], incomplete: Some(detector) };
+
+        let (plan, warning) =
+            plan_suggested(Path::new("portrait.jpg"), &suggestions, &AutopilotModels::default(), Quality::Hd, 800, 600);
+
+        assert_eq!(plan.operations, vec![opai::Upscale::tokyo(opai::FloatPrecision::Fp32, scale)]);
+        let warning = warning.expect("the failed signal is warned about");
+        assert!(warning.starts_with("portrait.jpg: "), "{warning}");
+        assert!(warning.contains("dt_newyork_fp32") && warning.contains("corrupt model"), "{warning}");
+    }
+
+    #[test]
+    fn a_complete_analysis_warns_about_nothing() {
+        let suggestions = Suggestions { suggested: Vec::new(), incomplete: None };
+
+        let (plan, warning) =
+            plan_suggested(Path::new("large.jpg"), &suggestions, &AutopilotModels::default(), Quality::Hd, 4000, 3000);
+
+        assert!(plan.operations.is_empty());
+        assert_eq!(warning, None);
     }
 }

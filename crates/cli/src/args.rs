@@ -8,6 +8,8 @@ use clap::{CommandFactory, Parser, ValueEnum};
 use opai::Scale;
 use opai::export::{ExportFormat, FormatChoice};
 
+use crate::autopilot::AutopilotModels;
+
 /// Enhance photographs with Open Photo AI.
 ///
 /// Each input is a photograph or a directory of them; a directory contributes the images directly inside it, or its
@@ -138,6 +140,32 @@ pub struct Args {
     #[arg(long, value_name = "FACTOR", value_parser = parse_scale, requires = "upscale")]
     pub scale: Option<Scale>,
 
+    /// Analyse each photograph and apply the enhancements it calls for, each with its family's default model. Cannot
+    /// be combined with the enhancement flags or their parameters.
+    ///
+    /// A family's model is chosen with its environment variable, set to one of that family's models or to `off`,
+    /// which leaves the family out: OPAI_AP_DENOISE, OPAI_AP_FACE, OPAI_AP_COLORIZATION, OPAI_AP_LIGHT,
+    /// OPAI_AP_COLOR, OPAI_AP_SHARPEN and OPAI_AP_UPSCALE.
+    #[arg(
+        long = "autopilot",
+        visible_alias = "ap",
+        conflicts_with_all = [
+            "denoise",
+            "face_recovery",
+            "colorization",
+            "light_adjustment",
+            "color_balance",
+            "sharpen",
+            "upscale",
+            "scale",
+            "denoise_strength",
+            "sharpen_strength",
+            "light_bias",
+            "balance_bias",
+        ]
+    )]
+    pub autopilot: bool,
+
     /// `hd` runs every model at its higher-fidelity build, `sd` at its lighter, faster one.
     #[arg(long, short = 'q', value_enum, default_value_t = Quality::Hd, ignore_case = true)]
     pub quality: Quality,
@@ -171,6 +199,11 @@ pub struct Args {
     /// The file or directory to write to.
     #[arg(long, short = 'o', value_name = "OUTPUT")]
     pub output: PathBuf,
+
+    /// The model autopilot runs each family with, read from the `OPAI_AP_*` variables by [`parse`] under
+    /// `--autopilot` only, and `None` otherwise.
+    #[arg(skip)]
+    pub autopilot_models: Option<AutopilotModels>,
 }
 
 /// The upscale models, as the command line names them.
@@ -304,9 +337,17 @@ impl From<Processor> for opai::ExecutionProvider {
 /// The command line this process was started with, or the process ended with clap's message and exit status.
 ///
 /// Read through `wild`, which expands the wildcards `cmd` and PowerShell leave as written, and on every other platform
-/// hands the arguments over unchanged.
+/// hands the arguments over unchanged. Under `--autopilot`, the `OPAI_AP_*` variables are read here too, so a bad one
+/// is refused as a bad flag is, before anything is installed; without it they are not looked at.
 pub fn parse() -> Args {
-    parse_from(wild::args_os()).unwrap_or_else(|error| error.exit())
+    let mut args = parse_from(wild::args_os()).unwrap_or_else(|error| error.exit());
+
+    if args.autopilot {
+        let models = AutopilotModels::read(|name| std::env::var_os(name)).unwrap_or_else(|error| error.exit());
+        args.autopilot_models = Some(models);
+    }
+
+    args
 }
 
 /// `arguments` parsed and checked, every refusal a clap error so it is reported and exits as clap's own are.
@@ -327,12 +368,14 @@ where
         args.color_balance.is_some(),
         args.sharpen.is_some(),
         args.upscale.is_some(),
+        args.autopilot,
     ];
     if !requested.contains(&true) {
         return Err(Args::command().error(
             clap::error::ErrorKind::MissingRequiredArgument,
             "at least one enhancement is required: --denoise (--dn), --face-recovery (--fr), --colorization (--cl), \
-             --light-adjustment (--la), --color-balance (--cb), --sharpen (--sh) or --upscale (--up)",
+             --light-adjustment (--la), --color-balance (--cb), --sharpen (--sh), --upscale (--up) or \
+             --autopilot (--ap)",
         ));
     }
 
@@ -400,6 +443,7 @@ fn parse_bias(text: &str) -> Result<i16, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chain::Selection;
     use clap::error::ErrorKind;
 
     fn parse(line: &str) -> Result<Args, clap::Error> {
@@ -497,8 +541,55 @@ mod tests {
             ("--color-balance", "--cb"),
             ("--sharpen", "--sh"),
             ("--upscale", "--up"),
+            ("--autopilot", "--ap"),
         ] {
             assert!(message.contains(&format!("{flag} ({alias})")), "{flag} is not listed in: {message}");
+        }
+    }
+
+    #[test]
+    fn autopilot_alone_is_enough() {
+        let args = parse("opai photo.jpg --ap -o out.png").expect("parses");
+        assert!(args.autopilot);
+        assert_eq!(Selection::from_args(&args), Selection::default());
+
+        assert!(parse("opai photo.jpg --autopilot -q sd -p cpu -o out.png").expect("parses").autopilot);
+        assert!(!parse("opai photo.jpg --up -o out.png").expect("parses").autopilot);
+    }
+
+    #[test]
+    fn the_environment_is_not_read_by_parse_from() {
+        assert_eq!(parse("opai photo.jpg --up -o out.png").expect("parses").autopilot_models, None);
+        assert_eq!(parse("opai photo.jpg --ap -o out.png").expect("parses").autopilot_models, None);
+    }
+
+    #[test]
+    fn autopilot_cannot_be_combined_with_an_enhancement_or_a_parameter() {
+        // Each flag with what it needs to parse on its own, and the name clap gives it in the refusal. A parameter is
+        // given with its enhancement, so the refusal is about autopilot rather than about a missing enhancement.
+        let cases = [
+            ("--dn", "--denoise"),
+            ("--fr", "--face-recovery"),
+            ("--cl", "--colorization"),
+            ("--la", "--light-adjustment"),
+            ("--cb", "--color-balance"),
+            ("--sh", "--sharpen"),
+            ("--up", "--upscale"),
+            ("--scale 2", "--scale"),
+            ("--dn-str 150", "--dn-str"),
+            ("--sh-str 150", "--sh-str"),
+            ("--la-bias 20", "--la-bias"),
+            ("--cb-bias 20", "--cb-bias"),
+        ];
+
+        for (flags, name) in cases {
+            let error = parse(&format!("opai photo.jpg --ap {flags} -o out.png")).expect_err(flags);
+
+            assert_eq!(error.kind(), ErrorKind::ArgumentConflict, "{flags}: {error}");
+            assert_eq!(error.exit_code(), 2);
+            let message = error.to_string();
+            assert!(message.contains("--autopilot") && message.contains(name), "{flags}: {message}");
+            assert!(message.contains("cannot be used with"), "{flags}: {message}");
         }
     }
 
@@ -875,7 +966,7 @@ mod tests {
     }
 
     /// Every `opai …` command in `docs/CLI_REFERENCE.md`, from its code blocks and its inline code, without trailing
-    /// comments.
+    /// comments or the environment variables set before it.
     fn documented_commands() -> Vec<String> {
         let reference = include_str!("../../../docs/CLI_REFERENCE.md");
         let mut commands = Vec::new();
@@ -890,7 +981,11 @@ mod tests {
             let candidates: Vec<&str> =
                 if fenced { vec![line.trim()] } else { line.split('`').skip(1).step_by(2).collect() };
             for candidate in candidates {
-                let command = candidate.trim_start_matches("NO_COLOR=1 ");
+                let mut command = candidate.trim_start_matches("NO_COLOR=1 ");
+                // Autopilot's model variables, as many as are set before the command.
+                while let Some(rest) = command.strip_prefix("OPAI_AP_") {
+                    command = rest.split_once(' ').map_or("", |(_, rest)| rest);
+                }
                 let command = command.split(" #").next().unwrap_or_default().trim();
                 if command.starts_with("opai ") {
                     commands.push(command.to_owned());

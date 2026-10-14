@@ -7,6 +7,7 @@
 - [Arguments and global options](#arguments-and-global-options)
 - [Where the results go](#where-the-results-go)
 - [Enhancements](#enhancements)
+- [Autopilot](#autopilot)
 - [Processing order](#processing-order)
 - [Supported formats](#supported-formats)
 - [What happens during a run](#what-happens-during-a-run)
@@ -31,7 +32,7 @@ opai <INPUT>... <ENHANCEMENT FLAGS...> [OPTIONS] --output <OUTPUT>
 The rules in short:
 
 - The `INPUT`s come **first**, before any flag. Each one is an image or a directory of images.
-- You need **at least one** enhancement flag.
+- You need **at least one** enhancement flag, or [`--autopilot`](#autopilot) to let `opai` choose them per image.
 - `--output` / `-o` is **required**. It's a [file or a directory](#where-the-results-go).
 - The order of the enhancement flags doesn't matter. The enhancements always run in a [fixed order](#processing-order).
 - An existing file is **never overwritten** unless you pass `--overwrite`. The result is [numbered](#numbering-and---overwrite) instead.
@@ -65,6 +66,9 @@ opai photos --dn --overwrite -o photos
 
 # Upscale on the CPU only, e.g. to rule out a GPU problem
 opai photo.jpg --up -p cpu -o photo-large.png
+
+# Let autopilot choose each photo's enhancements, as the GUI's Autopilot does
+opai photos --ap -o enhanced
 ```
 
 ## Arguments and global options
@@ -112,6 +116,10 @@ Text added before and after each image's name, before the extension: `--prefix n
 ### `--overwrite`
 
 Replaces a file that already exists at a destination instead of [numbering](#numbering-and---overwrite) the result.
+
+### `--autopilot`, `--ap`
+
+Analyses each image and applies the enhancements it calls for, instead of the ones you name. It can't be combined with the enhancement flags or their options. See [Autopilot](#autopilot).
 
 ### `-q, --quality <hd|sd>` (default: `hd`)
 
@@ -169,9 +177,6 @@ Under an output directory:
 The file name is the same one the GUI's export would use: the prefix, the source's name, the suffix, and the extension of the [`--format`](#--format-format-default-preserve) chosen.
 
 ### Numbering and `--overwrite`
-
-> [!IMPORTANT]
-> **Changed in this version:** `opai` used to overwrite an existing output file without asking. It now keeps it and numbers the new result instead. Pass `--overwrite` to get the old behaviour.
 
 **Without `--overwrite`**, a file that already exists at a destination is kept, and the result is written to the first free name made by adding `_1`, `_2`, … up to `_999` before the extension, exactly as the GUI's export does. This applies to an output file too: if `out.png` exists, `opai photo.jpg --up -o out.png` writes `out_1.png`. Two inputs with the same name going to the same place (`opai one/a.jpg two/a.jpg --up -o out`) give `out/a.jpg` and `out/a_1.jpg`. In place, each result is numbered beside its source (`photos/a_1.jpg`).
 
@@ -338,6 +343,53 @@ Option: `--scale <FACTOR>`, the upscale factor, from `1.0` to `8.0`. Decimals ar
 > [!IMPORTANT]
 > If the image is larger than 4 MP and you don't pass `--scale`, the upscale step is **skipped**. The terminal doesn't warn about this; it's only recorded in the [log file](#log-file). Any other enhancements in the command still run, and the file is still written at the original resolution. To upscale a large image anyway, pass `--scale`.
 
+## Autopilot
+
+`--autopilot` (alias `--ap`) runs the same analysis as the GUI's Autopilot on each image, once it's loaded, and applies the enhancements that image calls for: denoise for visible grain, face recovery when there are faces to restore, colorization for a black & white photo, light adjustment for a badly exposed one, color balance for a color cast, sharpen for a blurred one, and an upscale for a small one. Different images in one batch can get different enhancements. They still run in the [fixed order](#processing-order).
+
+```bash
+opai photos --ap -o enhanced
+```
+
+- **It replaces the enhancement flags.** Combining `--ap` with any enhancement flag (`--dn`, `--fr`, `--cl`, `--la`, `--cb`, `--sh`, `--up`) or their options (`--dn-str`, `--sh-str`, `--la-bias`, `--cb-bias`, `--scale`) fails with exit code `2`, for example `error: the argument '--autopilot' cannot be used with '--upscale [<MODEL>]'`. Every other option (`-q`, `-p`, `-r`, `--format`, `--prefix`, `--suffix`, `--overwrite`, `-o`) works as usual, and `-q` picks the build of the models autopilot runs.
+- **Each enhancement uses its default strength or bias**: strength `100` for denoise and sharpen, bias `50` for light adjustment and color balance. An upscale runs at the factor the image's size calls for (see [Upscale](#upscale---upscale-model---up-model)); an image above 4 MP is not upscaled.
+- **An image that needs nothing is still written**, unchanged, in the format asked for. Its row ends with `Enhancements applied to` as any other.
+- **If face detection can't run** (for example, its model can't be downloaded), the image still gets the other enhancements, without face recovery, and the [log file](#log-file) records a warning.
+- **What was chosen for each image** is recorded in the [log file](#log-file). The terminal shows each enhancement in the image's row while it runs.
+
+### Choosing the models
+
+Each enhancement runs with its default model unless an environment variable names another one:
+
+| Enhancement      | Environment variable    | Default model | Accepted values                       |
+|------------------|-------------------------|---------------|---------------------------------------|
+| Denoise          | `OPAI_AP_DENOISE`       | Stockholm     | `stockholm`, `gothenburg`, `malmo`, `off` |
+| Face Recovery    | `OPAI_AP_FACE`          | Athens        | `athens`, `santorini`, `off`          |
+| Colorization     | `OPAI_AP_COLORIZATION`  | Delhi         | `delhi`, `mumbai`, `jaipur`, `off`    |
+| Light Adjustment | `OPAI_AP_LIGHT`         | Paris         | `paris`, `lyon`, `off`                |
+| Color Balance    | `OPAI_AP_COLOR`         | Rio           | `rio`, `saopaulo`, `off`              |
+| Sharpen          | `OPAI_AP_SHARPEN`       | Moscow        | `moscow`, `petersburg`, `novgorod`, `off` |
+| Upscale          | `OPAI_AP_UPSCALE`       | Tokyo         | `kyoto`, `osaka`, `tokyo`, `saitama`, `off` |
+
+```bash
+# Upscale with Osaka whenever autopilot upscales
+OPAI_AP_UPSCALE=osaka opai photos --ap -o out
+
+# Never sharpen or restore faces, and use Malmo for denoise
+OPAI_AP_SHARPEN=off OPAI_AP_FACE=off OPAI_AP_DENOISE=malmo opai photos --ap -o out
+```
+
+- Model names are spelled as the enhancement flags take them, in any case (`Osaka` = `osaka`).
+- **`off`** (any case) leaves that enhancement out entirely: it's never applied, and the analysis doesn't even look for it, so `OPAI_AP_FACE=off` skips face detection.
+- An **empty** value is the same as not setting the variable.
+- An **invalid** value fails with exit code `2` before anything is downloaded, naming the variable and listing what it accepts:
+
+  ```
+  error: invalid value 'paris' for the environment variable OPAI_AP_UPSCALE
+    [possible values: kyoto, osaka, tokyo, saitama, off]
+  ```
+- The variables are read **only with `--ap`**. Without it they're ignored and not checked: `OPAI_AP_UPSCALE=paris opai photo.jpg --up -o out.png` upscales with Tokyo. The GUI never reads them; its Autopilot uses the models chosen in its settings.
+
 ## Processing order
 
 The enhancements always run in this order, no matter what order you type the flags in:
@@ -406,7 +458,7 @@ With an output **file**, the format is the one its extension names. With an outp
    A file **found inside a directory** that has an image extension but can't be read is not a refusal: it's skipped, recorded in the [log file](#log-file), and the rest of the batch goes on. Nothing is written or created when the run is refused.
 2. **Dependencies are installed (first run only).** The first time `opai` runs, it downloads the components it needs: ONNX Runtime, plus CUDA and TensorRT on systems with a supported NVIDIA GPU. A `💾 Downloading dependency <name>... ⣾ 34% Complete` line shows the progress, with a spinner that keeps turning while the download works; it is rewritten when the next dependency starts, and shows a green `✓` once the dependency reaches `100%`. These are shared with the GUI, so if the GUI has already downloaded them, nothing is downloaded. This happens once per command, however many images it has. Then the [processor](#-p---processor-processor-default-auto) is checked against what this machine offers, and the run is refused with [exit code 2](#exit-codes) if it doesn't offer it. Once it's accepted, the line `🧠 Running inference using the processor <processor>; quality <HD|SD>` names the processor you asked for (`Auto` under `-p auto`) and the quality, followed by a blank line.
 3. **Each image, one after another:**
-   1. **The image is loaded.** Its row in the list reads `🖼️ [  0%] Preparing to enhance <path>`.
+   1. **The image is loaded.** Its row in the list reads `🖼️ [  0%] Preparing to enhance <path>`. With [`--autopilot`](#autopilot), the image is then analysed, and its row reads `🖼️ [  0%] Choosing enhancements for <path>` until the analysis has chosen its enhancements.
    2. **Models are downloaded (first use only).** Each model is downloaded the first time it's used. The image's row reads `Downloading <enhancement> for <path>` while this happens.
    3. **The enhancements run**, in the [fixed order](#processing-order). The image's row reads `Applying <enhancement> to <path>`, with one percentage for the whole image. When `--fr` is used, face detection is included in that percentage and reads as `Face Recovery`. The upscale factor, when `--scale` isn't given, is chosen from each image's own size.
    4. **The file is written**, and the image's row reads `🖼️ [100%] Enhancements applied to <path>`. Until then its percentage stops at `99%`. The [log file](#log-file) records the file written.
@@ -464,7 +516,8 @@ And once the run ends, the view stays as it was last drawn, with the summary und
 - **The processor line** names the processor you asked for with [`-p`](#-p---processor-processor-default-auto), spelled `Auto`, `CPU`, `CoreML`, `CUDA`, `TensorRT` or `WebGPU`, and the [quality](#-q---quality-hdsd-default-hd), `HD` or `SD`. Under `-p auto` it reads `Auto`, not the hardware `auto` picks; the [log file](#log-file) records that.
 - **The progress bar** covers the whole batch and is always labelled `Enhancing`. `[n/N]` counts the images that have ended, written or failed; `n` is padded to the width of `N`, as in `[02/15]`. It fills as `(n + p) / N`, where `p` is the current image's progress as its row shows it, so it moves forward within each image, never moves backwards when one image ends and the next starts, and reaches `100.0%` only once the last image has ended. It ends with `ETA <time>`, an estimate of the time the batch has left at the rate it has run so far; it reads `ETA --` until at least 1% has run. The first image's model loading (and, on first use, its download) makes the early estimate high, and it settles as the batch goes on.
 - **The list** shows one row per image started so far, scrolling to the most recent five. Each row shows the image's own progress, right-aligned in three columns (`[  0%]`, `[ 42%]`, `[100%]`). It covers face detection and every enhancement, never decreases, and stops at `99%` until the file is written. A row reads as follows, its words padded with spaces so every path starts in the same column:
-  - `🖼️ [  0%] Preparing to enhance <path>` before the image's run has reported anything, and for the whole time an image with nothing left to run is processed (an upscale skipped because the image is already large enough);
+  - `🖼️ [  0%] Preparing to enhance <path>` before the image's run has reported anything, and for the whole time an image with nothing left to run is processed (an upscale skipped because the image is already large enough, or an image autopilot found nothing to do for);
+  - `🖼️ [  0%] Choosing enhancements for <path>` with [`--autopilot`](#autopilot), while the image is analysed. On the first run, this includes downloading the face detection model, so it can stay at `0%` for a while;
   - `🖼️ [ 12%] Downloading <enhancement> for <path>` while a model is downloaded;
   - `🖼️ [ 42%] Applying <enhancement> to <path>` while an enhancement runs or is served from the [run cache](#run-cache);
   - `🖼️ [100%] Enhancements applied to <path>` once its result is written;
@@ -535,6 +588,7 @@ Each run writes detailed records to a log file shared by the CLI and the GUI:
 What's in it that the terminal doesn't show:
 
 - An upscale that was skipped because the image was already large enough.
+- With [`--autopilot`](#autopilot), the enhancements chosen for each image, and a warning when part of the analysis (such as face detection) couldn't run.
 - A file found in a directory that was skipped because it couldn't be read, and why.
 - Face detection results, e.g. `found 3 faces, restoring 2`, or `no faces were found; none will be restored`.
 - Each file written, with its size and format, and the hardware it ran on, e.g. `ran on CoreML, CPU` or `served from cache`.
@@ -546,7 +600,9 @@ What's in it that the terminal doesn't show:
 
 | What you see                                                                 | Cause and fix |
 |-------------------------------------------------------------------------------|---------------|
-| `error: at least one enhancement is required: --denoise (--dn), …`             | No enhancement flag was given. Add at least one. |
+| `error: at least one enhancement is required: --denoise (--dn), …`             | No enhancement flag was given. Add at least one, or `--ap`. |
+| `error: the argument '--autopilot' cannot be used with '--upscale [<MODEL>]'`   | `--ap` chooses the enhancements itself. Drop `--ap`, or drop the enhancement flags and their options. |
+| `error: invalid value 'paris' for the environment variable OPAI_AP_UPSCALE` followed by `[possible values: …]` | An `OPAI_AP_*` variable names a model of another enhancement, or a misspelt one. Pick one from the list shown, `off`, or unset it. |
 | `error: the following required arguments were not provided: --output <OUTPUT>` | `-o`/`--output` is missing. |
 | `error: invalid value 'foo' for '--upscale [<MODEL>]'` followed by `[possible values: …]` | Unknown model name. Pick one from the list shown. |
 | `error: invalid value 'photo.jpg' for '--upscale [<MODEL>]'`                   | An input was placed after a flag. Put the `INPUT`s first. |

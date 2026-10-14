@@ -60,6 +60,8 @@ impl Look {
 pub enum Activity {
     /// Its run has reported nothing yet, or it has nothing to run.
     Preparing,
+    /// Autopilot is analysing it, to choose its enhancements.
+    Choosing,
     /// The model of an operation of this family is being fetched.
     Downloading(Family),
     /// An operation of this family runs, or is served from the run cache.
@@ -128,6 +130,7 @@ pub fn row(percent: u8, path: &str, state: RowState, color: bool) -> Line<'stati
     // The words before the magenta one, the magenta one, and the words after it.
     let (emoji, before, word, after) = match state {
         RowState::Working(Activity::Preparing) => ("🖼️", "Preparing to enhance", None, ""),
+        RowState::Working(Activity::Choosing) => ("🖼️", "Choosing enhancements for", None, ""),
         RowState::Working(Activity::Downloading(family)) => ("🖼️", "Downloading ", Some(family_label(family)), " for"),
         RowState::Working(Activity::Applying(family)) => ("🖼️", "Applying ", Some(family_label(family)), " to"),
         RowState::Applied => ("🖼️", "", Some("Enhancements"), " applied to"),
@@ -349,8 +352,13 @@ mod tests {
 
     #[test]
     fn every_path_starts_in_the_same_column_and_the_longest_words_keep_a_space() {
-        let mut states =
-            vec![RowState::Working(Activity::Preparing), RowState::Applied, RowState::Failed, RowState::Stopped];
+        let mut states = vec![
+            RowState::Working(Activity::Preparing),
+            RowState::Working(Activity::Choosing),
+            RowState::Applied,
+            RowState::Failed,
+            RowState::Stopped,
+        ];
         for family in Family::ALL {
             states.push(RowState::Working(Activity::Downloading(family)));
             states.push(RowState::Working(Activity::Applying(family)));
@@ -363,6 +371,32 @@ mod tests {
             assert_eq!(words.len(), WORDS_WIDTH + 1, "{text:?}");
             assert!(words.ends_with(' ') && !words.trim_end().is_empty(), "{text:?}");
         }
+    }
+
+    #[test]
+    fn a_choosing_row_is_its_exact_text_and_colours_its_percentage_and_path() {
+        let choosing = RowState::Working(Activity::Choosing);
+
+        assert_eq!(
+            plain(&row(0, "photo.jpg", choosing, false)),
+            "🖼️ [  0%] Choosing enhancements for     photo.jpg"
+        );
+
+        let spans: Vec<_> = row(0, "photo.jpg", choosing, true)
+            .spans
+            .iter()
+            .map(|span| (span.content.to_string(), span.style))
+            .collect();
+        assert_eq!(
+            spans,
+            [
+                ("🖼️ [".to_owned(), Style::new()),
+                ("  0%".to_owned(), rgb(BLUE)),
+                ("] Choosing enhancements for".to_owned(), Style::new()),
+                ("     ".to_owned(), Style::new()),
+                ("photo.jpg".to_owned(), rgb(CYAN).add_modifier(Modifier::UNDERLINED)),
+            ]
+        );
     }
 
     #[test]
@@ -413,6 +447,7 @@ mod tests {
     fn a_row_without_colour_has_no_style() {
         let states = [
             RowState::Working(Activity::Preparing),
+            RowState::Working(Activity::Choosing),
             RowState::Working(Activity::Downloading(Family::Upscale)),
             APPLYING,
             RowState::Applied,

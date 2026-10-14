@@ -444,6 +444,35 @@ impl View {
         }
     }
 
+    /// Marks the image at `index` as being analysed by autopilot: its row reads `Choosing enhancements for`, at the
+    /// percentage it already had. The bar is left where it is.
+    pub fn choosing(&self, index: usize) {
+        self.set_activity(index, Activity::Choosing);
+    }
+
+    /// Ends the analysis of the image at `index`: its row reads `Preparing to enhance` again until its chain first
+    /// reports, which for an empty chain is never.
+    pub fn chosen(&self, index: usize) {
+        self.set_activity(index, Activity::Preparing);
+    }
+
+    /// Sets the words of the current image's row, if it is the image at `index` and still being worked on.
+    fn set_activity(&self, index: usize, activity: Activity) {
+        let mut current = lock(&self.inner.image);
+        let Some(image) = current.as_mut().filter(|image| image.index == index) else {
+            return;
+        };
+        if !matches!(image.state, RowState::Working(_)) {
+            return;
+        }
+        image.state = RowState::Working(activity);
+
+        let batch = lock(&self.inner.batch);
+        if let Some(live) = &batch.slot.live {
+            live.handle().update(|line| line.set(image));
+        }
+    }
+
     /// The inference callback the current image's row and the batch's bar are moved by, meant for
     /// [`opai::Handover::new`].
     pub fn on_inference(&self) -> OnInference {
@@ -720,6 +749,65 @@ pub(crate) mod tests {
         let batch = lock(&view.inner.batch);
         assert_eq!(batch.slot.attempts, 0);
         assert_eq!(batch.ended, 3, "written and failed images both count as ended");
+    }
+
+    fn current(view: &View) -> Option<ImageProgress> {
+        lock(&view.inner.image).clone()
+    }
+
+    #[test]
+    fn a_report_after_choosing_moves_the_row_on() {
+        let view = View::new(plain(), CancellationToken::new());
+        view.start_batch(1);
+        view.start_image(1, Path::new("a.jpg"));
+
+        view.choosing(1);
+        let choosing = current(&view).expect("an image is current");
+        assert_eq!(choosing.state, RowState::Working(Activity::Choosing));
+        assert_eq!(choosing.percent(), 0);
+
+        view.on_inference()(&inference(upscale(), Stage::Running, 0.3));
+        let applying = current(&view).expect("an image is current");
+        assert_eq!(applying.state, RowState::Working(Activity::Applying(Family::Upscale)));
+        assert_eq!(applying.percent(), 30);
+    }
+
+    #[test]
+    fn choosing_another_image_changes_nothing() {
+        let view = View::new(plain(), CancellationToken::new());
+        view.start_batch(2);
+        view.start_image(2, Path::new("b.jpg"));
+
+        view.choosing(1);
+
+        assert_eq!(current(&view).map(|image| image.state), Some(RowState::Working(Activity::Preparing)));
+    }
+
+    #[test]
+    fn an_image_ended_straight_from_choosing_reads_applied() {
+        let view = View::new(plain(), CancellationToken::new());
+        view.start_batch(1);
+        view.start_image(1, Path::new("a.jpg"));
+        view.choosing(1);
+
+        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced);
+
+        assert_eq!(line.as_deref(), Some("🖼️ [100%] Enhancements applied to       a.jpg"));
+    }
+
+    #[test]
+    fn an_image_given_nothing_to_run_returns_to_preparing_and_ends_applied() {
+        let view = View::new(plain(), CancellationToken::new());
+        view.start_batch(1);
+        view.start_image(1, Path::new("a.jpg"));
+        view.choosing(1);
+        view.chosen(1);
+        assert_eq!(current(&view).map(|image| image.state), Some(RowState::Working(Activity::Preparing)));
+
+        // Autopilot suggested nothing: an empty chain reports nothing and goes straight to written.
+        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced);
+
+        assert_eq!(line.as_deref(), Some("🖼️ [100%] Enhancements applied to       a.jpg"));
     }
 
     #[test]
