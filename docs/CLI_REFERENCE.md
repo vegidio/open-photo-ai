@@ -380,7 +380,7 @@ OPAI_AP_SHARPEN=off OPAI_AP_FACE=off OPAI_AP_DENOISE=malmo opai photos --ap -o o
 ```
 
 - Model names are spelled as the enhancement flags take them, in any case (`Osaka` = `osaka`).
-- **`off`** (any case) leaves that enhancement out entirely: it's never applied, and the analysis doesn't even look for it, so `OPAI_AP_FACE=off` skips face detection.
+- **`off`** (any case) leaves that enhancement out entirely: it's never applied, and the analysis doesn't even look for it, so `OPAI_AP_FACE=off` skips face recovery.
 - An **empty** value is the same as not setting the variable.
 - An **invalid** value fails with exit code `2` before anything is downloaded, naming the variable and listing what it accepts:
 
@@ -626,40 +626,3 @@ What's in it that the terminal doesn't show:
 | `🧨 failed to decode photos/b.jpg: …`                                          | That image's header was readable, but the image itself wasn't; the rest of the batch went on. |
 | `🧨 2 of 5 images failed`                                                      | The summary after a batch with failures. Exit code `1`. |
 | `🧨 stopped: nothing more was written`                                         | You pressed Ctrl-C. |
-
-## Scripting and batch processing
-
-Give a whole batch to **one** command instead of looping: dependencies are checked once, the models stay loaded between images, and every input is checked before anything starts.
-
-```bash
-# Every JPEG in a folder, as PNG, into "enhanced"
-opai photos/*.jpg --dn --up --format png -o enhanced
-
-# A whole tree, mirrored into a new directory
-opai photos -r --dn --up -o enhanced
-```
-
-The same commands work in PowerShell and `cmd` on Windows, where `opai` expands `*.jpg` itself.
-
-Things to keep in mind in scripts:
-
-- **Reruns don't overwrite.** Running the same command twice writes `a_1.jpg` next to `a.jpg`, and so on. Pass `--overwrite` if a rerun should replace the earlier results. Scripts written for older versions, which overwrote `-o` silently, now accumulate numbered files.
-- **The output changed (breaking).** Earlier versions printed a header and a `✨ Image enhanced successfully; file saved at …` line for every image. Each image then printed one line when it ended, and only the summary names files written: the file itself for a single image, or the output directory for more. Read each written path from the [log file](#log-file) instead.
-- **The per-image lines changed again (breaking).** The lines `🖼️ [n/N] Enhanced image <path>` and `🧨 [n/N] Failed image <path>: <reason>` are now `🖼️ [100%] Enhancements applied to <path>` and `🧨 [ 42%] Failed to enhance <path>: <reason>`, with spaces between the words and the path so every path starts in the same column: the image's place in the run is no longer printed, and its percentage is. Piped output also starts with the line `🧠 Running inference using the processor <processor>; quality <HD|SD>` and a blank line. The log file still records each path written.
-- **Exit codes:** `2` means the command itself is wrong and won't succeed on retry; nothing was written. `1` means at least one image failed, while the others were written; the `🧨` lines and the log file say which. `130` means the user pressed Ctrl-C.
-- **One instance at a time:** don't start several `opai` commands in parallel; give them all the images instead.
-
-If you still need a loop (for example, a different output name per image), check the exit code of each run:
-
-```bash
-mkdir -p enhanced
-for f in photos/*.jpg; do
-  name=$(basename "${f%.*}")
-  opai "$f" --dn --up -o "enhanced/$name.png"
-  case $? in
-    0) ;;
-    130) break ;;
-    *) echo "failed: $f" >&2 ;;
-  esac
-done
-```

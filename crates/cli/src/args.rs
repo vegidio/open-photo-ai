@@ -29,116 +29,9 @@ pub struct Args {
     #[arg(value_name = "INPUT", required = true, num_args = 1..)]
     pub inputs: Vec<PathBuf>,
 
-    // The enhancements are declared in the library's apply order, which is the order `--help` lists them in.
-    /// Remove the noise from the photograph, with MODEL or Stockholm where none is named.
-    #[arg(
-        long = "denoise",
-        visible_alias = "dn",
-        value_name = "MODEL",
-        num_args = 0..=1,
-        default_missing_value = "stockholm",
-        ignore_case = true
-    )]
-    pub denoise: Option<DenoiseModel>,
-
-    /// The denoise strength, from 1 to 300 percent of the model's own effect; default 100.
-    #[arg(long = "dn-str", value_name = "STRENGTH", value_parser = parse_strength, requires = "denoise")]
-    pub denoise_strength: Option<u16>,
-
-    /// Restore the faces in the photograph, with MODEL or Athens where none is named.
-    #[arg(
-        long = "face-recovery",
-        visible_alias = "fr",
-        value_name = "MODEL",
-        num_args = 0..=1,
-        default_missing_value = "athens",
-        ignore_case = true
-    )]
-    pub face_recovery: Option<FaceModel>,
-
-    /// Colorize the photograph, with MODEL or Delhi where none is named.
-    #[arg(
-        long = "colorization",
-        visible_alias = "cl",
-        value_name = "MODEL",
-        num_args = 0..=1,
-        default_missing_value = "delhi",
-        ignore_case = true
-    )]
-    pub colorization: Option<ColorizationModel>,
-
-    /// Adjust the photograph's light, with MODEL or Paris where none is named.
-    #[arg(
-        long = "light-adjustment",
-        visible_alias = "la",
-        value_name = "MODEL",
-        num_args = 0..=1,
-        default_missing_value = "paris",
-        ignore_case = true
-    )]
-    pub light_adjustment: Option<LightModel>,
-
-    /// The light adjustment bias, from -100 to 100 percent of the model's own effect; default 50.
-    #[arg(
-        long = "la-bias",
-        value_name = "BIAS",
-        value_parser = parse_bias,
-        requires = "light_adjustment",
-        allow_negative_numbers = true
-    )]
-    pub light_bias: Option<i16>,
-
-    /// Balance the photograph's colours, with MODEL or Rio where none is named.
-    #[arg(
-        long = "color-balance",
-        visible_alias = "cb",
-        value_name = "MODEL",
-        num_args = 0..=1,
-        default_missing_value = "rio",
-        ignore_case = true
-    )]
-    pub color_balance: Option<BalanceModel>,
-
-    /// The colour balance bias, from -100 to 100 percent of the model's own effect; default 50.
-    #[arg(
-        long = "cb-bias",
-        value_name = "BIAS",
-        value_parser = parse_bias,
-        requires = "color_balance",
-        allow_negative_numbers = true
-    )]
-    pub balance_bias: Option<i16>,
-
-    /// Sharpen the photograph, with MODEL or Moscow where none is named.
-    #[arg(
-        long = "sharpen",
-        visible_alias = "sh",
-        value_name = "MODEL",
-        num_args = 0..=1,
-        default_missing_value = "moscow",
-        ignore_case = true
-    )]
-    pub sharpen: Option<SharpenModel>,
-
-    /// The sharpen strength, from 1 to 300 percent of the model's own effect; default 100.
-    #[arg(long = "sh-str", value_name = "STRENGTH", value_parser = parse_strength, requires = "sharpen")]
-    pub sharpen_strength: Option<u16>,
-
-    /// Upscale the photograph, with MODEL or Tokyo where none is named.
-    #[arg(
-        long = "upscale",
-        visible_alias = "up",
-        value_name = "MODEL",
-        num_args = 0..=1,
-        default_missing_value = "tokyo",
-        ignore_case = true
-    )]
-    pub upscale: Option<UpscaleModel>,
-
-    /// The factor to upscale by, from 1.0 to 8.0. Without it, the factor is what the photograph needs: 4x up to
-    /// 1 MP, 2x up to 4 MP, and no upscale above that.
-    #[arg(long, value_name = "FACTOR", value_parser = parse_scale, requires = "upscale")]
-    pub scale: Option<Scale>,
+    /// The enhancements, and their parameters.
+    #[command(flatten)]
+    pub selection: Selection,
 
     /// Analyse each photograph and apply the enhancements it calls for, each with its family's default model. Cannot
     /// be combined with the enhancement flags or their parameters.
@@ -146,24 +39,7 @@ pub struct Args {
     /// A family's model is chosen with its environment variable, set to one of that family's models or to `off`,
     /// which leaves the family out: OPAI_AP_DENOISE, OPAI_AP_FACE, OPAI_AP_COLORIZATION, OPAI_AP_LIGHT,
     /// OPAI_AP_COLOR, OPAI_AP_SHARPEN and OPAI_AP_UPSCALE.
-    #[arg(
-        long = "autopilot",
-        visible_alias = "ap",
-        conflicts_with_all = [
-            "denoise",
-            "face_recovery",
-            "colorization",
-            "light_adjustment",
-            "color_balance",
-            "sharpen",
-            "upscale",
-            "scale",
-            "denoise_strength",
-            "sharpen_strength",
-            "light_bias",
-            "balance_bias",
-        ]
-    )]
+    #[arg(long = "autopilot", visible_alias = "ap", conflicts_with = "Selection")]
     pub autopilot: bool,
 
     /// `hd` runs every model at its higher-fidelity build, `sd` at its lighter, faster one.
@@ -279,6 +155,15 @@ impl Quality {
             Self::Sd => "SD",
         }
     }
+
+    /// Which of a model's published precisions this names, by position: the first build the catalogue lists, or the
+    /// second.
+    pub const fn position(self) -> usize {
+        match self {
+            Self::Hd => 0,
+            Self::Sd => 1,
+        }
+    }
 }
 
 // `#[cfg]` is resolved before `ValueEnum` expands, so a value no machine running this OS could ever offer is missing
@@ -350,6 +235,135 @@ pub fn parse() -> Args {
     args
 }
 
+/// Which enhancement runs with which model and parameters: what the flags ask for, or what autopilot chose for one
+/// photograph, and what [`plan`](crate::chain::plan) reads.
+#[derive(Debug, Clone, Copy, Default, PartialEq, clap::Args)]
+pub struct Selection {
+    // The enhancements are declared in the library's apply order, which is the order `--help` lists them in.
+    /// Remove the noise from the photograph, with MODEL or Stockholm where none is named.
+    #[arg(
+        long = "denoise",
+        visible_alias = "dn",
+        value_name = "MODEL",
+        num_args = 0..=1,
+        default_missing_value = "stockholm",
+        ignore_case = true
+    )]
+    pub denoise: Option<DenoiseModel>,
+
+    /// The denoise strength, from 1 to 300 percent of the model's own effect; default 100.
+    #[arg(long = "dn-str", value_name = "STRENGTH", value_parser = parse_strength, requires = "denoise")]
+    pub denoise_strength: Option<u16>,
+
+    /// Restore the faces in the photograph, with MODEL or Athens where none is named.
+    #[arg(
+        long = "face-recovery",
+        visible_alias = "fr",
+        value_name = "MODEL",
+        num_args = 0..=1,
+        default_missing_value = "athens",
+        ignore_case = true
+    )]
+    pub face_recovery: Option<FaceModel>,
+
+    /// Colorize the photograph, with MODEL or Delhi where none is named.
+    #[arg(
+        long = "colorization",
+        visible_alias = "cl",
+        value_name = "MODEL",
+        num_args = 0..=1,
+        default_missing_value = "delhi",
+        ignore_case = true
+    )]
+    pub colorization: Option<ColorizationModel>,
+
+    /// Adjust the photograph's light, with MODEL or Paris where none is named.
+    #[arg(
+        long = "light-adjustment",
+        visible_alias = "la",
+        value_name = "MODEL",
+        num_args = 0..=1,
+        default_missing_value = "paris",
+        ignore_case = true
+    )]
+    pub light_adjustment: Option<LightModel>,
+
+    /// The light adjustment bias, from -100 to 100 percent of the model's own effect; default 50.
+    #[arg(
+        long = "la-bias",
+        value_name = "BIAS",
+        value_parser = parse_bias,
+        requires = "light_adjustment",
+        allow_negative_numbers = true
+    )]
+    pub light_bias: Option<i16>,
+
+    /// Balance the photograph's colours, with MODEL or Rio where none is named.
+    #[arg(
+        long = "color-balance",
+        visible_alias = "cb",
+        value_name = "MODEL",
+        num_args = 0..=1,
+        default_missing_value = "rio",
+        ignore_case = true
+    )]
+    pub color_balance: Option<BalanceModel>,
+
+    /// The colour balance bias, from -100 to 100 percent of the model's own effect; default 50.
+    #[arg(
+        long = "cb-bias",
+        value_name = "BIAS",
+        value_parser = parse_bias,
+        requires = "color_balance",
+        allow_negative_numbers = true
+    )]
+    pub balance_bias: Option<i16>,
+
+    /// Sharpen the photograph, with MODEL or Moscow where none is named.
+    #[arg(
+        long = "sharpen",
+        visible_alias = "sh",
+        value_name = "MODEL",
+        num_args = 0..=1,
+        default_missing_value = "moscow",
+        ignore_case = true
+    )]
+    pub sharpen: Option<SharpenModel>,
+
+    /// The sharpen strength, from 1 to 300 percent of the model's own effect; default 100.
+    #[arg(long = "sh-str", value_name = "STRENGTH", value_parser = parse_strength, requires = "sharpen")]
+    pub sharpen_strength: Option<u16>,
+
+    /// Upscale the photograph, with MODEL or Tokyo where none is named.
+    #[arg(
+        long = "upscale",
+        visible_alias = "up",
+        value_name = "MODEL",
+        num_args = 0..=1,
+        default_missing_value = "tokyo",
+        ignore_case = true
+    )]
+    pub upscale: Option<UpscaleModel>,
+
+    /// The factor to upscale by, from 1.0 to 8.0. Without it, the factor is what the photograph needs: 4x up to
+    /// 1 MP, 2x up to 4 MP, and no upscale above that.
+    #[arg(long, value_name = "FACTOR", value_parser = parse_scale, requires = "upscale")]
+    pub scale: Option<Scale>,
+}
+
+impl Selection {
+    /// Whether no enhancement is asked for.
+    pub const fn is_empty(&self) -> bool {
+        self.denoise.is_none()
+            && self.face_recovery.is_none()
+            && self.colorization.is_none()
+            && self.light_adjustment.is_none()
+            && self.color_balance.is_none()
+            && self.sharpen.is_none()
+            && self.upscale.is_none()
+    }
+}
+
 /// `arguments` parsed and checked, every refusal a clap error so it is reported and exits as clap's own are.
 pub fn parse_from<I, T>(arguments: I) -> Result<Args, clap::Error>
 where
@@ -360,17 +374,7 @@ where
 
     // Not a clap `ArgGroup`: its refusal lists the group's members as "required arguments", where what the user needs
     // to hear is that an enhancement is.
-    let requested = [
-        args.denoise.is_some(),
-        args.face_recovery.is_some(),
-        args.colorization.is_some(),
-        args.light_adjustment.is_some(),
-        args.color_balance.is_some(),
-        args.sharpen.is_some(),
-        args.upscale.is_some(),
-        args.autopilot,
-    ];
-    if !requested.contains(&true) {
+    if !args.autopilot && args.selection.is_empty() {
         return Err(Args::command().error(
             clap::error::ErrorKind::MissingRequiredArgument,
             "at least one enhancement is required: --denoise (--dn), --face-recovery (--fr), --colorization (--cl), \
@@ -382,23 +386,21 @@ where
     Ok(args)
 }
 
-/// A `--format` value, in any case, with the extensions `jpg`, `tif` and `heif` read as the formats they name.
+/// A `--format` value, in any case, with every extension a format is written under — `jpg`, `tif`, `heif` — read as
+/// the format it names.
 ///
 /// The aliases are this command's: the library's [`FormatChoice`] reads the one spelling the GUI stores, and widening it
 /// would make the GUI's wire accept words its window never sends.
 fn parse_format(text: &str) -> Result<FormatChoice, String> {
     let word = text.trim().to_lowercase();
-    let word = match word.as_str() {
-        "jpg" => "jpeg",
-        "tif" => "tiff",
-        "heif" => "heic",
-        other => other,
-    };
 
-    FormatChoice::from_str(word).map_err(|_| {
-        let names: Vec<_> = ExportFormat::ALL.into_iter().map(ExportFormat::name).collect();
-        format!("{text:?} is not a format; use preserve, {}", names.join(", "))
-    })
+    FormatChoice::from_str(&word)
+        .ok()
+        .or_else(|| ExportFormat::preserving(&word).map(FormatChoice::Format))
+        .ok_or_else(|| {
+            let names: Vec<_> = ExportFormat::ALL.into_iter().map(ExportFormat::name).collect();
+            format!("{text:?} is not a format; use preserve, {}", names.join(", "))
+        })
 }
 
 /// A `--scale` value, refused with the accepted range where the library's [`Scale`] refuses it.
@@ -414,13 +416,20 @@ fn parse_scale(text: &str) -> Result<Scale, String> {
 const STRENGTH_MIN: u16 = 1;
 
 /// The highest `--dn-str` or `--sh-str`, the library's [`opai::Strength::MAX`] as a percentage.
-const STRENGTH_MAX: u16 = 300;
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a whole, positive percentage"
+)]
+const STRENGTH_MAX: u16 = (opai::Strength::MAX * 100.0) as u16;
 
 /// The lowest `--la-bias` or `--cb-bias`, the library's [`opai::Bias::MIN`] as a percentage.
-const BIAS_MIN: i16 = -100;
+#[allow(clippy::cast_possible_truncation, reason = "a whole percentage")]
+const BIAS_MIN: i16 = (opai::Bias::MIN * 100.0) as i16;
 
 /// The highest `--la-bias` or `--cb-bias`, the library's [`opai::Bias::MAX`] as a percentage.
-const BIAS_MAX: i16 = 100;
+#[allow(clippy::cast_possible_truncation, reason = "a whole percentage")]
+const BIAS_MAX: i16 = (opai::Bias::MAX * 100.0) as i16;
 
 /// A `--dn-str` or `--sh-str` value: a whole percentage, refused with the accepted range otherwise.
 fn parse_strength(text: &str) -> Result<u16, String> {
@@ -443,7 +452,6 @@ fn parse_bias(text: &str) -> Result<i16, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chain::Selection;
     use clap::error::ErrorKind;
 
     fn parse(line: &str) -> Result<Args, clap::Error> {
@@ -455,10 +463,10 @@ mod tests {
         let args = parse("opai photo.jpg --up --fr -o out.png").expect("parses");
 
         assert_eq!(args.inputs, [PathBuf::from("photo.jpg")]);
-        assert_eq!(args.upscale, Some(UpscaleModel::Tokyo));
-        assert_eq!(args.face_recovery, Some(FaceModel::Athens));
+        assert_eq!(args.selection.upscale, Some(UpscaleModel::Tokyo));
+        assert_eq!(args.selection.face_recovery, Some(FaceModel::Athens));
         assert_eq!(args.quality, Quality::Hd);
-        assert_eq!(args.scale, None);
+        assert_eq!(args.selection.scale, None);
         assert_eq!(args.output, PathBuf::from("out.png"));
     }
 
@@ -466,8 +474,8 @@ mod tests {
     fn the_long_names_are_the_aliases_equals() {
         let args = parse("opai photo.jpg --upscale --face-recovery --quality sd --output out.png").expect("parses");
 
-        assert_eq!(args.upscale, Some(UpscaleModel::Tokyo));
-        assert_eq!(args.face_recovery, Some(FaceModel::Athens));
+        assert_eq!(args.selection.upscale, Some(UpscaleModel::Tokyo));
+        assert_eq!(args.selection.face_recovery, Some(FaceModel::Athens));
         assert_eq!(args.quality, Quality::Sd);
     }
 
@@ -475,8 +483,8 @@ mod tests {
     fn a_named_model_is_taken_whatever_its_case() {
         let args = parse("opai photo.jpg --up OSAKA --fr Santorini -q SD -o out.png").expect("parses");
 
-        assert_eq!(args.upscale, Some(UpscaleModel::Osaka));
-        assert_eq!(args.face_recovery, Some(FaceModel::Santorini));
+        assert_eq!(args.selection.upscale, Some(UpscaleModel::Osaka));
+        assert_eq!(args.selection.face_recovery, Some(FaceModel::Santorini));
         assert_eq!(args.quality, Quality::Sd);
 
         for (name, model) in [
@@ -486,7 +494,7 @@ mod tests {
             ("saitama", UpscaleModel::Saitama),
         ] {
             let args = parse(&format!("opai photo.jpg --up {name} -o out.png")).expect("parses");
-            assert_eq!(args.upscale, Some(model), "{name}");
+            assert_eq!(args.selection.upscale, Some(model), "{name}");
         }
     }
 
@@ -523,7 +531,7 @@ mod tests {
         }
 
         let args = parse("opai photo.jpg --up --scale 2.5 -o out.png").expect("2.5 is in range");
-        assert_eq!(args.scale.map(Scale::get), Some(2.5));
+        assert_eq!(args.selection.scale.map(Scale::get), Some(2.5));
     }
 
     #[test]
@@ -551,7 +559,7 @@ mod tests {
     fn autopilot_alone_is_enough() {
         let args = parse("opai photo.jpg --ap -o out.png").expect("parses");
         assert!(args.autopilot);
-        assert_eq!(Selection::from_args(&args), Selection::default());
+        assert_eq!(args.selection, Selection::default());
 
         assert!(parse("opai photo.jpg --autopilot -q sd -p cpu -o out.png").expect("parses").autopilot);
         assert!(!parse("opai photo.jpg --up -o out.png").expect("parses").autopilot);
@@ -597,32 +605,37 @@ mod tests {
     fn a_new_family_alone_is_enough() {
         let args = parse("opai photo.jpg --cl -o out.png").expect("parses");
 
-        assert_eq!(args.colorization, Some(ColorizationModel::Delhi));
-        assert_eq!(args.upscale, None);
-        assert_eq!(args.face_recovery, None);
+        assert_eq!(args.selection.colorization, Some(ColorizationModel::Delhi));
+        assert_eq!(args.selection.upscale, None);
+        assert_eq!(args.selection.face_recovery, None);
     }
 
     #[test]
     fn bare_new_flags_take_their_default_models_and_no_parameters() {
         let args = parse("opai photo.jpg --dn --sh --cl --la --cb -o out.png").expect("parses");
 
-        assert_eq!(args.denoise, Some(DenoiseModel::Stockholm));
-        assert_eq!(args.sharpen, Some(SharpenModel::Moscow));
-        assert_eq!(args.colorization, Some(ColorizationModel::Delhi));
-        assert_eq!(args.light_adjustment, Some(LightModel::Paris));
-        assert_eq!(args.color_balance, Some(BalanceModel::Rio));
+        assert_eq!(args.selection.denoise, Some(DenoiseModel::Stockholm));
+        assert_eq!(args.selection.sharpen, Some(SharpenModel::Moscow));
+        assert_eq!(args.selection.colorization, Some(ColorizationModel::Delhi));
+        assert_eq!(args.selection.light_adjustment, Some(LightModel::Paris));
+        assert_eq!(args.selection.color_balance, Some(BalanceModel::Rio));
         assert_eq!(
-            (args.denoise_strength, args.sharpen_strength, args.light_bias, args.balance_bias),
+            (
+                args.selection.denoise_strength,
+                args.selection.sharpen_strength,
+                args.selection.light_bias,
+                args.selection.balance_bias
+            ),
             (None, None, None, None)
         );
 
         let long = parse("opai photo.jpg --denoise --sharpen --colorization --light-adjustment --color-balance -o x")
             .expect("parses");
-        assert_eq!(long.denoise, Some(DenoiseModel::Stockholm));
-        assert_eq!(long.sharpen, Some(SharpenModel::Moscow));
-        assert_eq!(long.colorization, Some(ColorizationModel::Delhi));
-        assert_eq!(long.light_adjustment, Some(LightModel::Paris));
-        assert_eq!(long.color_balance, Some(BalanceModel::Rio));
+        assert_eq!(long.selection.denoise, Some(DenoiseModel::Stockholm));
+        assert_eq!(long.selection.sharpen, Some(SharpenModel::Moscow));
+        assert_eq!(long.selection.colorization, Some(ColorizationModel::Delhi));
+        assert_eq!(long.selection.light_adjustment, Some(LightModel::Paris));
+        assert_eq!(long.selection.color_balance, Some(BalanceModel::Rio));
     }
 
     #[test]
@@ -630,16 +643,16 @@ mod tests {
         let args = parse("opai photo.jpg --dn MALMO --sh Petersburg --cl jaiPUR --la LYON --cb SaoPaulo -o out.png")
             .expect("parses");
 
-        assert_eq!(args.denoise, Some(DenoiseModel::Malmo));
-        assert_eq!(args.sharpen, Some(SharpenModel::Petersburg));
-        assert_eq!(args.colorization, Some(ColorizationModel::Jaipur));
-        assert_eq!(args.light_adjustment, Some(LightModel::Lyon));
-        assert_eq!(args.color_balance, Some(BalanceModel::SaoPaulo));
+        assert_eq!(args.selection.denoise, Some(DenoiseModel::Malmo));
+        assert_eq!(args.selection.sharpen, Some(SharpenModel::Petersburg));
+        assert_eq!(args.selection.colorization, Some(ColorizationModel::Jaipur));
+        assert_eq!(args.selection.light_adjustment, Some(LightModel::Lyon));
+        assert_eq!(args.selection.color_balance, Some(BalanceModel::SaoPaulo));
 
         let args = parse("opai photo.jpg --dn gothenburg --sh novgorod --cl mumbai -o out.png").expect("parses");
-        assert_eq!(args.denoise, Some(DenoiseModel::Gothenburg));
-        assert_eq!(args.sharpen, Some(SharpenModel::Novgorod));
-        assert_eq!(args.colorization, Some(ColorizationModel::Mumbai));
+        assert_eq!(args.selection.denoise, Some(DenoiseModel::Gothenburg));
+        assert_eq!(args.selection.sharpen, Some(SharpenModel::Novgorod));
+        assert_eq!(args.selection.colorization, Some(ColorizationModel::Mumbai));
     }
 
     #[test]
@@ -684,16 +697,16 @@ mod tests {
     #[test]
     fn each_parameter_is_read_for_its_own_enhancement() {
         let args = parse("opai photo.jpg --dn --dn-str 200 --sh --sh-str 80 -o out.png").expect("parses");
-        assert_eq!(args.denoise_strength, Some(200));
-        assert_eq!(args.sharpen_strength, Some(80));
+        assert_eq!(args.selection.denoise_strength, Some(200));
+        assert_eq!(args.selection.sharpen_strength, Some(80));
 
         let args = parse("opai photo.jpg --la --la-bias -20 -o out.png").expect("parses");
-        assert_eq!(args.light_bias, Some(-20));
+        assert_eq!(args.selection.light_bias, Some(-20));
         assert_eq!(args.output, PathBuf::from("out.png"));
 
         let args = parse("opai photo.jpg --cb --cb-bias -100 --la --la-bias 100 -o out.png").expect("parses");
-        assert_eq!(args.balance_bias, Some(-100));
-        assert_eq!(args.light_bias, Some(100));
+        assert_eq!(args.selection.balance_bias, Some(-100));
+        assert_eq!(args.selection.light_bias, Some(100));
     }
 
     #[test]
@@ -728,11 +741,19 @@ mod tests {
         let command = Args::command();
         let bare = parse("opai photo.jpg --dn --sh --cl --la --cb -o out.png").expect("parses");
         let families = [
-            (Family::Denoise, names::<DenoiseModel>(), bare.denoise.as_ref().map(name)),
-            (Family::Sharpen, names::<SharpenModel>(), bare.sharpen.as_ref().map(name)),
-            (Family::Colorization, names::<ColorizationModel>(), bare.colorization.as_ref().map(name)),
-            (Family::LightAdjustment, names::<LightModel>(), bare.light_adjustment.as_ref().map(name)),
-            (Family::ColorBalance, names::<BalanceModel>(), bare.color_balance.as_ref().map(name)),
+            (Family::Denoise, names::<DenoiseModel>(), bare.selection.denoise.as_ref().map(name)),
+            (Family::Sharpen, names::<SharpenModel>(), bare.selection.sharpen.as_ref().map(name)),
+            (
+                Family::Colorization,
+                names::<ColorizationModel>(),
+                bare.selection.colorization.as_ref().map(name),
+            ),
+            (
+                Family::LightAdjustment,
+                names::<LightModel>(),
+                bare.selection.light_adjustment.as_ref().map(name),
+            ),
+            (Family::ColorBalance, names::<BalanceModel>(), bare.selection.color_balance.as_ref().map(name)),
         ];
 
         for (family, names, default_model) in families {
@@ -798,7 +819,7 @@ mod tests {
         let args = parse("opai photo.jpg --up -o x").expect("parses");
 
         assert_eq!(args.inputs, [PathBuf::from("photo.jpg")]);
-        assert_eq!(args.upscale, Some(UpscaleModel::Tokyo));
+        assert_eq!(args.selection.upscale, Some(UpscaleModel::Tokyo));
         assert_eq!(args.output, PathBuf::from("x"));
     }
 

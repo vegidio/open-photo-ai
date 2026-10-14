@@ -1,6 +1,7 @@
 //! What a run returns: the picture, and what it was actually executed on.
 
 use crate::image::Picture;
+use crate::inference::faces::ChainFaces;
 use crate::providers::ExecutionProvider;
 
 #[cfg(doc)]
@@ -140,4 +141,8 @@ pub struct Enhanced {
 
     /// What the run was asked to execute on, beside what it actually executed on.
     pub providers: ProviderReport,
+
+    /// What finding the faces for the chain's face recoveries came to: [`ChainFaces::NotAsked`] unless
+    /// [`ProcessOptions::faces`] asked for a detection and the chain carries a face recovery.
+    pub faces: ChainFaces,
 }

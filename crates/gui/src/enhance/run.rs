@@ -8,10 +8,10 @@
 
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use opai::{
-    CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, Face, FacedChain, Faces,
-    InferenceError, Opai, OutputDepth, Picture, ProcessOptions,
+    ChainFaces, Enhanced, ExecutionProvider, FaceSelection, InferenceError, Opai, OutputDepth, Picture, ProcessOptions,
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ use super::operation::{Requested, UnknownOperation};
 use super::progress::Reporting;
 use super::slot::Runs;
 use crate::command::{Answer, CommandError, Ended};
-use crate::faces::DetectedFace;
+use crate::faces::{DetectedFace, FaceChoice};
 use crate::images::{Crop, Opened, load_framed};
 
 /// The processor the window chose for this run: an [`ExecutionProvider`], read from the settings store's spelling.
@@ -72,7 +72,7 @@ pub(crate) enum Enhancement {
         #[serde(skip_serializing_if = "Option::is_none")]
         faces: Option<Vec<DetectedFace>>,
         /// Why the faces could not be found, where they could not: `opai`'s own sentence, untranslated. The recovery
-        /// then restored none and the rest of the chain ran — see [`Opai::find_chain_faces`].
+        /// then restored none and the rest of the chain ran — see [`opai::ProcessOptions::faces`].
         #[serde(skip_serializing_if = "Option::is_none")]
         faces_error: Option<String>,
     },
@@ -158,21 +158,6 @@ pub(crate) trait Enhancer {
         operations: &[opai::Operation],
         options: ProcessOptions,
     ) -> impl Future<Output = Result<Enhanced, InferenceError>> + Send;
-
-    /// Hands every face recovery in `operations` the faces `select` keeps among those found in `source`, as
-    /// [`Opai::find_chain_faces`] does.
-    ///
-    /// **The default finds nobody**, which is what every fake that is not about faces wants: a chain carrying no face
-    /// recovery is not asked, and one that does restores an empty selection. [`Opai`] runs the real detection.
-    fn find_chain_faces(
-        &self,
-        _source: &Picture,
-        operations: Vec<opai::Operation>,
-        select: impl Fn(usize, &Face) -> bool + Send,
-        _options: ExecuteOptions,
-    ) -> impl Future<Output = Result<FacedChain, InferenceError>> + Send {
-        std::future::ready(opai::fill_chain_faces(operations, Ok(Faces::empty()), select))
-    }
 }
 
 impl Enhancer for Opai {
@@ -183,16 +168,6 @@ impl Enhancer for Opai {
         options: ProcessOptions,
     ) -> impl Future<Output = Result<Enhanced, InferenceError>> + Send {
         Opai::process(self, source, operations, Some(options))
-    }
-
-    fn find_chain_faces(
-        &self,
-        source: &Picture,
-        operations: Vec<opai::Operation>,
-        select: impl Fn(usize, &Face) -> bool + Send,
-        options: ExecuteOptions,
-    ) -> impl Future<Output = Result<FacedChain, InferenceError>> + Send {
-        Opai::find_chain_faces(self, source, operations, select, Some(options))
     }
 }
 
@@ -259,66 +234,45 @@ pub(crate) fn judge_chain<'a>(
     Ok(Judged { source, requested, operations, path })
 }
 
-/// What a judged chain runs over, and with, once [`prepare_chain`] has framed its source and found its faces.
+/// What a judged chain runs over, and with, once [`prepare_chain`] has framed its source.
 pub(crate) struct Prepared {
     /// The framed source: the chain's input, and what every cache key is folded from.
     pub(crate) picture: Picture,
-    /// The chain, with every face recovery handed the faces it keeps.
+    /// The chain, each face recovery still to be handed its faces.
     pub(crate) operations: Vec<opai::Operation>,
-    /// What finding the faces came to — see [`Opai::find_chain_faces`].
-    pub(crate) faces: ChainFaces,
-    /// The bar the detection reported onto the head of, whose [`opai::Handover::chain`] the chain reports through.
-    pub(crate) handover: Option<opai::Handover>,
+    /// Which faces each face recovery restores, for [`ProcessOptions::faces`]: the window's own choice for each, read
+    /// by the recovery's position in the chain as asked for, and what the library's default keeps for a recovery
+    /// nobody chose for.
+    pub(crate) faces: FaceSelection,
 }
 
-/// Decodes and frames a judged chain's source, then finds the faces its face recoveries restore — steps shared by a
-/// canvas run and an export, taken once the caller has claimed whatever a stop reaches the run through.
+/// Decodes and frames a judged chain's source, and reads which faces its face recoveries restore — the steps shared by
+/// a canvas run and an export, taken once the caller has claimed whatever a stop reaches the run through.
 ///
-/// The detection runs on `processor` under `cancel`, so it is stopped with the chain and runs where it would, and
-/// reports onto the head of `on_progress`'s bar — see [`opai::Handover`]. `None` is a run stopped during the detection,
-/// before the chain began.
+/// The faces themselves are found by the run, under its own provider, stop and progress — see
+/// [`ProcessOptions::faces`].
 ///
 /// # Errors
 ///
 /// [`EnhanceError::UnreadableSource`]. Not logged here: `opai` records the failed decode, where it happened.
-pub(crate) async fn prepare_chain<E: Enhancer>(
-    enhancer: &E,
+pub(crate) async fn prepare_chain(
     opened: &Opened,
     judged: Judged<'_>,
     crop: Option<Crop>,
-    processor: Processor,
-    cancel: CancellationToken,
-    on_progress: Option<&opai::OnInference>,
-) -> Result<Option<Prepared>, EnhanceError> {
+) -> Result<Prepared, EnhanceError> {
     let Judged { source, requested, operations, path } = judged;
 
     let picture = load_framed(opened, source, path, crop)
         .await
         .map_err(|error| EnhanceError::UnreadableSource { identity: source.to_string(), message: error.to_string() })?;
 
-    // Built over the chain as asked for, before it moves into the detection: a face selection changes no family, so
-    // this is the chain `process` later runs.
-    let handover = on_progress.map(|on_progress| opai::Handover::new(on_progress, &operations));
-    let detecting = ExecuteOptions {
-        provider: processor.into(),
-        on_progress: handover.as_ref().map(opai::Handover::detection),
-        cancel,
-        ..Default::default()
-    };
-
-    // The window's own choice for each face recovery, read by the recovery's position in the chain as asked for;
-    // a recovery nobody chose for keeps what the library's default keeps.
-    let select = |index: usize, face: &Face| match requested.get(index).and_then(|requested| requested.faces.as_ref()) {
+    let choices: Vec<Option<FaceChoice>> = requested.iter().map(|requested| requested.faces.clone()).collect();
+    let faces = FaceSelection::Detect(Arc::new(move |index, face| match choices.get(index).and_then(Option::as_ref) {
         Some(choice) => choice.keeps(face),
         None => opai::default_face_selection(index, face),
-    };
+    }));
 
-    let Ok(FacedChain { operations, faces }) = enhancer.find_chain_faces(&picture, operations, select, detecting).await
-    else {
-        return Ok(None);
-    };
-
-    Ok(Some(Prepared { picture, operations, faces, handover }))
+    Ok(Prepared { picture, operations, faces })
 }
 
 /// Runs a chain over an open image, and answers what it produced without its pixels.
@@ -340,7 +294,7 @@ pub(crate) async fn prepare_chain<E: Enhancer>(
 ///
 /// # A face recovery finds its own faces
 ///
-/// Step 6 is [`Opai::find_chain_faces`]: the chain detects inside this request rather than the window detecting first
+/// Step 6 is [`ProcessOptions::faces`]: the chain detects inside this request rather than the window detecting first
 /// and asking second, so the whole of it is one stop and one progress stream, the detection inside the first
 /// operation's slot of the bar.
 /// The faces found come back beside the result for the window to count and offer, and a detection that failed comes
@@ -385,18 +339,7 @@ pub(crate) async fn enhance_with<E: Enhancer>(
         return Ok(Enhancement::Stopped);
     }
 
-    let on_progress = reporting.as_ref().map(|reporting| &reporting.on_progress);
-    let Some(Prepared { picture, operations, faces, handover }) =
-        prepare_chain(enhancer, opened, judged, request.crop, request.processor, cancel.clone(), on_progress).await?
-    else {
-        // Stopped during the detection, before the chain began.
-        if let Some(reporting) = &reporting {
-            reporting.release();
-        }
-        tracing::debug!("a run was stopped while its faces were being found");
-
-        return Ok(Enhancement::Stopped);
-    };
+    let Prepared { picture, operations, faces } = prepare_chain(opened, judged, request.crop).await?;
 
     // `..Default::default()` keeps this source-compatible as `ProcessOptions` grows; `cache` stays on by
     // default so a re-run doesn't pay twice.
@@ -407,8 +350,9 @@ pub(crate) async fn enhance_with<E: Enhancer>(
     let options = ProcessOptions {
         provider: request.processor.into(),
         depth: OutputDepth::Eight,
-        on_progress: handover.as_ref().map(opai::Handover::chain),
+        on_progress: reporting.as_ref().map(|reporting| Arc::clone(&reporting.on_progress)),
         cancel,
+        faces,
         ..Default::default()
     };
 
@@ -420,7 +364,7 @@ pub(crate) async fn enhance_with<E: Enhancer>(
     }
 
     match outcome {
-        Ok(Enhanced { picture, .. }) => {
+        Ok(Enhanced { picture, faces, .. }) => {
             let (width, height) = picture.dimensions();
             let identity = picture.identity().to_string();
 
@@ -1069,21 +1013,16 @@ mod tests {
             &self,
             source: &Picture,
             operations: &[opai::Operation],
-            _options: ProcessOptions,
+            options: ProcessOptions,
         ) -> Result<Enhanced, InferenceError> {
-            self.seen.lock().expect("unpoisoned").push(operations.to_vec());
+            let FaceSelection::Detect(select) = options.faces else {
+                panic!("a canvas run did not ask for its faces to be found");
+            };
+            let found = opai::Faces::new([Self::face()]);
+            let faced = opai::fill_chain_faces(operations.to_vec(), Ok(found), |index, face| select(index, face))?;
+            self.seen.lock().expect("unpoisoned").push(faced.operations);
 
-            Ok(enhanced(source, 8, 6, "cafebabecafebabe"))
-        }
-
-        async fn find_chain_faces(
-            &self,
-            _source: &Picture,
-            operations: Vec<opai::Operation>,
-            select: impl Fn(usize, &opai::Face) -> bool + Send,
-            _options: ExecuteOptions,
-        ) -> Result<FacedChain, InferenceError> {
-            opai::fill_chain_faces(operations, Ok(Faces::new([Self::face()])), select)
+            Ok(Enhanced { faces: faced.faces, ..enhanced(source, 8, 6, "cafebabecafebabe") })
         }
     }
 
@@ -1107,7 +1046,7 @@ mod tests {
             seen.as_slice(),
             [vec![opai::FaceRecovery::santorini(
                 opai::FloatPrecision::Fp32,
-                Faces::new([FindingOne::face()])
+                opai::Faces::new([FindingOne::face()])
             )]]
         );
     }

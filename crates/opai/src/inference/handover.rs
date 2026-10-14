@@ -3,11 +3,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::inference::process::in_apply_order;
 use crate::inference::progress::{InferenceProgress, OnInference, Stage};
-use crate::models::{Family, Operation};
+use crate::models::Operation;
 
-// A chain carrying a face recovery is two runs underneath — the detection `Opai::find_chain_faces` makes and the chain
+// A chain carrying a face recovery is two runs underneath — the detection `process` makes and the chain
 // itself — and each reports its own `0..1` and lands on exactly 1. Drawn as they arrive that is two sweeps: the bar
 // fills, empties and fills again, which reads as the enhancement having been applied twice. So the two are reported as
 // one run in which every enhancement owns an equal slot, and the detection is part of a slot rather than one of its own:
@@ -20,10 +19,9 @@ const DETECTION_SHARE: f64 = 0.2;
 
 /// A chain's face detection and the chain itself, reported as one run whose bar moves forward once.
 ///
-/// Wire [`detection`](Self::detection) into the [`ExecuteOptions`](crate::ExecuteOptions) handed to
-/// [`Opai::find_chain_faces`](crate::Opai::find_chain_faces), and [`chain`](Self::chain) into the
-/// [`ProcessOptions`](crate::ProcessOptions) handed to [`Opai::process`](crate::Opai::process) afterwards. Both report
-/// into the one callback this was built over.
+/// [`detection`](Self::detection) reports the detection [`Opai::process`](crate::Opai::process) makes for a
+/// [`FaceSelection::Detect`](crate::FaceSelection::Detect), and [`chain`](Self::chain) the chain it runs afterwards.
+/// Both report into the one callback this was built over.
 ///
 /// **Every enhancement owns `1 / N` of the bar, and the detection is not one of them.** A chain of `N` operations is
 /// `N` equal slots, as [`Opai::process`](crate::Opai::process) reports it on its own. A detection that does work is
@@ -37,19 +35,11 @@ const DETECTION_SHARE: f64 = 0.2;
 /// the run store, and reporting that would jump every re-run part of the way in for nothing. So the detection's own
 /// reports are forwarded only once one says it is fetching or running, and the chain is forwarded untouched unless one
 /// was.
-///
-/// **The detection counts as the face recovery's step.** Its reports carry the
-/// [`operation_index`](InferenceProgress::operation_index) of the first face recovery in the chain as it is applied,
-/// and the chain's [`operation_count`](InferenceProgress::operation_count), rather than its own `0` of `1`. Its
-/// [`subject`](InferenceProgress::subject) and [`stage`](InferenceProgress::stage) are left alone.
-pub struct Handover {
+pub(crate) struct Handover {
     /// Where every report goes in the end.
     inner: OnInference,
     /// Whether the detection reported any work, which decides the share the chain is mapped onto.
     detected: Arc<AtomicBool>,
-    /// The position and count a detection report is rewritten to: the first face recovery's place in the applied
-    /// chain, and the chain's length.
-    attributed: (usize, usize),
     /// How much of the bar one operation owns: `1 / N`.
     slot: f64,
 }
@@ -57,32 +47,21 @@ pub struct Handover {
 impl Handover {
     /// Splits the reports `on_progress` receives over a detection and `operations`, the chain it is made for.
     ///
-    /// `operations` must be the chain later handed to [`Opai::process`](crate::Opai::process) — in any order, since
-    /// it is put into the applied order here as it is there. A face selection changes no family, so the chain before
-    /// [`Opai::find_chain_faces`](crate::Opai::find_chain_faces) fills it in is the same chain for this purpose.
-    pub fn new(on_progress: &OnInference, operations: &[Operation]) -> Self {
-        let applied = in_apply_order(operations);
-        // A chain with no face recovery makes no detection, so its `0` is never read.
-        let position = applied.iter().position(|operation| operation.family() == Family::FaceRecovery).unwrap_or(0);
-
+    /// `operations` is the chain in any order: a face selection changes no family and the apply order changes no
+    /// length, so the chain before its faces are filled in is the same chain for this purpose.
+    pub(crate) fn new(on_progress: &OnInference, operations: &[Operation]) -> Self {
         // An empty chain has no slot to share; `1` keeps the arithmetic finite for a detection nothing asked for.
         #[allow(clippy::cast_precision_loss, reason = "a chain is a handful of operations")]
-        let slot = 1.0 / applied.len().max(1) as f64;
+        let slot = 1.0 / operations.len().max(1) as f64;
 
-        Self {
-            inner: Arc::clone(on_progress),
-            detected: Arc::default(),
-            attributed: (position, applied.len()),
-            slot,
-        }
+        Self { inner: Arc::clone(on_progress), detected: Arc::default(), slot }
     }
 
-    /// The callback for the detection: its reports mapped onto the head of the first slot and attributed to the face
-    /// recovery, and a detection served from the store not reported at all.
-    pub fn detection(&self) -> OnInference {
+    /// The callback for the detection: its reports mapped onto the head of the first slot, and a detection served
+    /// from the store not reported at all.
+    pub(crate) fn detection(&self) -> OnInference {
         let inner = Arc::clone(&self.inner);
         let detected = Arc::clone(&self.detected);
-        let (operation_index, operation_count) = self.attributed;
         let head = self.slot * DETECTION_SHARE;
 
         Arc::new(move |report: &InferenceProgress| {
@@ -91,12 +70,7 @@ impl Handover {
             }
 
             detected.store(true, Ordering::Relaxed);
-            inner(&InferenceProgress {
-                chain_fraction: report.chain_fraction * head,
-                operation_index,
-                operation_count,
-                ..report.clone()
-            });
+            inner(&InferenceProgress { chain_fraction: report.chain_fraction * head, ..report.clone() });
         })
     }
 
@@ -105,7 +79,7 @@ impl Handover {
     ///
     /// **Ask for it once the detection has ended**, which is when whether it reported anything is known. The
     /// detection's future completing orders every store its callbacks made before this load.
-    pub fn chain(&self) -> OnInference {
+    pub(crate) fn chain(&self) -> OnInference {
         if !self.detected.load(Ordering::Relaxed) {
             return Arc::clone(&self.inner);
         }
@@ -131,7 +105,7 @@ impl std::fmt::Debug for Handover {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Handover")
             .field("detected", &self.detected.load(Ordering::Relaxed))
-            .field("attributed", &self.attributed)
+            .field("slot", &self.slot)
             .finish_non_exhaustive()
     }
 }
@@ -141,8 +115,10 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use crate::inference::process::in_apply_order;
     use crate::models::{
-        Denoise, Detection, FaceRecovery, Faces, FloatPrecision, Scale, Strength, Subject, Upscale, UpscaleVariant,
+        Denoise, Detection, FaceRecovery, Faces, Family, FloatPrecision, Scale, Strength, Subject, Upscale,
+        UpscaleVariant,
     };
 
     fn kyoto() -> Operation {
@@ -157,16 +133,9 @@ mod tests {
         Denoise::stockholm(FloatPrecision::Fp32, Strength::clamped(1.0))
     }
 
-    /// One report, as the library builds one, about operation `index` of `count`.
-    fn reported(subject: &Arc<Subject>, stage: Stage, chain: f64, (index, count): (usize, usize)) -> InferenceProgress {
-        InferenceProgress {
-            subject: Arc::clone(subject),
-            stage,
-            operation_fraction: chain,
-            operation_index: index,
-            operation_count: count,
-            chain_fraction: chain,
-        }
+    /// One report, as the library builds one.
+    fn reported(subject: &Arc<Subject>, stage: Stage, chain: f64) -> InferenceProgress {
+        InferenceProgress { subject: Arc::clone(subject), stage, operation_fraction: chain, chain_fraction: chain }
     }
 
     /// Everything a [`Handover`] over `operations` forwarded: the detection reporting at each of `detection`'s
@@ -184,7 +153,7 @@ mod tests {
         let subject = Arc::new(Subject::Analysis(Detection::for_face_recovery()));
         for stage in detection {
             // The detection's own single-operation run, as `execute` reports it.
-            detecting(&reported(&subject, stage.clone(), 1.0, (0, 1)));
+            detecting(&reported(&subject, stage.clone(), 1.0));
         }
 
         let chaining = handover.chain();
@@ -194,7 +163,7 @@ mod tests {
             let subject = Arc::new(Subject::Enhancement(operation.clone()));
             for step in 0..=steps {
                 let chain = (index as f64 + step as f64 / steps as f64) / count as f64;
-                chaining(&reported(&subject, Stage::Running, chain, (index, count)));
+                chaining(&reported(&subject, Stage::Running, chain));
             }
         }
 
@@ -277,41 +246,6 @@ mod tests {
         let reports = handed_over(&[santorini(), denoise()], &[Stage::Running], 2);
 
         assert_eq!(percents(&reports), [10, 10, 30, 50, 50, 75, 100]);
-    }
-
-    #[test]
-    fn a_detection_is_counted_as_the_face_recoverys_step() {
-        let reports = handed_over(&[santorini(), kyoto()], &[Stage::Running, Stage::Running], 2);
-
-        let detected = detections(&reports);
-        assert_eq!(detected.len(), 2);
-        assert!(
-            detected.iter().all(|report| (report.operation_index, report.operation_count) == (0, 2)),
-            "a detection report kept its own single-operation position"
-        );
-        // Only the counter is rewritten: a front end still sees what the report is about and what it is doing.
-        assert!(detected.iter().all(|report| matches!(report.stage, Stage::Running)));
-    }
-
-    #[test]
-    fn a_detection_is_counted_at_the_face_recoverys_place_in_the_applied_chain() {
-        // Listed with the face recovery second, applied with the denoise in front of it.
-        let reports = handed_over(&[kyoto(), santorini(), denoise()], &[Stage::Running], 1);
-
-        let detected = detections(&reports);
-        assert_eq!((detected[0].operation_index, detected[0].operation_count), (1, 3));
-    }
-
-    #[test]
-    fn the_chains_reports_keep_their_own_position() {
-        let reports = handed_over(&[santorini(), kyoto()], &[Stage::Running], 2);
-
-        let positions = reports
-            .iter()
-            .filter(|report| matches!(*report.subject, Subject::Enhancement(_)))
-            .map(|report| (report.operation_index, report.operation_count))
-            .collect::<Vec<_>>();
-        assert_eq!(positions, [(0, 2), (0, 2), (0, 2), (1, 2), (1, 2), (1, 2)]);
     }
 
     #[test]

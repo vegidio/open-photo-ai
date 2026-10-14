@@ -6,30 +6,24 @@
 
 use std::path::{Path, PathBuf};
 
-use opai::export::{ExportFormat, FormatChoice, Named, Naming, destination_for};
+use opai::export::{ExportFormat, Named, Naming, destination_for};
 use serde::{Deserialize, Serialize};
 
 /// What decides the name and folder of each file written, as the window's export settings store it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct ExportNaming {
-    /// Written before the source's name.
-    pub(crate) prefix: String,
-    /// Written after the source's name, before the extension.
-    pub(crate) suffix: String,
+    /// The prefix, the suffix and the format.
+    #[serde(flatten)]
+    pub(crate) naming: Naming,
     /// The folder to write into, or absent for the directory each source is in.
     #[serde(default)]
     pub(crate) location: Option<PathBuf>,
-    /// The format to write, or Preserve.
-    pub(crate) format: FormatChoice,
 }
 
 impl ExportNaming {
     /// The destination `source` asks to be written to, and what it is written as.
     pub(crate) fn destination_for(&self, source: &Path) -> (PathBuf, Named) {
-        let naming = Naming { prefix: self.prefix.clone(), suffix: self.suffix.clone(), format: self.format };
-
-        destination_for(source, &naming, self.location.as_deref())
+        destination_for(source, &self.naming, self.location.as_deref())
     }
 }
 
@@ -69,9 +63,10 @@ pub(crate) fn names(paths: Vec<String>, naming: &ExportNaming) -> Vec<ExportName
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opai::export::FormatChoice;
 
     fn naming(format: FormatChoice) -> ExportNaming {
-        ExportNaming { prefix: "new-".into(), suffix: "-opai".into(), location: None, format }
+        ExportNaming { naming: Naming { prefix: "new-".into(), suffix: "-opai".into(), format }, location: None }
     }
 
     #[test]
@@ -107,13 +102,13 @@ mod tests {
         }))
         .expect("the window's export settings");
         assert_eq!(read.location.as_deref(), Some(Path::new("/exports")));
-        assert_eq!(read.format, FormatChoice::Preserve);
+        assert_eq!(read.naming.format, FormatChoice::Preserve);
 
         let unlocated: ExportNaming =
             serde_json::from_value(serde_json::json!({ "prefix": "", "suffix": "", "format": "jpeg" }))
                 .expect("a naming with no folder chosen");
         assert_eq!(unlocated.location, None);
-        assert_eq!(unlocated.format, FormatChoice::Format(ExportFormat::Jpeg));
+        assert_eq!(unlocated.naming.format, FormatChoice::Format(ExportFormat::Jpeg));
     }
 
     /// The whole wire shape, pinned: the rows read exactly this.

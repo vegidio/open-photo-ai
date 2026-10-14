@@ -2,6 +2,7 @@
 
 mod cache;
 mod entry;
+mod faces;
 mod identity;
 mod log;
 mod plan;

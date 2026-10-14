@@ -18,17 +18,6 @@ use crate::args::{
 /// The word that leaves a family out of the analysis. No model is named `off`, so it is free.
 const OFF: &str = "off";
 
-/// What a family's variable chose.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Choice<M> {
-    /// Unset or empty: the model the family's flag runs when given bare.
-    Default,
-    /// This model.
-    Model(M),
-    /// `off`: the family is never suggested and its signal never read.
-    Off,
-}
-
 /// A family's model vocabulary, as autopilot reads it from the environment.
 pub trait FamilyModel: ValueEnum + Copy {
     /// The family these models belong to.
@@ -38,8 +27,8 @@ pub trait FamilyModel: ValueEnum + Copy {
     /// The model the family's flag runs when given with no model, and autopilot's default.
     const DEFAULT: Self;
 
-    /// This family's choice in `models`.
-    fn choice(models: &AutopilotModels) -> Choice<Self>;
+    /// This family's model in `models`, or `None` where it is switched off.
+    fn choice(models: &AutopilotModels) -> Option<Self>;
 }
 
 macro_rules! family_model {
@@ -49,7 +38,7 @@ macro_rules! family_model {
             const VARIABLE: &'static str = $variable;
             const DEFAULT: Self = $default;
 
-            fn choice(models: &AutopilotModels) -> Choice<Self> {
+            fn choice(models: &AutopilotModels) -> Option<Self> {
                 models.$field
             }
         }
@@ -72,28 +61,28 @@ family_model!(BalanceModel, Family::ColorBalance, "OPAI_AP_COLOR", BalanceModel:
 family_model!(SharpenModel, Family::Sharpen, "OPAI_AP_SHARPEN", SharpenModel::Moscow, sharpen);
 family_model!(UpscaleModel, Family::Upscale, "OPAI_AP_UPSCALE", UpscaleModel::Tokyo, upscale);
 
-/// Autopilot's model for every family, in the library's apply order.
+/// Autopilot's model for every family, in the library's apply order: `None` where the family's variable says `off`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AutopilotModels {
-    pub denoise: Choice<DenoiseModel>,
-    pub face_recovery: Choice<FaceModel>,
-    pub colorization: Choice<ColorizationModel>,
-    pub light_adjustment: Choice<LightModel>,
-    pub color_balance: Choice<BalanceModel>,
-    pub sharpen: Choice<SharpenModel>,
-    pub upscale: Choice<UpscaleModel>,
+    pub denoise: Option<DenoiseModel>,
+    pub face_recovery: Option<FaceModel>,
+    pub colorization: Option<ColorizationModel>,
+    pub light_adjustment: Option<LightModel>,
+    pub color_balance: Option<BalanceModel>,
+    pub sharpen: Option<SharpenModel>,
+    pub upscale: Option<UpscaleModel>,
 }
 
 impl Default for AutopilotModels {
     fn default() -> Self {
         Self {
-            denoise: Choice::Default,
-            face_recovery: Choice::Default,
-            colorization: Choice::Default,
-            light_adjustment: Choice::Default,
-            color_balance: Choice::Default,
-            sharpen: Choice::Default,
-            upscale: Choice::Default,
+            denoise: Some(DenoiseModel::DEFAULT),
+            face_recovery: Some(FaceModel::DEFAULT),
+            colorization: Some(ColorizationModel::DEFAULT),
+            light_adjustment: Some(LightModel::DEFAULT),
+            color_balance: Some(BalanceModel::DEFAULT),
+            sharpen: Some(SharpenModel::DEFAULT),
+            upscale: Some(UpscaleModel::DEFAULT),
         }
     }
 }
@@ -120,7 +109,7 @@ impl AutopilotModels {
     /// The families not switched off, in the library's apply order: what the analysis is asked to look for.
     pub fn families(&self) -> Vec<Family> {
         fn on<M: FamilyModel>(models: &AutopilotModels) -> Option<Family> {
-            (!matches!(M::choice(models), Choice::Off)).then_some(M::FAMILY)
+            M::choice(models).map(|_| M::FAMILY)
         }
 
         [
@@ -140,26 +129,23 @@ impl AutopilotModels {
     /// The model the family `M` runs with, the bare flag's where the variable left the default, or `None` where the
     /// family is switched off.
     pub fn model_for<M: FamilyModel>(&self) -> Option<M> {
-        match M::choice(self) {
-            Choice::Default => Some(M::DEFAULT),
-            Choice::Model(model) => Some(model),
-            Choice::Off => None,
-        }
+        M::choice(self)
     }
 }
 
-/// The choice `M`'s variable makes, read through `lookup`.
-fn read_one<M: FamilyModel>(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Choice<M>, clap::Error> {
+/// The model `M`'s variable chooses, read through `lookup`: the bare flag's where it is unset or empty, `None` where
+/// it says `off`.
+fn read_one<M: FamilyModel>(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Option<M>, clap::Error> {
     let Some(value) = lookup(M::VARIABLE).filter(|value| !value.is_empty()) else {
-        return Ok(Choice::Default);
+        return Ok(Some(M::DEFAULT));
     };
 
     let text = value.to_str();
     if text.is_some_and(|text| text.eq_ignore_ascii_case(OFF)) {
-        return Ok(Choice::Off);
+        return Ok(None);
     }
 
-    text.and_then(|text| M::from_str(text, true).ok()).map(Choice::Model).ok_or_else(|| {
+    text.and_then(|text| M::from_str(text, true).ok()).map(Some).ok_or_else(|| {
         let accepted: Vec<String> = M::value_variants()
             .iter()
             .filter_map(ValueEnum::to_possible_value)
@@ -235,8 +221,8 @@ mod tests {
     fn off_in_any_case_leaves_the_family_out() {
         let models = read(&[("OPAI_AP_SHARPEN", "off"), ("OPAI_AP_FACE", "OFF")]).expect("reads");
 
-        assert_eq!(models.sharpen, Choice::Off);
-        assert_eq!(models.face_recovery, Choice::Off);
+        assert_eq!(models.sharpen, None);
+        assert_eq!(models.face_recovery, None);
         assert_eq!(models.model_for::<SharpenModel>(), None);
         assert_eq!(models.model_for::<FaceModel>(), None);
         assert_eq!(
@@ -292,13 +278,13 @@ mod tests {
         let bare = crate::args::parse_from("opai photo.jpg --dn --fr --cl --la --cb --sh --up -o out.png".split(' '))
             .expect("parses");
 
-        assert_eq!(bare.denoise, Some(DenoiseModel::DEFAULT));
-        assert_eq!(bare.face_recovery, Some(FaceModel::DEFAULT));
-        assert_eq!(bare.colorization, Some(ColorizationModel::DEFAULT));
-        assert_eq!(bare.light_adjustment, Some(LightModel::DEFAULT));
-        assert_eq!(bare.color_balance, Some(BalanceModel::DEFAULT));
-        assert_eq!(bare.sharpen, Some(SharpenModel::DEFAULT));
-        assert_eq!(bare.upscale, Some(UpscaleModel::DEFAULT));
+        assert_eq!(bare.selection.denoise, Some(DenoiseModel::DEFAULT));
+        assert_eq!(bare.selection.face_recovery, Some(FaceModel::DEFAULT));
+        assert_eq!(bare.selection.colorization, Some(ColorizationModel::DEFAULT));
+        assert_eq!(bare.selection.light_adjustment, Some(LightModel::DEFAULT));
+        assert_eq!(bare.selection.color_balance, Some(BalanceModel::DEFAULT));
+        assert_eq!(bare.selection.sharpen, Some(SharpenModel::DEFAULT));
+        assert_eq!(bare.selection.upscale, Some(UpscaleModel::DEFAULT));
     }
 
     /// Autopilot's default model is the one the library's catalogue lists first, which is what the GUI falls back to.

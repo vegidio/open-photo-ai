@@ -3,6 +3,7 @@
 use tokio_util::sync::CancellationToken;
 
 use crate::inference::depth::OutputDepth;
+use crate::inference::faces::FaceSelection;
 use crate::inference::progress::OnInference;
 use crate::providers::ExecutionProvider;
 
@@ -67,6 +68,16 @@ pub struct ProcessOptions {
     /// It is a different question from [`Opai::cache_mode`](crate::Opai::cache_mode), which reports what is *backing*
     /// the cache: a run with this set to `false` still reads `Disk` there.
     pub cache: bool,
+
+    /// Where the chain's face recoveries get their faces from. Defaults to [`FaceSelection::AsGiven`]: the faces each
+    /// one was built with.
+    ///
+    /// [`FaceSelection::Detect`] runs one face-recovery detection over the source before the chain — the one the GUI's
+    /// picker and Autopilot run, so a photograph either already examined is served from the store — under this run's
+    /// provider, stop and cache. Its progress is reported on the same bar as the chain, which moves forward once: every
+    /// operation owns an equal `1 / N` of it and the detection takes the first fifth of the first operation's slot
+    /// (none, when the store already knew the faces).
+    pub faces: FaceSelection,
 }
 
 impl std::fmt::Debug for ProcessOptions {
@@ -79,6 +90,7 @@ impl std::fmt::Debug for ProcessOptions {
             .field("on_progress", &self.on_progress.is_some())
             .field("cancel", &self.cancel)
             .field("cache", &self.cache)
+            .field("faces", &self.faces)
             .finish()
     }
 }
@@ -93,6 +105,7 @@ impl Default for ProcessOptions {
             // On, because the whole point of the cache is that a user who re-runs an enhancement does not pay for it
             // twice, and a default of `false` would mean every caller had to know to ask for that.
             cache: true,
+            faces: FaceSelection::AsGiven,
         }
     }
 }

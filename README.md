@@ -65,6 +65,10 @@ The GUI is the easiest way to use the app, with an intuitive interface that allo
 
 ### CLI
 
+<p align="center">
+<img src="docs/assets/cli-screenshot.avif" width="80%" alt="Open Photo AI - CLI"/>
+</p>
+
 The CLI enhances one image per command:
 
 ```bash

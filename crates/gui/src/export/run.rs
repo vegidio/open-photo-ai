@@ -4,13 +4,13 @@
 //! state, and the order of what it does is its contract.
 //!
 //! Its records name no run: they are emitted inside the `export` command's span, which carries it, and the file writes
-//! it onto each of them from there. A destination that cannot be claimed or committed is not recorded here either; the
-//! command wrapper records it, once. See `crate::command`.
+//! it onto each of them from there. A file that cannot be written is not recorded here either: `opai` records it,
+//! where it happened.
 
 use opai::{Enhanced, InferenceError, OutputDepth, ProcessOptions};
 use serde::Serialize;
 
-use opai::export::{Named, claim, encode_options};
+use opai::export::{Named, WriteError, WriteOptions, Written, write};
 
 use super::Exports;
 use super::names::ExportNaming;
@@ -48,27 +48,15 @@ impl Answer for Exported {
 /// Why an export could not be asked for, or could not finish. A stop is deliberately not among these — see
 /// [`Exported`].
 ///
-/// Every refusal a canvas run has, carried as [`EnhanceError`] itself so the two cannot drift apart, and the two ways
-/// the file itself can fail, which a canvas run has no file to meet.
+/// Every refusal a canvas run has, carried as [`EnhanceError`] itself so the two cannot drift apart, and the file itself
+/// failing, which a canvas run has no file to meet.
 #[derive(Debug, Clone, PartialEq, Serialize, thiserror::Error)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum ExportError {
-    /// The encoded photograph could not be saved under the name claimed for it.
+    /// No name could be claimed at the destination, the encoded photograph could not be saved under it, or the
+    /// written file could not be put in its place.
     #[error("`{path}` could not be written: {message}")]
     Write {
-        /// The destination the window asked for, whatever numbered name was being tried.
-        path: String,
-        /// The reason, untranslated: what the failed row's tooltip copies to the clipboard.
-        message: String,
-    },
-
-    // Its own variant rather than a second use of `Write`, because the two are recorded by different crates: `opai`
-    // records a failed save, and nothing but the command wrapper sees a failed claim or commit. The window cannot tell
-    // them apart and has no reason to, so it crosses under `Write`'s tag in `Write`'s shape.
-    /// A name could not be claimed at the destination, or the written file could not be put in its place.
-    #[error("`{path}` could not be written: {message}")]
-    #[serde(rename = "write")]
-    Unwritable {
         /// The destination the window asked for, whatever numbered name was being tried.
         path: String,
         /// The reason, untranslated: what the failed row's tooltip copies to the clipboard.
@@ -90,9 +78,7 @@ impl CommandError for ExportError {
         match self {
             // Whoever saw it, exactly as for a canvas run.
             Self::Chain(error) => error.ended(),
-            // A failed claim or commit, which nothing else sees.
-            Self::Unwritable { .. } => Ended::Failed { error: self, recorded: false },
-            // `opai` records the failed save, where it happened.
+            // `opai` records a failed write, where it happened.
             Self::Write { .. } => Ended::Failed { error: self, recorded: true },
         }
     }
@@ -173,35 +159,20 @@ pub(crate) async fn export_with<E: Enhancer>(
     // `prepare_chain`. The row reports it as the head of its `enhancing` bar. What was found is the canvas's to record,
     // not an export's: a detection that failed is exported over no faces without a notice, as a file whose other
     // enhancements still apply.
-    let on_progress = reporting.as_ref().map(|reporting| &reporting.enhancing.on_progress);
-    let prepared = prepare_chain(
-        enhancer,
-        opened,
-        judged,
-        request.crop,
-        request.processor,
-        registration.cancel().clone(),
-        on_progress,
-    )
-    .await?;
+    let Prepared { picture, operations, faces } = prepare_chain(opened, judged, request.crop).await?;
 
-    // A stop during the detection is a stop of the chain, answered below as one.
-    let outcome = match prepared {
-        Some(Prepared { picture, operations, handover, .. }) => {
-            // `OutputDepth::Source`, unlike the canvas's `Eight`: this result is written to a file rather than drawn,
-            // and a 16-bit photograph written to a format that holds 16 bits keeps them.
-            let options = ProcessOptions {
-                provider: request.processor.into(),
-                depth: OutputDepth::Source,
-                on_progress: handover.as_ref().map(opai::Handover::chain),
-                cancel: registration.cancel().clone(),
-                ..Default::default()
-            };
-
-            enhancer.process(&picture, &operations, options).await
-        }
-        None => Err(InferenceError::Cancelled),
+    // `OutputDepth::Source`, unlike the canvas's `Eight`: this result is written to a file rather than drawn, and a
+    // 16-bit photograph written to a format that holds 16 bits keeps them.
+    let options = ProcessOptions {
+        provider: request.processor.into(),
+        depth: OutputDepth::Source,
+        on_progress: reporting.as_ref().map(|reporting| std::sync::Arc::clone(&reporting.enhancing.on_progress)),
+        cancel: registration.cancel().clone(),
+        faces,
+        ..Default::default()
     };
+
+    let outcome = enhancer.process(&picture, &operations, options).await;
 
     // Released whatever the chain did, so the row lands where the chain actually got to.
     if let Some(reporting) = &reporting {
@@ -233,26 +204,17 @@ pub(crate) async fn export_with<E: Enhancer>(
 
     let (destination, Named { format, .. }) = request.naming.destination_for(&source_path);
 
-    // Claiming and committing the destination are this application's own failures, which the command wrapper records;
-    // the save between them is `opai`'s, which records it itself. See `ExportError::ended`.
-    let path = || destination.display().to_string();
-    let unwritten = |message: String| ExportError::Write { path: path(), message };
-    let unwritable = |message: String| ExportError::Unwritable { path: path(), message };
+    // The folder is not created: one the user removed since choosing it fails the export rather than reappearing.
+    let options = WriteOptions { quality: request.quality, overwrite: request.overwrite, create_parent: false };
+    let Written { path: written, bytes } =
+        write(&picture, &destination, format.into(), options).await.map_err(|error| {
+            let message = match error {
+                WriteError::Unwritable { source, .. } => source.to_string(),
+                WriteError::Save(error) => error.to_string(),
+            };
 
-    // Off the runtime's own threads: up to a thousand exclusive creates, on whatever drive the user chose.
-    let requested = destination.clone();
-    let claim = crate::task::spawn_blocking(move || claim(&requested, request.overwrite))
-        .await
-        .expect("claiming a name cannot panic, and nothing cancels its thread")
-        .map_err(|error| unwritable(error.to_string()))?;
-
-    let options = encode_options(format, request.quality);
-    let bytes = opai::image::save(picture.shared_pixels(), claim.path(), format.into(), Some(options))
-        .await
-        .map_err(|error| unwritten(error.to_string()))?;
-
-    // Overwriting, this is where the destination is replaced, and not before: a failed write above left it untouched.
-    let written = claim.commit().map_err(|error| unwritable(error.to_string()))?;
+            ExportError::Write { path: destination.display().to_string(), message }
+        })?;
     tracing::info!(path = %written.display(), bytes, "a photograph was exported");
 
     Ok(Exported::Exported { path: written.to_string_lossy().into_owned(), bytes })
@@ -264,8 +226,8 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
 
-    use opai::export::{ExportFormat, FormatChoice};
-    use opai::{ExecuteOptions, ExecutionProvider, Opai, Picture, Precision};
+    use opai::export::{ExportFormat, FormatChoice, Naming};
+    use opai::{ExecutionProvider, Opai, Picture, Precision};
 
     use super::*;
     use crate::enhance::UnknownOperation;
@@ -274,7 +236,11 @@ mod tests {
 
     /// What a fake enhancer hands back: `pixels` at `identity`, on the source's own path.
     fn enhanced(source: &Picture, pixels: image::DynamicImage, identity: &str) -> Enhanced {
-        Enhanced { picture: Picture::new(source.path(), pixels, identity), providers: no_providers() }
+        Enhanced {
+            picture: Picture::new(source.path(), pixels, identity),
+            providers: no_providers(),
+            faces: opai::ChainFaces::NotAsked,
+        }
     }
 
     /// An enhancer that doubles the picture for a chain and answers the source itself for an empty one — `opai`'s own
@@ -311,8 +277,6 @@ mod tests {
                             subject: Arc::clone(&subject),
                             stage: opai::Stage::Running,
                             operation_fraction: f64::from(step) / 10.0,
-                            operation_index: index,
-                            operation_count: operations.len(),
                             chain_fraction: chain,
                         });
                     }
@@ -401,10 +365,12 @@ mod tests {
                 processor: Processor(opai::ExecutionProvider::CoreMl),
                 crop: None,
                 naming: ExportNaming {
-                    prefix: String::new(),
-                    suffix: suffix.to_string(),
+                    naming: Naming {
+                        prefix: String::new(),
+                        suffix: suffix.to_string(),
+                        format: ExportFormat::Png.into(),
+                    },
                     location: Some(self.out.path().to_path_buf()),
-                    format: ExportFormat::Png.into(),
                 },
                 quality: Some(90.0),
                 overwrite: false,
@@ -435,7 +401,9 @@ mod tests {
 
     /// `request`, written as `format` instead.
     fn written_as(format: impl Into<FormatChoice>, request: Request) -> Request {
-        Request { naming: ExportNaming { format: format.into(), ..request.naming }, ..request }
+        let mut request = request;
+        request.naming.naming.format = format.into();
+        request
     }
 
     /// `request`, written into `folder` instead.
@@ -742,20 +710,18 @@ mod tests {
         async fn process(
             &self,
             _source: &Picture,
-            _operations: &[opai::Operation],
-            _options: ProcessOptions,
+            operations: &[opai::Operation],
+            options: ProcessOptions,
         ) -> Result<Enhanced, InferenceError> {
-            unreachable!("a stop during the detection runs no chain")
-        }
+            let opai::FaceSelection::Detect(select) = options.faces else {
+                panic!("an export did not ask for its faces to be found");
+            };
 
-        async fn find_chain_faces(
-            &self,
-            _source: &Picture,
-            operations: Vec<opai::Operation>,
-            select: impl Fn(usize, &opai::Face) -> bool + Send,
-            _options: ExecuteOptions,
-        ) -> Result<opai::FacedChain, InferenceError> {
-            opai::fill_chain_faces(operations, Err(InferenceError::Cancelled), select)
+            opai::fill_chain_faces(operations.to_vec(), Err(InferenceError::Cancelled), |index, face| {
+                select(index, face)
+            })?;
+
+            unreachable!("a stop during the detection runs no chain")
         }
     }
 
@@ -837,7 +803,7 @@ mod tests {
             )
             .expect_err("nothing can be written into a missing directory");
 
-        let ExportError::Unwritable { path, message } = &refused else {
+        let ExportError::Write { path, message } = &refused else {
             panic!("an unwritable destination was refused as something else: {refused:?}");
         };
         assert_eq!(*path, destination.display().to_string());
@@ -871,7 +837,7 @@ mod tests {
             )
             .expect_err("nothing can be written into a read-only directory");
 
-        let ExportError::Unwritable { path, message } = &refused else {
+        let ExportError::Write { path, message } = &refused else {
             panic!("a read-only destination was refused as something else: {refused:?}");
         };
         assert_eq!(*path, destination.display().to_string());
@@ -965,7 +931,6 @@ mod tests {
             ),
             (ExportError::Chain(EnhanceError::Enhance { message: "b".to_string() }), "enhance"),
             (ExportError::Write { path: "a".to_string(), message: "b".to_string() }, "write"),
-            (ExportError::Unwritable { path: "a".to_string(), message: "b".to_string() }, "write"),
         ];
         for (error, kind) in refusals {
             assert_eq!(serde_json::to_value(&error).expect("serializable")["kind"], kind, "{error:?}");
@@ -1174,10 +1139,12 @@ mod tests {
                             processor,
                             crop: None,
                             naming: ExportNaming {
-                                prefix: String::new(),
-                                suffix: "-opai".to_string(),
+                                naming: Naming {
+                                    prefix: String::new(),
+                                    suffix: "-opai".to_string(),
+                                    format: format.into(),
+                                },
                                 location: None,
-                                format: format.into(),
                             },
                             quality: Some(90.0),
                             overwrite: false,
@@ -1220,7 +1187,6 @@ mod tests {
                 ExportError::Chain(EnhanceError::UnknownOperation { index: 0, reason }),
                 "recorded by the wrapper",
             ),
-            (ExportError::Unwritable { path: s(), message: s() }, "recorded by the wrapper"),
             (
                 ExportError::Chain(EnhanceError::UnreadableSource { identity: s(), message: s() }),
                 "recorded by opai",
@@ -1265,21 +1231,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_destination_that_could_not_be_claimed_crosses_as_a_failed_write_did() {
-        let path = "/exports/a.png".to_string();
-        let message = "permission denied".to_string();
-
-        let unwritable = ExportError::Unwritable { path: path.clone(), message: message.clone() };
-        let written = ExportError::Write { path, message };
-
-        // The shape the window's formatter has always read, so it needs no edit.
-        let shape = serde_json::json!({ "kind": "write", "path": "/exports/a.png", "message": "permission denied" });
-        assert_eq!(serde_json::to_value(&unwritable).expect("serializable"), shape);
-        assert_eq!(serde_json::to_value(&written).expect("serializable"), shape);
-        assert_eq!(unwritable.to_string(), written.to_string());
-    }
-
     /// [`export_with`] inside the `export` command's span, as the command runs it, and what that recorded.
     fn traced_export<E: Enhancer>(
         fixture: &Fixture,
@@ -1299,27 +1250,22 @@ mod tests {
     }
 
     #[test]
-    fn a_destination_that_cannot_be_claimed_is_recorded_once_by_the_wrapper_and_never_as_an_error() {
+    fn a_destination_that_cannot_be_claimed_is_recorded_once_by_opai_and_never_as_an_error() {
         let fixture = Fixture::new();
         let destination = fixture.out.path().join("missing").join("holiday.png");
         let request =
             written_into(destination.parent().expect("a folder"), fixture.request("export-1", vec![kyoto()], ""));
 
         let (recorded, answer) = traced_export(&fixture, &Recording::default(), request);
-        assert!(matches!(answer, Err(ExportError::Unwritable { .. })), "{answer:?}");
+        assert!(matches!(answer, Err(ExportError::Write { .. })), "{answer:?}");
 
         assert!(recorded.at(tracing::Level::ERROR).is_empty(), "a claim failure was recorded as an error");
 
         let [warning] = recorded.at(tracing::Level::WARN)[..] else {
             panic!("expected exactly one warning: {:#?}", recorded.events);
         };
-        assert_eq!(warning.target, crate::command::TARGET);
-        assert_eq!(warning.field("command"), Some("export"));
-        let error = warning.field("error").expect("the warning says why");
-        assert!(
-            error.contains(&destination.display().to_string()),
-            "the warning did not name the destination: {error}"
-        );
+        assert!(warning.target.starts_with("opai"), "recorded by {}", warning.target);
+        assert_eq!(warning.field("path"), Some(destination.display().to_string().as_str()));
         assert_eq!(recorded.only("export").field("outcome"), Some("failed"));
     }
 

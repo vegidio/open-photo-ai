@@ -68,31 +68,29 @@
 //!
 //! ## Finding the faces to restore
 //!
-//! A [`FaceRecovery`] restores the faces it carries and detects none itself. A chain carrying one is passed through
-//! [`Opai::find_chain_faces`] first: it runs the face-recovery detection once over the picture, hands each recovery
-//! the faces a selection keeps ([`default_face_selection`] keeps the [`restorable`](Face::restorable) ones), and
-//! reports what it found as [`ChainFaces`]. A failed detection restores nobody and leaves the rest of the chain to
-//! run; only a stop ends it. [`fill_chain_faces`] is the same rules without the detection.
+//! A [`FaceRecovery`] restores the faces it carries and detects none itself. Set [`ProcessOptions::faces`] to
+//! [`FaceSelection::Detect`] and [`Opai::process`] finds them first: it runs the face-recovery detection once over the
+//! picture, hands each recovery the faces a selection keeps ([`FaceSelection::restorable`] keeps the
+//! [`restorable`](Face::restorable) ones), and reports what it found as [`Enhanced::faces`]. A failed detection
+//! restores nobody and leaves the rest of the chain to run; only a stop ends it. [`fill_chain_faces`] is the same rules
+//! without the detection.
 //!
-//! The detection and the chain are two runs, each reporting its own `0..1`. [`Handover`] reports them on one bar that
-//! moves forward once: every operation owns an equal `1 / N` of it, the detection takes the first fifth of the first
-//! operation's slot (none, when the store already knew the faces), and the detection's reports count as the face
-//! recovery's step. A face recovery and an upscale are `0..0.5` and `0.5..1`, detection included.
+//! The detection and the chain report on one bar that moves forward once: every operation owns an equal `1 / N` of it,
+//! and the detection takes the first fifth of the first operation's slot (none, when the store already knew the
+//! faces). A face recovery and an upscale are `0..0.5` and `0.5..1`, detection included.
 //!
 //! ```no_run
 //! # async fn run(opai: &opai::Opai, picture: &opai::Picture, chain: Vec<opai::Operation>,
 //! #     on_progress: opai::OnInference) -> Result<(), opai::InferenceError> {
-//! use opai::{ExecuteOptions, FacedChain, Handover, ProcessOptions, default_face_selection};
+//! use opai::{ChainFaces, FaceSelection, ProcessOptions};
 //!
-//! let handover = Handover::new(&on_progress, &chain);
+//! let options =
+//!     ProcessOptions { on_progress: Some(on_progress), faces: FaceSelection::restorable(), ..Default::default() };
+//! let enhanced = opai.process(picture, &chain, Some(options)).await?;
 //!
-//! let detection = ExecuteOptions { on_progress: Some(handover.detection()), ..Default::default() };
-//! let FacedChain { operations, .. } =
-//!     opai.find_chain_faces(picture, chain, default_face_selection, Some(detection)).await?;
-//!
-//! // Asked for after the detection has ended, when whether it reported anything is known.
-//! let options = ProcessOptions { on_progress: Some(handover.chain()), ..Default::default() };
-//! let enhanced = opai.process(picture, &operations, Some(options)).await?;
+//! if let ChainFaces::Failed(error) = &enhanced.faces {
+//!     eprintln!("no faces were restored: {error}");
+//! }
 //! # Ok(())
 //! # }
 //! ```
@@ -215,8 +213,9 @@ pub use image::{EncodeOptions, ImageError, ImageFormat, ImageInfo, ImageIoError,
 /// The inference vocabulary needed to ask for a run or read its report. The module stays private.
 pub use inference::depth::OutputDepth;
 pub use inference::execute::{ExecuteOptions, Executed};
-pub use inference::faces::{ChainFaces, FacedChain, default_face_selection, fill_chain_faces};
-pub use inference::handover::Handover;
+pub use inference::faces::{
+    ChainFaces, FaceSelection, FacedChain, SelectFaces, default_face_selection, fill_chain_faces,
+};
 pub use inference::process::{Enhanced, ProcessOptions, ProviderReport, ProviderVerdict};
 pub use inference::progress::{InferenceProgress, OnInference, Stage};
 pub use libpath::prepare_library_path;
@@ -808,60 +807,6 @@ impl Opai {
         options: Option<ExecuteOptions>,
     ) -> Result<Executed<Faces>, InferenceError> {
         inference::execute::execute(self, self.inner.cache.handle().as_ref(), source, analysis, options).await
-    }
-
-    /// Finds the faces `operations`' face recoveries restore in `source`, and answers the chain with each recovery
-    /// handed the faces `select` keeps.
-    ///
-    /// A face recovery restores the faces it is given and finds none of its own, so this is the step a front end runs
-    /// between building a chain and [`process`](Self::process)ing it. For a chain with no face recovery it detects
-    /// nothing and answers [`ChainFaces::NotAsked`]. Otherwise it runs [`Detection::for_face_recovery`] through
-    /// [`execute`](Self::execute) **once**, however many recoveries the chain carries, and fills the chain as
-    /// [`fill_chain_faces`] does. Because it is the same detection the GUI's picker and Autopilot run, a photograph
-    /// either already examined is served from the run store.
-    ///
-    /// `select(index, face)` decides per recovery, `index` being its position in `operations` as passed. A caller with
-    /// no per-face choices passes [`default_face_selection`]. The answer keeps the order `operations` was passed in.
-    ///
-    /// `options` is handed to the detection unchanged: its provider, progress and stop are the caller's.
-    ///
-    /// The faces are in `source`'s coordinates, so the chain must be run over that same picture.
-    ///
-    /// ```no_run
-    /// # async fn run(opai: &opai::Opai, picture: &opai::Picture, chain: Vec<opai::Operation>)
-    /// #     -> Result<(), opai::InferenceError> {
-    /// use opai::{ChainFaces, FacedChain, default_face_selection};
-    ///
-    /// let FacedChain { operations, faces } =
-    ///     opai.find_chain_faces(picture, chain, default_face_selection, None).await?;
-    ///
-    /// if let ChainFaces::Failed(error) = &faces {
-    ///     eprintln!("no faces will be restored: {error}");
-    /// }
-    ///
-    /// let enhanced = opai.process(picture, &operations, None).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// Only [`InferenceError::Cancelled`], where the detection was stopped. **A detection that fails is not an
-    /// error**: every recovery restores nobody, the rest of the chain is unchanged, and the failure is reported as
-    /// [`ChainFaces::Failed`].
-    pub async fn find_chain_faces(
-        &self,
-        source: &Picture,
-        operations: Vec<Operation>,
-        select: impl Fn(usize, &Face) -> bool,
-        options: Option<ExecuteOptions>,
-    ) -> Result<FacedChain, InferenceError> {
-        inference::faces::find_chain_faces(operations, select, options, |options| async move {
-            self.execute(source, &Detection::for_face_recovery(), options)
-                .await
-                .map(|executed| executed.value)
-        })
-        .await
     }
 
     /// Analyses `source` and returns the enhancements that photograph calls for.

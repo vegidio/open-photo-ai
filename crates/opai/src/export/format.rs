@@ -8,7 +8,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::image::{EncodeOptions, ImageFormat};
+use crate::image::ImageFormat;
 
 /// A format an export is written in, spelled as the front ends spell it.
 ///
@@ -63,9 +63,9 @@ impl ExportFormat {
         }
     }
 
-    /// The format a Preserve export writes a source with `extension` back as, keeping that extension, or `None` where
-    /// no format does. `extension` is compared as given, so the caller lowercases it.
-    pub(crate) fn preserving(extension: &str) -> Option<Self> {
+    /// The format a file with `extension` is written in — the one a Preserve export writes it back as, keeping that
+    /// extension — or `None` where no format is. `extension` is compared as given, so the caller lowercases it.
+    pub fn preserving(extension: &str) -> Option<Self> {
         Self::ALL
             .into_iter()
             .find(|format| crate::image::extensions_of((*format).into()).contains(&extension))
@@ -209,15 +209,10 @@ pub struct ExportFormats {
     pub fallback: ExportFormat,
 }
 
-/// The quality `format` is written at where none is named, or `None` for a format that takes none: the library's
-/// [`crate::image::default_quality`], which every front end writes with.
-fn default_quality(format: ExportFormat) -> Option<u8> {
-    crate::image::default_quality(format.into())
-}
-
-/// The quality range `format` takes, starting at its [`default_quality`], or `None` for a lossless format.
+/// The quality range `format` takes, starting at the library's [`crate::image::default_quality`], which every front
+/// end writes with, or `None` for a lossless format.
 fn quality_range(format: ExportFormat) -> Option<QualityRange> {
-    default_quality(format).map(|default| QualityRange {
+    crate::image::default_quality(format.into()).map(|default| QualityRange {
         min: crate::image::MIN_QUALITY,
         max: crate::image::MAX_QUALITY,
         default,
@@ -243,19 +238,16 @@ pub fn capabilities() -> ExportFormats {
     }
 }
 
-/// The encoder settings for `format` at `quality`: the library's
-/// [`recommended_encode_options`](crate::image::recommended_encode_options), so an export writes each format exactly
-/// as every other front end does.
-///
-/// A lossy format sent no quality is written at its published default. A quality outside `1..=100` is brought inside
-/// it rather than refused.
-pub fn encode_options(format: ExportFormat, quality: Option<f64>) -> EncodeOptions {
-    crate::image::recommended_encode_options(format.into(), quality)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::image::EncodeOptions;
+
+    /// The encoder settings an export in `format` at `quality` is written with.
+    fn encode_options(format: ExportFormat, quality: Option<f64>) -> EncodeOptions {
+        crate::image::recommended_encode_options(format.into(), quality)
+    }
 
     const EVERY: [ExportFormat; 8] = [
         ExportFormat::Bmp,

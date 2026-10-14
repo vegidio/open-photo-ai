@@ -1,6 +1,6 @@
 //! Finding the faces in an open photograph, so a face recovery can be run over them.
 //!
-//! Two ways in. A chain carrying a face recovery gets its faces through [`Opai::find_chain_faces`]: `enhance` and
+//! Two ways in. A chain carrying a face recovery gets its faces through [`opai::ProcessOptions::faces`]: `enhance` and
 //! `export` detect inside the run they were asked for, with one progress stream, and hand the recovery the faces the
 //! user's [`FaceChoice`] keeps — so the window never has to detect first and enhance second. What this module keeps of
 //! that is the choice itself, keyed by [`face_key`]. [`detect_faces`] is the picker's: the window holds the faces too
@@ -390,8 +390,6 @@ mod tests {
                         subject: Arc::clone(&subject),
                         stage: installing(&subject, fraction),
                         operation_fraction: fraction,
-                        operation_index: 0,
-                        operation_count: 1,
                         // A transfer occupies only the head of the run's own range, as it does for a chain.
                         chain_fraction: fraction / 10.0,
                     });
@@ -404,8 +402,6 @@ mod tests {
                         subject: Arc::clone(&subject),
                         stage: opai::Stage::Running,
                         operation_fraction: fraction,
-                        operation_index: 0,
-                        operation_count: 1,
                         chain_fraction: 0.1 + fraction * 0.9,
                     });
                 }

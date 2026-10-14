@@ -1,9 +1,10 @@
 //! Finding the faces a chain's face recoveries restore: one detection over the chain's input, handed out per recovery
 //! by a caller's selection.
 //!
-//! A face recovery restores the faces it is given and finds none of its own, so a front end running one has to detect
-//! first. This is that step, once, for every front end: [`fill_chain_faces`] holds every decision and
-//! [`Opai::find_chain_faces`](crate::Opai::find_chain_faces) adds only the detection.
+//! A face recovery restores the faces it is given and finds none of its own, so a chain carrying one has to detect
+//! first. This is that step, once, for every front end: [`fill_chain_faces`] holds every decision, and
+//! [`Opai::process`](crate::Opai::process) adds the detection when
+//! [`ProcessOptions::faces`](crate::ProcessOptions::faces) asks for one.
 //!
 //! ```text
 //!   chain has no face recovery?  --> chain unchanged, NotAsked, nothing detected
@@ -19,6 +20,7 @@
 //! chain does not go on.
 
 use std::future::Future;
+use std::sync::Arc;
 
 use crate::error::InferenceError;
 use crate::inference::execute::ExecuteOptions;
@@ -46,6 +48,40 @@ pub struct FacedChain {
     pub faces: ChainFaces,
 }
 
+/// Which faces a face recovery decides per face: `select(index, face)`, `index` being the recovery's position in the
+/// chain as passed in, before [`Opai::process`](crate::Opai::process) puts it into apply order.
+pub type SelectFaces = Arc<dyn Fn(usize, &Face) -> bool + Send + Sync>;
+
+/// Where a chain's face recoveries get their faces from.
+#[derive(Clone, Default)]
+pub enum FaceSelection {
+    /// From the operations themselves, as built: nothing is detected and the result reports
+    /// [`ChainFaces::NotAsked`]. For a caller that found the faces another way.
+    #[default]
+    AsGiven,
+    /// From one detection over the chain's input, run before the chain when it carries a face recovery, each recovery
+    /// handed the faces the selection keeps — as [`fill_chain_faces`] does it. A failed detection restores nobody and
+    /// runs the rest of the chain; only a stop ends it.
+    Detect(SelectFaces),
+}
+
+impl FaceSelection {
+    /// Detect, and keep the faces [`default_face_selection`] keeps: the selection of a caller with no per-face choices.
+    pub fn restorable() -> Self {
+        Self::Detect(Arc::new(default_face_selection))
+    }
+}
+
+impl std::fmt::Debug for FaceSelection {
+    /// Written out rather than derived: a selection has nothing to print.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AsGiven => f.write_str("AsGiven"),
+            Self::Detect(_) => f.write_str("Detect(..)"),
+        }
+    }
+}
+
 /// The selection a caller with no per-face choices passes: keep exactly the faces [`Face::restorable`] keeps.
 ///
 /// The rule the GUI applies to a face nobody has chosen about and that Autopilot suggests face recovery by, so a front
@@ -56,8 +92,8 @@ pub fn default_face_selection(_index: usize, face: &Face) -> bool {
 
 /// `operations` with every face recovery handed the faces `select` keeps among those `detected` found.
 ///
-/// The pure half of [`Opai::find_chain_faces`](crate::Opai::find_chain_faces), public so a front end can answer its
-/// own test seams by the same rules without a detector on disk.
+/// The pure half of [`FaceSelection::Detect`], public so a front end can answer its own test seams by the same rules
+/// without a detector on disk.
 ///
 /// `select(index, face)` decides per recovery, `index` being the recovery's position in `operations` as passed in,
 /// before [`Opai::process`](crate::Opai::process) puts the chain into apply order. Kept faces stay in detector order:
@@ -107,8 +143,8 @@ pub fn fill_chain_faces(
     Ok(FacedChain { operations, faces: ChainFaces::Found(found) })
 }
 
-/// [`Opai::find_chain_faces`](crate::Opai::find_chain_faces) over any detection: `detect` is called at most once, with
-/// `options`, and only for a chain carrying a face recovery.
+/// The faces for `operations`, found by any detection: `detect` is called at most once, with `options`, and only for a
+/// chain carrying a face recovery.
 pub(crate) async fn find_chain_faces<D, F>(
     operations: Vec<Operation>,
     select: impl Fn(usize, &Face) -> bool,

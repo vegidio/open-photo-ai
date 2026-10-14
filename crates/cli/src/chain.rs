@@ -1,18 +1,14 @@
 //! The flags, or what autopilot chose, turned into the chain the library runs.
 //!
-//! The terminal's own vocabulary — `hd`, `sd`, `--up`, `--dn-str` and the rest — mapped onto `opai`'s constructors, in
-//! the same way the GUI maps its window's request onto them. The scale ladder is the library's
-//! [`opai::suggested_scale`], and a parameter's default is the one the library's catalogue publishes, neither restated.
+//! The terminal's own vocabulary — `hd`, `sd`, `--up`, `--dn-str` and the rest — mapped onto the rows of
+//! the library's catalogue, the same way the GUI and perf build theirs. The scale ladder is the library's
+//! [`opai::suggested_scale`], and a model's builds and parameter defaults are the ones its catalogue row publishes,
+//! none restated.
 
-use opai::{
-    Bias, ColorBalance, Colorization, Denoise, FaceRecovery, Faces, Family, Fidelity, FloatPrecision, LightAdjustment,
-    Operation, OsakaPrecision, ParameterKind, Scale, Sharpen, Strength, Suggestion, Upscale,
-};
+use opai::{Bias, Operation, ParameterKind, ParameterValues, Strength, Subject, Suggestion, VariantEntry};
 
-use crate::args::{
-    Args, BalanceModel, ColorizationModel, DenoiseModel, FaceModel, LightModel, Quality, SharpenModel, UpscaleModel,
-};
-use crate::autopilot::AutopilotModels;
+use crate::args::{Quality, Selection};
+use crate::autopilot::{AutopilotModels, FamilyModel};
 
 /// What a run will do, and what the user should be told about it before it starts.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,48 +20,7 @@ pub struct Plan {
     pub notes: Vec<String>,
 }
 
-/// Which enhancement runs with which model and parameters: what [`plan`] reads, whether the flags chose it or
-/// autopilot did.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Selection {
-    pub denoise: Option<DenoiseModel>,
-    pub face_recovery: Option<FaceModel>,
-    pub colorization: Option<ColorizationModel>,
-    pub light_adjustment: Option<LightModel>,
-    pub color_balance: Option<BalanceModel>,
-    pub sharpen: Option<SharpenModel>,
-    pub upscale: Option<UpscaleModel>,
-    /// The denoise strength as a percentage, or the catalogue's default where `None`.
-    pub denoise_strength: Option<u16>,
-    /// The sharpen strength as a percentage, or the catalogue's default where `None`.
-    pub sharpen_strength: Option<u16>,
-    /// The light adjustment bias as a percentage, or the catalogue's default where `None`.
-    pub light_bias: Option<i16>,
-    /// The colour balance bias as a percentage, or the catalogue's default where `None`.
-    pub balance_bias: Option<i16>,
-    /// The upscale factor, or the one the photograph needs where `None`.
-    pub scale: Option<Scale>,
-}
-
 impl Selection {
-    /// What the enhancement flags and their parameter flags ask for.
-    pub const fn from_args(args: &Args) -> Self {
-        Self {
-            denoise: args.denoise,
-            face_recovery: args.face_recovery,
-            colorization: args.colorization,
-            light_adjustment: args.light_adjustment,
-            color_balance: args.color_balance,
-            sharpen: args.sharpen,
-            upscale: args.upscale,
-            denoise_strength: args.denoise_strength,
-            sharpen_strength: args.sharpen_strength,
-            light_bias: args.light_bias,
-            balance_bias: args.balance_bias,
-            scale: args.scale,
-        }
-    }
-
     /// What autopilot chose for one photograph: each family in `suggestions` with its model from `models`, at the
     /// catalogue's default parameters, and an upscale at the scale the analysis read off the photograph.
     pub fn from_suggestions(suggestions: &[Suggestion], models: &AutopilotModels) -> Self {
@@ -97,66 +52,37 @@ impl Selection {
 pub fn plan(selection: &Selection, quality: Quality, width: u32, height: u32) -> Plan {
     let mut operations = Vec::new();
     let mut notes = Vec::new();
-    let precision = float_precision(quality);
 
     if let Some(model) = selection.denoise {
-        let strength = strength(selection.denoise_strength, Family::Denoise);
-        operations.push(match model {
-            DenoiseModel::Stockholm => Denoise::stockholm(precision, strength),
-            DenoiseModel::Gothenburg => Denoise::gothenburg(precision, strength),
-            DenoiseModel::Malmo => Denoise::malmo(precision, strength),
-        });
+        operations.push(build(model, quality, |values| set(values, Strength::NAME, selection.denoise_strength)));
     }
 
     if let Some(model) = selection.face_recovery {
-        // Maximum fidelity: as close to the original face as the model goes, which is the library's own default.
-        operations.push(match model {
-            FaceModel::Athens => FaceRecovery::athens(precision, Faces::empty(), Fidelity::MAXIMUM),
-            FaceModel::Santorini => FaceRecovery::santorini(precision, Faces::empty()),
-        });
+        // Maximum fidelity: as close to the original face as the model goes, which is what the catalogue publishes.
+        operations.push(build(model, quality, |_| {}));
     }
 
     if let Some(model) = selection.colorization {
-        operations.push(match model {
-            ColorizationModel::Delhi => Colorization::delhi(precision),
-            ColorizationModel::Mumbai => Colorization::mumbai(precision),
-            ColorizationModel::Jaipur => Colorization::jaipur(precision),
-        });
+        operations.push(build(model, quality, |_| {}));
     }
 
     if let Some(model) = selection.light_adjustment {
-        let bias = bias(selection.light_bias, Family::LightAdjustment);
-        operations.push(match model {
-            LightModel::Paris => LightAdjustment::paris(precision, bias),
-            LightModel::Lyon => LightAdjustment::lyon(precision, bias),
-        });
+        operations.push(build(model, quality, |values| set(values, Bias::NAME, selection.light_bias)));
     }
 
     if let Some(model) = selection.color_balance {
-        let bias = bias(selection.balance_bias, Family::ColorBalance);
-        operations.push(match model {
-            BalanceModel::Rio => ColorBalance::rio(precision, bias),
-            BalanceModel::SaoPaulo => ColorBalance::saopaulo(precision, bias),
-        });
+        operations.push(build(model, quality, |values| set(values, Bias::NAME, selection.balance_bias)));
     }
 
     if let Some(model) = selection.sharpen {
-        let strength = strength(selection.sharpen_strength, Family::Sharpen);
-        operations.push(match model {
-            SharpenModel::Moscow => Sharpen::moscow(precision, strength),
-            SharpenModel::Petersburg => Sharpen::stpetersburg(precision, strength),
-            SharpenModel::Novgorod => Sharpen::novgorod(precision, strength),
-        });
+        operations.push(build(model, quality, |values| set(values, Strength::NAME, selection.sharpen_strength)));
     }
 
     if let Some(model) = selection.upscale {
         match selection.scale.or_else(|| opai::suggested_scale(width, height)) {
-            Some(scale) => operations.push(match model {
-                UpscaleModel::Kyoto => Upscale::kyoto(precision, scale),
-                UpscaleModel::Osaka => Upscale::osaka(osaka_precision(quality), scale),
-                UpscaleModel::Tokyo => Upscale::tokyo(precision, scale),
-                UpscaleModel::Saitama => Upscale::saitama(precision, scale),
-            }),
+            Some(scale) => {
+                operations.push(build(model, quality, |values| *values = std::mem::take(values).with_scale(scale)));
+            }
             None => notes.push(format!(
                 "the upscale was skipped: the photograph is already large enough ({width}x{height}); \
                  pass --scale to upscale it anyway"
@@ -167,60 +93,48 @@ pub fn plan(selection: &Selection, quality: Quality, width: u32, height: u32) ->
     Plan { operations, notes }
 }
 
-/// `percent` of the model's own effect as a [`Strength`], or the catalogue's default for `family` where none was given.
-fn strength(percent: Option<u16>, family: Family) -> Strength {
-    let value = percent.map_or_else(|| published_default(family), |percent| f64::from(percent) / 100.0);
+/// The operation `model` names at `quality`, built by the library's catalogue: at the parameters that model's row
+/// publishes as defaults, then whatever `overrides` sets.
+///
+/// `quality` picks a build by its position in the row's precisions, so a model published at other precisions than
+/// FP32 and FP16 — Osaka, at FP16 and INT8 — needs no case of its own.
+fn build<M: FamilyModel>(model: M, quality: Quality, overrides: impl FnOnce(&mut ParameterValues)) -> Operation {
+    let name = model.to_possible_value().expect("no model is skipped");
+    let variant =
+        VariantEntry::published(M::FAMILY, name.get_name()).expect("every model the command line names is published");
+    let precision = variant.precisions.get(quality.position()).unwrap_or(&variant.precisions[0]);
 
-    // Every whole percentage the parser accepts is a whole number of the library's 0.001 steps, inside its range.
-    Strength::new(value).expect("an accepted strength is in the library's range")
-}
+    let mut values = ParameterValues::new();
+    for parameter in variant.parameters {
+        if let ParameterKind::Range { default, .. } = parameter.kind {
+            values.set(parameter.name, default).expect("a published parameter is known by its name");
+        }
+    }
+    overrides(&mut values);
 
-/// `percent` of the model's own effect as a [`Bias`], or the catalogue's default for `family` where none was given.
-fn bias(percent: Option<i16>, family: Family) -> Bias {
-    let value = percent.map_or_else(|| published_default(family), |percent| f64::from(percent) / 100.0);
-
-    // Every whole percentage the parser accepts is a whole number of the library's 0.001 steps, inside its range.
-    Bias::new(value).expect("an accepted bias is in the library's range")
-}
-
-/// The value the library's catalogue starts a new `family` operation at: the default of the one range parameter every
-/// variant of that family takes.
-fn published_default(family: Family) -> f64 {
-    let entry = opai::catalogue()
-        .iter()
-        .find(|entry| entry.family == family)
-        .expect("every family is published");
-
-    entry.variants[0]
-        .parameters
-        .iter()
-        .find_map(|parameter| match parameter.kind {
-            ParameterKind::Range { default, .. } => Some(default),
-            ParameterKind::Faces => None,
-        })
-        .expect("the family takes a range parameter")
-}
-
-/// The build `quality` names for every model published in FP32 and FP16.
-const fn float_precision(quality: Quality) -> FloatPrecision {
-    match quality {
-        Quality::Hd => FloatPrecision::Fp32,
-        Quality::Sd => FloatPrecision::Fp16,
+    match variant.build(*precision, &values) {
+        Ok(Subject::Enhancement(operation)) => operation,
+        other => panic!("{:?} {} did not build an enhancement: {other:?}", M::FAMILY, variant.codename),
     }
 }
 
-/// The build `quality` names for Osaka, which has no FP32 build: its two are FP16 and INT8.
-const fn osaka_precision(quality: Quality) -> OsakaPrecision {
-    match quality {
-        Quality::Hd => OsakaPrecision::Fp16,
-        Quality::Sd => OsakaPrecision::Int8,
+/// Sets `name` to `percent` of the model's own effect, where one was given.
+fn set<T: Into<f64>>(values: &mut ParameterValues, name: &str, percent: Option<T>) {
+    if let Some(percent) = percent {
+        // Every whole percentage the parser accepts is a whole number of the library's 0.001 steps, inside its range.
+        values.set(name, percent.into() / 100.0).expect("a published parameter is known by its name");
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use opai::{
+        ColorBalance, Colorization, Denoise, FaceRecovery, Faces, Family, Fidelity, FloatPrecision, LightAdjustment,
+        OsakaPrecision, Scale, Sharpen, Upscale,
+    };
+
     use super::*;
-    use crate::args::parse_from;
+    use crate::args::{Args, parse_from};
 
     fn args(line: &str) -> Args {
         parse_from(line.split_whitespace()).unwrap_or_else(|error| panic!("{line}: {error}"))
@@ -229,7 +143,7 @@ mod tests {
     /// The chain the command line `line` asks for over a `width` x `height` photograph.
     fn plan(line: &str, width: u32, height: u32) -> Plan {
         let args = args(line);
-        super::plan(&Selection::from_args(&args), args.quality, width, height)
+        super::plan(&args.selection, args.quality, width, height)
     }
 
     fn scale(factor: f64) -> Scale {

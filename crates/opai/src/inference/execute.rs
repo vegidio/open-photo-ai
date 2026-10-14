@@ -718,25 +718,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_single_run_reports_the_first_of_one_operation_on_every_stage() {
-        let mut backend = Fake::new();
-        backend.installs = true;
-
-        let (reports, options) = recording();
-        drive(&backend, FakePipeline::shared(&backend.log, &[Precision::Fp32], Behaviour::Succeeds), options)
-            .await
-            .expect("a run");
-
-        let reports = lock(&reports);
-        assert!(reports.iter().any(|report| matches!(report.stage, Stage::Installing(_))));
-        assert!(reports.iter().any(|report| matches!(report.stage, Stage::Running)));
-        assert!(
-            reports.iter().all(|report| (report.operation_index, report.operation_count) == (0, 1)),
-            "a single run reported another position"
-        );
-    }
-
-    #[tokio::test]
     async fn a_model_already_on_disk_does_not_give_up_the_head_of_its_range() {
         // The split is decided by whether an install actually happened rather than by whether one was possible, so a
         // model already on disk runs over the whole range instead of starting a fifth of the way along.

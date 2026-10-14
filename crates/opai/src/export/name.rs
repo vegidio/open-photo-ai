@@ -10,10 +10,14 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use serde::Deserialize;
+
 use super::format::{ExportFormat, FormatChoice};
 
 /// What decides the name of each file written: the affixes around the source's name, and the format choice.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Deserializable in the shape a front end's export settings store it, so one can be read straight off the wire.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Naming {
     /// Written before the source's name.
     pub prefix: String,

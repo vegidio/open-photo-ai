@@ -7,11 +7,9 @@
 //! anything else               --> Directory, refused if a non-directory is there; created on the first write
 //! ```
 
-use std::future::Future;
 use std::path::{Path, PathBuf};
 
-use opai::export::{self, FormatChoice, Naming};
-use opai::image::{self, recommended_encode_options};
+use opai::export::{self, FormatChoice, Naming, WriteOptions};
 use opai::{ImageFormat, Picture};
 
 use crate::args::Args;
@@ -123,8 +121,8 @@ pub fn destination(target: &Target, source: &Source) -> (PathBuf, ImageFormat) {
 ///
 /// # Errors
 ///
-/// [`CliError::Claim`] naming `destination` where its directory cannot be created or no name can be held or kept, and
-/// [`CliError::Write`] where the encoder fails.
+/// [`CliError::Write`], naming `destination` where its directory cannot be created or no name can be held or kept,
+/// or the output path where the encoder fails.
 pub async fn write(
     target: &Target,
     picture: &Picture,
@@ -132,43 +130,12 @@ pub async fn write(
     format: ImageFormat,
     overwrite: bool,
 ) -> Result<PathBuf, CliError> {
-    let pixels = picture.shared_pixels();
-    let options = recommended_encode_options(format, None);
+    let options = WriteOptions { quality: None, overwrite, create_parent: matches!(target, Target::Directory { .. }) };
 
-    write_with(matches!(target, Target::Directory { .. }), destination, overwrite, async |path: PathBuf| {
-        image::save(pixels, path, format, Some(options))
-            .await
-            .map(drop)
-            .map_err(|source| CliError::Write(Box::new(source)))
-    })
-    .await
-}
-
-/// [`write()`] with the encoding left to `save`, which is handed the path to write into.
-async fn write_with<F>(
-    create_parent: bool,
-    destination: &Path,
-    overwrite: bool,
-    save: impl FnOnce(PathBuf) -> F,
-) -> Result<PathBuf, CliError>
-where
-    F: Future<Output = Result<(), CliError>>,
-{
-    let unwritable = |source| CliError::Claim { path: destination.to_path_buf(), source };
-
-    if create_parent && let Some(parent) = destination.parent().filter(|parent| !parent.as_os_str().is_empty()) {
-        std::fs::create_dir_all(parent).map_err(unwritable)?;
-    }
-
-    // Blocking and called directly: it creates one file, and the runtime has nothing else to serve meanwhile. Taken
-    // after enhancing, so no empty placeholder sits on disk through the inference.
-    let claim = export::claim(destination, overwrite).map_err(unwritable)?;
-
-    // A failure drops the claim, which gives its name back.
-    save(claim.path().to_path_buf()).await?;
-
-    // Overwriting, this is where the destination is replaced, and not before.
-    claim.commit().map_err(unwritable)
+    export::write(picture, destination, format, options)
+        .await
+        .map(|written| written.path)
+        .map_err(|error| CliError::Write(Box::new(error)))
 }
 
 #[cfg(test)]
@@ -176,6 +143,7 @@ mod tests {
     use super::*;
     use crate::args::parse_from;
     use opai::export::ExportFormat;
+    use opai::image;
 
     fn args(line: &str) -> Args {
         parse_from(line.split_whitespace()).expect("parses")
@@ -380,26 +348,6 @@ mod tests {
 
         assert_eq!(written, destination);
         assert!(image::probe_blocking(&written).is_ok());
-    }
-
-    #[tokio::test]
-    async fn a_failed_save_leaves_nothing_behind() {
-        for overwrite in [false, true] {
-            let dir = tempfile::tempdir().expect("a temporary directory");
-            let out = dir.path().join("out.png");
-            std::fs::write(&out, "earlier").expect("written");
-
-            let error = write_with(false, &out, overwrite, async |path: PathBuf| {
-                std::fs::write(&path, "half").expect("the claim is writable");
-                Err(CliError::Usage("the encoder failed".into()))
-            })
-            .await
-            .expect_err("the save failed");
-
-            assert_eq!(error.to_string(), "the encoder failed");
-            assert_eq!(std::fs::read(&out).expect("kept"), b"earlier", "overwrite: {overwrite}");
-            assert_eq!(names(dir.path()), ["out.png"], "overwrite: {overwrite}");
-        }
     }
 
     #[tokio::test]

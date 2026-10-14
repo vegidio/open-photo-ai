@@ -1,8 +1,8 @@
 //! Running an ordered chain of operations over one image: what is refused, what each one runs, and in what order.
 //!
 //! [`fn@plan`] decides what a chain will do and refuses what it cannot serve; [`run`] carries it out;
-//! [`identity_after`] names what came out. [`process`] is the three of them together and is the whole body of
-//! [`Opai::process`](crate::Opai::process).
+//! [`identity_after`] names what came out. [`process`] is the three of them together, after finding the faces a chain's
+//! face recoveries restore where it was asked to, and is the whole body of [`Opai::process`](crate::Opai::process).
 
 // What a run leaves in the log. `process` brackets the run with a pair of records at `info` — what it was asked to
 // apply, the source's identity and the resolved depth on the way in; the elapsed time and whether it succeeded on the
@@ -31,12 +31,17 @@ use image::DynamicImage;
 use rust_sak::memo::Memo;
 use tokio_util::sync::CancellationToken;
 
+use std::future::Future;
+
 use super::acquire;
+use super::execute::{ExecuteOptions, execute};
+use super::faces::{ChainFaces, FaceSelection, FacedChain, find_chain_faces};
+use super::handover::Handover;
 use super::progress::{ChainProgress, OnInference};
 use crate::cache::RunCache;
 use crate::error::InferenceError;
 use crate::image::Picture;
-use crate::models::Operation;
+use crate::models::{Detection, Faces, Operation};
 use crate::pipeline::{Backend, Shared};
 use crate::providers::ExecutionProvider;
 use crate::sessions::SessionHandle;
@@ -89,12 +94,61 @@ pub(crate) async fn process<B: Backend>(
     operations: &[Operation],
     options: Option<ProcessOptions>,
 ) -> Result<Enhanced, InferenceError> {
-    let options = options.unwrap_or_default();
+    process_with(backend, cache, source, operations, options, |options| async move {
+        execute(backend, cache, source, &Detection::for_face_recovery(), options)
+            .await
+            .map(|executed| executed.value)
+    })
+    .await
+}
+
+/// [`process`] over any face detection: `detect` is called at most once, and only where
+/// [`ProcessOptions::faces`] asks for one and the chain carries a face recovery.
+pub(crate) async fn process_with<B, D, F>(
+    backend: &B,
+    cache: Option<&Memo>,
+    source: &Picture,
+    operations: &[Operation],
+    options: Option<ProcessOptions>,
+    detect: D,
+) -> Result<Enhanced, InferenceError>
+where
+    B: Backend,
+    D: FnOnce(Option<ExecuteOptions>) -> F,
+    F: Future<Output = Result<Faces, InferenceError>>,
+{
+    let mut options = options.unwrap_or_default();
+
+    // Before the plan, so the faces each recovery carries are part of every cache key the run derives. A stop here
+    // ends the call before the run's opening record, as a stop before `process` would.
+    let (operations, faces) = match std::mem::take(&mut options.faces) {
+        FaceSelection::AsGiven => (std::borrow::Cow::Borrowed(operations), ChainFaces::NotAsked),
+        FaceSelection::Detect(select) => {
+            let handover = options.on_progress.as_ref().map(|on_progress| Handover::new(on_progress, operations));
+            let detection = ExecuteOptions {
+                provider: options.provider,
+                on_progress: handover.as_ref().map(Handover::detection),
+                cancel: options.cancel.clone(),
+                cache: options.cache,
+            };
+
+            let FacedChain { operations, faces } =
+                find_chain_faces(operations.to_vec(), |index, face| select(index, face), Some(detection), detect)
+                    .await?;
+
+            // Asked for once the detection has ended, when whether it reported anything is known.
+            if let Some(handover) = &handover {
+                options.on_progress = Some(handover.chain());
+            }
+
+            (std::borrow::Cow::Owned(operations), faces)
+        }
+    };
 
     // Before everything else — the plan, the identity, every cache key and every report — so all of them describe the
     // chain that actually runs. A chain already in order is borrowed as it is, so its cache keys are the ones it has
     // always had.
-    let operations = &*in_apply_order(operations);
+    let operations = &*in_apply_order(&operations);
 
     // Resolved **here**, once, and handed to the run, to the identity composition and to every cache key the run
     // derives. Resolving it twice — once for what runs and once for what the result is named — is two answers to one
@@ -210,7 +264,7 @@ pub(crate) async fn process<B: Backend>(
     // sometimes busy, for no correctness gain at all.
     let picture = Picture::new(source.path(), pixels, identity_after(source.identity(), operations, depth));
 
-    Ok(Enhanced { picture, providers })
+    Ok(Enhanced { picture, providers, faces })
 }
 
 /// The operations of a run as one field value, comma-separated: two steps of one chain read as `<tag>,<tag>`.

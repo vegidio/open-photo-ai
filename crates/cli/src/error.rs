@@ -13,6 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
+use opai::export::WriteError;
 use opai::{ImageIoError, InferenceError, InitError};
 
 /// Why a run, or one image of it, ended without writing its output.
@@ -40,23 +41,13 @@ pub enum CliError {
     #[error(transparent)]
     Load(Box<ImageIoError>),
 
-    /// The result could not be written. The library's message already names the output path, so it is shown as it
-    /// is. Boxed, because a codec's error would otherwise make every result in the run as large as itself.
+    /// The result could not be written. The library's message names the destination, so it is shown as it is. Boxed,
+    /// because a codec's error would otherwise make every result in the run as large as itself.
     #[error(transparent)]
-    Write(Box<ImageIoError>),
+    Write(Box<WriteError>),
 
-    /// The destination's directory could not be created, or its name held or kept. The filesystem's error names no
-    /// path, so the destination asked for is named here.
-    #[error("cannot write {}: {source}", path.display())]
-    Claim {
-        /// The destination asked for.
-        path: PathBuf,
-        /// What the filesystem refused.
-        source: std::io::Error,
-    },
-
-    /// One image of the run failed. The message names the image once: the cause's alone where it already does, as a
-    /// failed decode does, and otherwise prefixed with it, since an inference failure names nothing and a write names
+    /// One image of the run failed. The message names the image once: the cause's alone for a failed decode, which
+    /// already names it, and otherwise prefixed with it, since an inference failure names nothing and a write names
     /// the destination.
     #[error("{}", image_reason(path, source))]
     Image {
@@ -88,10 +79,10 @@ impl From<InferenceError> for CliError {
 
 /// [`CliError::Image`]'s message.
 fn image_reason(path: &Path, source: &CliError) -> String {
-    let message = source.to_string();
-    let image = path.display().to_string();
-
-    if message.contains(&image) { message } else { format!("could not enhance {image}: {message}") }
+    match source {
+        CliError::Load(_) => source.to_string(),
+        _ => format!("could not enhance {}: {source}", path.display()),
+    }
 }
 
 impl CliError {
@@ -101,12 +92,7 @@ impl CliError {
             Self::Image { source, .. } => source.exit_code(),
             Self::Usage(_) => 2,
             Self::Cancelled => 130,
-            Self::Init(_)
-            | Self::Inference(_)
-            | Self::Load(_)
-            | Self::Write(_)
-            | Self::Claim { .. }
-            | Self::Batch { .. } => 1,
+            Self::Init(_) | Self::Inference(_) | Self::Load(_) | Self::Write(_) | Self::Batch { .. } => 1,
         }
     }
 }
@@ -115,6 +101,14 @@ impl CliError {
 mod tests {
     use super::*;
     use opai::Holder;
+
+    /// A destination at `path` that could not be claimed.
+    fn unwritable(path: &str) -> CliError {
+        CliError::Write(Box::new(WriteError::Unwritable {
+            destination: path.into(),
+            source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        }))
+    }
 
     #[test]
     fn a_usage_error_exits_two() {
@@ -156,7 +150,7 @@ mod tests {
             source: std::io::Error::from(std::io::ErrorKind::NotFound),
         };
 
-        let error = CliError::Write(Box::new(source));
+        let error = CliError::Write(Box::new(WriteError::Save(source)));
 
         assert_eq!(error.exit_code(), 1);
         let message = error.to_string();
@@ -174,10 +168,7 @@ mod tests {
 
     #[test]
     fn a_failed_claim_exits_one_naming_the_destination() {
-        let error = CliError::Claim {
-            path: "out/a.png".into(),
-            source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
-        };
+        let error = unwritable("out/a.png");
 
         assert_eq!(error.exit_code(), 1);
         assert!(error.to_string().starts_with("cannot write out/a.png: "), "{error}");
@@ -196,11 +187,7 @@ mod tests {
         assert_eq!(reason.matches("photos/a.jpg").count(), 1, "{reason}");
         assert!(!reason.starts_with("could not enhance"), "{reason}");
 
-        let write = CliError::Claim {
-            path: "out/a.jpg".into(),
-            source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
-        };
-        let reason = image(write);
+        let reason = image(unwritable("out/a.jpg"));
         assert!(reason.starts_with("could not enhance photos/a.jpg: cannot write out/a.jpg: "), "{reason}");
 
         let reason = image(CliError::Inference(InferenceError::Shutdown));

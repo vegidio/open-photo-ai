@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,13 +65,17 @@ export const ExportSettingsPanel = ({ names, onClose }: { names: ExportNames | u
     // for. Nothing until both the names and the format table have arrived, and nothing while the names are still
     // those of an earlier format choice: a slider for the format just left would be the wrong one.
     const formats = useExportFormats();
-    const queueQuality =
-        formats && names?.format === format
-            ? queueQualityFor(
-                  [...names.byPath.values()].map((name) => name.format),
-                  formats,
-              )
-            : undefined;
+    // Memoized: the dialog re-renders this column on every progress report while a batch runs.
+    const queueQuality = useMemo(
+        () =>
+            formats && names?.format === format
+                ? queueQualityFor(
+                      [...names.byPath.values()].map((name) => name.format),
+                      formats,
+                  )
+                : undefined,
+        [formats, names, format],
+    );
 
     const [draft, setDraft] = useState(() => ({ ...useSettingsStore.getState().quality }));
 

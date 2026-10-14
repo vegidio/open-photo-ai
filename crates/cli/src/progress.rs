@@ -72,10 +72,9 @@ struct Inner {
     batch: Mutex<Batch>,
 }
 
-/// The batch's view: how many images it has, how many ended, and its session once one was started.
+/// The batch's view: how many images ended, and its session once one was started.
 #[derive(Default)]
 struct Batch {
-    total: usize,
     /// The images written or failed so far, the `n` of the bar's `[n/N]`.
     ended: usize,
     slot: Slot<Live<BatchLine>>,
@@ -269,11 +268,9 @@ impl LiveLine for DependencyLine {
     }
 }
 
-/// The dependency line: what was last reported, and its session once one was started.
+/// The dependency line's session, once one was started.
 #[derive(Default)]
 struct Install {
-    /// The dependency and fraction the latest download or expansion report reads as, drawn or not.
-    reported: Option<(String, f64)>,
     slot: Slot<Live<DependencyLine>>,
 }
 
@@ -331,8 +328,10 @@ impl<S: Session> Slot<S> {
         }
     }
 
-    /// Settles the session, and says whether one was drawn.
-    fn finish(&mut self, what: &str) -> bool {
+    /// Settles the session, leaving its last frame in the scrollback, says whether one was drawn, and never starts
+    /// another.
+    fn close(&mut self, what: &str) -> bool {
+        self.closed = true;
         let Some(live) = self.live.take() else {
             return false;
         };
@@ -341,12 +340,6 @@ impl<S: Session> Slot<S> {
             tracing::warn!("the {what} ended with a terminal error: {error}");
         }
         true
-    }
-
-    /// Settles the session, as [`finish`](Self::finish) does, says whether one was drawn, and never starts another.
-    fn close(&mut self, what: &str) -> bool {
-        self.closed = true;
-        self.finish(what)
     }
 }
 
@@ -380,22 +373,24 @@ impl View {
             return;
         }
 
-        let name = progress.dependency.as_str().to_string();
-        let fraction = progress.fraction;
-        let mut install = lock(&self.inner.install);
-        install.reported = Some((name.clone(), fraction));
-
         if !self.inner.look.interactive {
             return;
         }
 
+        let name = progress.dependency.as_str();
+        let fraction = progress.fraction;
+        let mut install = lock(&self.inner.install);
+
         match &install.slot.live {
             Some(live) => live.handle().update(|line| {
-                line.name = name;
+                // Copied only when the next dependency replaces the last, not on every report of the same one.
+                if line.name != name {
+                    name.clone_into(&mut line.name);
+                }
                 line.fraction = fraction;
             }),
             None => {
-                let line = DependencyLine::new(name, fraction, self.inner.look.color);
+                let line = DependencyLine::new(name.to_owned(), fraction, self.inner.look.color);
                 let interrupt = Arc::clone(&self.inner.install_interrupt);
                 install
                     .slot
@@ -419,7 +414,6 @@ impl View {
     /// drawn cancels the run. Off a terminal, or where the terminal refuses the session, prints nothing.
     pub fn start_batch(&self, total: usize) {
         let mut batch = lock(&self.inner.batch);
-        batch.total = total;
         batch.ended = 0;
 
         if !self.inner.look.interactive {
@@ -474,7 +468,7 @@ impl View {
     }
 
     /// The inference callback the current image's row and the batch's bar are moved by, meant for
-    /// [`opai::Handover::new`].
+    /// [`opai::ProcessOptions::on_progress`].
     pub fn on_inference(&self) -> OnInference {
         let view = self.clone();
         Arc::new(move |report: &InferenceProgress| view.inference_report(report))
@@ -565,7 +559,6 @@ pub(crate) mod tests {
         Dependency, Detection, FaceRecovery, Faces, Family, FloatPrecision, Operation, Scale, Subject, Upscale,
         UpscaleVariant,
     };
-    use ratatui::text::Span;
 
     fn plain() -> Look {
         Look { interactive: false, color: false }
@@ -577,14 +570,7 @@ pub(crate) mod tests {
 
     /// A report on `subject` at `stage`, the chain at `chain_fraction`.
     pub(crate) fn inference(subject: Subject, stage: Stage, chain_fraction: f64) -> InferenceProgress {
-        InferenceProgress {
-            subject: Arc::new(subject),
-            stage,
-            operation_fraction: 0.5,
-            operation_index: 0,
-            operation_count: 2,
-            chain_fraction,
-        }
+        InferenceProgress { subject: Arc::new(subject), stage, operation_fraction: 0.5, chain_fraction }
     }
 
     pub(crate) fn upscale() -> Subject {
@@ -600,54 +586,23 @@ pub(crate) mod tests {
         Stage::Installing(install(Dependency::Runtime, Phase::Downloading, 0.1))
     }
 
-    fn reported_text(view: &View) -> Option<String> {
-        lock(&view.inner.install).reported.as_ref().map(|(name, fraction)| {
-            let line = look::dependency_line(name, *fraction, Span::raw("*"), false);
-            line.spans.iter().map(|span| span.content.as_ref()).collect()
-        })
-    }
-
     #[test]
-    fn the_dependency_line_follows_the_reports_without_drawing_off_a_terminal() {
+    fn the_dependency_line_draws_nothing_off_a_terminal() {
         let view = View::new(plain(), CancellationToken::new());
         let on_install = view.on_install();
-        let mut seen = Vec::new();
 
         for progress in [
             install(Dependency::Runtime, Phase::Downloading, 0.34),
-            install(Dependency::Runtime, Phase::Extracting, 0.9),
             install(Dependency::Runtime, Phase::Extracting, 1.0),
             install(Dependency::Cuda, Phase::Downloading, 0.05),
-            install(Dependency::Cuda, Phase::Downloading, 1.0),
+            install(Dependency::Runtime, Phase::AlreadyInstalled, 1.0),
         ] {
             on_install(&progress);
-            seen.push(reported_text(&view).expect("a line for every transfer"));
         }
-
-        let cuda = Dependency::Cuda.as_str();
-        assert_eq!(
-            seen,
-            [
-                "💾 Downloading dependency ONNX Runtime... * 34% Complete".to_string(),
-                "💾 Downloading dependency ONNX Runtime... * 90% Complete".to_string(),
-                "💾 Downloading dependency ONNX Runtime... * 100% Complete".to_string(),
-                format!("💾 Downloading dependency {cuda}... * 5% Complete"),
-                format!("💾 Downloading dependency {cuda}... * 100% Complete"),
-            ]
-        );
 
         let install = lock(&view.inner.install);
         assert_eq!(install.slot.attempts, 0, "no session is attempted off a terminal");
         assert!(install.slot.live.is_none());
-    }
-
-    #[test]
-    fn an_already_installed_dependency_draws_nothing() {
-        let view = View::new(plain(), CancellationToken::new());
-
-        view.on_install()(&install(Dependency::Runtime, Phase::AlreadyInstalled, 1.0));
-
-        assert_eq!(reported_text(&view), None);
     }
 
     /// Each row of `buf`, its cells joined and its trailing blanks dropped.
@@ -829,7 +784,6 @@ pub(crate) mod tests {
         let view = View::new(look, CancellationToken::new());
         {
             let mut batch = lock(&view.inner.batch);
-            batch.total = 5;
             batch.slot.start("batch view", || Err(std::io::Error::from(std::io::ErrorKind::Unsupported)));
         }
 
@@ -978,7 +932,7 @@ pub(crate) mod tests {
 
         for _ in 0..2 {
             slot.start("progress bar", || Err(std::io::Error::from(std::io::ErrorKind::Unsupported)));
-            assert!(!slot.finish("progress bar"));
+            assert!(slot.live.is_none());
         }
 
         assert_eq!(slot.attempts, 1);
@@ -1010,7 +964,7 @@ pub(crate) mod tests {
     fn finishing_without_a_session_prints_nothing_and_says_so() {
         let view = View::new(plain(), CancellationToken::new());
 
-        assert!(!lock(&view.inner.batch).slot.finish("batch view"));
-        assert!(!lock(&view.inner.install).slot.finish("dependency line"));
+        assert!(!lock(&view.inner.batch).slot.close("batch view"));
+        assert!(!lock(&view.inner.install).slot.close("dependency line"));
     }
 }

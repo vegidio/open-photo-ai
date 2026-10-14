@@ -29,14 +29,15 @@
 use std::path::{Path, PathBuf};
 
 use opai::{
-    APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, FacedChain, Handover,
+    APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, FaceSelection,
     InitOptions, OnInference, Opai, OutputDepth, Picture, ProcessOptions, ProviderVerdict, Suggestions,
     default_face_selection, image,
 };
 
+use crate::args::Selection;
 use crate::args::{Args, Processor, Quality};
 use crate::autopilot::AutopilotModels;
-use crate::chain::{self, Plan, Selection};
+use crate::chain::{self, Plan};
 use crate::error::CliError;
 use crate::inputs::{self, Source};
 use crate::look::{self, ImageEnd, Look};
@@ -120,7 +121,7 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
         let planner = match &autopilot {
             Some(models) => Planner::Autopilot(models),
             None => {
-                let plan = chain::plan(&Selection::from_args(&args), args.quality, source.width, source.height);
+                let plan = chain::plan(&args.selection, args.quality, source.width, source.height);
                 log_notes(&source.path, &plan);
                 Planner::Fixed(plan)
             }
@@ -247,7 +248,7 @@ async fn enhance_one(
         }
     };
 
-    let (faced, enhanced) = enhance(opai, &picture, plan.operations, provider, view, cancel).await?;
+    let enhanced = enhance(opai, &picture, &plan.operations, provider, view, cancel).await?;
 
     // A Ctrl-C that landed after the last tile was checked still means "write nothing".
     if cancel.is_cancelled() {
@@ -262,7 +263,7 @@ async fn enhance_one(
         "wrote {} ({width}x{height}, {}); {}",
         written.display(),
         format.name(),
-        provenance(faced.operations.is_empty(), &enhanced.providers.verdict())
+        provenance(plan.operations.is_empty(), &enhanced.providers.verdict())
     );
 
     Ok(written)
@@ -333,60 +334,40 @@ fn log_notes(path: &Path, plan: &Plan) {
     }
 }
 
-/// Finds the faces `operations` needs and runs the chain, both on `provider` and reporting onto the image's row
-/// and the batch's bar.
+/// Runs `operations` on `provider`, finding the faces its face recoveries restore first, reporting onto the image's
+/// row and the batch's bar.
 async fn enhance(
     opai: &Opai,
     picture: &Picture,
-    operations: Vec<opai::Operation>,
+    operations: &[opai::Operation],
     provider: ExecutionProvider,
     view: &View,
     cancel: &CancellationToken,
-) -> Result<(FacedChain, Enhanced), CliError> {
-    // Built before the operations move into `find_chain_faces`; a face selection changes no family, so it is the same
-    // chain `process` runs.
-    let handover = Handover::new(&view.on_inference(), &operations);
-
-    let faced = opai
-        .find_chain_faces(
-            picture,
-            operations,
-            default_face_selection,
-            Some(detection_options(provider, handover.detection(), cancel)),
-        )
+) -> Result<Enhanced, CliError> {
+    let enhanced = opai
+        .process(picture, operations, Some(chain_options(provider, view.on_inference(), cancel)))
         .await?;
 
-    if let Some(report) = face_report(&faced.faces) {
-        if matches!(faced.faces, ChainFaces::Failed(_)) {
+    if let Some(report) = face_report(&enhanced.faces) {
+        if matches!(enhanced.faces, ChainFaces::Failed(_)) {
             tracing::warn!("{report}");
         } else {
             tracing::info!("{report}");
         }
     }
 
-    let enhanced = opai
-        .process(picture, &faced.operations, Some(chain_options(provider, handover.chain(), cancel)))
-        .await?;
-
-    Ok((faced, enhanced))
+    Ok(enhanced)
 }
 
-/// What face detection is asked for: `provider`, reporting to `on_progress`, stopped by `cancel`.
-fn detection_options(
-    provider: ExecutionProvider,
-    on_progress: OnInference,
-    cancel: &CancellationToken,
-) -> ExecuteOptions {
-    ExecuteOptions { on_progress: Some(on_progress), cancel: cancel.clone(), provider, ..Default::default() }
-}
-
-/// What the chain is asked for: `provider` at the source's depth, reporting to `on_progress`, stopped by `cancel`.
+/// What the chain is asked for: `provider` at the source's depth, restoring the faces [`default_face_selection`] keeps,
+/// reporting to `on_progress`, stopped by `cancel`.
 fn chain_options(provider: ExecutionProvider, on_progress: OnInference, cancel: &CancellationToken) -> ProcessOptions {
     ProcessOptions {
         depth: OutputDepth::Source,
         on_progress: Some(on_progress),
         cancel: cancel.clone(),
         provider,
+        faces: FaceSelection::restorable(),
         ..Default::default()
     }
 }
@@ -611,17 +592,16 @@ mod tests {
     }
 
     #[test]
-    fn detection_and_chain_are_both_asked_for_the_chosen_processor() {
+    fn the_chain_and_its_face_detection_are_asked_for_the_chosen_processor() {
         let cancel = CancellationToken::new();
-        let on_progress = || -> OnInference { std::sync::Arc::new(|_| {}) };
 
         for processor in Processor::value_variants() {
             let provider = ExecutionProvider::from(*processor);
 
-            assert_eq!(detection_options(provider, on_progress(), &cancel).provider, provider);
-            let chain = chain_options(provider, on_progress(), &cancel);
+            let chain = chain_options(provider, std::sync::Arc::new(|_| {}), &cancel);
             assert_eq!(chain.provider, provider);
             assert_eq!(chain.depth, OutputDepth::Source);
+            assert!(matches!(chain.faces, FaceSelection::Detect(_)), "the chain finds no faces");
         }
     }
 

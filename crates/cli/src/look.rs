@@ -118,7 +118,7 @@ const WORDS_WIDTH: usize = "Downloading ".len() + "Face Recovery".len() + " for"
 /// magenta and the path cyan and underlined, or a `🧨` row is red throughout. The percentage is right-aligned to three
 /// columns and the words padded, so every path starts in the same column.
 pub fn row(percent: u8, path: &str, state: RowState, color: bool) -> Line<'static> {
-    let fg = |(r, g, b): (u8, u8, u8)| if color { Style::new().fg(Color::Rgb(r, g, b)) } else { Style::new() };
+    let fg = |rgb| fg(rgb, color);
     let red = matches!(state, RowState::Failed | RowState::Stopped);
     let [plain, percent_style, word_style, path_style] = if red {
         [fg(RED); 4]
@@ -169,7 +169,7 @@ pub fn plain_row(percent: u8, path: &str, end: &ImageEnd, color: bool) -> String
 /// `🧠 Running inference using the processor <provider>; quality <HD|SD>`, with the processor green and the quality
 /// yellow. The processor is spelled as `opai` spells it, `Auto` included.
 pub fn processor_line(provider: ExecutionProvider, quality: Quality, color: bool) -> String {
-    let fg = |(r, g, b): (u8, u8, u8)| if color { Style::new().fg(Color::Rgb(r, g, b)) } else { Style::new() };
+    let fg = |rgb| fg(rgb, color);
 
     [
         ("🧠 Running inference using the processor ", Style::new()),
@@ -208,8 +208,12 @@ pub fn failure(error: impl Display, color: bool) -> String {
 
 /// The dependency line's mark once its install reads `100`: `✓`, green.
 pub fn done_mark(color: bool) -> Span<'static> {
-    let (r, g, b) = GREEN;
-    Span::styled("✓", if color { Style::new().fg(Color::Rgb(r, g, b)) } else { Style::new() })
+    Span::styled("✓", fg(GREEN, color))
+}
+
+/// Text in `(r, g, b)`, or unstyled without `color`.
+fn fg((r, g, b): (u8, u8, u8), color: bool) -> Style {
+    if color { Style::new().fg(Color::Rgb(r, g, b)) } else { Style::new() }
 }
 
 /// `💾 Downloading dependency <name>... <mark> <percent>% Complete`, with the name and the percentage in bold white
