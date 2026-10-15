@@ -1,4 +1,4 @@
-//! What the terminal's lines say and how they are coloured: the dependency line, the processor line, the list's rows
+//! What the terminal's lines say and how they are coloured: the update line, the dependency line, the processor line, the list's rows
 //! and their plain lines, the summary and the failure line. Pure text, so all of it is tested without a terminal.
 //!
 //! Whether to draw live lines and whether to colour is decided once, in [`Look`], the way MediaSim decides it: a
@@ -22,7 +22,7 @@ pub const YELLOW: (u8, u8, u8) = (0xe5, 0xdb, 0x08);
 pub const RED: (u8, u8, u8) = (0xf4, 0x43, 0x36);
 /// A row's percentage, UMD's blue.
 pub const BLUE: (u8, u8, u8) = (0x82, 0xaa, 0xff);
-/// A row's enhancement or word `enhancements`, and the dependency line's spinner, UMD's magenta.
+/// A row's enhancement, and the dependency line's spinner, UMD's magenta.
 pub const MAGENTA: (u8, u8, u8) = (0xc7, 0x92, 0xe9);
 /// A row's path, underlined, UMD's cyan.
 pub const CYAN: (u8, u8, u8) = (0x88, 0xdd, 0xff);
@@ -114,8 +114,7 @@ pub fn image_percent(fraction: f64, written: bool) -> u8 {
 const WORDS_WIDTH: usize = "Downloading ".len() + "Face Recovery".len() + " for".len();
 
 /// The list's row for an image at `percent`: `🖼️ [ 42%] Applying Upscale to` and the other words `state` reads as,
-/// padded to [`WORDS_WIDTH`], then the path. The percentage and its `%` are blue, the enhancement or `Enhancements`
-/// magenta and the path cyan and underlined, or a `🧨` row is red throughout. The percentage is right-aligned to three
+/// padded to [`WORDS_WIDTH`], then the path. The percentage and its `%` are blue, the enhancement magenta and the path cyan and underlined, or a `🧨` row is red throughout. The percentage is right-aligned to three
 /// columns and the words padded, so every path starts in the same column.
 pub fn row(percent: u8, path: &str, state: RowState, color: bool) -> Line<'static> {
     let fg = |rgb| fg(rgb, color);
@@ -133,7 +132,7 @@ pub fn row(percent: u8, path: &str, state: RowState, color: bool) -> Line<'stati
         RowState::Working(Activity::Choosing) => ("🖼️", "Choosing enhancements for", None, ""),
         RowState::Working(Activity::Downloading(family)) => ("🖼️", "Downloading ", Some(family_label(family)), " for"),
         RowState::Working(Activity::Applying(family)) => ("🖼️", "Applying ", Some(family_label(family)), " to"),
-        RowState::Applied => ("🖼️", "", Some("Enhancements"), " applied to"),
+        RowState::Applied => ("🖼️", "Enhancements applied to", None, ""),
         RowState::Failed => ("🧨", "Failed to enhance", None, ""),
         RowState::Stopped => ("🧨", "Stopped enhancing", None, ""),
     };
@@ -176,6 +175,23 @@ pub fn processor_line(provider: ExecutionProvider, quality: Quality, color: bool
         (provider.as_str(), fg(GREEN)),
         ("; quality ", Style::new()),
         (quality.label(), fg(YELLOW)),
+    ]
+    .iter()
+    .map(|(text, style)| ansi(text, *style))
+    .collect()
+}
+
+/// Where a newer release is downloaded from, as the update line names it.
+pub const RELEASES_URL: &str = "https://github.com/vegidio/open-photo-ai";
+
+/// `💡 New update available: download at <RELEASES_URL>`, all yellow, with the URL underlined. Static, not pulsing as
+/// the GUI's button does: anything printed below it leaves it out of reach of a redraw.
+pub fn update_line(color: bool) -> String {
+    let underline = if color { Modifier::UNDERLINED } else { Modifier::empty() };
+
+    [
+        ("💡 New update available: download at ", fg(YELLOW, color)),
+        (RELEASES_URL, fg(YELLOW, color).add_modifier(underline)),
     ]
     .iter()
     .map(|(text, style)| ansi(text, *style))
@@ -429,14 +445,14 @@ mod tests {
     }
 
     #[test]
-    fn an_applied_row_colours_its_percentage_and_the_word_enhancements() {
+    fn an_applied_row_colours_its_percentage_but_not_its_words() {
         let line = row(100, "b.jpg", RowState::Applied, true);
 
         assert_eq!(line.spans[1].content, "100%");
         assert_eq!(line.spans[1].style, rgb(BLUE));
-        assert_eq!(line.spans[3].content, "Enhancements");
-        assert_eq!(line.spans[3].style, rgb(MAGENTA));
-        assert_eq!(line.spans[5].style, rgb(CYAN).add_modifier(Modifier::UNDERLINED));
+        assert_eq!(line.spans[2].content, "] Enhancements applied to");
+        assert_eq!(line.spans[2].style, Style::new());
+        assert_eq!(line.spans[4].style, rgb(CYAN).add_modifier(Modifier::UNDERLINED));
     }
 
     #[test]
@@ -550,6 +566,28 @@ mod tests {
         );
 
         assert_eq!(processor_line(ExecutionProvider::Auto, Quality::Hd, true), expected);
+    }
+
+    #[test]
+    fn the_update_line_without_colour_is_its_exact_text() {
+        let line = update_line(false);
+
+        assert_eq!(line, "💡 New update available: download at https://github.com/vegidio/open-photo-ai");
+        assert!(!line.contains('\x1b'), "{line:?}");
+    }
+
+    #[test]
+    fn the_update_line_is_yellow_with_the_url_underlined() {
+        let (r, g, b) = YELLOW;
+        let line = update_line(true);
+
+        assert!(
+            line.starts_with(&"💡 New update available: download at ".with(TermColor::Rgb { r, g, b }).to_string())
+        );
+        assert!(
+            line.ends_with(&RELEASES_URL.with(TermColor::Rgb { r, g, b }).underlined().to_string()),
+            "{line:?}"
+        );
     }
 
     #[test]

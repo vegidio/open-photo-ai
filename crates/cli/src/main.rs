@@ -18,6 +18,8 @@
 //! whole batch, and the summary follows it:
 //!
 //! ```text
+//! 💡 New update available: download at https://github.com/vegidio/open-photo-ai  <- only when a newer release is
+//!                                                                                   published, then a blank line
 //! 💾 Downloading dependency ONNX Runtime... ✓ 100% Complete  <- only when a dependency is downloaded; a spinner
 //!                                                               turns until it reaches 100%
 //! 🧠 Running inference using the processor Auto; quality HD  <- the processor asked for, in every mode
@@ -60,6 +62,7 @@ mod progress;
 mod run;
 #[cfg(test)]
 mod test_support;
+mod update;
 
 use std::process::ExitCode;
 use std::time::Instant;

@@ -1,7 +1,9 @@
 //! One run, from the checked arguments to the written files.
 //!
 //! ```text
+//! the update check             --> started at launch, beside the checks below
 //! output, inputs               --> refused here: nothing installed
+//! the update line              --> 💡 and a blank line, when the check answered "outdated" within 1.5s of launch
 //! initialize                   --> once; the 💾 line; a Ctrl-C on it abandons initialization; another instance ends it
 //! check the processor          --> one this machine does not offer is refused here: no image loaded
 //! the processor line           --> 🧠 naming the processor asked for and the quality, then a blank line; every mode
@@ -48,6 +50,7 @@ use crate::inputs::{self, Source};
 use crate::look::{self, ImageEnd, Look};
 use crate::output::{self, Target};
 use crate::progress::View;
+use crate::update;
 
 /// Runs what `args` asks for over every image it names, drawing as `look` says, and writes their results.
 ///
@@ -63,6 +66,10 @@ use crate::progress::View;
 pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     // Everything that can be refused without the library, before it is initialized: a typo in the fortieth path must
     // not cost the first run's download. The output is read first, so the cheap refusals do not wait for a walk.
+    // The check for a newer release runs meanwhile, and only its answer waits.
+    let launched = tokio::time::Instant::now();
+    let update = update::start();
+
     let target = output::target(&args)?;
     let skip = match &target {
         // A directory that does not exist yet holds no earlier results to skip.
@@ -71,6 +78,12 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     };
     let sources = inputs::expand(&args.inputs, args.recursive, skip.as_deref())?;
     events::files_added(&sources.iter().map(|source| source.path.as_path()).collect::<Vec<_>>());
+
+    // Before the dependency line, the first thing that can draw. A refusal above prints its failure line alone.
+    if update::outdated(update, launched + update::WAIT).await {
+        eprintln!("{}", look::update_line(look.color));
+        eprintln!();
+    }
 
     let cancel = CancellationToken::new();
     let view = View::new(look, cancel.clone());
