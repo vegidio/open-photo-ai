@@ -105,6 +105,29 @@ opai scan.png --up osaka -q sd -o scan.avif
 opai night.jpg --dn gothenburg --dn-str 200 --la --la-bias -20 -o night-clean.jpg
 ```
 
+## 💻 System Requirements
+
+|          | Windows                             | Linux                                  | macOS                               |
+|----------|-------------------------------------|----------------------------------------|-------------------------------------|
+| **OS**   | Windows 10+                         | Ubuntu 24.04, Fedora 40, Debian 13     | macOS 12+, Apple Silicon only       |
+| **RAM**  | 8 GB (16 GB recommended)            | 8 GB (16 GB recommended)               | 8 GB (16 GB recommended)            |
+| **GPU**  | Optional, any DirectX 12 GPU        | Optional, any GPU with a Vulkan driver | Built-in (CoreML/Metal)             |
+| **Disk** | 5 GB (25 GB to install every model) | 5 GB (25 GB to install every model)    | 3 GB (20 GB to install every model) |
+
+The app runs on any of these systems even without a GPU, falling back to the CPU when no supported accelerator is found; it will just be much slower.
+
+### NVIDIA acceleration (CUDA & TensorRT)
+
+On Windows x64 and Linux, the app can use CUDA and TensorRT for the best performance. For that you need:
+
+- A GTX 16xx, RTX 20xx or newer GPU (compute capability 7.5+). Older cards, like the GTX 10xx series, still work, but through the slower WebGPU acceleration.
+- A recent NVIDIA driver with support to CUDA 13 (version 580 or newer).
+- At least 6 GB of VRAM; 8 GB or more is recommended.
+
+### Osaka upscaler
+
+**Osaka** is a much heavier model than the others and has its own requirements: at least 32 GB of RAM and a GPU with 16 GB of VRAM on Windows and Linux, or 16 GB of unified memory on macOS. It also takes about 7 GB of extra disk space.
+
 ## ✨ Enhancements
 
 All enhancements available here come from open-source AI models that were adapted and converted to work on this project. The models and the credits to the original works can be found in the Hugging Face repository [vegidio/open-photo-ai](https://huggingface.co/vegidio/open-photo-ai):
