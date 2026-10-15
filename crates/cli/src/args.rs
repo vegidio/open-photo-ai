@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
 use opai::Scale;
 use opai::export::{ExportFormat, FormatChoice};
 
@@ -21,7 +21,7 @@ use crate::autopilot::AutopilotModels;
 /// directory input. An existing file is never overwritten unless `--overwrite` is given: the result is numbered
 /// `_1`, `_2`, … instead.
 #[derive(Debug, Parser)]
-#[command(name = "opai", version = opai::version(), override_usage = "opai <INPUT>... [OPTIONS] --output <OUTPUT>")]
+#[command(name = "opai", display_name = "Open Photo AI - CLI", version = opai::version(), disable_version_flag = true, override_usage = "opai <INPUT>... [OPTIONS] --output <OUTPUT>")]
 pub struct Args {
     // Positional and first, so a bare enhancement flag is never handed an input as its model name. A user who writes
     // `opai --up photo.jpg` is told `photo.jpg` is not a model, which is clear and costs nothing.
@@ -80,6 +80,10 @@ pub struct Args {
     /// does the same.
     #[arg(long)]
     pub no_analytics: bool,
+
+    /// Print version.
+    #[arg(long, short = 'v', action = ArgAction::Version)]
+    version: (),
 
     /// The model autopilot runs each family with, read from the `OPAI_AP_*` variables by [`parse`] under
     /// `--autopilot` only, and `None` otherwise.
@@ -1030,10 +1034,8 @@ mod tests {
 
     #[test]
     fn every_example_in_the_reference_parses() {
-        // The synopsis, `--version`'s output, and the commands the reference shows failing or ending the parse on
-        // purpose.
-        let version = format!("opai {}", opai::version());
-        let not_runs = ["opai <INPUT>...", "opai --up photo.jpg", "opai --help", "opai --version", version.as_str()];
+        // The synopsis, and the commands the reference shows failing or ending the parse on purpose.
+        let not_runs = ["opai <INPUT>...", "opai --up photo.jpg", "opai --help", "opai --version"];
 
         let commands = documented_commands();
         assert!(commands.len() > 20, "the reference's examples were not found: {commands:?}");
@@ -1053,6 +1055,10 @@ mod tests {
         let error = parse("opai --version").expect_err("--version ends the parse");
 
         assert_eq!(error.kind(), ErrorKind::DisplayVersion);
-        assert!(error.to_string().contains(opai::version()), "{error}");
+        assert_eq!(error.to_string().trim_end(), format!("Open Photo AI - CLI {}", opai::version()));
+
+        let error = parse("opai -v").expect_err("-v ends the parse");
+
+        assert_eq!(error.kind(), ErrorKind::DisplayVersion);
     }
 }

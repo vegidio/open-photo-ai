@@ -26,7 +26,7 @@ opai <INPUT>... <ENHANCEMENT FLAGS...> [OPTIONS] --output <OUTPUT>
 | Command          | What it does                                            |
 |------------------|---------------------------------------------------------|
 | `opai --help`    | Full help, with every flag, model and default (`-h` for a summary). |
-| `opai --version` | Prints the version, e.g. `opai 26.10.0`. (`-V` also works.) |
+| `opai --version` | Prints the version, e.g. `Open Photo AI - CLI 26.10.0`. (`-v` also works.) |
 
 The rules in short:
 
