@@ -76,6 +76,11 @@ pub struct Args {
     #[arg(long, short = 'o', value_name = "OUTPUT")]
     pub output: PathBuf,
 
+    /// Name, on each written image's line, the enhancements it received: each model, its strength, bias or upscale
+    /// factor, and whether the run cache served them. Without it the line names only the path.
+    #[arg(long)]
+    pub verbose: bool,
+
     /// Send no usage or diagnostic data to the project for this run. Setting OPAI_ANALYTICS to 0, off, false or no
     /// does the same.
     #[arg(long)]
@@ -1048,6 +1053,15 @@ mod tests {
                 panic!("`{command}` does not parse: {error}");
             }
         }
+    }
+
+    #[test]
+    fn verbose_is_off_unless_asked_for_and_works_with_autopilot() {
+        assert!(!parse("opai photo.jpg --up -o out").expect("parses").verbose);
+        assert!(parse("opai photo.jpg --up --verbose -o out").expect("parses").verbose);
+
+        let args = parse("opai photo.jpg --ap --verbose -o out").expect("parses");
+        assert!(args.autopilot && args.verbose);
     }
 
     #[test]
