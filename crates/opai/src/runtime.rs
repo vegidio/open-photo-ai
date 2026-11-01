@@ -82,7 +82,7 @@ fn load(name: &str, runtime_dir: &Path, started: std::time::Instant) -> Result<(
     #[allow(clippy::disallowed_methods, reason = "runtime::start is the sole loader; see FAILED_LOAD")]
     let loaded = ai::load_with(runtime_dir, &options);
     if let Err(error) = loaded {
-        let error = load_failure(error);
+        let error = load_failure(error, runtime_dir);
         if let InitError::RuntimeLoad { path, source } | InitError::RuntimeStart { path, source } = &error {
             *failed = Some(Failure { path: path.clone(), reason: source.to_string() });
         }
@@ -99,13 +99,16 @@ fn load(name: &str, runtime_dir: &Path, started: std::time::Instant) -> Result<(
     Ok(())
 }
 
-/// The initialization error a failed load is reported as, naming the path the load was attempted against.
-fn load_failure(error: LoadError) -> InitError {
+/// The initialization error a failed load is reported as, naming the path the load was attempted against, or
+/// `runtime_dir` for an error that names none.
+fn load_failure(error: LoadError, runtime_dir: &Path) -> InitError {
     match &error {
         LoadError::NotInstalled { path } | LoadError::Open { path, .. } => {
             InitError::RuntimeLoad { path: path.clone(), source: error.clone() }
         }
         LoadError::Start { path, .. } => InitError::RuntimeStart { path: path.clone(), source: error.clone() },
+        // `LoadError` is `rust-sak`'s and `#[non_exhaustive]`; an unknown one is a runtime that could not be loaded.
+        _ => InitError::RuntimeLoad { path: runtime_dir.to_path_buf(), source: error.clone() },
     }
 }
 
@@ -128,9 +131,9 @@ mod tests {
         let start = LoadError::Start { path: path.clone(), reason: "refused".to_string() };
         let missing = LoadError::NotInstalled { path: path.clone() };
 
-        assert!(matches!(load_failure(open), InitError::RuntimeLoad { path: p, .. } if p == path));
-        assert!(matches!(load_failure(missing), InitError::RuntimeLoad { path: p, .. } if p == path));
-        assert!(matches!(load_failure(start), InitError::RuntimeStart { path: p, .. } if p == path));
+        assert!(matches!(load_failure(open, &path), InitError::RuntimeLoad { path: p, .. } if p == path));
+        assert!(matches!(load_failure(missing, &path), InitError::RuntimeLoad { path: p, .. } if p == path));
+        assert!(matches!(load_failure(start, &path), InitError::RuntimeStart { path: p, .. } if p == path));
     }
 
     /// The variable the parent sets for the child half of a [`child_test`].

@@ -56,7 +56,7 @@ pub(crate) struct ModelFolder {
     offline: AtomicBool,
     /// The record that installed models are being used without the listing was written.
     warned: AtomicBool,
-    /// Retries of a transient failure, for the listing and the downloads.
+    /// Retries of a transient failure, for the listing and so for the downloads, which go through the listing's hub.
     retries: u32,
 }
 
@@ -90,7 +90,7 @@ impl ModelFolder {
         let read = self
             .listing
             .get_or_try_init(|| async {
-                let listing = Listing::read_retrying(&self.folder, self.retries).await?;
+                let listing = Listing::read_with(Hub::for_folder(&self.folder).retries(self.retries), &self.folder).await?;
                 // `debug`: it happens once per process that acquires a model, and says only that nothing went wrong.
                 tracing::debug!(
                     url = %self.folder,
@@ -227,7 +227,7 @@ async fn run(
     // The stop is dropping the install: `rust-sak` then cancels the transfer, keeps its partial to resume onto, and
     // releases the folder's lock.
     let outcome = tokio::select! {
-        outcome = ai::install_files_retrying(files, listing, folder.retries, on_event) => outcome,
+        outcome = ai::install_files(files, listing, on_event) => outcome,
         () = installing.cancel.cancelled() => return Err(InitError::Stopped),
     };
 

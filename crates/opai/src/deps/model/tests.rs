@@ -140,8 +140,8 @@ async fn nothing_of_the_listing_is_left_on_disk_after_a_run() {
     let env = env();
     env.acquire(&kyoto(), ModelTrust::Published).await.unwrap();
 
-    // Every file the run left behind is the model's own or the installer's (its marker and its lock), so no copy of
-    // the listing is there for a later run to read.
+    // Every file the run left behind is the model's own or the installer's (its marker, and its lock beside the
+    // folder), so no copy of the listing is there for a later run to read.
     let mut left = Vec::new();
     let mut pending = vec![env.app_dir.clone()];
     while let Some(dir) = pending.pop() {
@@ -157,7 +157,7 @@ async fn nothing_of_the_listing_is_left_on_disk_after_a_run() {
     left.sort();
 
     let dir = model_dir(&kyoto());
-    let expected = [format!("{dir}/.installed"), format!("{dir}/.lock"), format!("{dir}/{}", graph())];
+    let expected = [format!("{dir}/.installed"), format!("{dir}.lock"), format!("{dir}/{}", graph())];
     assert!(left.iter().all(|path| expected.contains(path)), "{left:?}");
     assert!(left.contains(&format!("{dir}/{}", graph())), "{left:?}");
 }

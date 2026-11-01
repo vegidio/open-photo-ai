@@ -256,8 +256,7 @@ fn failed(plan: &Plan, error: InstallError) -> InitError {
         failure @ (Failure::Network | Failure::Http(_) | Failure::Damaged { .. } | Failure::Malformed(_)) => {
             InitError::Transfer { dependency, reason: failure.to_string() }
         }
-        // `Failure` is `rust-sak`'s and may grow; an unknown one is a transfer that did not complete.
-        #[allow(unreachable_patterns, reason = "`Failure` is not `#[non_exhaustive]` today, and may become it")]
+        // `Failure` is `rust-sak`'s and `#[non_exhaustive]`; an unknown one is a transfer that did not complete.
         failure => InitError::Transfer { dependency, reason: failure.to_string() },
     }
 }
