@@ -9,7 +9,7 @@ use super::super::simple::SimpleVariant;
 
 use super::{athens, santorini};
 
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 /// Athens, the CodeFormer-style restorer a front end offers first.
 pub(crate) const ATHENS: SimpleVariant =
@@ -45,7 +45,7 @@ impl FaceRecoveryVariant {
     }
 
     /// The execution-provider tuning measured for this variant.
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         // A match reaching the model's own file, which is where `models`' tiers put a measured profile and the prose
         // behind it: the measurement is of a graph, and the graph is the model's. Detection's sits in its family's
         // `variant.rs` only because that family has one model.

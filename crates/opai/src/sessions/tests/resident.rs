@@ -285,7 +285,7 @@ fn no_two_operations_resolving_to_one_artifact_declare_different_profiles() {
     let catalogued = every_catalogue_run();
     assert!(!catalogued.is_empty(), "the traversal reached no published row at all");
 
-    let mut declared: BTreeMap<ArtifactId, (EpProfile, String)> = BTreeMap::new();
+    let mut declared: BTreeMap<ArtifactId, (Tuning, String)> = BTreeMap::new();
     let mut families = BTreeSet::new();
 
     // Both spreads: the catalogue's, which is what a front end can name, and the typed constructors', which is

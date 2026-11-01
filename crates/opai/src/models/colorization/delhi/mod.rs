@@ -4,11 +4,12 @@
 // Deleting the model is deleting this directory plus the arms in `ColorizationVariant` that name it.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
+use crate::providers::profile::cpu_and_gpu_at_fp16;
+use rust_sak::ai::Tuning;
 
 /// The execution-provider tuning declared for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // Ported from the reference's `delhi.go`, and **not measured on Delhi's own graph, there or here**. The reference
     // declares the same setting as Mumbai's beside it and records no figure and no reasoning for it. Delhi is the same
     // DDColor architecture — a ConvNeXt encoder feeding a transformer colour decoder — so Mumbai's op-mix argument

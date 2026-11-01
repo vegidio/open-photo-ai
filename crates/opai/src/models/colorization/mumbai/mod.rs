@@ -4,11 +4,12 @@
 // Deleting the model is deleting this directory plus the arms in `ColorizationVariant` that name it.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
+use crate::providers::profile::cpu_and_gpu_at_fp16;
+use rust_sak::ai::Tuning;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // Ported from the reference's `mumbai.go`, not re-measured on this project's build.
     //
     // Kept off the Neural Engine at FP16. On the graph as published today that is worth 34.9% (298.8 ms to 194.5 ms).

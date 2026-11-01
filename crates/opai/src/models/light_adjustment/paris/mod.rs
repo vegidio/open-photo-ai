@@ -27,7 +27,8 @@
 // and it is wrong: the move then is to re-export the unfolded architecture, not to patch this one.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode};
+use crate::providers::profile::nodes;
+use rust_sak::ai::{CoreMlComputeUnits, ExecutionMode, Tuning};
 
 // Why the canvas is a fixed square: a graph with dynamic spatial axes and a dynamic batch does not run on CoreML at
 // all. With static input shapes required — which is what a model declaring no profile gets — the provider declines
@@ -59,7 +60,7 @@ pub(crate) const CANVAS: u32 = 1024;
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// and sequential execution at FP16, and at both precisions WebGPU's broken `Pow` left to the CPU and its layout set to
 /// NCHW — with the attention's product left to the CPU as well at FP16.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // Transcribed from the reference's `paris.go` and re-confirmed on this project's own sweep. Everything below is an
     // M2 Max against ONNX Runtime 1.26 at the 1024 square.
     //
@@ -81,7 +82,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // `Fp16Only` helper to enforce by hand what a match over the precision states directly.
     //
     // CoreML's latency specialization hint and its low-precision GPU accumulation both measured within 0.8% in both
-    // precisions for this graph and are not set — carried by the `..EpProfile::default()` below rather than named, so
+    // precisions for this graph and are not set — carried by the `..Tuning::default()` below rather than named, so
     // what the test pins is that nothing else was named either.
     //
     // Re-confirmed with `perftest paris --precision <p> -p <provider> -n 20`, on an M2 Max (64 GB, macOS 26.6) against
@@ -112,7 +113,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     //
     // NCHW over the plugin's NHWC default is the one tuning option that measured outside run-to-run spread, -6.1% at
     // FP32 and -7.3% at FP16 end to end, with identical output. Everything else the plugin offers was swept on the same
-    // machine against the plugin 0.4.0 and landed within ±2% or worse — see `providers::options::webgpu_options`.
+    // machine against the plugin 0.4.0 and landed within ±2% or worse — see `rust_sak::ai::provider_options`.
     //
     //   paris, perftest -p webgpu --bias 1 -n 20, 3 rounds     FP32        FP16
     //     node_pow_1 on the CPU                                104.5ms      97.5ms
@@ -125,15 +126,15 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // values after it (`node_matmul_1`) loses them. Leaving that product to the CPU provider as well lifts FP16 to 34
     // dB and is *faster*, 46.3 ms to 41.1 ms per graph with NCHW on the same machine, because the plugin's version of
     // it was the slow part. The rest cannot be reached from here: the softmax itself is expanded by the runtime into
-    // unnamed nodes before the plugin sees it (see `EpProfile::webgpu_force_cpu_nodes`), so FP16 on WebGPU stays
+    // unnamed nodes before the plugin sees it (see `Tuning::webgpu_force_cpu_nodes`), so FP16 on WebGPU stays
     // visibly darker than CoreML's. FP32 has no such loss and does not carry the second node.
-    let webgpu = EpProfile { webgpu_prefer_nchw: true, webgpu_force_cpu_nodes: &[POW], ..EpProfile::default() };
+    let webgpu = Tuning { webgpu_prefer_nchw: true, webgpu_force_cpu_nodes: nodes(&[POW]), ..Tuning::default() };
 
     match precision {
-        Precision::Fp16 => EpProfile {
+        Precision::Fp16 => Tuning {
             coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
             execution_mode: ExecutionMode::Sequential,
-            webgpu_force_cpu_nodes: &[POW, ATTENTION_PRODUCT],
+            webgpu_force_cpu_nodes: nodes(&[POW, ATTENTION_PRODUCT]),
             ..webgpu
         },
         _ => webgpu,
@@ -154,8 +155,8 @@ mod tests {
     use crate::models::precision::FloatPrecision;
 
     /// The WebGPU half of the profile as FP32 carries it; FP16 adds the attention product.
-    fn webgpu() -> EpProfile {
-        EpProfile { webgpu_prefer_nchw: true, webgpu_force_cpu_nodes: &["node_pow_1"], ..EpProfile::default() }
+    fn webgpu() -> Tuning {
+        Tuning { webgpu_prefer_nchw: true, webgpu_force_cpu_nodes: nodes(&["node_pow_1"]), ..Tuning::default() }
     }
 
     #[test]
@@ -165,10 +166,10 @@ mod tests {
         // the default would still load, still adjust the right photograph, and cost twice as much on an M2 Max.
         assert_eq!(
             LightAdjustmentVariant::Paris(FloatPrecision::Fp16).profile(),
-            EpProfile {
+            Tuning {
                 coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
                 execution_mode: ExecutionMode::Sequential,
-                webgpu_force_cpu_nodes: &["node_pow_1", "node_matmul_1"],
+                webgpu_force_cpu_nodes: nodes(&["node_pow_1", "node_matmul_1"]),
                 ..webgpu()
             },
             "Paris at FP16 is not the settings measured for it"

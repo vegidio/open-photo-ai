@@ -20,7 +20,7 @@ use super::simple::single_artifact;
 
 use crate::pipeline::Backend;
 use crate::pipeline::Shared;
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 pub(crate) use variant::ALL;
 pub use variant::FaceRecoveryVariant;
@@ -124,7 +124,7 @@ impl FaceRecovery {
     }
 
     /// The execution-provider tuning measured for the model this runs, at the precision it runs at.
-    pub(crate) fn profile(&self) -> EpProfile {
+    pub(crate) fn profile(&self) -> Tuning {
         // Asked of the variant, because the variant is what names the graph a measurement was made against — and the
         // precision it was measured at travels inside it.
         self.variant.profile()

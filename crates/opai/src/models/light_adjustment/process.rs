@@ -37,10 +37,10 @@ use crate::pipeline::Backend;
 use crate::pipeline::{
     DepthGeneric, OnOneGraph, Ran, Shared, Shown, SingleGraph, Square, checkpoint, reflected, reporter,
 };
-use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
 use imaging::mix::blended;
 use imaging::tensor::{self, Channel, Normalisation, Sampler};
+use rust_sak::ai::Tuning;
 
 // `[0, 1]` is the reference's `standardize: false` on **both** halves of its conversion — against the `[-1, 1]` face
 // recovery's restorers were trained on. Pinned as a literal here and asserted in the tests below, because feeding a
@@ -165,7 +165,7 @@ const STEPS: usize = 4;
 pub(crate) fn pipeline<B: Backend>(
     name: String,
     artifact: ArtifactId,
-    profile: EpProfile,
+    profile: Tuning,
     params: LightAdjustmentParams,
     canvas: u32,
 ) -> Shared<B> {
@@ -184,7 +184,7 @@ struct Adjust {
 }
 
 impl Adjust {
-    fn new(name: String, artifact: ArtifactId, profile: EpProfile, params: LightAdjustmentParams, canvas: u32) -> Self {
+    fn new(name: String, artifact: ArtifactId, profile: Tuning, params: LightAdjustmentParams, canvas: u32) -> Self {
         Self { graph: SingleGraph::new(name, artifact, profile), canvas, bias: params.bias.as_f32() }
     }
 }
@@ -539,7 +539,7 @@ mod tests {
         async fn acquire(
             &self,
             _artifact: &ArtifactId,
-            _profile: &EpProfile,
+            _profile: &Tuning,
             _requested: ExecutionProvider,
             _interest: &crate::sessions::Interest,
         ) -> Result<SessionHandle<Self::Session>, SessionError> {

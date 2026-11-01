@@ -7,7 +7,7 @@ use super::super::simple::SimpleVariant;
 use super::process::Contract;
 use super::{delhi, jaipur, mumbai};
 
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 /// Delhi, the colorization model a front end offers first.
 pub(crate) const DELHI: SimpleVariant = SimpleVariant { codename: "delhi", label: "Delhi", parameters: &[] };
@@ -44,7 +44,7 @@ impl ColorizationVariant {
 
     /// The execution-provider tuning measured for this variant: Delhi's is [`delhi::profile`], Mumbai's
     /// [`mumbai::profile`] and Jaipur's [`jaipur::profile`].
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         // A match reaching the model's own file, which is where `models`' tiers put a measured profile and the prose
         // behind it: the measurement is of a graph, and the graph is the model's.
         //

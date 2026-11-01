@@ -14,7 +14,7 @@
 pub(crate) mod process;
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlSpecialization, EpProfile};
+use rust_sak::ai::{CoreMlSpecialization, Tuning};
 
 // A fixed square, because a graph with dynamic spatial axes does not run on CoreML at all with static input shapes
 // required — which is what a model declaring no profile gets: the provider declines every one of its 52 nodes, so a
@@ -49,7 +49,7 @@ pub(crate) const CANVAS: u32 = 656;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML's fast-prediction
 /// specialization at FP16 only, and the provider's defaults otherwise — compute units included, at both precisions.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // Transcribed from the reference's `rio.go`, which carries both the figures and the conditions they were taken
     // under: an M2 Max against ONNX Runtime 1.26 at the 656 square.
     //
@@ -98,14 +98,12 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
         // The **first** FP16 run of that session measured 57.8 ms, and nothing reproduced it across seven later runs
         // in either configuration: a cold machine, not a setting, and the kind of figure that gets mistaken for a
         // finding.
-        Precision::Fp16 => {
-            EpProfile { coreml_specialization: CoreMlSpecialization::FastPrediction, ..EpProfile::default() }
-        }
+        Precision::Fp16 => Tuning { coreml_specialization: CoreMlSpecialization::FastPrediction, ..Tuning::default() },
         // Not declared at FP32. Both configurations bottom out at 14.48 ms there, so what separates them is variance
         // rather than compute — and a declaration that is worth something at one precision and nothing at the other
         // is not carried to the precision that did not earn it. That is the precision-split rule Paris, Lyon, Saitama
         // and Kyoto follow, reached here from a different measurement.
-        _ => EpProfile::default(),
+        _ => Tuning::default(),
     }
 }
 
@@ -116,7 +114,7 @@ mod tests {
     use crate::models::color_balance::ColorBalanceVariant;
     use crate::models::light_adjustment::LightAdjustmentVariant;
     use crate::models::precision::FloatPrecision;
-    use crate::providers::profile::CoreMlComputeUnits;
+    use rust_sak::ai::CoreMlComputeUnits;
 
     #[test]
     fn rio_carries_the_one_measured_setting_at_fp16() {
@@ -125,7 +123,7 @@ mod tests {
         // would still load, still correct the right photograph, and cost 3% more on an M2 Max.
         assert_eq!(
             ColorBalanceVariant::Rio(FloatPrecision::Fp16).profile(),
-            EpProfile { coreml_specialization: CoreMlSpecialization::FastPrediction, ..EpProfile::default() },
+            Tuning { coreml_specialization: CoreMlSpecialization::FastPrediction, ..Tuning::default() },
             "Rio at FP16 is not the setting measured for it"
         );
     }
@@ -137,7 +135,7 @@ mod tests {
         // earn it.
         assert_eq!(
             ColorBalanceVariant::Rio(FloatPrecision::Fp32).profile(),
-            EpProfile::default(),
+            Tuning::default(),
             "Rio at FP32 declared a setting nothing measured"
         );
     }

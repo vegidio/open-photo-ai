@@ -23,8 +23,9 @@
 pub(crate) mod process;
 
 use crate::models::precision::Precision;
-use crate::providers::profile::EpProfile;
+use crate::providers::profile::nodes;
 use imaging::tensor::Normalisation;
+use rust_sak::ai::Tuning;
 
 // 656 is Deep_White_Balance's own working size and the size Rio ships, so the editing half runs at exactly the scale it
 // was tuned for and one padded square serves both halves — built once, cropped once, with no second geometry for a
@@ -93,7 +94,7 @@ pub(crate) const fn rendering_offset(index: usize) -> u32 {
 ///
 /// **The provider defaults, at both precisions — and that is a measurement rather than an omission** — except for the
 /// three convolutions WebGPU computes wrongly, at both precisions.
-pub(crate) fn profile(_precision: Precision) -> EpProfile {
+pub(crate) fn profile(_precision: Precision) -> Tuning {
     // Everything below is an M2 Max against the ONNX Runtime this application pins, at the 656 square.
     //
     // Nothing beats the CoreML defaults. The fast-prediction specialization is the only row that even looks like a
@@ -162,7 +163,7 @@ pub(crate) fn profile(_precision: Precision) -> EpProfile {
     // while the renderings beside them are exact. Left to the CPU provider they bring FP32 to 138 dB and FP16 to 62 dB.
     // Nothing else in the graph was needed. Measured on an M2 Max against the WebGPU plugin 0.4.0 and ONNX Runtime
     // 1.30, per graph: +9.7% at FP32 (156.0 ms to 171.2 ms) and +12.6% at FP16 (124.2 ms to 139.8 ms) on WebGPU.
-    EpProfile { webgpu_force_cpu_nodes: WEBGPU_CPU_NODES, ..EpProfile::default() }
+    Tuning { webgpu_force_cpu_nodes: nodes(WEBGPU_CPU_NODES), ..Tuning::default() }
 }
 
 /// The nodes WebGPU is kept off at both precisions, as the graph names them — see `profile`.
@@ -178,7 +179,7 @@ mod tests {
 
     use crate::models::color_balance::ColorBalanceVariant;
     use crate::models::precision::FloatPrecision;
-    use crate::providers::profile::{CoreMlComputeUnits, CoreMlSpecialization};
+    use rust_sak::ai::{CoreMlComputeUnits, CoreMlSpecialization};
 
     #[test]
     fn the_channel_layout_is_the_one_the_conversion_script_exports() {
@@ -228,7 +229,7 @@ mod tests {
         for precision in FloatPrecision::ALL {
             assert_eq!(
                 ColorBalanceVariant::SaoPaulo(precision).profile(),
-                EpProfile { webgpu_force_cpu_nodes: WEBGPU_CPU_NODES, ..EpProfile::default() },
+                Tuning { webgpu_force_cpu_nodes: nodes(WEBGPU_CPU_NODES), ..Tuning::default() },
                 "São Paulo at {precision:?} declared a setting the sweep did not find"
             );
         }

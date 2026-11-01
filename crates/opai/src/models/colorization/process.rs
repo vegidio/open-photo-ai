@@ -33,10 +33,10 @@ use crate::error::InferenceError;
 use crate::models::ArtifactId;
 use crate::pipeline::Backend;
 use crate::pipeline::{ImagePipeline, OnOneGraph, Ran, Shared, SingleGraph, Square, reporter};
-use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
 use imaging::ChannelDepth;
 use imaging::tensor::{Channel, Sampler};
+use rust_sak::ai::Tuning;
 
 /// Which of the family's two graph contracts a variant speaks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,7 +112,7 @@ const STEPS: usize = 3;
 pub(crate) fn pipeline<B: Backend>(
     name: String,
     artifact: ArtifactId,
-    profile: EpProfile,
+    profile: Tuning,
     contract: Contract,
 ) -> Shared<B> {
     Arc::new(Colorize { graph: SingleGraph::new(name, artifact, profile), contract })
@@ -264,7 +264,7 @@ mod tests {
         async fn acquire(
             &self,
             _artifact: &ArtifactId,
-            _profile: &EpProfile,
+            _profile: &Tuning,
             _requested: ExecutionProvider,
             _interest: &crate::sessions::Interest,
         ) -> Result<SessionHandle<Self::Session>, SessionError> {

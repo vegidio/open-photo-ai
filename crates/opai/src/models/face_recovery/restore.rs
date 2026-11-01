@@ -39,9 +39,9 @@ use crate::models::face::Faces;
 use crate::pipeline::Backend;
 use crate::pipeline::session::GraphShape;
 use crate::pipeline::{DepthGeneric, OnOneGraph, Shared, SingleGraph, checkpoint, reporter};
-use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
 use imaging::tensor::{Channel, Normalisation, Sampler, flattened};
+use rust_sak::ai::Tuning;
 
 // Not a tunable: the weights are exported at a static `[1, 3, 512, 512]`, and the whole of the alignment — the
 // template's scaling, the mask's extent and the composite's bound — is derived from this value.
@@ -69,7 +69,7 @@ const STEPS_PER_FACE: usize = 2;
 pub(crate) fn pipeline<B: Backend>(
     name: String,
     artifact: ArtifactId,
-    profile: EpProfile,
+    profile: Tuning,
     params: FaceRecoveryParams,
     weight: Option<f32>,
 ) -> Shared<B> {
@@ -95,7 +95,7 @@ impl Restore {
     fn new(
         name: String,
         artifact: ArtifactId,
-        profile: EpProfile,
+        profile: Tuning,
         params: FaceRecoveryParams,
         weight: Option<f32>,
     ) -> Self {
@@ -269,7 +269,7 @@ mod tests {
         async fn acquire(
             &self,
             _artifact: &ArtifactId,
-            _profile: &EpProfile,
+            _profile: &Tuning,
             _requested: ExecutionProvider,
             _interest: &crate::sessions::Interest,
         ) -> Result<SessionHandle<Self::Session>, SessionError> {

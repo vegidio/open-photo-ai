@@ -8,10 +8,10 @@
 // plus the arms in `FaceRecoveryVariant` that name it.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlSpecialization, EpProfile, ExecutionMode};
+use rust_sak::ai::{CoreMlSpecialization, ExecutionMode, Tuning};
 
 /// The execution-provider tuning measured for this model. `precision` is ignored: both precisions share one profile.
-pub(crate) fn profile(_precision: Precision) -> EpProfile {
+pub(crate) fn profile(_precision: Precision) -> Tuning {
     // Transcribed from the reference's `santorini.go`, whose comment carries both the numbers and the conditions they
     // were taken under. **No execution provider was exercised against this model in this project**: the figures were
     // taken on an M2 Max (CoreML) and an RTX 5090 (CUDA), and what this crate validates is that the settings are
@@ -22,7 +22,7 @@ pub(crate) fn profile(_precision: Precision) -> EpProfile {
     // the graph's shape and its export rather than of the precision it was exported at, and both precisions were
     // measured. The parameter stays so that a later re-measurement that splits them is a change to this function
     // rather than to its signature and every call site.
-    EpProfile {
+    Tuning {
         // CoreML asked to specialize the graph for latency. A trade rather than a win: worth 1.04x at FP16 on an M2
         // Max and a tie at FP32 in steady state, at the price of 20-30ms of cold start in every FP32 round — which is
         // the specialization time Apple names as this hint's price.
@@ -63,7 +63,7 @@ pub(crate) fn profile(_precision: Precision) -> EpProfile {
         //
         // - **The NHWC convolution layout fails at `Run`**, reporting that the input channels are not equal to the
         //   kernel channels times the group. That is exactly the modulated-convolution hazard
-        //   `EpProfile::cuda_prefer_nhwc` documents: 23 of this graph's 95 convolutions take a weight computed by a
+        //   `Tuning::cuda_prefer_nhwc` documents: 23 of this graph's 95 convolutions take a weight computed by a
         //   `Reshape` rather than by a stored initializer. It is **not** symmetric with Athens, which declares the
         //   layout at FP16, nor with New York, which declares it at both.
         // - **Convolution-bias fusion** costs 1.4ms at FP32 and fails inside the cuDNN frontend at FP16 with
@@ -73,7 +73,7 @@ pub(crate) fn profile(_precision: Precision) -> EpProfile {
         // strategy, the default-stream copy, the EP-level unified stream and the tunable-op switch. Two are not
         // options at all: the convolution algorithm search must not be set to its *default* setting, which costs 2.1x
         // because all 95 convolutions then fall back, and TF32 must not be disabled, which costs 1.5x.
-        ..EpProfile::default()
+        ..Tuning::default()
     }
 }
 
@@ -83,11 +83,11 @@ mod tests {
 
     use crate::models::face_recovery::FaceRecoveryVariant;
     use crate::models::precision::FloatPrecision;
-    use crate::providers::profile::CoreMlComputeUnits;
+    use rust_sak::ai::CoreMlComputeUnits;
 
-    fn declared(precision: FloatPrecision) -> EpProfile {
+    fn declared(precision: FloatPrecision) -> Tuning {
         // Asked through the variant rather than of `profile` directly, because the variant's match is the half a
-        // refactor can break: a row left pointing at `EpProfile::default()` still compiles and still restores.
+        // refactor can break: a row left pointing at `Tuning::default()` still compiles and still restores.
         FaceRecoveryVariant::Santorini(precision).profile()
     }
 
@@ -162,9 +162,9 @@ mod tests {
     fn santorini_leaves_every_other_provider_setting_at_the_runtimes_own_default() {
         // The two CUDA defaults that are load-bearing for this graph are the reason: the convolution algorithm
         // search must not be set to its own default, which costs 2.1x, and TF32 must not be disabled, which costs
-        // 1.5x. Both are carried by the `..EpProfile::default()` rather than named, so what this pins is that
+        // 1.5x. Both are carried by the `..Tuning::default()` rather than named, so what this pins is that
         // nothing else was named either — convolution-bias fusion included, which fails in the cuDNN frontend here.
-        let default = EpProfile::default();
+        let default = Tuning::default();
 
         for precision in FloatPrecision::ALL {
             let carried = declared(precision);

@@ -96,7 +96,7 @@ impl Installed {
     /// What this machine can be asked to run on before the runtime is loaded: the CPU, CoreML on macOS, and the NVIDIA
     /// providers whose libraries are installed. WebGPU is decided by the load.
     pub(crate) fn providers(&self) -> SupportedProviders {
-        ai::Supported::detect(self.cuda, self.tensorrt).into()
+        SupportedProviders::detect(self.cuda, self.tensorrt)
     }
 }
 

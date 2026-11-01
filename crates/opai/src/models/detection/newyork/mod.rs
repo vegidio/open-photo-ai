@@ -33,8 +33,8 @@ use crate::models::face::Faces;
 use crate::pipeline::Backend;
 use crate::pipeline::session::{GraphShape, NamedOutput};
 use crate::pipeline::{DataPipeline, OnOneGraph, SharedData, SingleGraph, checkpoint, reporter};
-use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
+use rust_sak::ai::Tuning;
 
 // Not a tunable: the anchor grid, the output tensor lengths and the whole of the pre- and post-processing are derived
 // from this value, and the weights are exported at a static `[1, 3, 640, 640]`.
@@ -73,7 +73,7 @@ struct NewYork {
 
 impl NewYork {
     /// The pipeline for `artifact` under `profile`, named `name`.
-    fn new(artifact: ArtifactId, profile: EpProfile, name: String) -> Self {
+    fn new(artifact: ArtifactId, profile: Tuning, name: String) -> Self {
         Self { graph: SingleGraph::new(name, artifact, profile) }
     }
 }
@@ -177,8 +177,8 @@ mod tests {
     use crate::pipeline::Model;
     use crate::pipeline::test_support::stub_backend_runs;
     use crate::providers::ExecutionProvider;
-    use crate::providers::profile::{CoreMlComputeUnits, CoreMlSpecialization, ExecutionMode};
     use crate::sessions::SessionHandle;
+    use rust_sak::ai::{CoreMlComputeUnits, CoreMlSpecialization, ExecutionMode};
 
     /// What a run of the fake found, so a test can say which of the three phases it was stopped at.
     #[derive(Default)]
@@ -204,7 +204,7 @@ mod tests {
         async fn acquire(
             &self,
             _artifact: &ArtifactId,
-            _profile: &EpProfile,
+            _profile: &Tuning,
             _requested: ExecutionProvider,
             _interest: &crate::sessions::Interest,
         ) -> Result<SessionHandle<Self::Session>, crate::error::SessionError> {
@@ -416,7 +416,7 @@ mod tests {
         for precision in FloatPrecision::ALL {
             assert_eq!(
                 DetectionVariant::NewYork(precision).profile(),
-                EpProfile { cuda_prefer_nhwc: true, execution_mode: ExecutionMode::Sequential, ..EpProfile::default() },
+                Tuning { cuda_prefer_nhwc: true, execution_mode: ExecutionMode::Sequential, ..Tuning::default() },
                 "at {precision:?}"
             );
         }

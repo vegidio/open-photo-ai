@@ -111,12 +111,12 @@ use crate::models::precision::Precision;
 use crate::models::{ArtifactId, GraphRole, ResolvedGraph, Scale};
 use crate::pipeline::Backend;
 use crate::pipeline::{ImagePipeline, Model, reporter};
-use crate::providers::options::TRT_BUILDER_OPTIMIZATION_LEVEL;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode};
+use crate::providers::profile::TRT_BUILDER_OPTIMIZATION_LEVEL;
 use crate::sessions::SessionHandle;
 use imaging::grid::{Tile, TileGrid};
 use imaging::tensor::{Channel, Normalisation, Sampler, chw_to_image, padded_to_chw};
 use imaging::{ChannelDepth, TilingError};
+use rust_sak::ai::{CoreMlComputeUnits, ExecutionMode, Tuning};
 
 /// What one diffusion upscale operation runs: its three graphs, and the scale the image is resampled to first.
 ///
@@ -196,7 +196,7 @@ impl<B: Backend> Model<B> for Diffusion {
 
     /// Each graph's artifact against **its own** profile. See the type's own documentation for why one shared profile
     /// would be a wrong image rather than a tidier signature.
-    fn sessions(&self) -> Vec<(&ArtifactId, &EpProfile)> {
+    fn sessions(&self) -> Vec<(&ArtifactId, &Tuning)> {
         self.graphs.iter().map(|graph| (&graph.artifact, &graph.profile)).collect()
     }
 }
@@ -445,14 +445,13 @@ where
 /// sweep that concluded it joined the names with a comma, and the separator was hardcoded a layer below the thing
 /// being swept — so every multi-name case in it was one unrecognised name, which the runtime ignores in silence, and
 /// therefore failed exactly as naming nothing does. The table was consistent with a wrong separator and was read as a
-/// runtime limitation. The separator is a semicolon; see [`DISABLED_OPTIMIZER_SEPARATOR`] and, for the measurement,
+/// runtime limitation. The separator is a semicolon; see `DISABLED_OPTIMIZER_SEPARATOR` and, for the measurement,
 /// `models::upscale::osaka::live`.
 ///
 /// An unrecognised name is ignored by the runtime rather than reported, so a typo here is silent and the only sign
 /// the setting took effect is that the model loads at all. That is what made one wrong character survive three
 /// changes, and it is the reason this setting is never taken on trust from documentation.
 ///
-/// [`DISABLED_OPTIMIZER_SEPARATOR`]: crate::providers::profile::DISABLED_OPTIMIZER_SEPARATOR
 const BROKEN_OPTIMIZERS: [&str; 2] = ["ReshapeFusion", "SimplifiedLayerNormFusion"];
 
 /// Osaka: a VAE encoder, a one-step diffusion transformer and a VAE decoder, run as a single pass over the image at
@@ -517,7 +516,7 @@ pub(crate) static OSAKA: DiffusionVariant = DiffusionVariant {
 /// - **`ReshapeFusion` and `SimplifiedLayerNormFusion` disabled.** Not tuning at all: without the second of them
 ///   the transformer does not open on the CPU provider. This is the one setting here that **was** verified
 ///   locally rather than transcribed, and it ends up exactly where the reference has it — both names, joined by
-///   [`DISABLED_OPTIMIZER_SEPARATOR`], which is what has to be right for either to take effect. See
+///   `DISABLED_OPTIMIZER_SEPARATOR`, which is what has to be right for either to take effect. See
 ///   [`BROKEN_OPTIMIZERS`] for the failure it is declared against and for the reading of it that was wrong.
 /// - **CoreML on the CPU and the GPU.** The default `ALL` lets CoreML dispatch to the Neural Engine, which these
 ///   graphs are consistently worse on: 4.2x on the VAE encoder and 3.9x on the decoder against `CPUAndGPU`, while
@@ -544,16 +543,16 @@ pub(crate) static OSAKA: DiffusionVariant = DiffusionVariant {
 /// way to take that speed is to select the FP16 model, which is faster still and stays at 0.9999.
 ///
 /// `trt_int8_enable` is refused for a second reason, and it is the one to remember before adding anything to
-/// [`trt_options`](EpProfile::trt_options): **a profile applies to all three graphs.** The quantization is
+/// [`trt_options`](Tuning::trt_options): **a profile applies to all three graphs.** The quantization is
 /// weight-only `DequantizeLinear` with no Q on the activations, which TensorRT does not accelerate — the
 /// transformer measures as noise with it — but the flag reaches the two VAE halves too, and there it is a
 /// catastrophe: the encoder goes from 21.4ms to 124.6ms and the decoder from 45.5ms to 298.9ms. Neither mode is
-/// named here, and both are already off in [`crate::providers::options`]'s pinned defaults; this arm's job is to
+/// named here, and both are already off in `rust-sak`'s pinned TensorRT defaults; this arm's job is to
 /// record that the absence is a decision.
 ///
 /// ## What the CUDA layout setting does, and where it is taken back off
 ///
-/// [`cuda_prefer_nhwc`](EpProfile::cuda_prefer_nhwc) is declared here for the variant and **overridden off for
+/// [`cuda_prefer_nhwc`](Tuning::cuda_prefer_nhwc) is declared here for the variant and **overridden off for
 /// the transformer alone**, where the graph set is resolved — see [`graph`]. The two VAE halves are 27
 /// and 38 convolutions at FP16, which is the shape cuDNN has tensor-core kernels for in NHWC and which otherwise
 /// pays for a transpose on either side of every convolution: -8.0% on the encoder and -9.4% on the decoder, at
@@ -572,19 +571,18 @@ pub(crate) static OSAKA: DiffusionVariant = DiffusionVariant {
 /// are all ties — the last one TensorRT itself suggests in a build warning, and taking that suggestion costs 1.3%
 /// and moves the result further from CUDA rather than nearer.
 ///
-/// [`DISABLED_OPTIMIZER_SEPARATOR`]: crate::providers::profile::DISABLED_OPTIMIZER_SEPARATOR
-pub(crate) fn profile(_precision: Precision) -> EpProfile {
+pub(crate) fn profile(_precision: Precision) -> Tuning {
     // Both precisions, and every figure the reference's. The transformer takes `cuda_prefer_nhwc` back off
     // where the graph set is resolved, so the override is a property of that graph rather than something a
     // caller remembers to apply.
-    EpProfile {
+    Tuning {
         coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
         execution_mode: ExecutionMode::Sequential,
         disable_mem_pattern: true,
         disabled_optimizers: BROKEN_OPTIMIZERS.iter().map(|name| (*name).to_string()).collect(),
         cuda_prefer_nhwc: true,
         trt_options: [(TRT_BUILDER_OPTIMIZATION_LEVEL.to_string(), "3".to_string())].into(),
-        ..EpProfile::default()
+        ..Tuning::default()
     }
 }
 
@@ -602,12 +600,12 @@ mod tests {
     use crate::models::ArtifactId;
     use crate::pipeline::session::GraphShape;
     use crate::providers::ExecutionProvider;
-    use crate::providers::profile::EpProfile;
     use crate::sessions::SessionHandle;
     use imaging::canvas::axis_weights;
     use imaging::canvas::fixtures::flat;
     use imaging::canvas::placements;
     use imaging::test_support::gradient;
+    use rust_sak::ai::Tuning;
 
     /// What the fake recorded: the two shapes of every graph call, in order.
     type Shapes = Arc<Mutex<Vec<(&'static str, GraphShape, GraphShape)>>>;
@@ -632,7 +630,7 @@ mod tests {
         async fn acquire(
             &self,
             _artifact: &ArtifactId,
-            _profile: &EpProfile,
+            _profile: &Tuning,
             _requested: ExecutionProvider,
             _interest: &crate::sessions::Interest,
         ) -> Result<SessionHandle<Self::Session>, SessionError> {
@@ -903,7 +901,7 @@ mod tests {
         ResolvedGraph {
             role,
             artifact: ArtifactId::new(crate::models::Family::Upscale, "osaka", None, Precision::Fp16),
-            profile: EpProfile::default(),
+            profile: Tuning::default(),
         }
     }
 

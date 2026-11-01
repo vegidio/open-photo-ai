@@ -22,7 +22,8 @@
 // checkpoint carries both.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
+use crate::providers::profile::{cpu_and_gpu_at_fp16, with_webgpu_cpu_nodes_at_fp16};
+use rust_sak::ai::Tuning;
 
 // It cannot be exported with dynamic axes, though not for the reason one would expect. A dynamic export is numerically
 // perfect — the tracer turns the mask calculation into real operations rather than baking a constant, and the result is
@@ -40,7 +41,7 @@ pub(crate) const CANVAS: u32 = 1024;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // Transcribed from the reference's `lyon.go` and re-confirmed on this project's own sweep. Everything below is an
     // M2 Max against ONNX Runtime 1.26 at the 1024 square.
     //
@@ -109,7 +110,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // matter bring it to 50 dB; what remains is FP16 rounding spread across the graph, which no single node accounts
     // for. Measured on an M2 Max against the WebGPU plugin 0.4.0 and ONNX Runtime 1.30, per graph: +4.4% on WebGPU,
     // 1948.3 ms to 2034.5 ms. FP32 needs none.
-    cpu_and_gpu_at_fp16(precision).with_webgpu_cpu_nodes_at_fp16(precision, WEBGPU_CPU_NODES_FP16)
+    with_webgpu_cpu_nodes_at_fp16(cpu_and_gpu_at_fp16(precision), precision, WEBGPU_CPU_NODES_FP16)
 }
 
 /// The nodes WebGPU is kept off at FP16, as the graph names them — see `profile`.
@@ -139,7 +140,7 @@ mod tests {
 
     use crate::models::light_adjustment::LightAdjustmentVariant;
     use crate::models::precision::FloatPrecision;
-    use crate::providers::profile::ExecutionMode;
+    use rust_sak::ai::ExecutionMode;
 
     #[test]
     fn lyon_adds_its_webgpu_nodes_to_the_shared_fp16_profile() {
@@ -147,7 +148,7 @@ mod tests {
         // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
         assert_eq!(
             LightAdjustmentVariant::Lyon(FloatPrecision::Fp16).profile(),
-            cpu_and_gpu_at_fp16(Precision::Fp16).with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, WEBGPU_CPU_NODES_FP16)
+            with_webgpu_cpu_nodes_at_fp16(cpu_and_gpu_at_fp16(Precision::Fp16), Precision::Fp16, WEBGPU_CPU_NODES_FP16)
         );
         assert_eq!(
             LightAdjustmentVariant::Lyon(FloatPrecision::Fp32).profile(),

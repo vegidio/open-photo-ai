@@ -91,7 +91,7 @@ impl super::Backend for NoBackend {
     async fn acquire(
         &self,
         _artifact: &crate::models::ArtifactId,
-        _profile: &crate::providers::profile::EpProfile,
+        _profile: &rust_sak::ai::Tuning,
         _requested: crate::providers::ExecutionProvider,
         _interest: &crate::sessions::Interest,
     ) -> Result<crate::sessions::SessionHandle<Self::Session>, crate::error::SessionError> {
@@ -134,7 +134,7 @@ impl super::Backend for Fake {
     async fn acquire(
         &self,
         _artifact: &crate::models::ArtifactId,
-        _profile: &crate::providers::profile::EpProfile,
+        _profile: &rust_sak::ai::Tuning,
         _requested: crate::providers::ExecutionProvider,
         _interest: &crate::sessions::Interest,
     ) -> Result<crate::sessions::SessionHandle<Self::Session>, crate::error::SessionError> {

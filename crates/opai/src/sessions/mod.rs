@@ -47,7 +47,7 @@
 //!
 //! # A provider that cannot open a model is a downgrade, not a failure
 //!
-//! A request walks a **ladder** of resolutions (see [`options::ladder`]) until one builds. Under `Auto` that is the
+//! A request walks a **ladder** of rungs (see `rust_sak::ai::ladder`) until one builds. Under `Auto` that is the
 //! machine's accelerators one at a time, best first — each rung keeping every accelerator below it attached, so an
 //! operation one declines is still delegated down the list — and the CPU last. Any other request is its provider,
 //! then the CPU. The handle carries what it was actually built on, which is what the chain folds a run's
@@ -111,13 +111,12 @@ use crate::deps::model;
 use crate::deps::model::manifest::Listing;
 use crate::error::{InitError, SessionError};
 use crate::models::ArtifactId;
-use crate::providers::options::{self, ChainResolution};
-use crate::providers::profile::EpProfile;
 use crate::providers::{ExecutionProvider, SupportedProviders};
-use crate::sessions::build::BuildRequest;
+use crate::sessions::build::{BuildRequest, provider_of};
 use crate::task::spawn_blocking;
 use crate::telemetry::metrics;
 use crate::telemetry::unit::{self, Outcome, unit_span};
+use rust_sak::ai::Tuning;
 use tracing::Instrument as _;
 
 /// Where a model's files and the hashes they are verified against come from.
@@ -133,7 +132,7 @@ enum ModelSource {
     At { base_url: String, listing: Listing },
 }
 
-/// How a plan and a model file become a session.
+/// How a rung and a model file become a session.
 ///
 /// A boxed closure rather than a generic parameter or a `fn` pointer: the production builder is
 /// [`build::build`], and a test's has to capture what it is recording.
@@ -167,7 +166,7 @@ pub(crate) struct Sessions<S = ort::session::Session> {
     trust: ModelTrust,
     /// Where the model files come from.
     models: ModelSource,
-    /// How a plan and a file become a session.
+    /// How a rung and a file become a session.
     build: Builder<S>,
 }
 
@@ -207,10 +206,10 @@ impl<S: Send + 'static> Sessions<S> {
         Self { cache, app_dir, name, supported, trust, models, build }
     }
 
-    /// Records whether WebGPU is usable, once the runtime has loaded its plugin — which is after these sessions were
-    /// built from the install plan, since nothing the plan installs decides it.
-    pub(crate) const fn set_webgpu(&mut self, webgpu: bool) {
-        self.supported = self.supported.with_webgpu(webgpu);
+    /// Replaces what this machine offers with `supported`, read again once the runtime has loaded — which is after
+    /// these sessions were built from the install plan, and is what decides whether WebGPU is offered.
+    pub(crate) const fn set_supported(&mut self, supported: SupportedProviders) {
+        self.supported = supported;
     }
 
     /// What this machine can be asked to run on, as decided during initialization — the one copy of it.
@@ -257,7 +256,7 @@ impl<S: Send + 'static> Sessions<S> {
     /// on, and is checked by a test below rather than left to a comment.
     ///
     /// Where the resolved providers cannot open the model, it is built on the next rung of the request's
-    /// [`ladder`](options::ladder) — the CPU last — and the handle reports what it was built on. A missing or
+    /// ladder — the CPU last — and the handle reports what it was built on. A missing or
     /// unreadable model file is not retried: it fails the same way on every provider.
     ///
     /// # Errors
@@ -270,7 +269,7 @@ impl<S: Send + 'static> Sessions<S> {
     pub(crate) async fn session(
         &self,
         artifact: &ArtifactId,
-        profile: &EpProfile,
+        profile: &Tuning,
         requested: ExecutionProvider,
         interest: &Interest,
     ) -> Result<SessionHandle<S>, SessionError> {
@@ -296,23 +295,23 @@ impl<S: Send + 'static> Sessions<S> {
 
     /// [`session`](Self::session)'s body, inside the request's span.
     ///
-    /// Walks the request's [`ladder`](options::ladder), trying each rung until one builds. Under `Auto` a rung that
+    /// Walks the request's ladder (`rust_sak::ai::ladder`), trying each rung until one builds. Under `Auto` a rung that
     /// already threw an error for this artifact is skipped, and one that throws now is remembered as declined.
     async fn request(
         &self,
         artifact: &ArtifactId,
-        profile: &EpProfile,
+        profile: &Tuning,
         requested: ExecutionProvider,
         interest: &Interest,
     ) -> Result<SessionHandle<S>, SessionError> {
         let auto = requested == ExecutionProvider::Auto;
-        let rungs: Vec<_> = options::ladder(requested, self.supported)
+        let rungs: Vec<_> = rust_sak::ai::ladder(&[requested], self.supported)
             .into_iter()
-            .filter(|rung| !(auto && self.cache.is_declined(artifact, rung.resolved())))
+            .filter(|rung| !(auto && self.cache.is_declined(artifact, provider_of(rung))))
             .collect();
 
         for (index, rung) in rungs.iter().enumerate() {
-            match self.build_releasing(artifact, profile, rung, interest).await {
+            match self.build_releasing(artifact, profile, requested, rung, interest).await {
                 // A stop, which is not a failure and not a downgrade: the transfer this request was waiting on ended
                 // because nothing was left waiting for it, and attempting the next rung would be starting the same
                 // install again on behalf of a request that has already gone away.
@@ -325,10 +324,10 @@ impl<S: Send + 'static> Sessions<S> {
                 // `Install`, fails the same way on every rung, and retrying it would multiply the wait before
                 // reporting what was already known.
                 //
-                // Matched on the provider the failure *carries*, which `sessions::build` sets from the plan it
+                // Matched on the provider the failure *carries*, which `sessions::build` sets from the rung it
                 // attached, so the fallback is decided by what was actually tried.
                 Err(SessionError::Build { provider, .. }) if provider != ExecutionProvider::Cpu => {
-                    let next = rungs.get(index + 1).map_or(ExecutionProvider::Cpu, |rung| rung.resolved());
+                    let next = rungs.get(index + 1).map_or(ExecutionProvider::Cpu, |rung| provider_of(rung));
 
                     // **The record this whole instrumentation sweep is most for.** A downgrade is invisible to a user
                     // — the enhancement still completes, several times slower — so a bug report about speed has
@@ -360,36 +359,38 @@ impl<S: Send + 'static> Sessions<S> {
     async fn build_releasing(
         &self,
         artifact: &ArtifactId,
-        profile: &EpProfile,
-        rung: &ChainResolution,
+        profile: &Tuning,
+        requested: ExecutionProvider,
+        rung: &[ExecutionProvider],
         interest: &Interest,
     ) -> Result<Option<SessionHandle<S>>, SessionError> {
-        let outcome = self.build_on(artifact, profile, rung, interest).await;
+        let outcome = self.build_on(artifact, profile, requested, rung, interest).await;
 
         match outcome {
             Err(error) if error.is_out_of_memory() && self.cache.release_unused(artifact) > 0 => {
                 // `info` rather than `warn`: nothing has been lost yet, and the downgrade it may still end in has its
                 // own record.
-                tracing::info!(%artifact, provider = %rung.resolved(), "retrying the build after releasing memory");
-                self.build_on(artifact, profile, rung, interest).await
+                tracing::info!(%artifact, provider = %provider_of(rung), "retrying the build after releasing memory");
+                self.build_on(artifact, profile, requested, rung, interest).await
             }
             outcome => outcome,
         }
     }
 
-    /// The session for `artifact` under `rung`, one resolution of the request's ladder.
+    /// The session for `artifact` on `rung`, one rung of the ladder for `requested`.
     ///
-    /// The build's records name what the *caller* asked for, carried on the rung, beside what it was built on.
+    /// The build's records name what the *caller* asked for beside what it was built on.
     async fn build_on(
         &self,
         artifact: &ArtifactId,
-        profile: &EpProfile,
-        rung: &ChainResolution,
+        profile: &Tuning,
+        requested: ExecutionProvider,
+        rung: &[ExecutionProvider],
         interest: &Interest,
     ) -> Result<Option<SessionHandle<S>>, SessionError> {
         // Keyed on what the machine will actually serve, not on what was asked for: filing a CPU session under a GPU
         // key would make an explicit switch to the CPU build a second identical copy of it.
-        let (requested, resolved) = (rung.requested, rung.resolved());
+        let resolved = provider_of(rung);
 
         self.cache
             .get_or_build(artifact, requested, resolved, interest, |installing| -> BuildFuture<'_, S> {
@@ -401,8 +402,7 @@ impl<S: Send + 'static> Sessions<S> {
                         return Ok(None);
                     };
 
-                    let paths = caches::resolve(&self.app_dir, &self.name, artifact)?;
-                    let plan = options::plan(rung.clone(), profile, &paths, crate::gpu::cuda_device_memory());
+                    let cache = caches::resolve(&self.app_dir, &self.name, artifact)?;
 
                     // The graph is the artifact's own name, the same rule the descriptor composes a model's version from;
                     // a model too large for the protobuf limit keeps its weights in a sibling the runtime opens itself.
@@ -412,7 +412,16 @@ impl<S: Send + 'static> Sessions<S> {
                     // to minutes, it is what a later run would have to pay all over again, and there is nothing to
                     // interrupt it at. What a stop saves is the transfer, which is where the gigabytes and the minutes
                     // of waiting actually are.
-                    self.open(BuildRequest { artifact: artifact.clone(), plan, paths, model }).await.map(Some)
+                    let request = BuildRequest {
+                        artifact: artifact.clone(),
+                        requested,
+                        supported: self.supported,
+                        rung: rung.to_vec(),
+                        tuning: profile.clone(),
+                        cache,
+                        model,
+                    };
+                    self.open(request).await.map(Some)
                 })
             })
             .await

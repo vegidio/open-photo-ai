@@ -687,9 +687,9 @@ mod tests {
     use crate::pipeline::session::{GraphShape, NamedOutput};
     use crate::pipeline::test_support::NoBackend;
     use crate::providers::ExecutionProvider;
-    use crate::providers::profile::EpProfile;
     use crate::sessions::SessionHandle;
     use crate::task::lock;
+    use rust_sak::ai::Tuning;
     use tokio_util::sync::CancellationToken;
 
     /// A picture of `width` by `height` to analyse, correctly exposed, with no cast and with colour of its own, so that
@@ -791,7 +791,7 @@ mod tests {
         async fn acquire(
             &self,
             artifact: &ArtifactId,
-            _profile: &EpProfile,
+            _profile: &Tuning,
             _requested: ExecutionProvider,
             _interest: &crate::sessions::Interest,
         ) -> Result<SessionHandle<Self::Session>, SessionError> {

@@ -8,7 +8,7 @@ use super::super::simple::SimpleVariant;
 
 use super::{lyon, paris};
 
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 /// Paris, the light adjustment model a front end offers first.
 pub(crate) const PARIS: SimpleVariant =
@@ -42,7 +42,7 @@ impl LightAdjustmentVariant {
 
     /// The execution-provider tuning measured for this variant: Paris' is [`paris::profile`] and Lyon's
     /// [`lyon::profile`].
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         // A match reaching the model's own file, which is where `models`' tiers put a measured profile and the prose
         // behind it: the measurement is of a graph, and the graph is the model's.
         //
@@ -186,7 +186,7 @@ pub(crate) mod tests {
         // measured at is a slower session with nothing to report it. Paris at FP32 is the exception, for its WebGPU
         // settings alone; which ones is pinned in `paris`.
         for variant in every_variant() {
-            let declared = variant.profile() != EpProfile::default();
+            let declared = variant.profile() != Tuning::default();
 
             assert_eq!(
                 declared,

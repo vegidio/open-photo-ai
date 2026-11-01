@@ -940,9 +940,9 @@ fn the_provider_choice_is_reachable_from_the_crate_root() {
     assert_eq!(stored, ExecutionProvider::CoreMl);
     assert_eq!(stored.to_string(), "CoreML");
 
-    // And refused where the text names no provider this build publishes, with the error the crate root already
-    // exports.
-    let error: InitError = "openvino".parse::<ExecutionProvider>().expect_err("an unpublished name is refused");
+    // And refused where the text names no provider this build publishes, as `rust-sak`'s error, which converts into
+    // the one the crate root already exports.
+    let error = InitError::from("openvino".parse::<ExecutionProvider>().expect_err("an unpublished name is refused"));
     assert!(matches!(error, InitError::UnknownProvider { .. }), "{error}");
 
     // Every choice a chooser would offer, from the one list the crate publishes.

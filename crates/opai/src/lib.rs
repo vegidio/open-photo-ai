@@ -403,7 +403,7 @@ impl pipeline::Backend for Opai {
     async fn acquire(
         &self,
         artifact: &ArtifactId,
-        profile: &providers::profile::EpProfile,
+        profile: &rust_sak::ai::Tuning,
         requested: ExecutionProvider,
         interest: &sessions::Interest,
     ) -> Result<sessions::SessionHandle<Self::Session>, error::SessionError> {
@@ -632,14 +632,15 @@ impl Opai {
         // environment is blocking and syscall-heavy, so it runs on a blocking thread.
         let app_name = name.to_string();
         let runtime_dir = installed.runtime.clone();
-        let webgpu = spawn_blocking::<_, InitError, _>(move || runtime::start(&app_name, &runtime_dir)).await??;
+        spawn_blocking::<_, InitError, _>(move || runtime::start(&app_name, &runtime_dir)).await??;
 
-        // WebGPU is the one provider the install cannot decide: its plugin ships inside the runtime's archive, and
-        // whether it offers a device is only known once that runtime has loaded it. The handle has not been shared yet.
+        // Read again now the runtime is loaded: WebGPU is the one provider the install cannot decide, since its plugin
+        // ships inside the runtime's archive and whether it offers a device is only known once that runtime has loaded
+        // it. The handle has not been shared yet.
         Arc::get_mut(&mut opai.inner)
             .expect("the handle is not shared before initialization returns")
             .sessions
-            .set_webgpu(webgpu);
+            .set_supported(installed.providers());
 
         Ok(opai)
     }
@@ -705,7 +706,7 @@ impl Opai {
     pub(crate) async fn session(
         &self,
         artifact: &ArtifactId,
-        profile: &providers::profile::EpProfile,
+        profile: &rust_sak::ai::Tuning,
         requested: ExecutionProvider,
         interest: &sessions::Interest,
     ) -> Result<sessions::SessionHandle<ort::session::Session>, error::SessionError> {

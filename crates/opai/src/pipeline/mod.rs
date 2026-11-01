@@ -42,8 +42,8 @@ use session::GraphShape;
 
 use crate::error::InferenceError;
 use crate::models::ArtifactId;
-use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
+use rust_sak::ai::Tuning;
 
 /// What both drivers ask of a planned operation's model code, whatever its result is.
 ///
@@ -73,7 +73,7 @@ pub(crate) trait Model<B: Backend>: Send + Sync {
     // shape that would make the mistake writable.
 
     /// Every session this operation needs before any of it runs, each paired with the settings it is opened under.
-    fn sessions(&self) -> Vec<(&ArtifactId, &EpProfile)>;
+    fn sessions(&self) -> Vec<(&ArtifactId, &Tuning)>;
 }
 
 /// One planned operation whose result is a picture, as the chain driver sees it.
@@ -211,13 +211,13 @@ pub(crate) struct SingleGraph {
     /// The single artifact, held as a one-element slice for [`Model::required`].
     artifact: [ArtifactId; 1],
     /// The measured tuning the session is opened under.
-    profile: EpProfile,
+    profile: Tuning,
     /// The operation's display name, for naming it in a failure.
     pub(crate) name: String,
 }
 
 impl SingleGraph {
-    pub(crate) fn new(name: String, artifact: ArtifactId, profile: EpProfile) -> Self {
+    pub(crate) fn new(name: String, artifact: ArtifactId, profile: Tuning) -> Self {
         Self { artifact: [artifact], profile, name }
     }
 }
@@ -233,7 +233,7 @@ impl<B: Backend, P: OnOneGraph> Model<B> for P {
     }
 
     /// One artifact against its own profile. The single-graph shape of every family but upscale.
-    fn sessions(&self) -> Vec<(&ArtifactId, &EpProfile)> {
+    fn sessions(&self) -> Vec<(&ArtifactId, &Tuning)> {
         let graph = self.graph();
 
         vec![(&graph.artifact[0], &graph.profile)]

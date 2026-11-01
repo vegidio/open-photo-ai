@@ -10,11 +10,12 @@
 pub(in crate::models::colorization) mod rgb;
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
+use crate::providers::profile::cpu_and_gpu_at_fp16;
+use rust_sak::ai::Tuning;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // Ported from the reference's `jaipur.go`, not re-measured on this project's build.
     //
     // Kept off the Neural Engine at FP16, which on this graph is worth roughly 4.5x:

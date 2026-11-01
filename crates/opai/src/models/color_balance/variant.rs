@@ -8,7 +8,7 @@ use super::super::simple::SimpleVariant;
 
 use super::{rio, saopaulo};
 
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 /// Rio, the colour balance model a front end offers first.
 pub(crate) const RIO: SimpleVariant = SimpleVariant { codename: "rio", label: "Rio", parameters: &BIAS_PARAMETER };
@@ -47,7 +47,7 @@ impl ColorBalanceVariant {
     ///
     /// Each arm's figures, and the conditions they were taken under, are in [`rio::profile`] and
     /// [`saopaulo::profile`].
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         // A match reaching the model's own file, which is where a measured profile and the prose behind it live: the
         // measurement is of a graph, and the graph is the model's.
         //
@@ -57,7 +57,7 @@ impl ColorBalanceVariant {
         // nobody took.
         match self {
             Self::Rio(precision) => rio::profile(precision.into()),
-            // Reaches a file rather than answering `EpProfile::default` inline, and the value being identical is
+            // Reaches a file rather than answering `Tuning::default` inline, and the value being identical is
             // exactly why: a model nobody measured and a model measured to want nothing are the same configuration
             // and different facts, and only the second one is findable.
             Self::SaoPaulo(precision) => saopaulo::profile(precision.into()),
@@ -210,11 +210,11 @@ pub(crate) mod tests {
         // tuning and is not Rio's, so it is set aside here and everything else must still be the provider's default.
         for variant in every_variant() {
             let mut tuning = variant.profile();
-            tuning.webgpu_force_cpu_nodes = &[];
+            tuning.webgpu_force_cpu_nodes = Vec::new();
 
             let measured = matches!(variant, ColorBalanceVariant::Rio(FloatPrecision::Fp16));
             assert_eq!(
-                tuning != EpProfile::default(),
+                tuning != Tuning::default(),
                 measured,
                 "{variant:?} declared {tuning:?}, which is not what was measured for it"
             );
@@ -235,7 +235,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             ColorBalanceVariant::Rio(FloatPrecision::Fp16).profile().coreml_specialization,
-            crate::providers::profile::CoreMlSpecialization::FastPrediction,
+            rust_sak::ai::CoreMlSpecialization::FastPrediction,
             "Rio's FP16 arm stopped declaring the fast-prediction specialization measured for it"
         );
     }

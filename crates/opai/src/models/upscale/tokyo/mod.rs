@@ -6,7 +6,7 @@ use imaging::TileGeometry;
 use imaging::tensor::Normalisation;
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode};
+use rust_sak::ai::{CoreMlComputeUnits, ExecutionMode, Tuning};
 
 /// Tokyo, native 4x weights only.
 pub(crate) static TOKYO: ConvVariant = ConvVariant {
@@ -19,7 +19,7 @@ pub(crate) static TOKYO: ConvVariant = ConvVariant {
 };
 
 /// The execution-provider tuning measured for this model, at the precision it carries.
-fn profile(_precision: Precision) -> EpProfile {
+fn profile(_precision: Precision) -> Tuning {
     // Both precisions, and that is the difference from Kyoto and Saitama: what excludes the Neural Engine is the
     // graph's window attention, which is structural and survives the export precision. The CoreML numbers below say
     // the same thing the reference's do about *where* the margin is — FP16 earns it, FP32 is a wash — and the FP32 arm
@@ -27,7 +27,7 @@ fn profile(_precision: Precision) -> EpProfile {
     // splitting to save nothing. Tokyo's FP16 export happens to carry the `Resize` FP32 islands `kyoto::profile`
     // describes — 334 `Cast` nodes, four of them wrapping the two upsamples, one in and one out of each — and for once
     // it does not matter, because the Neural Engine is excluded either way.
-    EpProfile {
+    Tuning {
         // The CPU and the GPU: the one compute-unit setting here chosen for what it **excludes** rather than for what
         // it prefers. This is a SwinIR — 2682 nodes, of which 776 reshapes, 379 slices, 344 transposes and 110 layer
         // normalizations against just 36 convolutions — which is the op mix the Neural Engine handles worst.
@@ -96,7 +96,7 @@ fn profile(_precision: Precision) -> EpProfile {
         //   is worth 4.7% at FP32 across the 216 `Gemm`s and 108 `MatMul`s. TensorRT has nothing left to tune
         //   regardless: it swallows all 2682 nodes into a single engine, so every builder setting lands on the same
         //   fused engine.
-        ..EpProfile::default()
+        ..Tuning::default()
     }
 }
 
@@ -118,10 +118,10 @@ mod tests {
             // And nothing else — `cuda_prefer_nhwc` and `fuse_conv_bias` were both measured and both rejected.
             assert_eq!(
                 tokyo,
-                EpProfile {
+                Tuning {
                     coreml_compute_units: CoreMlComputeUnits::CpuAndGpu,
                     execution_mode: ExecutionMode::Sequential,
-                    ..EpProfile::default()
+                    ..Tuning::default()
                 },
                 "at {precision:?}"
             );

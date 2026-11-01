@@ -209,7 +209,7 @@ mod tests {
     use crate::error::SessionError;
     use crate::models::ArtifactId;
     use crate::providers::ExecutionProvider;
-    use crate::providers::profile::EpProfile;
+    use rust_sak::ai::Tuning;
 
     /// What the fake recorded: the graph each call was made against and the two shapes it was declared with.
     type Calls = Arc<Mutex<Vec<(&'static str, GraphShape, GraphShape)>>>;
@@ -232,7 +232,7 @@ mod tests {
         async fn acquire(
             &self,
             _artifact: &ArtifactId,
-            _profile: &EpProfile,
+            _profile: &Tuning,
             _requested: ExecutionProvider,
             _interest: &crate::sessions::Interest,
         ) -> Result<SessionHandle<Self::Session>, SessionError> {

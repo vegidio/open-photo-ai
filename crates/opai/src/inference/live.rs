@@ -74,10 +74,10 @@ use crate::live_support::{live_application, photograph};
 use crate::models::{FloatPrecision, Operation, Scale, Upscale, UpscaleVariant};
 use crate::pipeline::session::run_tile;
 use crate::providers::ExecutionProvider;
-use crate::providers::profile::{EpProfile, ExecutionMode};
 use imaging::grid::Tile;
 use imaging::tensor::{Normalisation, Sampler, image_to_chw};
 use rust_sak::ai::ort;
+use rust_sak::ai::{ExecutionMode, Tuning};
 
 /// How a result's pixels are described in the output below, so a reader sees `Rgb16` rather than a discriminant.
 fn describe(pixels: &image::DynamicImage) -> &'static str {
@@ -492,7 +492,7 @@ async fn same_pixels_either_way(provider: ExecutionProvider) {
         ExecutionMode::Sequential,
         "this test exists because Tokyo declares the mode; it no longer does"
     );
-    let parallel = EpProfile { execution_mode: ExecutionMode::Parallel, ..sequential.clone() };
+    let parallel = Tuning { execution_mode: ExecutionMode::Parallel, ..sequential.clone() };
 
     // One tile off the top-left of the photograph, at the geometry the driver would have partitioned it at.
     let shape = imaging::TileGeometry::default().size;

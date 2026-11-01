@@ -80,7 +80,7 @@ async fn an_osaka_run_acquires_exactly_three_sessions_under_the_settings_measure
     assert!(opened[2].1.cuda_prefer_nhwc, "the decoder was opened under the transformer's layout");
 
     for (artifact, profile) in &opened {
-        assert_ne!(profile, &EpProfile::default(), "{artifact} was opened on the default profile by omission");
+        assert_ne!(profile, &Tuning::default(), "{artifact} was opened on the default profile by omission");
         assert_eq!(
             profile.disabled_optimizers,
             ["ReshapeFusion", "SimplifiedLayerNormFusion"],
@@ -169,7 +169,7 @@ fn osakas_three_graphs_each_plan_with_the_settings_measured_for_that_graph() {
 
         // And nothing arrives on the default by omission — every graph carries the measured declaration.
         for (artifact, profile) in artifacts.iter().zip(&profiles) {
-            assert_ne!(profile, &EpProfile::default(), "{artifact} planned on the default profile");
+            assert_ne!(profile, &Tuning::default(), "{artifact} planned on the default profile");
             assert_eq!(profile.execution_mode, ExecutionMode::Sequential, "{artifact}");
             assert_eq!(
                 profile.disabled_optimizers,
@@ -211,7 +211,7 @@ fn a_planned_graph_set_acquires_one_session_per_graph_under_that_graphs_settings
 fn tokyo_and_saitama_plan_at_both_precisions_carrying_the_profile_their_arm_declares() {
     // The seam a refusal used to occupy, kept rather than deleted: these four were gated on their profiles being
     // unmeasured, so what replaces the gate is the assertion that each one now plans *and* arrives with the
-    // measured settings attached. Nothing may reach the pipeline on `EpProfile::default()` by omission.
+    // measured settings attached. Nothing may reach the pipeline on `Tuning::default()` by omission.
     for variant in [
         UpscaleVariant::Tokyo(FloatPrecision::Fp16),
         UpscaleVariant::Tokyo(FloatPrecision::Fp32),
@@ -244,7 +244,7 @@ fn tokyo_and_saitama_plan_at_both_precisions_carrying_the_profile_their_arm_decl
     assert_eq!(session_profiles(&saitama[0])[0].coreml_compute_units, CoreMlComputeUnits::CpuAndNeuralEngine);
 
     let saitama_fp32 = plan::<Fake>(&[upscale(UpscaleVariant::Saitama(FloatPrecision::Fp32))]).unwrap();
-    assert_eq!(session_profiles(&saitama_fp32[0])[0], EpProfile::default());
+    assert_eq!(session_profiles(&saitama_fp32[0])[0], Tuning::default());
 }
 
 #[test]

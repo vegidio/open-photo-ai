@@ -12,7 +12,7 @@ async fn two_requests_waiting_on_one_build_share_one_build_span_and_the_second_l
     let id = kyoto();
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, false, false));
 
-    let (profile, interest) = (EpProfile::default(), Interest::default());
+    let (profile, interest) = (Tuning::default(), Interest::default());
 
     let (_, observed, (first, second)) = logging::traced_of("info", || async {
         let request = || sessions.session(&id, &profile, ExecutionProvider::Cpu, &interest);
@@ -55,7 +55,7 @@ async fn a_request_served_from_memory_says_so_and_opens_no_build() {
     let bench = Arc::new(Bench::default());
     let id = kyoto();
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, false, false));
-    let (profile, interest) = (EpProfile::default(), Interest::default());
+    let (profile, interest) = (Tuning::default(), Interest::default());
     let request = || sessions.session(&id, &profile, ExecutionProvider::Cpu, &interest);
     drop(request().await.unwrap());
 
@@ -79,9 +79,7 @@ async fn a_failed_gpu_build_marks_its_span_failed_and_counts_a_fallback() {
     let fallbacks = || PROVIDER_FALLBACKS.value(&[("requested", "CUDA")]);
     let before = fallbacks();
     let (_, observed, handle) = logging::traced_of("info", || async {
-        sessions
-            .session(&id, &EpProfile::default(), ExecutionProvider::Cuda, &Interest::default())
-            .await
+        sessions.session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default()).await
     })
     .await;
     assert_eq!(handle.unwrap().provider(), ExecutionProvider::Cpu);
