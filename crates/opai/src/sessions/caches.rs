@@ -227,6 +227,28 @@ mod tests {
     }
 
     #[test]
+    fn moving_from_the_release_tag_to_the_runtime_folders_version_discards_the_engines_once() {
+        // Earlier releases keyed the stamp on the GitHub tag; this one keys it on the version folder's name. The first
+        // launch after the update sees a different string and discards once, which is right: the runtime itself was
+        // installed afresh into the shared root.
+        let (_root, app_dir) = app();
+        invalidate_for_runtime(&app_dir, NAME, "runtime/1.30.0").unwrap();
+        let paths = resolve(&app_dir, NAME, &kyoto()).unwrap();
+        let engine = paths.engine.join("engine.bin");
+        std::fs::write(&engine, b"compiled under the runtime the old release installed").unwrap();
+
+        let version = crate::deps::folders::runtime_version();
+        invalidate_for_runtime(&app_dir, NAME, &version).unwrap();
+        assert!(!engine.exists(), "the change of key did not discard the engines");
+
+        let paths = resolve(&app_dir, NAME, &kyoto()).unwrap();
+        let engine = paths.engine.join("engine.bin");
+        std::fs::write(&engine, b"compiled under the runtime in the shared root").unwrap();
+        invalidate_for_runtime(&app_dir, NAME, &version).unwrap();
+        assert!(engine.is_file(), "a second launch under the same folder discarded the engines again");
+    }
+
+    #[test]
     fn a_machine_that_has_never_compiled_anything_records_the_release_and_completes() {
         // A first run: there is no tree, no stamp and nothing to discard. Emptying a directory that is already empty
         // is what "absent reads as compiled under something else" costs here.

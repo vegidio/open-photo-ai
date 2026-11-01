@@ -186,23 +186,7 @@ pub struct SupportedProviders {
     pub webgpu: bool,
 }
 
-/// The execution provider that installing one GPU library unlocks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Provider {
-    // Not folded into `ExecutionProvider`: the two answer different questions, and this one's narrowness is the point.
-    // A row that could name `Auto` or the CPU is a row that can be wrong, since neither is unlocked by installing
-    // anything.
-    Cuda,
-    TensorRt,
-}
-
 impl SupportedProviders {
-    /// The providers available before any GPU library is considered: the CPU, and CoreML where the operating system
-    /// is new enough. Both GPU providers start false and are set only once their library is actually on disk.
-    pub(crate) fn detect() -> Self {
-        Self { cpu: true, coreml: is_coreml_supported(), cuda: false, tensorrt: false, webgpu: false }
-    }
-
     /// Whether this machine supports `provider`.
     ///
     /// [`Auto`](ExecutionProvider::Auto) and [`Cpu`](ExecutionProvider::Cpu) are `true` on every machine — there is no
@@ -241,36 +225,17 @@ impl SupportedProviders {
         self.webgpu = webgpu;
         self
     }
+}
 
-    /// This report with `provider` additionally claimed.
-    pub(crate) fn with(mut self, provider: Provider) -> Self {
-        // By value, so the report is folded out of an install plan: assembled by mutation beside one, the plan and the
-        // report can disagree.
-        match provider {
-            Provider::Cuda => self.cuda = true,
-            Provider::TensorRt => self.tensorrt = true,
-        }
-
-        self
+impl From<rust_sak::ai::Supported> for SupportedProviders {
+    /// What `rust-sak` found this machine offers: the CPU always, CoreML on every macOS the runtime loads on (macOS 14
+    /// and newer for 1.30.0, past the macOS 12 the ML Program format needs, so no version is probed), CUDA and
+    /// TensorRT where their libraries were installed, and WebGPU where the runtime's plugin registered and offered a
+    /// device.
+    fn from(supported: rust_sak::ai::Supported) -> Self {
+        let rust_sak::ai::Supported { cpu, coreml, cuda, tensorrt, webgpu } = supported;
+        Self { cpu, coreml, cuda, tensorrt, webgpu }
     }
-}
-
-/// Whether this Mac is on macOS 12 or newer.
-#[cfg(target_os = "macos")]
-fn is_coreml_supported() -> bool {
-    // 12 because the MLProgram model format the CoreML provider is configured with requires it.
-    //
-    // The same call the Go app makes through a cgo shim — `[[NSProcessInfo processInfo] operatingSystemVersion]` —
-    // from safe Rust. The alternative, `sysctlbyname("kern.osrelease")` with a Darwin-to-macOS mapping, saves one
-    // macOS-only dependency at the cost of an `unsafe` block and a version table written nowhere in the call.
-    objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion().majorVersion >= 12
-}
-
-/// CoreML exists only on Apple's platforms, so everywhere else this is a compile-time `false`.
-#[cfg(not(target_os = "macos"))]
-fn is_coreml_supported() -> bool {
-    // As the Go original's `apple_others.go` is.
-    false
 }
 
 #[cfg(test)]
@@ -290,38 +255,15 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_cpu_is_supported_unconditionally() {
-        assert!(SupportedProviders::detect().cpu, "a machine that cannot run on the CPU cannot run at all");
-    }
+    fn the_report_is_rust_saks_field_by_field() {
+        let report = SupportedProviders::from(rust_sak::ai::Supported::detect(true, true));
+        assert!(report.cpu, "a machine that cannot run on the CPU cannot run at all");
+        assert_eq!(report.coreml, cfg!(target_os = "macos"));
+        assert!(report.cuda && report.tensorrt, "as installed");
+        assert!(!report.webgpu, "nothing is registered before the runtime loads");
 
-    #[test]
-    fn coreml_matches_the_platform_this_is_running_on() {
-        // Every macOS this project builds for is well past 12, so on a Mac the answer is true and anywhere else it is
-        // the `cfg`'d constant. The version comparison itself is Foundation's; what is checked here is that the right
-        // half of the `cfg` was compiled in.
-        assert_eq!(SupportedProviders::detect().coreml, cfg!(target_os = "macos"));
-    }
-
-    #[test]
-    fn each_provider_claims_its_own_field_and_nothing_else() {
-        // What makes the report derivable from the plan: one row's `provides` sets exactly one flag, so folding the
-        // rows that were actually selected cannot claim a provider none of them unlocks.
-        let cuda = SupportedProviders::detect().with(Provider::Cuda);
-        assert!(cuda.cuda);
-        assert!(!cuda.tensorrt, "installing CUDA claimed TensorRT");
-
-        let tensorrt = SupportedProviders::detect().with(Provider::TensorRt);
-        assert!(tensorrt.tensorrt);
-        assert!(!tensorrt.cuda, "installing TensorRT claimed CUDA");
-    }
-
-    #[test]
-    fn claiming_a_provider_leaves_the_detected_ones_alone() {
-        let base = SupportedProviders::detect();
-        let with_cuda = base.with(Provider::Cuda);
-
-        assert_eq!(with_cuda.cpu, base.cpu);
-        assert_eq!(with_cuda.coreml, base.coreml);
+        let tensorrt_alone = SupportedProviders::from(rust_sak::ai::Supported::detect(false, true));
+        assert!(!tensorrt_alone.tensorrt, "TensorRT runs on CUDA");
     }
 
     /// What the report lands as on the other side of a process boundary.
@@ -343,11 +285,12 @@ pub(crate) mod tests {
     fn neither_gpu_provider_is_claimed_before_its_library_is_installed() {
         // The report is honest about what is on disk, not about what hardware was seen — which is what makes it
         // correct on a platform where an NVIDIA card is detected and nothing is published for it.
-        let detected = SupportedProviders::detect();
+        let detected = SupportedProviders::from(rust_sak::ai::Supported::detect(false, false));
 
         assert!(!detected.cuda);
         assert!(!detected.tensorrt);
     }
+
     #[test]
     fn every_provider_parses_from_the_spelling_it_reports_whatever_the_casing() {
         // The three casings a settings file, a command line and a hand-edited config actually carry. Driven from
@@ -443,7 +386,8 @@ pub(crate) mod tests {
     #[test]
     fn auto_and_the_cpu_are_supported_on_every_machine() {
         // Checked against the barest report there is and against one claiming everything.
-        for machine in [no_accelerator(), machine_supporting(true, true, true), SupportedProviders::detect()] {
+        for machine in [no_accelerator(), machine_supporting(true, true, true), machine_supporting(true, false, false)]
+        {
             assert!(machine.supports(ExecutionProvider::Auto), "{machine:?} could not be asked for Auto");
             assert!(machine.supports(ExecutionProvider::Cpu), "{machine:?} could not be asked for the CPU");
         }
@@ -466,25 +410,5 @@ pub(crate) mod tests {
         assert!(mac.supports(ExecutionProvider::CoreMl));
         assert!(!mac.supports(ExecutionProvider::Cuda));
         assert!(!mac.supports(ExecutionProvider::TensorRt));
-    }
-
-    #[test]
-    fn what_a_gpu_row_can_claim_stays_narrower_than_what_a_user_can_ask_for() {
-        for provider in [Provider::Cuda, Provider::TensorRt] {
-            let claimed = no_accelerator().with(provider);
-
-            assert!(claimed.supports(ExecutionProvider::Auto));
-            assert!(claimed.supports(ExecutionProvider::Cpu));
-            assert!(
-                !claimed.supports(ExecutionProvider::CoreMl),
-                "{provider:?} claimed a provider no GPU library unlocks"
-            );
-        }
-
-        // And each row still sets exactly one of the two flags `supports` reads.
-        assert!(no_accelerator().with(Provider::Cuda).supports(ExecutionProvider::Cuda));
-        assert!(!no_accelerator().with(Provider::Cuda).supports(ExecutionProvider::TensorRt));
-        assert!(no_accelerator().with(Provider::TensorRt).supports(ExecutionProvider::TensorRt));
-        assert!(!no_accelerator().with(Provider::TensorRt).supports(ExecutionProvider::Cuda));
     }
 }

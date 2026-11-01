@@ -207,6 +207,7 @@ pub use autopilot::{Suggestion, Suggestions, suggested_scale};
 pub use cache::CacheMode;
 pub use deps::ModelTrust;
 pub use error::{InferenceError, InitError, UnsupportedReason};
+use rust_sak::ai::ort;
 // Re-exported so a caller of this crate's image functions doesn't need `rust-sak` in its own manifest — it's
 // pinned by git tag and unpublished.
 pub use image::{EncodeOptions, ImageError, ImageFormat, ImageInfo, ImageIoError, Picture, RawFormat, RawImageInfo};
@@ -238,7 +239,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use cache::Store;
-use deps::artifact::ONNX_RUNTIME;
 use sessions::{Sessions, caches};
 use task::spawn_blocking;
 
@@ -590,7 +590,7 @@ impl Opai {
         tracing::info!(
             name,
             config_dir = %app_dir.display(),
-            onnx = ONNX_RUNTIME.tag,
+            onnx = %deps::folders::runtime_version(),
             os = std::env::consts::OS,
             arch = std::env::consts::ARCH,
             "initializing"
@@ -603,39 +603,38 @@ impl Opai {
         // A second initialization in *this* process joins the existing claim rather than contending with it.
         let claim = instance::claim(&app_dir, &app)?;
 
-        let plan = Self::select(gpu::adapters(), gpu::cuda(), std::env::consts::OS, std::env::consts::ARCH)?;
+        // After the claim, so a process of the same user still running an earlier release is never left without the
+        // runtime it loaded. Beside `remove_roaming_dir` in spirit: both delete what an earlier release left behind.
+        // TODO: remove once users have upgraded past this release
+        config::remove_old_install_dirs(&app_dir);
 
-        // Here, before `Self::install` — the first thing that transfers or creates anything — is called.
-        Self::report_plan(&plan, on_plan.as_ref());
+        let plan = setup::Plan::for_machine(setup::dependency_root()?, gpu::adapters(), gpu::cuda());
 
-        // Taken by name before the plan moves into install, so this can't disagree with what actually installs.
-        let lib = plan.runtime.lib.expect("every platform the runtime is published for names its library");
-        let webgpu = plan.runtime.webgpu;
+        // The plan is reported from inside the install, once, before anything is transferred: sizing what is missing
+        // takes its folder's listing.
+        let (mut opai, installed) =
+            Self::install_reporting(name, app_dir, claim, plan, models, on_progress, on_plan).await?;
 
-        let (mut opai, installed) = Self::install(name, app_dir, claim, plan, models, on_progress).await?;
-
-        // After install (the pinned tag only applies once the runtime is on disk) and before anything can build
-        // a session: a compiled provider artifact is only valid for the runtime that built it.
+        // After install (the runtime's version only applies once it is on disk) and before anything can build a
+        // session: a compiled provider artifact is only valid for the runtime that built it.
         //
         // On a blocking thread: the common path is a small stamp read, the rare one an unbounded delete of
         // `engines/`.
         let engines_dir = opai.inner.config_dir.clone();
         let app_name = name.to_string();
         spawn_blocking::<_, InitError, _>(move || {
-            caches::invalidate_for_runtime(&engines_dir, &app_name, ONNX_RUNTIME.tag)
+            caches::invalidate_for_runtime(&engines_dir, &app_name, &deps::folders::runtime_version())
         })
         .await??;
 
         // After every install and before returning the handle, so a runtime that can't start is a failed
-        // initialization rather than a mid-enhancement surprise.
-        let library = runtime::library_path(&installed.runtime, lib);
-
-        // `dlopen` of a ~175 MB library plus environment creation is blocking and syscall-heavy, so it runs on
-        // a blocking thread.
+        // initialization rather than a mid-enhancement surprise. Opening a ~175 MB library and creating the
+        // environment is blocking and syscall-heavy, so it runs on a blocking thread.
         let app_name = name.to_string();
-        let webgpu = spawn_blocking::<_, InitError, _>(move || runtime::start(&app_name, &library, webgpu)).await??;
+        let runtime_dir = installed.runtime.clone();
+        let webgpu = spawn_blocking::<_, InitError, _>(move || runtime::start(&app_name, &runtime_dir)).await??;
 
-        // WebGPU is the one provider the install plan cannot decide: its plugin ships inside the runtime's archive, and
+        // WebGPU is the one provider the install cannot decide: its plugin ships inside the runtime's archive, and
         // whether it offers a device is only known once that runtime has loaded it. The handle has not been shared yet.
         Arc::get_mut(&mut opai.inner)
             .expect("the handle is not shared before initialization returns")

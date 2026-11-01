@@ -1,205 +1,129 @@
 //! What an initialization installs: choosing the dependencies this machine can use, and putting them on disk.
+//!
+//! The choosing is this crate's policy and the installing is `rust-sak`'s `ai`: this file decides which folders to
+//! name, reports the plan and the progress in the shapes the front ends already read, and maps what can go wrong onto
+//! [`InitError`]. See [`deps::folders`].
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
+use rust_sak::ai::gpu::{self as ai_gpu, GpuRefusal};
+use rust_sak::ai::{self, Event, Failure, InstallError, State};
 use rust_sak::sysinfo::{CudaInfo, GpuInfo};
-use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::cache::{self, CacheMode, Store};
-use crate::deps::artifact::{CUDA, CUDNN, ONNX_RUNTIME, TENSORRT};
-use crate::deps::release::Dependency as Descriptor;
-use crate::deps::{self, ModelTrust};
+use crate::deps::{self, ModelTrust, folders};
 use crate::error::InitError;
-use crate::gpu::{CudaSupport, TensorRtSupport};
-use crate::progress::{OnPlan, OnProgress, PlannedDependency, Reporter};
-use crate::providers::{Provider, SupportedProviders};
+use crate::progress::{Dependency as Which, OnPlan, OnProgress, Phase, PlannedDependency, Progress};
+use crate::providers::SupportedProviders;
 use crate::sessions::Sessions;
 use crate::task::spawn_blocking;
-use crate::{Inner, Opai, config, gpu, instance};
+use crate::telemetry::unit::{self, Unit, unit_span};
+use crate::{Inner, Opai, instance};
 
-/// What one machine's initialization will install, and everything derivable from that.
+/// What one machine's initialization will install, and where.
 #[derive(Debug, Clone)]
 pub(crate) struct Plan {
-    // A named field rather than `plan[0]`: the runtime is always installed and always loaded from here, so
-    // naming it removes a positional invariant that spanned two functions.
-    /// The ONNX Runtime for this platform. Always present — an unpublished platform fails the selection.
-    pub(crate) runtime: Descriptor,
-    /// The GPU libraries this machine's hardware and platform actually offer, in install order.
-    pub(crate) gpu: Vec<Descriptor>,
-}
-
-/// Where an install put each of [`Plan`]'s dependencies.
-#[derive(Debug, Clone)]
-pub(crate) struct Installed {
-    /// The directory the ONNX Runtime was installed into, which
-    /// [`runtime::library_path`](crate::runtime::library_path) resolves against.
-    pub(crate) runtime: PathBuf,
-    /// The directories the GPU libraries were installed into, in install order.
-    #[expect(
-        dead_code,
-        reason = "the GPU directories have no reader until a caller needs a path the install wrote"
-    )]
-    gpu: Vec<PathBuf>,
+    /// The dependency root shared with every application installing from the same folders.
+    pub(crate) root: PathBuf,
+    /// What to install, in install order: always the runtime first, then the NVIDIA libraries this machine can run.
+    pub(crate) dependencies: Vec<(Which, ai::Dependency)>,
 }
 
 impl Plan {
-    /// Every dependency to install, in install order: the runtime first, then the GPU libraries in pinned-table
-    /// order.
-    pub(crate) fn all(&self) -> impl Iterator<Item = &Descriptor> {
-        std::iter::once(&self.runtime).chain(&self.gpu)
+    /// The plan for a machine with `adapters`, whose NVIDIA driver reported `cuda`, installing under `root`.
+    pub(crate) fn for_machine(root: PathBuf, adapters: &[GpuInfo], cuda: Option<&CudaInfo>) -> Self {
+        let dependencies = select(adapters, cuda).into_iter().map(|which| (which.clone(), folders::dependency(&which)));
+        Self { root, dependencies: dependencies.collect() }
     }
+}
 
-    /// A plan that installs `runtime` and nothing else, which is what a machine with no NVIDIA adapter gets.
-    #[cfg(test)]
-    pub(crate) fn runtime_only(runtime: Descriptor) -> Self {
-        Self { runtime, gpu: Vec::new() }
-    }
-
-    /// The rows a plan recipient is handed: every dependency this machine will account for, in install order,
-    /// each carrying its total published size.
-    ///
-    /// Deliberately doesn't say which are already installed — that arrives moments later via the progress
-    /// report. Reads nothing from disk, so a launch with nothing to do isn't doubly expensive.
-    pub(crate) fn rows(&self) -> Vec<PlannedDependency> {
-        self.all().map(PlannedDependency::for_dependency).collect()
-    }
-
-    /// What this machine can be asked to run on, derived from what is actually in the plan.
-    pub(crate) fn providers(&self) -> SupportedProviders {
-        // Folded from the rows so "a provider is claimed only where its library is installed" is structural,
-        // not something tests check two hand-maintained things agree on.
-        self.gpu
+/// Which dependencies a machine with `adapters`, whose NVIDIA driver reported `cuda`, can run, in install order.
+///
+/// A pure function of the probe's answers, so every branch is driven without GPU hardware. Each refusal is recorded
+/// at `info` with its reason: from outside, "an NVIDIA card but no CUDA" looks identical to a failed install.
+pub(crate) fn select(adapters: &[GpuInfo], cuda: Option<&CudaInfo>) -> Vec<Which> {
+    let mut selected = vec![Which::Runtime];
+    let nvidia = || {
+        adapters
             .iter()
-            .filter_map(|descriptor| descriptor.provides)
-            .fold(SupportedProviders::detect(), SupportedProviders::with)
+            .filter(|gpu| crate::gpu::is_nvidia(gpu))
+            .map(|gpu| gpu.name.as_str())
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+
+    match ai_gpu::check_with(adapters, cuda, &folders::CUDA_REQUIREMENT) {
+        Ok(()) => selected.extend([Which::Cuda, Which::Cudnn]),
+        // Not worth a record: the ordinary state of a Mac, and of any machine without an NVIDIA card.
+        Err(GpuRefusal::NoAdapter) => return selected,
+        Err(refusal) => {
+            tracing::info!(
+                adapters = %nvidia(),
+                reason = %refusal,
+                "the pinned CUDA release cannot run here; this machine runs without CUDA"
+            );
+            return selected;
+        }
+    }
+
+    // TensorRT is built on CUDA, so it is asked only once CUDA is in.
+    match ai_gpu::check_with(adapters, cuda, &folders::TENSORRT_REQUIREMENT) {
+        Ok(()) => selected.push(Which::TensorRt),
+        Err(refusal) => tracing::info!(
+            adapters = %nvidia(),
+            reason = %refusal,
+            "the pinned TensorRT release cannot run here; this machine runs on CUDA"
+        ),
+    }
+
+    selected
+}
+
+/// Where an install put the plan's dependencies, and which of them it installed.
+#[derive(Debug, Clone)]
+pub(crate) struct Installed {
+    /// The ONNX Runtime's folder, which the runtime is loaded from.
+    pub(crate) runtime: PathBuf,
+    /// Whether CUDA (and cuDNN with it) is installed.
+    pub(crate) cuda: bool,
+    /// Whether TensorRT is installed.
+    pub(crate) tensorrt: bool,
+}
+
+impl Installed {
+    /// What this machine can be asked to run on before the runtime is loaded: the CPU, CoreML on macOS, and the NVIDIA
+    /// providers whose libraries are installed. WebGPU is decided by the load.
+    pub(crate) fn providers(&self) -> SupportedProviders {
+        ai::Supported::detect(self.cuda, self.tensorrt).into()
     }
 }
 
 impl Opai {
-    /// Decides what to install on a machine with `adapters`, whose NVIDIA driver reported `cuda`, and what the
-    /// resulting provider report says.
+    /// Installs `plan` and opens the run cache beside it, and builds the handle over both.
     ///
-    /// A pure function of the adapter list, the driver's answer and the platform, testable without real GPU hardware.
+    /// The plan is reported to `on_plan` once, before anything is transferred: every dependency this machine will
+    /// account for, in install order, with its archive's size. Then each is reported to `on_progress` as it installs,
+    /// or once as already installed.
     ///
-    /// # Errors
-    ///
-    /// Returns [`InitError::UnsupportedPlatform`] only when no **runtime** is published for this platform — an
-    /// unpublished GPU library is reported unsupported rather than an error, since it's an optimisation the
-    /// user was never going to get anyway.
-    pub(crate) fn select(
-        adapters: &[GpuInfo],
-        cuda: Option<&CudaInfo>,
-        os: &'static str,
-        arch: &'static str,
-    ) -> Result<Plan, InitError> {
-        Self::select_at(deps::release::RELEASE_BASE_URL, adapters, cuda, os, arch)
-    }
-
-    /// The testable half of [`Opai::select`], against an explicit base URL so the suite can point a real install at a
-    /// local server.
+    /// `claim` is taken by value, not acquired here: an install literally can't be reached without a claim already in
+    /// hand, for any caller.
     ///
     /// # Errors
     ///
-    /// As [`Opai::select`].
-    pub(crate) fn select_at(
-        base_url: &str,
-        adapters: &[GpuInfo],
-        cuda: Option<&CudaInfo>,
-        os: &'static str,
-        arch: &'static str,
-    ) -> Result<Plan, InitError> {
-        let runtime = Descriptor::from_release_at(base_url, &ONNX_RUNTIME, os, arch)?;
-        let mut gpu = Vec::new();
-
-        // `.ok()` is the whole non-offer rule: no archive for this platform means it never joins the plan, and
-        // so its provider is never claimed.
-        let published = |release| Descriptor::from_release_at(base_url, release, os, arch).ok();
-
-        let nvidia: Vec<&str> =
-            adapters.iter().filter(|gpu| gpu::is_nvidia(gpu)).map(|gpu| gpu.name.as_str()).collect();
-
-        if !nvidia.is_empty() {
-            // An NVIDIA card is not enough: the pinned CUDA needs a recent driver and a Turing-or-newer device, and
-            // installing it anywhere else costs a ~600 MB download and a failed session build per model, every one
-            // of which falls back anyway.
-            match gpu::cuda_support(cuda) {
-                CudaSupport::Supported => {
-                    if let (Some(cuda), Some(cudnn)) = (published(&CUDA), published(&CUDNN)) {
-                        // cuDNN after CUDA: it links against the CUDA runtime.
-                        gpu.push(cuda);
-                        gpu.push(cudnn);
-                    }
-                }
-                // Worth a record: from outside, "an NVIDIA card but no CUDA" looks identical to a failed install.
-                refusal => tracing::info!(
-                    adapters = %nvidia.join(","),
-                    cuda = CUDA.tag,
-                    reason = %refusal,
-                    "the pinned CUDA release cannot run here; this machine runs without CUDA"
-                ),
-            }
-        }
-
-        // TensorRT is built on CUDA, so it never installs without it — the condition below is read off the CUDA
-        // row already being in the plan, not a separate flag. That row is also what holds TensorRT to a driver new
-        // enough for it.
-        if gpu.iter().any(|descriptor| descriptor.provides == Some(Provider::Cuda)) {
-            match gpu::tensorrt_support(cuda) {
-                TensorRtSupport::Supported => {
-                    if let Some(tensorrt) = published(&TENSORRT) {
-                        // Last: at 1.4-2 GB, larger than the other three combined, so an interrupted first launch
-                        // already has the two that unlock CUDA.
-                        gpu.push(tensorrt);
-                    }
-                }
-                // Worth a record: from outside, "CUDA but no TensorRT" looks identical to a failed TensorRT install.
-                refusal => tracing::info!(
-                    adapters = %nvidia.join(","),
-                    tensorrt = TENSORRT.tag,
-                    reason = %refusal,
-                    "the pinned TensorRT release cannot run here; this machine runs on CUDA"
-                ),
-            }
-        }
-
-        Ok(Plan { runtime, gpu })
-    }
-
-    /// Hands `on_plan` what this initialization is about to install, once, and does nothing at all where none is
-    /// registered.
-    ///
-    /// A function of its own so the suite can drive this exact call sequence — `initialize` itself loads a real
-    /// runtime, which a test can't redirect.
-    pub(crate) fn report_plan(plan: &Plan, on_plan: Option<&OnPlan>) {
-        let Some(on_plan) = on_plan else {
-            return;
-        };
-
-        on_plan(&plan.rows());
-    }
-
-    /// The body of [`Opai::initialize`], against an explicit application directory and install plan.
-    ///
-    /// Separated so the suite can drive a real install into a temporary directory against a local server.
-    ///
-    /// `claim` is taken by value, not acquired here: an install literally can't be reached without a claim
-    /// already in hand, for any caller.
-    ///
-    /// # Errors
-    ///
-    /// As [`Opai::initialize`], less the selection's own.
-    pub(crate) async fn install(
+    /// [`InitError::Transfer`] where a dependency could not be listed, downloaded or verified,
+    /// [`InitError::UnsupportedPlatform`] where no runtime is published for this platform, and [`InitError::Io`] for a
+    /// file error, a full disk included.
+    pub(crate) async fn install_reporting(
         name: &str,
         app_dir: PathBuf,
         claim: instance::Claim,
         plan: Plan,
         models: ModelTrust,
         on_progress: Option<OnProgress>,
+        on_plan: Option<OnPlan>,
     ) -> Result<(Self, Installed), InitError> {
-        let providers = plan.providers();
-
         // Opened while the dependencies install rather than after them: the two share nothing, and a disk store's
         // open can wait out a stale lock and sweep yesterday's expired entries. Spawned so it starts now rather than
         // when it is first awaited, and on a blocking thread for the same reason. A cache that won't open still never
@@ -209,56 +133,7 @@ impl Opai {
         let opening =
             tokio::spawn(spawn_blocking::<_, InitError, _>(move || Store::open(&cache_root)).in_current_span());
 
-        // Each dependency installs into the directory its own row names — never a shared directory that a
-        // later bump could delete out from under another dependency.
-        let dirs = plan
-            .all()
-            .map(|descriptor| config::sub_dir(&app_dir, name, &descriptor.dir))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        // Whether each is already current, asked of every dependency at once: on a launch with nothing to install
-        // this is the whole of the work, a stat per recorded file of a CUDA or TensorRT tree, and the answers do not
-        // depend on one another. The installs themselves stay serial below, in plan order — cuDNN links against the
-        // CUDA runtime, and progress is reported in the order the plan announced.
-        let checks: Vec<_> = plan
-            .all()
-            .zip(&dirs)
-            .map(|(descriptor, dir)| {
-                let (descriptor, dir) = (descriptor.clone(), dir.clone());
-                tokio::spawn(async move { deps::install::check(&dir, &descriptor).await }.in_current_span())
-            })
-            .collect();
-
-        let mut installed = Vec::with_capacity(dirs.len());
-        for ((descriptor, dir), check) in plan.all().zip(dirs).zip(checks) {
-            let checked = joined(check.await)?;
-
-            // One reporter per dependency, so each ends cleanly on `1.0` rather than one composite figure.
-            let reporter = Arc::new(Reporter::for_dependency(descriptor, on_progress.clone()));
-
-            // The one terminal report for a dependency with nothing to do, emitted at the point it would
-            // otherwise install — so observed order matches install order regardless. Never cancelled: nothing
-            // stops initialization today, only a run's own model install. Runtime first, since the plan lists it
-            // first — the GPU libraries are useless without it.
-            let outcome = deps::install::install_checked(
-                &dir,
-                descriptor,
-                Some(checked),
-                Arc::clone(&reporter),
-                &CancellationToken::new(),
-            )
-            .await?;
-
-            if outcome == deps::install::Outcome::AlreadyCurrent {
-                reporter.already_installed();
-            }
-
-            installed.push(dir);
-        }
-
-        let mut installed = installed.into_iter();
-        let runtime_dir = installed.next().expect("the plan always carries the runtime");
-        let gpu_dirs: Vec<PathBuf> = installed.collect();
+        let installed = install_dependencies(&plan, on_progress, on_plan.as_ref()).await?;
 
         let cache = joined(opening.await)?;
 
@@ -281,15 +156,209 @@ impl Opai {
 
         // Built against the report this exact install produced, and carrying `models` since the one model
         // installer is behind `Sessions`.
-        let sessions = Sessions::new(app_dir.clone(), name.to_string(), providers, models);
+        let sessions = Sessions::new(app_dir.clone(), name.to_string(), installed.providers(), models);
         let inner = Inner { name: name.to_string(), config_dir: app_dir, claim, models, sessions, cache };
-        let opai = Self { inner: Arc::new(inner) };
 
-        // Returned alongside the handle so a caller uses the path actually installed to, rather than
-        // re-resolving it (and possibly disagreeing).
-        let installed = Installed { runtime: runtime_dir, gpu: gpu_dirs };
+        Ok((Self { inner: std::sync::Arc::new(inner) }, installed))
+    }
+}
 
-        Ok((opai, installed))
+#[cfg(test)]
+impl Opai {
+    /// [`Opai::install_reporting`] with nobody to hand the plan to, as the suites install.
+    ///
+    /// # Errors
+    ///
+    /// As [`Opai::install_reporting`].
+    pub(crate) async fn install(
+        name: &str,
+        app_dir: PathBuf,
+        claim: instance::Claim,
+        plan: Plan,
+        models: ModelTrust,
+        on_progress: Option<OnProgress>,
+    ) -> Result<(Self, Installed), InitError> {
+        Self::install_reporting(name, app_dir, claim, plan, models, on_progress, None).await
+    }
+}
+
+/// Plans `plan` with `rust-sak`, reports the plan, and installs what is missing, reporting each dependency's progress
+/// and recording how each install ended.
+async fn install_dependencies(
+    plan: &Plan,
+    on_progress: Option<OnProgress>,
+    on_plan: Option<&OnPlan>,
+) -> Result<Installed, InitError> {
+    let dependencies: Vec<ai::Dependency> =
+        plan.dependencies.iter().map(|(_, dependency)| dependency.clone()).collect();
+    let planned = ai::plan(&plan.root, &dependencies).await.map_err(|error| failed(plan, error))?;
+
+    // A platform a library's folder publishes nothing for is not offered it: it is in neither the plan nor the report.
+    let rows: Vec<(Which, u64)> = plan
+        .dependencies
+        .iter()
+        .zip(planned.dependencies())
+        .filter(|(_, row)| row.state != State::Unavailable)
+        .map(|((which, _), row)| (which.clone(), row.size))
+        .collect();
+    if let Some(on_plan) = on_plan {
+        let report: Vec<PlannedDependency> = rows
+            .iter()
+            .map(|(which, size)| PlannedDependency { dependency: which.clone(), size: *size })
+            .collect();
+        on_plan(&report);
+    }
+
+    let mut records = Records::new(plan, &rows, on_progress);
+    let outcome = planned.install(|event| records.event(&event)).await;
+    match outcome {
+        Ok(()) => records.finish(),
+        Err(error) => {
+            let error = failed(plan, error);
+            records.fail(&error);
+            return Err(error);
+        }
+    }
+
+    let has = |wanted: Which| rows.iter().any(|(which, _)| *which == wanted);
+    Ok(Installed {
+        runtime: ai::dirs::dir_for(&plan.root, &folders::source(&Which::Runtime)),
+        cuda: has(Which::Cuda) && has(Which::Cudnn),
+        tensorrt: has(Which::TensorRt),
+    })
+}
+
+/// What `rust-sak`'s `error` means for this initialization.
+fn failed(plan: &Plan, error: InstallError) -> InitError {
+    let InstallError { dependency, failure } = error;
+    let dir = || {
+        plan.dependencies
+            .iter()
+            .find(|(_, candidate)| candidate.name == dependency)
+            .map_or_else(|| plan.root.clone(), |(_, candidate)| ai::dirs::dir_for(&plan.root, &candidate.source))
+    };
+    match failure {
+        Failure::UnsupportedPlatform { os, arch } => InitError::UnsupportedPlatform { dependency, os, arch },
+        Failure::DiskFull => {
+            InitError::Io { path: dir(), source: std::io::Error::from(std::io::ErrorKind::StorageFull) }
+        }
+        Failure::Io(reason) => InitError::Io { path: dir(), source: std::io::Error::other(reason) },
+        failure @ (Failure::Network | Failure::Http(_) | Failure::Damaged | Failure::Malformed(_)) => {
+            InitError::Transfer { dependency, reason: failure.to_string() }
+        }
+        // `Failure` is `rust-sak`'s and may grow; an unknown one is a transfer that did not complete.
+        #[allow(unreachable_patterns, reason = "`Failure` is not `#[non_exhaustive]` today, and may become it")]
+        failure => InitError::Transfer { dependency, reason: failure.to_string() },
+    }
+}
+
+/// The progress reports and the install records of one initialization's dependencies, driven by `rust-sak`'s events.
+///
+/// Each dependency is a unit of its own in the telemetry, as it was when this crate installed them one at a time: it
+/// opens on the dependency's first event, a [`Event::Current`] included, and closes on the next dependency's or at the
+/// end.
+struct Records<'a> {
+    plan: &'a Plan,
+    sizes: &'a [(Which, u64)],
+    on_progress: Option<OnProgress>,
+    open: Option<Open>,
+}
+
+/// The install unit of the dependency the events are about now.
+struct Open {
+    name: &'static str,
+    version: String,
+    span: tracing::Span,
+    started: Instant,
+}
+
+impl<'a> Records<'a> {
+    fn new(plan: &'a Plan, sizes: &'a [(Which, u64)], on_progress: Option<OnProgress>) -> Self {
+        Self { plan, sizes, on_progress, open: None }
+    }
+
+    fn event(&mut self, event: &Event) {
+        let (name, progress) = match *event {
+            Event::Progress { dependency, phase, bytes, total, fraction } => {
+                let phase = match phase {
+                    ai::Phase::Download => Phase::Downloading,
+                    ai::Phase::Extract => Phase::Extracting,
+                };
+                (dependency, Some((phase, bytes, (total > 0).then_some(total), fraction)))
+            }
+            Event::Current { dependency } => {
+                let size = self.size(dependency);
+                (dependency, Some((Phase::AlreadyInstalled, 0, Some(size), 1.0)))
+            }
+            Event::Verifying { dependency } => (dependency, None),
+        };
+        self.open(name);
+
+        let (Some(on_progress), Some(which), Some((phase, bytes, total, fraction))) =
+            (&self.on_progress, folders::which(name), progress)
+        else {
+            return;
+        };
+        on_progress(&Progress { dependency: which, phase, bytes, total, fraction });
+    }
+
+    /// The planned size of the dependency `rust-sak` named `name`.
+    fn size(&self, name: &str) -> u64 {
+        self.sizes
+            .iter()
+            .find(|(which, _)| folders::which(name).as_ref() == Some(which))
+            .map_or(0, |(_, size)| *size)
+    }
+
+    /// Opens `name`'s unit, closing the one before it as finished.
+    fn open(&mut self, name: &'static str) {
+        if self.open.as_ref().is_some_and(|open| open.name == name) {
+            return;
+        }
+        self.finish();
+        let version = self.version(name);
+        let span = unit_span!("install", dependency = name, version = %version);
+        self.open = Some(Open { name, version, span, started: Instant::now() });
+    }
+
+    /// `<folder>/<version>` of the dependency named `name`, as in `cuda/13.3.0`: what its record says it installed.
+    fn version(&self, name: &str) -> String {
+        self.plan
+            .dependencies
+            .iter()
+            .find(|(_, dependency)| dependency.name == name)
+            .map(|(_, dependency)| format!("{}/{}", dependency.source.name(), dependency.source.version()))
+            .unwrap_or_default()
+    }
+
+    /// Closes the open unit as finished.
+    fn finish(&mut self) {
+        if let Some(open) = self.open.take() {
+            unit::ended(Unit::Install, &open.span, open.started.elapsed(), unit::Outcome::Finished);
+        }
+    }
+
+    /// Closes the failed dependency's unit with `error`, opening it first if no event came before it failed.
+    fn fail(&mut self, error: &InitError) {
+        let name = match error {
+            InitError::Transfer { dependency, .. } | InitError::UnsupportedPlatform { dependency, .. } => {
+                Some(*dependency)
+            }
+            _ => self.open.as_ref().map(|open| open.name),
+        };
+        if let Some(name) = name {
+            self.open(name);
+        }
+        let Some(open) = self.open.take() else { return };
+        open.span.in_scope(|| {
+            let duration: Duration = open.started.elapsed();
+            deps::install::record_ended(open.name, &open.version, duration, error);
+            let ending = match error.stop_reason() {
+                Some(_) => unit::Outcome::Stopped,
+                None => unit::Outcome::Failed { kind: error.kind(), error },
+            };
+            unit::ended(Unit::Install, &open.span, duration, ending);
+        });
     }
 }
 
@@ -301,4 +370,18 @@ fn joined<T>(joined: Result<Result<T, InitError>, tokio::task::JoinError>) -> Re
         Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
         Err(_) => Err(InitError::from(crate::task::Cancelled)),
     }
+}
+
+/// The dependency root under the user's configuration directory, created if it is missing.
+///
+/// # Errors
+///
+/// [`InitError::Fs`] if the platform has no configuration directory or the root could not be created.
+pub(crate) fn dependency_root() -> Result<PathBuf, InitError> {
+    Ok(rust_sak::fs::mk_user_config_dir(folders::ROOT, "")?)
+}
+
+/// The version folders of every dependency under `root`, in install order, whether or not they are installed.
+pub(crate) fn dependency_dirs(root: &Path) -> Vec<PathBuf> {
+    folders::dirs_under(root)
 }

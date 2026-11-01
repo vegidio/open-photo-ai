@@ -12,11 +12,11 @@ use std::sync::atomic::Ordering;
 use rust_sak::image::ImageFormat;
 use tempfile::TempDir;
 
-use crate::deps::artifact::ONNX_RUNTIME;
-use crate::deps::release::{Dependency as Descriptor, RELEASE_BASE_URL};
+use crate::deps::folders;
 use crate::models::filter::{GUARDED, RESCUED};
 use crate::models::precision::FloatPrecision;
 use crate::models::{Operation, Strength};
+use crate::progress::Dependency as Which;
 use crate::providers::ExecutionProvider;
 use crate::setup::Plan;
 use crate::{Opai, ProcessOptions, runtime};
@@ -67,22 +67,21 @@ pub(crate) async fn live_application(name: &str) -> (TempDir, Opai) {
 pub(crate) async fn live_application_at(name: &str, app_dir: &Path) -> Opai {
     let app_dir = app_dir.to_path_buf();
 
-    let descriptor =
-        Descriptor::from_release_at(RELEASE_BASE_URL, &ONNX_RUNTIME, std::env::consts::OS, std::env::consts::ARCH)
-            .expect("the runtime is published for this platform");
-    let lib = descriptor.lib.expect("every platform the runtime is published for names its library");
-    let webgpu = descriptor.webgpu;
+    // The runtime alone, from its real folder, into a dependency root inside the test's directory rather than the
+    // shared one in the user's configuration directory.
+    let plan = Plan {
+        root: app_dir.join(folders::ROOT),
+        dependencies: vec![(Which::Runtime, folders::dependency(&Which::Runtime))],
+    };
 
     let claim = crate::instance::tests::claimed(&app_dir);
-    let (opai, installed) =
-        Opai::install(name, app_dir, claim, Plan::runtime_only(descriptor), crate::ModelTrust::Published, None)
-            .await
-            .expect("the pinned runtime must install");
+    let (opai, installed) = Opai::install(name, app_dir, claim, plan, crate::ModelTrust::Published, None)
+        .await
+        .expect("the pinned runtime must install");
 
-    // From the directory the install reported, as `Opai::initialize` does it. `start` is once per process, so a
-    // second call from another check in the same binary is the no-op it reports as success.
-    let library = runtime::library_path(&installed.runtime, lib);
-    runtime::start(name, &library, webgpu).expect("the pinned runtime must load and start");
+    // From the folder the install reported, as `Opai::initialize` does it. A second start from another check in the
+    // same binary reuses the running environment, which it reports as success.
+    runtime::start(name, &installed.runtime).expect("the pinned runtime must load and start");
 
     opai
 }

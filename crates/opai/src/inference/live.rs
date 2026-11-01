@@ -77,6 +77,7 @@ use crate::providers::ExecutionProvider;
 use crate::providers::profile::{EpProfile, ExecutionMode};
 use imaging::grid::Tile;
 use imaging::tensor::{Normalisation, Sampler, image_to_chw};
+use rust_sak::ai::ort;
 
 /// How a result's pixels are described in the output below, so a reader sees `Rgb16` rather than a discriminant.
 fn describe(pixels: &image::DynamicImage) -> &'static str {

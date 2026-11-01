@@ -232,7 +232,12 @@ impl Failure {
             // `HashMismatch` is a *transfer* failure rather than a verification one: an archive that arrived and hashed
             // wrong is most often a truncated response from the host that throttles them, which is the same story and
             // the same advice.
-            InitError::Download { .. } | InitError::HashMismatch { .. } => Failure::Transfer,
+            //
+            // `Transfer` is the same story for the runtime and the NVIDIA libraries, which `opai` installs through
+            // `rust-sak`: a listing or download that failed after the retries, or an archive that did not match.
+            InitError::Download { .. } | InitError::HashMismatch { .. } | InitError::Transfer { .. } => {
+                Failure::Transfer
+            }
 
             // `RuntimeUnavailable` because its doc says so in as many words: it "failed to load earlier in this process
             // and cannot be retried".
@@ -595,6 +600,9 @@ mod tests {
             actual: "def".to_string(),
         };
         assert_eq!(Failure::of(&transfer), Failure::Transfer);
+        let runtime =
+            InitError::Transfer { dependency: "NVIDIA cuDNN", reason: "the network could not be reached".into() };
+        assert_eq!(Failure::of(&runtime), Failure::Transfer);
 
         let unrecoverable = InitError::UnsupportedPlatform { dependency: "ONNX Runtime", os: "solaris", arch: "sparc" };
         assert_eq!(Failure::of(&unrecoverable), Failure::Unrecoverable);

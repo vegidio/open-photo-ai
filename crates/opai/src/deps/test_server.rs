@@ -1,42 +1,20 @@
 //! A throwaway local HTTP/1.1 server for the pipeline tests.
 //!
-//! It serves the committed 7z fixture the way GitHub releases serve a real archive — `ETag`, `Content-Length`, and
-//! `Range` requests answered with a `206` — so the tests exercise the real transfer, verification and expansion path
-//! without reaching the network. What it adds on top is the ability to lie: to serve bytes that do not hash to what
+//! It serves the committed fixture's bytes the way a model host serves a file — `ETag`, `Content-Length`, and `Range`
+//! requests answered with a `206` — so the tests exercise the real transfer and verification path without reaching
+//! the network. What it adds on top is the ability to lie: to serve bytes that do not hash to what
 //! was pinned, or to cut a response short, which is how the recovery paths become testable at all.
 
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-/// The archive every pipeline test installs: three files, one of them nested, mirroring the shape of a real runtime
-/// archive (a library plus its execution providers).
+/// The bytes every pipeline test installs, standing in for a model file: nothing here opens them.
 pub(crate) const FIXTURE: &[u8] = include_bytes!("testdata/tree.7z");
 
-/// What the fixture expands to, in the order [`crate::deps::manifest::record_tree`] reports it.
-///
-/// It is shaped like a real runtime archive — one large shared library beside two small providers, one of them nested.
-/// The library's 64 KiB are incompressible, which is what makes the archive bigger than a transfer's write buffer (so
-/// an interruption leaves real bytes to resume onto) and gives the expansion one file long enough to report progress
-/// from inside.
-pub(crate) const EXTRACTED: &[(&str, u64)] = &[
-    ("nested/onnxruntime_providers_cuda.so", 8),
-    ("onnxruntime.1.26.0.dylib", 65_536),
-    ("onnxruntime_providers_shared.so", 6),
-];
-
-/// The library name a runtime row carries, for the descriptors that stand in for one.
-///
-/// Only the runtime names a library — a GPU library is a directory on the search path, not a file the loader is opened
-/// against — so the rule lives here rather than being re-derived by each test module that builds a descriptor.
-pub(crate) fn fixture_lib(progress: &crate::progress::Dependency) -> Option<&'static str> {
-    matches!(progress, crate::progress::Dependency::Runtime).then_some("onnxruntime.1.26.0.dylib")
-}
-
-/// The source that serves `asset` for `version` from `server`, pinned to the fixture's real hash and size.
+/// The source that serves the file `asset` for `version` from `server`, pinned to the fixture's real hash and size.
 pub(crate) fn fixture_source(server: &TestServer, version: &str, asset: &str) -> crate::deps::release::Source {
     crate::deps::release::Source {
         url: format!("{}/{version}/{asset}", server.base_url),
@@ -48,7 +26,7 @@ pub(crate) fn fixture_source(server: &TestServer, version: &str, asset: &str) ->
 /// A model listing publishing each of `files` with the served fixture's real hash and size, so an install against the
 /// test server verifies for real rather than against a hash nothing wrote.
 ///
-/// Here beside [`fixture_source`], which is the same helper for a release archive and exists for the same reason: the
+/// Here beside [`fixture_source`], which is the same helper for one file and exists for the same reason: the
 /// rule that a published entry must be pinned to the bytes the server actually hands back is what makes these installs
 /// verify at all, and a second copy of it is a second thing to move when the fixture changes.
 pub(crate) fn fixture_listing(files: &[String]) -> crate::deps::model::manifest::Listing {
@@ -62,21 +40,6 @@ pub(crate) fn fixture_listing(files: &[String]) -> crate::deps::model::manifest:
             })
             .collect(),
     )
-}
-
-/// Asserts the fixture's three files are on disk under `dir`, and that the archive that produced them is not.
-pub(crate) fn assert_extracted(dir: &Path, archive: &str) {
-    for (path, size) in EXTRACTED {
-        let file = dir.join(crate::deps::manifest::from_slash(path));
-        assert!(file.exists(), "{path} is missing");
-        assert_eq!(std::fs::metadata(&file).unwrap().len(), *size, "{path}");
-    }
-
-    assert!(!dir.join(archive).exists(), "the archive was left behind");
-    assert!(
-        !crate::deps::install::part_path(&dir.join(archive)).exists(),
-        "a finished transfer left a partial"
-    );
 }
 
 /// What the server should do with one request.

@@ -1340,6 +1340,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "1.0.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "914a755b7c2d4af2bdcff7ce1739e2db9a1b81a9b07123d8015786ae03c0980d"
+dependencies = [
+ "link-section",
+ "linktime-proc-macro",
+]
+
+[[package]]
 name = "ctor-proc-macro"
 version = "0.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3569,6 +3579,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "link-section"
+version = "0.19.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39c29a617ce3df32c08497bdc1ab6e2376e0b17948ac166a2fbe5977c5954cd9"
+
+[[package]]
+name = "linktime-proc-macro"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e57c38c1e860fd37c604281cdfb1dd2216977fd76a50f85ba2f388ef3219616"
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4109,8 +4131,8 @@ checksum = "6aa2c4e539b869820a2b82e1aef6ff40aa85e65decdd5185e83fb4b1249cd00f"
 
 [[package]]
 name = "o11y-macros"
-version = "26.10.8"
-source = "git+https://github.com/vegidio/rust-sak?tag=26.10.1#1d3f4878aaee0cd88c81c7376493000333a5443d"
+version = "26.11.0"
+source = "git+https://github.com/vegidio/rust-sak?tag=26.11.0#0b23117917962ce2a6123a8365747283156f2c17"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4348,14 +4370,11 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 name = "opai"
 version = "26.10.0"
 dependencies = [
- "ctor",
+ "ctor 0.8.0",
  "dirs 7.0.0",
  "file-rotate",
  "image",
  "imaging",
- "libloading 0.9.0",
- "objc2-foundation",
- "ort",
  "rand_chacha 0.10.0",
  "rand_core 0.10.1",
  "rust-sak",
@@ -4413,9 +4432,9 @@ dependencies = [
 
 [[package]]
 name = "ort"
-version = "2.0.0-rc.13"
+version = "2.0.0-rc.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4336a1e2b38848325241c72889086886004e589b7c74f335e60a8e8db5138a0b"
+checksum = "37c87aa7a90b7ff3e0fe36cccd475df8d67f15f07f4d6c370c4b38464232813c"
 dependencies = [
  "libloading 0.9.0",
  "ndarray",
@@ -4426,9 +4445,9 @@ dependencies = [
 
 [[package]]
 name = "ort-sys"
-version = "2.0.0-rc.13"
+version = "2.0.0-rc.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf211e3776eea6aec988552fa118dd746d70e1b1e5e244058d1c98015f3e5872"
+checksum = "8d22b0417f1838db5a3ac0b3f98dfe39f6fb73624aa0a27c6bbb5040b9c7db2b"
 
 [[package]]
 name = "os_info"
@@ -5586,11 +5605,12 @@ checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rust-sak"
-version = "26.10.8"
-source = "git+https://github.com/vegidio/rust-sak?tag=26.10.1#1d3f4878aaee0cd88c81c7376493000333a5443d"
+version = "26.11.0"
+source = "git+https://github.com/vegidio/rust-sak?tag=26.11.0#0b23117917962ce2a6123a8365747283156f2c17"
 dependencies = [
  "avif-rs",
  "cap-std",
+ "ctor 1.0.13",
  "dirs 7.0.0",
  "enough",
  "futures-util",
@@ -5610,6 +5630,7 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation",
  "objc2-io-kit",
+ "ort",
  "pin-project-lite",
  "postcard",
  "ratatui",
@@ -5620,6 +5641,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sevenz-rust2",
+ "sha1",
  "sha2 0.11.0",
  "sysinfo",
  "tar",
@@ -6843,7 +6865,7 @@ dependencies = [
  "anyhow",
  "brotli",
  "cargo_metadata",
- "ctor",
+ "ctor 0.8.0",
  "dom_query",
  "dunce",
  "glob",

@@ -98,6 +98,7 @@ mod resident;
 pub(crate) use flight::{Install, Interest};
 use resident::spawn_sweeper;
 pub(crate) use resident::{SessionCache, SessionHandle};
+use rust_sak::ai::ort;
 
 use std::future::Future;
 use std::path::PathBuf;

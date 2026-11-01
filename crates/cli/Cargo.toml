@@ -34,7 +34,7 @@ ratatui = { version = "0.30.2", default-features = false, features = ["crossterm
 # directory input (already compiled for `opai`, which enables it at the same tag); `github` is the check for a newer
 # release, as the GUI makes it (already compiled for `gui`). Pinned to the same tag as `opai`'s, `gui`'s and `perf`'s:
 # all four tags move together, so the lock file holds a single `rust-sak`.
-rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.10.1", features = ["fs", "github", "tui"] }
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.11.0", features = ["fs", "github", "tui"] }
 
 # The project's error convention, matching `rust-sak`, `opai`, `gui` and `perf`.
 thiserror = "2.0.20"

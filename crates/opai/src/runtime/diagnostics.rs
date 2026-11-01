@@ -17,6 +17,7 @@
 //!   it, which for TensorRT is the build's own thread, so [`out_of_memory_since`] can tell a build what happened in
 //!   it. Held-back records are counted too. See `sessions::build`.
 
+use rust_sak::ai::ort;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, PoisonError};

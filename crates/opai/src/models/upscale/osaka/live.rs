@@ -125,6 +125,7 @@
 //! plumbing is tested.
 
 use image::{DynamicImage, ImageBuffer, Rgb, imageops::FilterType};
+use rust_sak::ai::ort;
 
 use super::latent::{
     LATENT_CHANNELS, REGION_EDGE, REGION_EDGE_PX, REGION_OVERLAP, TRANSFORMER_CHANNELS, VAE_STRIDE, pack,
