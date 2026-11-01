@@ -91,9 +91,6 @@ fn recording_plan() -> (Option<OnPlan>, PlanReports) {
 fn selected(adapters: &[GpuInfo], cuda: Option<&CudaInfo>) -> (Vec<Dependency>, SupportedProviders) {
     let chosen = setup::select(adapters, cuda);
     let has = |which: Dependency| chosen.contains(&which);
-    let report = SupportedProviders::from(rust_sak::ai::Supported::detect(
-        has(Dependency::Cuda) && has(Dependency::Cudnn),
-        has(Dependency::TensorRt),
-    ));
+    let report = SupportedProviders::detect(has(Dependency::Cuda) && has(Dependency::Cudnn), has(Dependency::TensorRt));
     (chosen, report)
 }

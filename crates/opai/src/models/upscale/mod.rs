@@ -25,10 +25,10 @@ use super::scale::Scale;
 use crate::error::InferenceError;
 use crate::pipeline::Backend;
 use crate::pipeline::Shared;
-use crate::providers::profile::EpProfile;
 use osaka::Diffusion;
 use passes::PassSequence;
 use resolve::Resolution;
+use rust_sak::ai::Tuning;
 
 // The enumeration the catalogue reads, which is what keeps a cross-family file from importing four rows by name: the
 // seven simple families expose the same as `denoise::ALL` and its six siblings.
@@ -209,7 +209,7 @@ impl Upscale {
     /// The execution-provider tuning measured for the model this runs, at the precision it runs at.
     ///
     /// The scale selects which native passes run, not what they run with, so every pass of a run carries this.
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         self.variant.profile()
     }
 

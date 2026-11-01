@@ -29,11 +29,11 @@ use crate::models::ArtifactId;
 use crate::models::strength::Strength;
 use crate::pipeline::Backend;
 use crate::pipeline::{ImagePipeline, OnOneGraph, Shared, SingleGraph, reporter};
-use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
 use imaging::mix::blended;
 use imaging::tensor::{Channel, Normalisation, Sampler};
 use imaging::{ChannelDepth, RunTile, TileGeometry, run_tiled};
+use rust_sak::ai::Tuning;
 
 // A fixed share rather than one fitted to a measured split, for the reason `light_adjustment::process::STEPS` gives:
 // a constant correct for one image size on one provider is a number nobody can re-derive from the code. The blend is
@@ -162,7 +162,7 @@ pub(crate) static RESCUED: std::sync::atomic::AtomicUsize = std::sync::atomic::A
 pub(crate) fn pipeline<B: Backend>(
     name: String,
     artifact: ArtifactId,
-    profile: EpProfile,
+    profile: Tuning,
     range: Normalisation,
     strength: Strength,
     guard: Option<Guard>,
@@ -189,7 +189,7 @@ impl Filter {
     fn new(
         name: String,
         artifact: ArtifactId,
-        profile: EpProfile,
+        profile: Tuning,
         range: Normalisation,
         strength: Strength,
         guard: Option<Guard>,
@@ -447,7 +447,7 @@ mod tests {
         let strength = Strength::new(strength).expect("the test supplied a strength in range");
         let artifact = ArtifactId::new(Family::Denoise, "fake", None, Precision::Fp32);
 
-        pipeline::<Fake>("Fake (FP32)".into(), artifact, EpProfile::default(), range, strength, guard)
+        pipeline::<Fake>("Fake (FP32)".into(), artifact, Tuning::default(), range, strength, guard)
     }
 
     /// A filter over `[0, 1]` at `strength`, guarded by `guard`.

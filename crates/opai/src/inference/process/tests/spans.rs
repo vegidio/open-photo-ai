@@ -48,7 +48,7 @@ impl Backend for Through {
     async fn acquire(
         &self,
         artifact: &ArtifactId,
-        profile: &EpProfile,
+        profile: &Tuning,
         requested: ExecutionProvider,
         interest: &Interest,
     ) -> Result<SessionHandle<Self::Session>, SessionError> {

@@ -16,9 +16,9 @@ use crate::models::{ArtifactId, Denoise, FloatPrecision, Strength};
 use crate::pipeline::Backend;
 use crate::pipeline::test_support::{self, FakeSession, stub_backend_runs};
 use crate::providers::ExecutionProvider;
-use crate::providers::profile::EpProfile;
 use crate::sessions::{Interest, SessionHandle};
 use imaging::test_support::gradient;
+use rust_sak::ai::Tuning;
 
 /// An export failure, as `o11y`'s worker would hand one to the callback.
 fn dropped() -> O11yError {
@@ -139,7 +139,7 @@ impl Backend for Filtering {
     async fn acquire(
         &self,
         _artifact: &ArtifactId,
-        _profile: &EpProfile,
+        _profile: &Tuning,
         _requested: ExecutionProvider,
         _interest: &Interest,
     ) -> Result<SessionHandle<FakeSession>, SessionError> {

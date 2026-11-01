@@ -6,7 +6,7 @@ use imaging::TileGeometry;
 use imaging::tensor::Normalisation;
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile};
+use rust_sak::ai::{CoreMlComputeUnits, Tuning};
 
 /// Saitama, native 4x weights only.
 pub(crate) static SAITAMA: ConvVariant = ConvVariant {
@@ -19,7 +19,7 @@ pub(crate) static SAITAMA: ConvVariant = ConvVariant {
 };
 
 /// The execution-provider tuning measured for this model, at the precision it carries.
-fn profile(precision: Precision) -> EpProfile {
+fn profile(precision: Precision) -> Tuning {
     // Measured on an M2 Max against ONNX Runtime 1.26, three invocations per configuration at 640x640:
     //
     //   saitama 4x, CoreML, median run
@@ -43,11 +43,9 @@ fn profile(precision: Precision) -> EpProfile {
         // whole graph as one partition on both — only a timing tells the two exports apart. The published artifact is
         // the fixed export, checked structurally: its two upsample `Resize` nodes run at FP16 with no `Cast` wrapped
         // around them.
-        Precision::Fp16 => {
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndNeuralEngine, ..EpProfile::default() }
-        }
+        Precision::Fp16 => Tuning { coreml_compute_units: CoreMlComputeUnits::CpuAndNeuralEngine, ..Tuning::default() },
         // Load-bearing, for the reason Kyoto's FP32 arm gives.
-        _ => EpProfile::default(),
+        _ => Tuning::default(),
     }
 }
 
@@ -63,8 +61,8 @@ mod tests {
         // op mix; the FP32 arm is the one that would be a measured regression if the FP16 answer were generalised.
         assert_eq!(
             UpscaleVariant::Saitama(FloatPrecision::Fp16).profile(),
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndNeuralEngine, ..EpProfile::default() }
+            Tuning { coreml_compute_units: CoreMlComputeUnits::CpuAndNeuralEngine, ..Tuning::default() }
         );
-        assert_eq!(UpscaleVariant::Saitama(FloatPrecision::Fp32).profile(), EpProfile::default());
+        assert_eq!(UpscaleVariant::Saitama(FloatPrecision::Fp32).profile(), Tuning::default());
     }
 }

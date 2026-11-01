@@ -222,6 +222,13 @@ fn holder_suffix(holder: &Option<Holder>) -> String {
     holder.as_ref().map_or_else(String::new, |holder| format!(" ({holder})"))
 }
 
+impl From<rust_sak::ai::UnknownProvider> for InitError {
+    /// The name `rust-sak`'s parse refused, as this crate's error for it.
+    fn from(error: rust_sak::ai::UnknownProvider) -> Self {
+        Self::UnknownProvider { name: error.name }
+    }
+}
+
 impl From<Cancelled> for InitError {
     // Hand-written rather than a `#[from]`, which would have to carry the marker as a field of a unit variant. The
     // marker says nothing a caller could read, and carrying it would change the variant's public shape for no one's

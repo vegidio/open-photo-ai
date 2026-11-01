@@ -9,7 +9,7 @@ use super::super::simple::SimpleVariant;
 
 use super::{gothenburg, malmo, stockholm};
 
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 /// Stockholm, the denoiser a front end offers first.
 pub(crate) const STOCKHOLM: SimpleVariant =
@@ -56,7 +56,7 @@ impl DenoiseVariant {
 
     /// The execution-provider tuning measured for this variant: Stockholm's is [`stockholm::profile`], Gothenburg's
     /// [`gothenburg::profile`] and Malmö's [`malmo::profile`].
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         // A match reaching the model's own file, which is where `models`' tiers put a measured profile and the prose
         // behind it: the measurement is of a graph, and the graph is the model's. Gothenburg and Malmö reach the same
         // answer as one another, measured separately; Stockholm is a different architecture and is measured on its
@@ -202,10 +202,10 @@ pub(crate) mod tests {
                     assert_eq!(variant.profile(), stockholm::profile(precision.into()), "{variant:?}");
                 }
                 DenoiseVariant::Gothenburg(FloatPrecision::Fp16) | DenoiseVariant::Malmo(FloatPrecision::Fp16) => {
-                    assert_ne!(variant.profile(), EpProfile::default(), "{variant:?} lost its measured profile");
+                    assert_ne!(variant.profile(), Tuning::default(), "{variant:?} lost its measured profile");
                 }
                 DenoiseVariant::Gothenburg(FloatPrecision::Fp32) | DenoiseVariant::Malmo(FloatPrecision::Fp32) => {
-                    assert_eq!(variant.profile(), EpProfile::default(), "{variant:?} declared a setting at FP32");
+                    assert_eq!(variant.profile(), Tuning::default(), "{variant:?} declared a setting at FP32");
                 }
             }
         }

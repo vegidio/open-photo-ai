@@ -38,7 +38,7 @@ impl TryFrom<String> for Processor {
 
     /// The provider `text` names, or the library's own refusal of a name no build published.
     fn try_from(text: String) -> Result<Self, Self::Error> {
-        text.parse().map(Self)
+        text.parse().map(Self).map_err(opai::InitError::from)
     }
 }
 

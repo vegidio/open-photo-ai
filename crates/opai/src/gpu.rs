@@ -60,15 +60,6 @@ pub(crate) fn cuda() -> Option<&'static CudaInfo> {
         .as_ref()
 }
 
-/// The total memory of CUDA's device 0, the one the CUDA and TensorRT providers are pinned to open, in bytes — or
-/// `None` on a machine with no CUDA device, or whose driver did not say.
-///
-/// The card's whole framebuffer, as the driver reports it, not what is free: that changes with every session held
-/// and every other program on the card, so it would size a build for a moment rather than for the device.
-pub(crate) fn cuda_device_memory() -> Option<u64> {
-    cuda()?.devices.first()?.total_memory
-}
-
 /// Case-insensitive substring test, without allocating a lowercased copy of either side.
 ///
 /// ASCII case is folded on both sides; every caller here passes a literal as `needle`.

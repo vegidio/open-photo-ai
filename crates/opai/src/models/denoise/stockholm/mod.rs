@@ -6,7 +6,8 @@
 
 use crate::models::filter::{Guard, Rescue};
 use crate::models::precision::Precision;
-use crate::providers::profile::EpProfile;
+use crate::providers::profile::with_webgpu_cpu_nodes_at_fp16;
+use rust_sak::ai::Tuning;
 
 // Stockholm is NAFNet, which diverges on tiles unlike anything it was trained on — dark, heavily noisy ones above
 // all, such as an underexposed night sky. It diverges in two ways:
@@ -32,7 +33,7 @@ pub(crate) const GUARD: Guard = Guard { magnitude: 3.0, rescue: Some(Rescue { dr
 
 /// The execution-provider tuning measured for this model, at the precision it carries: the provider defaults at both
 /// precisions, because nothing measured beat them, except for the nodes WebGPU cannot run correctly at FP16.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // **Measured, and the default won.** Nobody had measured Stockholm, in the reference or here, and it is NAFNet
     // rather than the Restormer Gothenburg and Malmö are, so their findings were not carried over: `CpuAndGpu` was
     // tried because it is a standard candidate for any CoreML graph, not because a Restormer won with it.
@@ -68,7 +69,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // `GlobalAveragePool` over the whole 256x256 plane in FP16, and six of them lose enough to turn the tile to noise
     // (0 dB against FP32 without them). Left to the CPU provider they bring it to 74 dB. Measured on an M2 Max against
     // the WebGPU plugin 0.4.0 and ONNX Runtime 1.30, per graph: +12.6% on WebGPU, 76.2 ms to 85.8 ms. FP32 needs none.
-    EpProfile::default().with_webgpu_cpu_nodes_at_fp16(precision, WEBGPU_CPU_NODES_FP16)
+    with_webgpu_cpu_nodes_at_fp16(Tuning::default(), precision, WEBGPU_CPU_NODES_FP16)
 }
 
 /// The nodes WebGPU is kept off at FP16, as the graph names them — see `profile`.
@@ -87,7 +88,7 @@ mod tests {
 
     use crate::models::denoise::DenoiseVariant;
     use crate::models::precision::FloatPrecision;
-    use crate::providers::profile::{CoreMlComputeUnits, CoreMlSpecialization, ExecutionMode};
+    use rust_sak::ai::{CoreMlComputeUnits, CoreMlSpecialization, ExecutionMode};
 
     #[test]
     fn the_guard_is_the_references_threshold_with_the_measured_rescue() {
@@ -142,12 +143,12 @@ mod tests {
 
     #[test]
     fn stockholm_declares_only_its_webgpu_nodes_and_only_at_fp16() {
-        // Compared as whole profiles, so a field added to `EpProfile` later is covered by existing.
+        // Compared as whole profiles, so a field added to `Tuning` later is covered by existing.
         assert_eq!(
             DenoiseVariant::Stockholm(FloatPrecision::Fp16).profile(),
-            EpProfile::default().with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, WEBGPU_CPU_NODES_FP16)
+            with_webgpu_cpu_nodes_at_fp16(Tuning::default(), Precision::Fp16, WEBGPU_CPU_NODES_FP16)
         );
-        assert_eq!(DenoiseVariant::Stockholm(FloatPrecision::Fp32).profile(), EpProfile::default());
+        assert_eq!(DenoiseVariant::Stockholm(FloatPrecision::Fp32).profile(), Tuning::default());
     }
 
     #[test]

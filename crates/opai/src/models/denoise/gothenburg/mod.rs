@@ -16,11 +16,12 @@
 // Both rewrites are exact in real arithmetic (1.4e-06 vs. the stock architecture on the same checkpoint).
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
+use crate::providers::profile::{cpu_and_gpu_at_fp16, with_webgpu_cpu_nodes_at_fp16};
+use rust_sak::ai::Tuning;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // Ported from the reference's `gothenburg.go` (not re-measured here, unlike Paris/Lyon) — acceptable since a
     // wrong CoreML-only, FP16-only setting only costs speed, never a wrong image.
     //
@@ -51,7 +52,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // `q·kᵀ` product, a sum over every pixel of the tile, in FP16, which leaves the tile at 51 dB against FP32. Left to
     // the CPU provider, the 22 of those that matter bring it to 71 dB. Measured on an M2 Max against the WebGPU plugin
     // 0.4.0 and ONNX Runtime 1.30, per graph: +3.6% on WebGPU, 532.9 ms to 552.2 ms. FP32 needs none.
-    cpu_and_gpu_at_fp16(precision).with_webgpu_cpu_nodes_at_fp16(precision, WEBGPU_CPU_NODES_FP16)
+    with_webgpu_cpu_nodes_at_fp16(cpu_and_gpu_at_fp16(precision), precision, WEBGPU_CPU_NODES_FP16)
 }
 
 /// The nodes WebGPU is kept off at FP16, as the graph names them — see `profile`.
@@ -93,7 +94,7 @@ mod tests {
         // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
         assert_eq!(
             DenoiseVariant::Gothenburg(FloatPrecision::Fp16).profile(),
-            cpu_and_gpu_at_fp16(Precision::Fp16).with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, WEBGPU_CPU_NODES_FP16)
+            with_webgpu_cpu_nodes_at_fp16(cpu_and_gpu_at_fp16(Precision::Fp16), Precision::Fp16, WEBGPU_CPU_NODES_FP16)
         );
         assert_eq!(DenoiseVariant::Gothenburg(FloatPrecision::Fp32).profile(), cpu_and_gpu_at_fp16(Precision::Fp32));
     }

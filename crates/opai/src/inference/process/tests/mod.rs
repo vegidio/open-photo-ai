@@ -28,10 +28,10 @@ use crate::models::ArtifactId;
 use crate::models::{FloatPrecision, OsakaPrecision, Scale, Upscale, UpscaleVariant};
 use crate::pipeline::session::GraphShape;
 use crate::progress::{Dependency, Phase, Progress};
-use crate::providers::profile::EpProfile;
-use crate::providers::profile::{CoreMlComputeUnits, ExecutionMode};
 use crate::sessions::Interest;
 use imaging::test_support::{gradient, nearest_neighbour};
+use rust_sak::ai::Tuning;
+use rust_sak::ai::{CoreMlComputeUnits, ExecutionMode};
 
 /// The shared gradient, behind the `Arc` every chain entry point takes.
 fn source(width: u32, height: u32) -> Arc<DynamicImage> {
@@ -45,7 +45,7 @@ struct Log {
     acquired: Vec<String>,
     /// The same acquisitions, each paired with the settings it was opened under — which is the half of the
     /// contract a graph set exercises and a pass sequence does not: three artifacts, three profiles.
-    opened_under: Vec<(String, EpProfile)>,
+    opened_under: Vec<(String, Tuning)>,
     /// The artifacts a tile was run against, in order.
     ran: Vec<String>,
     /// How many progress reports had already reached the caller when each tile ran.
@@ -198,7 +198,7 @@ impl Backend for Fake {
     async fn acquire(
         &self,
         artifact: &ArtifactId,
-        profile: &EpProfile,
+        profile: &Tuning,
         _requested: ExecutionProvider,
         interest: &Interest,
     ) -> Result<SessionHandle<Self::Session>, SessionError> {
@@ -511,7 +511,7 @@ fn session_artifacts(planned: &Planned<Fake>) -> Vec<String> {
 }
 
 /// The settings each of a planned operation's sessions would be opened under, in the same order.
-fn session_profiles(planned: &Planned<Fake>) -> Vec<EpProfile> {
+fn session_profiles(planned: &Planned<Fake>) -> Vec<Tuning> {
     planned.pipeline.sessions().iter().map(|(_, profile)| (*profile).clone()).collect()
 }
 

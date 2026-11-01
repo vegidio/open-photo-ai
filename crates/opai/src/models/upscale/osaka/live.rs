@@ -139,11 +139,12 @@ use crate::models::{GraphRole, Operation, OsakaPrecision, Resolution, Scale, Ups
 use crate::pipeline::Backend;
 use crate::pipeline::session::GraphShape;
 use crate::providers::ExecutionProvider;
-use crate::providers::profile::{DISABLED_OPTIMIZER_SEPARATOR, EpProfile};
+use crate::providers::profile::DISABLED_OPTIMIZER_SEPARATOR;
 use crate::sessions::SessionHandle;
 use crate::{Opai, Picture};
 use imaging::grid::{Tile, TileGrid};
 use imaging::tensor::{Normalisation, Sampler, chw_to_image, image_to_chw};
+use rust_sak::ai::Tuning;
 
 /// The application name these install under, and the directory they keep.
 const NAME: &str = "opai-live-osaka";
@@ -512,7 +513,7 @@ async fn the_disabled_optimizer_setting_is_a_semicolon_separated_list() {
         // after the first would read the first one's session back and report whatever it did.
         opai.release_sessions();
 
-        let profile = EpProfile { disabled_optimizers: entries(candidate), ..graph.profile.clone() };
+        let profile = Tuning { disabled_optimizers: entries(candidate), ..graph.profile.clone() };
         let loaded = opai
             .acquire(&graph.artifact, &profile, ExecutionProvider::Cpu, &crate::sessions::Interest::default())
             .await

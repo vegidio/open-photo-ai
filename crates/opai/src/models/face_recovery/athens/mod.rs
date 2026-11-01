@@ -7,14 +7,14 @@
 // plus the arms in `FaceRecoveryVariant` that name it.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile, ExecutionMode};
+use rust_sak::ai::{CoreMlComputeUnits, ExecutionMode, Tuning};
 
 /// The execution-provider tuning measured for this model, at the precision it carries.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // Transcribed from the reference's `athens.go`, whose comment carries both the numbers and the conditions they
     // were taken under. **No execution provider was exercised against this model in this project**: what this crate
     // validates is that the settings are *declared*, not that the percentages reproduce on other hardware.
-    EpProfile {
+    Tuning {
         // CoreML off the Neural Engine, at both precisions. Left to choose, CoreML gives most of the FP16 graph to the
         // Neural Engine, and the transitions on and off it cost more than the engine saves — restricting it to the CPU
         // and the GPU is worth **1.57x on an M2 Max**. The op mix is why: this is a CodeFormer, 72 GroupNorms, 19
@@ -40,7 +40,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
         // FP32 on the graph**, which is **-4% and +8% end to end**: the same flag measured at two scopes, so these
         // agree with the end-to-end figures `providers::profile` and the `execution-providers` spec quote.
         //
-        // `EpProfile::cuda_prefer_nhwc` says why the split falls at the precision. **That this is FP16 only is the
+        // `Tuning::cuda_prefer_nhwc` says why the split falls at the precision. **That this is FP16 only is the
         // load-bearing part, and it is the opposite of New York's answer**, which declares the layout at both:
         // tidying this for symmetry with New York costs 8% end to end with nothing to report it. The output is
         // unaffected either way: through the pipeline the NHWC result lands 67.1 dB from the NCHW one, where both sit
@@ -53,7 +53,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
         // The convolution algorithm search, the default-stream copy, the arena extension strategy, the EP-level
         // unified stream, the tunable-op switch and the attention kernel selection were all measured on this graph
         // and are all within noise — but the search must not be set to its *default* setting, which costs 70%.
-        ..EpProfile::default()
+        ..Tuning::default()
     }
 }
 
@@ -116,9 +116,9 @@ mod tests {
     fn athens_leaves_every_other_provider_setting_at_the_runtimes_own_default() {
         // The two CUDA defaults that are load-bearing for this graph are the reason: disabling TF32 costs 37%, and
         // convolution-bias fusion returns a different answer on every run here — which would make one image's cached
-        // result disagree with the same image recomputed. Both are carried by the `..EpProfile::default()` rather
+        // result disagree with the same image recomputed. Both are carried by the `..Tuning::default()` rather
         // than named, so what this pins is that nothing else was named either.
-        let default = EpProfile::default();
+        let default = Tuning::default();
 
         for precision in FloatPrecision::ALL {
             let carried = super::super::FaceRecoveryVariant::Athens(precision).profile();

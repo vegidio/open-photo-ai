@@ -18,8 +18,8 @@ use super::strength::Strength;
 use crate::models::filter;
 use crate::pipeline::Backend;
 use crate::pipeline::Shared;
-use crate::providers::profile::EpProfile;
 use imaging::tensor::Normalisation;
+use rust_sak::ai::Tuning;
 
 pub(crate) use variant::ALL;
 pub use variant::SharpenVariant;
@@ -88,7 +88,7 @@ impl Sharpen {
     }
 
     /// The execution-provider tuning measured for the model this runs, at the precision it runs at.
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         self.variant.profile()
     }
 

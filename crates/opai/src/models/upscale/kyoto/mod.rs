@@ -6,7 +6,7 @@ use imaging::TileGeometry;
 use imaging::tensor::Normalisation;
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{CoreMlComputeUnits, EpProfile};
+use rust_sak::ai::{CoreMlComputeUnits, Tuning};
 
 /// Kyoto, which publishes native 2x weights as well as 4x — so 8x is a 4x pass followed by a 2x one rather than two
 /// 4x passes, and a small request is served by the smaller model.
@@ -20,7 +20,7 @@ pub(crate) static KYOTO: ConvVariant = ConvVariant {
 };
 
 /// The execution-provider tuning measured for this model, at the precision it carries.
-fn profile(precision: Precision) -> EpProfile {
+fn profile(precision: Precision) -> Tuning {
     // Left alone, measured: the specialization strategy, low-precision accumulation on the GPU and the execution mode
     // are all within about 3% on this graph with bit-identical output, so the profile names none of them. The
     // execution mode is worth a note because Tokyo sets it and Kyoto deliberately does not: under CoreML the question
@@ -49,15 +49,13 @@ fn profile(precision: Precision) -> EpProfile {
         // would make this setting conditional. The margin is an M2 Max's, and the balance between the Neural Engine
         // and the GPU differs across Apple Silicon generations — the direction follows from the op mix and should
         // hold, but re-measure before quoting the number on other hardware.
-        Precision::Fp16 => {
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndNeuralEngine, ..EpProfile::default() }
-        }
+        Precision::Fp16 => Tuning { coreml_compute_units: CoreMlComputeUnits::CpuAndNeuralEngine, ..Tuning::default() },
         // Load-bearing rather than a formality, here and in Saitama's arm. CoreML's typed execution bars an FP32
         // MLProgram from the Neural Engine **altogether**, so at FP32 there is nothing to choose — `ALL` there already
         // means the CPU and the GPU. Asking for the Neural Engine anyway does not get it: it drops the graph onto the
         // CPU, which is a 9x regression at 2x and 20x at 4x. So writing the FP16 value for both precisions would not
         // be a harmless over-application of a good setting.
-        _ => EpProfile::default(),
+        _ => Tuning::default(),
     }
 }
 
@@ -78,7 +76,7 @@ mod tests {
         // this graph with bit-identical output, so they are left at the provider defaults.
         assert_eq!(
             kyoto,
-            EpProfile { coreml_compute_units: CoreMlComputeUnits::CpuAndNeuralEngine, ..EpProfile::default() }
+            Tuning { coreml_compute_units: CoreMlComputeUnits::CpuAndNeuralEngine, ..Tuning::default() }
         );
     }
 
@@ -87,6 +85,6 @@ mod tests {
         // The load-bearing half. CoreML's typed execution bars an FP32 MLProgram from the Neural Engine altogether,
         // so naming it here would not restate the default — it would drop the graph onto the CPU, which is 9x at 2x
         // and 20x at 4x. Applying the FP16 answer to both precisions is a regression, not a harmless over-reach.
-        assert_eq!(UpscaleVariant::Kyoto(FloatPrecision::Fp32).profile(), EpProfile::default());
+        assert_eq!(UpscaleVariant::Kyoto(FloatPrecision::Fp32).profile(), Tuning::default());
     }
 }

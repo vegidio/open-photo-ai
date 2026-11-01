@@ -222,7 +222,7 @@ impl<S, E> SessionCache<S, E> {
     /// written, zeros included, so one emptied by a sweep reads `0` rather than its last count.
     fn publish_resident(&self, entries: &HashMap<Key, Arc<Resident<S>>>) {
         // Every provider a session can be built on, which leaves out `Auto`: that is what a request asks for.
-        for provider in ExecutionProvider::BUILT_ON {
+        for provider in ExecutionProvider::ALL.into_iter().filter(|&provider| provider != ExecutionProvider::Auto) {
             let count = entries.keys().filter(|(_, built_on, _)| *built_on == provider).count();
             let count = u32::try_from(count).unwrap_or(u32::MAX);
             self.resident_gauge.set_with_tags(count, &[("provider", provider.as_str())]);

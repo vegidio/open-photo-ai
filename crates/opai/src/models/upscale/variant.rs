@@ -18,7 +18,7 @@ use super::resolve::Resolution;
 use super::saitama::SAITAMA;
 use super::tokyo::TOKYO;
 
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 // Object-safe on purpose: every method answers with **data** — a name, a precision list, a profile value, a
 // `Resolution` — and none of them is generic over a backend, holds a session or returns a pipeline.
@@ -52,7 +52,7 @@ pub(crate) trait UpscaleModel: Send + Sync {
     fn parameters(&self) -> &'static [ParameterEntry];
 
     /// The execution-provider tuning measured for this model at `precision`.
-    fn profile(&self, precision: Precision) -> EpProfile;
+    fn profile(&self, precision: Precision) -> Tuning;
 
     /// The tensor shape this model's passes run at, or `None` where this model runs no pass sequence.
     ///
@@ -114,7 +114,7 @@ impl UpscaleVariant {
     }
 
     /// The execution-provider tuning measured for this variant, at the precision it carries.
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         // Asked of the model, which is what names the graph a measurement was made against; the precision it was
         // measured at travels inside the variant and is widened on the way through.
         self.model().profile(self.precision())
@@ -158,7 +158,7 @@ impl UpscaleVariant {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::providers::profile::{CoreMlComputeUnits, CoreMlSpecialization, ExecutionMode};
+    use rust_sak::ai::{CoreMlComputeUnits, CoreMlSpecialization, ExecutionMode};
 
     /// Every operation the tests here and in the sibling modules build, one per variant and contract.
     pub(crate) fn every_variant() -> Vec<UpscaleVariant> {
@@ -318,7 +318,7 @@ pub(crate) mod tests {
                 continue;
             }
 
-            assert_eq!(variant.profile(), EpProfile::default(), "{variant:?} declared a profile nothing measured");
+            assert_eq!(variant.profile(), Tuning::default(), "{variant:?} declared a profile nothing measured");
         }
     }
 }

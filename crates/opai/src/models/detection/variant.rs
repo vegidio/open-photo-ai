@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::super::precision::{FloatPrecision, Precision};
 use super::super::simple::SimpleVariant;
 
-use crate::providers::profile::{EpProfile, ExecutionMode};
+use rust_sak::ai::{ExecutionMode, Tuning};
 
 // The codename and label are not one another's case: the codename is what an artifact name, a download URL and a
 // cache directory are composed from, so it carries no space. Both are transcribed — the reference's
@@ -37,7 +37,7 @@ impl DetectionVariant {
     }
 
     /// The execution-provider tuning measured for this variant.
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         // New York: NHWC on CUDA and sequential execution, at **both** precisions, and every figure the reference's.
         //
         // The two are independent and compose. NHWC removes a transpose pair around every convolution — RetinaFace is
@@ -50,7 +50,7 @@ impl DetectionVariant {
         // second run onwards.
         //
         // **That the layout is declared at FP32 as well as FP16 is the load-bearing part.** Athens declares it for
-        // FP16 **only**, because at FP32 it measured +8% there; `EpProfile::cuda_prefer_nhwc` says why the layout is
+        // FP16 **only**, because at FP32 it measured +8% there; `Tuning::cuda_prefer_nhwc` says why the layout is
         // measured per graph at each precision. A reader tidying this for symmetry with Athens would remove exactly
         // the half worth 17.5%, and nothing would report it: the model still loads and still returns the same faces,
         // only slower.
@@ -62,14 +62,14 @@ impl DetectionVariant {
         // measured as a tie. Sequential execution is a session setting rather than a per-provider one, so it reaches
         // CoreML too, where it is worth -6.5% at FP16 and a tie at FP32.
         //
-        // Two CUDA defaults must not change for this graph, and the `..EpProfile::default()` below carries them.
+        // Two CUDA defaults must not change for this graph, and the `..Tuning::default()` below carries them.
         // Disabling TF32 costs 114% at FP32 and 29% at FP16. Convolution-bias fusion is broken here: at FP32 it
         // decodes zero faces from intact confidence scores, and at FP16 it fails on the first convolution.
         //
         // What made this model fast is not a provider setting but the export: see `newyork::TARGET_SIZE`.
         match self {
             Self::NewYork(_) => {
-                EpProfile { cuda_prefer_nhwc: true, execution_mode: ExecutionMode::Sequential, ..EpProfile::default() }
+                Tuning { cuda_prefer_nhwc: true, execution_mode: ExecutionMode::Sequential, ..Tuning::default() }
             }
         }
     }

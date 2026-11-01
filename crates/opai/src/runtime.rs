@@ -25,9 +25,6 @@ pub(crate) mod diagnostics;
 /// the one the first attempt named.
 static FAILED_LOAD: Mutex<Option<Failure>> = Mutex::new(None);
 
-/// The name the WebGPU plugin registers its devices under, which prefixes the options a session attaches it with.
-pub(crate) const WEBGPU_EP: &str = "WebGpuExecutionProvider";
-
 /// What the first failed load in this process was, and what it said.
 #[derive(Debug)]
 struct Failure {
@@ -38,7 +35,8 @@ struct Failure {
 }
 
 /// Loads the runtime installed in `runtime_dir` and starts the inference environment every model session is later
-/// built under, named `name`. Says whether the WebGPU plugin registered and offered a device.
+/// built under, named `name`. Whether the WebGPU plugin registered and offered a device is then what
+/// `SupportedProviders::detect` reports.
 ///
 /// Called from `Opai::initialize` and from nowhere else, which is what makes the latch the whole application's
 /// rather than one caller's. A second start after a successful one returns at once and reuses the running
@@ -49,7 +47,7 @@ struct Failure {
 /// Returns [`InitError::RuntimeLoad`] if the runtime is not installed there or its library will not load,
 /// [`InitError::RuntimeStart`] if it loads and refuses to create an environment, and
 /// [`InitError::RuntimeUnavailable`] if a load already failed in this process — see [`FAILED_LOAD`].
-pub(crate) fn start(name: &str, runtime_dir: &Path) -> Result<bool, InitError> {
+pub(crate) fn start(name: &str, runtime_dir: &Path) -> Result<(), InitError> {
     let span = unit_span!("runtime_load", library = %runtime_dir.display());
 
     // Started before the load, so the record below says what the load and the environment together cost: the single
@@ -68,7 +66,7 @@ pub(crate) fn start(name: &str, runtime_dir: &Path) -> Result<bool, InitError> {
 }
 
 /// [`start`]'s body, inside its span. `started` is when the load began, for the record that closes it.
-fn load(name: &str, runtime_dir: &Path, started: std::time::Instant) -> Result<bool, InitError> {
+fn load(name: &str, runtime_dir: &Path, started: std::time::Instant) -> Result<(), InitError> {
     // Held across the load rather than only around the check, so two threads loading at once cannot both make a
     // first attempt. A poisoned lock means a previous caller panicked between the check and the record; the state
     // behind it is still what the next caller has to see.
@@ -98,8 +96,7 @@ fn load(name: &str, runtime_dir: &Path, started: std::time::Instant) -> Result<b
     let duration = started.elapsed();
     tracing::info!(name, library = %library.display(), ?duration, "ONNX Runtime started");
 
-    // Whether the load registered the WebGPU plugin with a device; CUDA and TensorRT are the install's to say.
-    Ok(ai::Supported::detect(false, false).webgpu)
+    Ok(())
 }
 
 /// The initialization error a failed load is reported as, naming the path the load was attempted against.
@@ -270,10 +267,12 @@ mod tests {
 
         // A second start in the same process, as a front end's error boundary performs, naming another folder. It
         // succeeds and leaves the running environment in place: a process runs on the first runtime it loads.
-        let webgpu =
-            start("opai-live-runtime-again", Path::new("/no/such/folder")).expect("a second start must succeed");
+        start("opai-live-runtime-again", Path::new("/no/such/folder")).expect("a second start must succeed");
         if cfg!(target_os = "macos") {
-            assert!(webgpu, "the runtime's WebGPU plugin offered this Mac's GPU, so the report says WebGPU");
+            assert!(
+                ai::Supported::detect(false, false).webgpu,
+                "the runtime's WebGPU plugin offered this Mac's GPU, so the report says WebGPU"
+            );
         }
         let second = ai::environment().unwrap();
         assert_eq!(first.ptr(), second.ptr(), "the second start replaced the running environment");

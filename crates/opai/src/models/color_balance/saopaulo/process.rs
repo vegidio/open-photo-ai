@@ -45,11 +45,11 @@ use crate::pipeline::Backend;
 use crate::pipeline::{
     DepthGeneric, OnOneGraph, Ran, Shared, Shown, SingleGraph, Square, checkpoint, reflected, reporter,
 };
-use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
 use imaging::bilinear::{self, Axis};
 use imaging::mix::blended;
 use imaging::tensor::{Channel, Sampler};
+use rust_sak::ai::Tuning;
 
 // One step per stage, and what each costs:
 //
@@ -69,7 +69,7 @@ const STEPS: usize = 5;
 pub(crate) fn pipeline<B: Backend>(
     name: String,
     artifact: ArtifactId,
-    profile: EpProfile,
+    profile: Tuning,
     params: ColorBalanceParams,
     canvas: u32,
 ) -> Shared<B> {
@@ -88,7 +88,7 @@ struct Mixed {
 }
 
 impl Mixed {
-    fn new(name: String, artifact: ArtifactId, profile: EpProfile, params: ColorBalanceParams, canvas: u32) -> Self {
+    fn new(name: String, artifact: ArtifactId, profile: Tuning, params: ColorBalanceParams, canvas: u32) -> Self {
         Self { graph: SingleGraph::new(name, artifact, profile), canvas, bias: params.bias.as_f32() }
     }
 }
@@ -372,7 +372,7 @@ mod tests {
         async fn acquire(
             &self,
             _artifact: &ArtifactId,
-            _profile: &EpProfile,
+            _profile: &Tuning,
             _requested: ExecutionProvider,
             _interest: &crate::sessions::Interest,
         ) -> Result<SessionHandle<Self::Session>, SessionError> {

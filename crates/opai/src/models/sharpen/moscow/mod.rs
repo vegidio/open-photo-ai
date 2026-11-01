@@ -4,11 +4,12 @@
 // Deleting the model is deleting this directory plus the arms in `SharpenVariant` that name it.
 
 use crate::models::precision::Precision;
-use crate::providers::profile::{EpProfile, cpu_and_gpu_at_fp16};
+use crate::providers::profile::{cpu_and_gpu_at_fp16, with_webgpu_cpu_nodes_at_fp16};
+use rust_sak::ai::Tuning;
 
 /// The execution-provider tuning measured for this model, at the precision it carries: CoreML off the Neural Engine
 /// at FP16, and the provider defaults at FP32.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // Ported from the reference's `moscow.go` (not re-measured here) — acceptable since a wrong CoreML-only,
     // FP16-only setting only costs speed, never a wrong image.
     //
@@ -43,7 +44,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // against FP32. Left to the CPU provider, the 68 of those that matter bring it to 67 dB. The largest list here, and
     // the costliest: measured on an M2 Max against the WebGPU plugin 0.4.0 and ONNX Runtime 1.30, per graph, +13.0% on
     // WebGPU, 532.0 ms to 601.2 ms. FP32 needs none.
-    cpu_and_gpu_at_fp16(precision).with_webgpu_cpu_nodes_at_fp16(precision, WEBGPU_CPU_NODES_FP16)
+    with_webgpu_cpu_nodes_at_fp16(cpu_and_gpu_at_fp16(precision), precision, WEBGPU_CPU_NODES_FP16)
 }
 
 /// The nodes WebGPU is kept off at FP16, as the graph names them — see `profile`.
@@ -131,7 +132,7 @@ mod tests {
         // refactor can break. What the shared profile holds is pinned once, beside it in `providers::profile`.
         assert_eq!(
             SharpenVariant::Moscow(FloatPrecision::Fp16).profile(),
-            cpu_and_gpu_at_fp16(Precision::Fp16).with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, WEBGPU_CPU_NODES_FP16)
+            with_webgpu_cpu_nodes_at_fp16(cpu_and_gpu_at_fp16(Precision::Fp16), Precision::Fp16, WEBGPU_CPU_NODES_FP16)
         );
         assert_eq!(SharpenVariant::Moscow(FloatPrecision::Fp32).profile(), cpu_and_gpu_at_fp16(Precision::Fp32));
     }

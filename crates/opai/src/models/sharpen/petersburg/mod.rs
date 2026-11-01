@@ -5,7 +5,8 @@
 
 use crate::models::filter::Guard;
 use crate::models::precision::Precision;
-use crate::providers::profile::EpProfile;
+use crate::providers::profile::with_webgpu_cpu_nodes_at_fp16;
+use rust_sak::ai::Tuning;
 
 // Petersburg is NAFNet, the architecture Stockholm is, and it shares the failure: on a tile unlike anything it was
 // trained on its raw output can go to 1000 and beyond, and decoded it would be a solid saturated block in the middle
@@ -21,7 +22,7 @@ pub(crate) const GUARD: Guard = Guard::magnitude(3.0);
 
 /// The execution-provider tuning measured for this model, at the precision it carries: the provider defaults at both
 /// precisions, because nothing measured beat them, except for the nodes WebGPU cannot run correctly at FP16.
-pub(crate) fn profile(precision: Precision) -> EpProfile {
+pub(crate) fn profile(precision: Precision) -> Tuning {
     // **Measured, and the default won.** Ported from the reference's `petersburg.go` (not re-measured here), whose
     // sweep is written down so that nobody pays for it again — and so that nobody "fills in" Moscow's setting because
     // the three models share a family.
@@ -60,7 +61,7 @@ pub(crate) fn profile(precision: Precision) -> EpProfile {
     // blocks' two channel-attention `ReduceMean`s over the whole 256x256 plane in FP16, which leaves the tile at 34 dB
     // against FP32. Left to the CPU provider those two bring it to 67 dB. Measured on an M2 Max against the WebGPU
     // plugin 0.4.0 and ONNX Runtime 1.30, per graph: +10.2% on WebGPU, 67.4 ms to 74.3 ms. FP32 needs none.
-    EpProfile::default().with_webgpu_cpu_nodes_at_fp16(precision, WEBGPU_CPU_NODES_FP16)
+    with_webgpu_cpu_nodes_at_fp16(Tuning::default(), precision, WEBGPU_CPU_NODES_FP16)
 }
 
 /// The nodes WebGPU is kept off at FP16, as the graph names them — see `profile`.
@@ -72,7 +73,7 @@ mod tests {
 
     use crate::models::precision::FloatPrecision;
     use crate::models::sharpen::SharpenVariant;
-    use crate::providers::profile::{CoreMlComputeUnits, CoreMlSpecialization, ExecutionMode};
+    use rust_sak::ai::{CoreMlComputeUnits, CoreMlSpecialization, ExecutionMode};
 
     #[test]
     fn the_guard_is_the_references_threshold() {
@@ -125,12 +126,12 @@ mod tests {
 
     #[test]
     fn petersburg_declares_only_its_webgpu_nodes_and_only_at_fp16() {
-        // Compared as whole profiles, so a field added to `EpProfile` later is covered by existing.
+        // Compared as whole profiles, so a field added to `Tuning` later is covered by existing.
         assert_eq!(
             SharpenVariant::Petersburg(FloatPrecision::Fp16).profile(),
-            EpProfile::default().with_webgpu_cpu_nodes_at_fp16(Precision::Fp16, WEBGPU_CPU_NODES_FP16)
+            with_webgpu_cpu_nodes_at_fp16(Tuning::default(), Precision::Fp16, WEBGPU_CPU_NODES_FP16)
         );
-        assert_eq!(SharpenVariant::Petersburg(FloatPrecision::Fp32).profile(), EpProfile::default());
+        assert_eq!(SharpenVariant::Petersburg(FloatPrecision::Fp32).profile(), Tuning::default());
     }
 
     #[test]

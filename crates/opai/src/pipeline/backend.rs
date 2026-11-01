@@ -6,8 +6,8 @@ use super::session::{GraphShape, NamedOutput};
 use crate::error::SessionError;
 use crate::models::ArtifactId;
 use crate::providers::ExecutionProvider;
-use crate::providers::profile::EpProfile;
 use crate::sessions::{Interest, SessionHandle};
+use rust_sak::ai::Tuning;
 
 // The seam that keeps every driver and every pipeline runnable without a runtime. The chain never names an `ort`
 // type: it asks a backend for a session and hands the backend a tile. Production instantiates it over this
@@ -40,7 +40,7 @@ pub(crate) trait Backend: Send + Sync + 'static {
     fn acquire(
         &self,
         artifact: &ArtifactId,
-        profile: &EpProfile,
+        profile: &Tuning,
         requested: ExecutionProvider,
         interest: &Interest,
     ) -> impl Future<Output = Result<SessionHandle<Self::Session>, SessionError>> + Send;

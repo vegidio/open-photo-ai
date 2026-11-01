@@ -191,7 +191,7 @@ impl From<PrecisionArg> for Precision {
 /// Its refusal is extended with the published spellings.
 fn parse_provider(text: &str) -> Result<ExecutionProvider, String> {
     // Read off `ExecutionProvider::ALL` rather than written down: a sixth provider is offered here by adding it there.
-    ExecutionProvider::from_str(text).map_err(|error| {
+    ExecutionProvider::from_str(text).map_err(opai::InitError::from).map_err(|error| {
         let published: Vec<&str> = ExecutionProvider::ALL.iter().map(|provider| provider.as_str()).collect();
         format!("{error} (one of: {})", published.join(", "))
     })

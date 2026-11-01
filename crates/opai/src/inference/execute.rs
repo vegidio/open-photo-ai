@@ -392,8 +392,8 @@ mod tests {
     use crate::models::{Analysis, ArtifactId, Detection, FloatPrecision, Precision};
     use crate::pipeline::{DataPipeline, Model, SharedData};
     use crate::progress::{Dependency, Phase, Progress};
-    use crate::providers::profile::EpProfile;
     use crate::task::lock;
+    use rust_sak::ai::Tuning;
 
     /// What a run did, so a test can say what was installed, opened and run rather than inferring it from the result.
     #[derive(Default)]
@@ -448,7 +448,7 @@ mod tests {
         async fn acquire(
             &self,
             artifact: &ArtifactId,
-            _profile: &EpProfile,
+            _profile: &Tuning,
             _requested: ExecutionProvider,
             interest: &crate::sessions::Interest,
         ) -> Result<SessionHandle<Self::Session>, SessionError> {
@@ -524,7 +524,7 @@ mod tests {
     struct FakePipeline {
         log: Arc<Mutex<Log>>,
         artifacts: Vec<ArtifactId>,
-        profile: EpProfile,
+        profile: Tuning,
         behaviour: Behaviour,
     }
 
@@ -537,7 +537,7 @@ mod tests {
                     .iter()
                     .map(|precision| ArtifactId::new(Family::Detection, "newyork", None, *precision))
                     .collect(),
-                profile: EpProfile::default(),
+                profile: Tuning::default(),
                 behaviour,
             })
         }
@@ -548,7 +548,7 @@ mod tests {
             &self.artifacts
         }
 
-        fn sessions(&self) -> Vec<(&ArtifactId, &EpProfile)> {
+        fn sessions(&self) -> Vec<(&ArtifactId, &Tuning)> {
             self.artifacts.iter().map(|artifact| (artifact, &self.profile)).collect()
         }
     }

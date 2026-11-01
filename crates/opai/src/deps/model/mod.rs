@@ -417,18 +417,25 @@ mod tests {
         assert_eq!(names, vec![format!("{KYOTO}.onnx"), format!("{KYOTO}.onnx.data")]);
     }
 
-    /// Seeds `id`'s engine directory and the shared timing cache with what a provider would have compiled, and
-    /// returns the two files.
-    fn compiled(app_dir: &Path, id: &ArtifactId) -> (PathBuf, PathBuf) {
+    /// Seeds `id`'s TensorRT and CoreML folders and the shared timing cache with what each provider would have
+    /// compiled, and returns the three files.
+    fn compiled(app_dir: &Path, id: &ArtifactId) -> (PathBuf, PathBuf, PathBuf) {
         // Through the same resolution the session builder points a provider at, so what these tests check is removed
         // is what would really have been there rather than a directory only this module believes in.
         let paths = crate::sessions::caches::resolve(app_dir, "opai-test", id).unwrap();
-        let engine = paths.engine.join("engine.bin");
+        let engine = paths.tensorrt.join("engine.bin");
+        let coreml = paths.coreml.join("model.mlmodelc");
         let timing = paths.timing.join("timings.bin");
-        std::fs::write(&engine, b"compiled from the weights installed then").unwrap();
-        std::fs::write(&timing, b"measured across every model").unwrap();
+        for (file, contents) in [
+            (&engine, &b"compiled from the weights installed then"[..]),
+            (&coreml, b"compiled from the weights installed then"),
+            (&timing, b"measured across every model"),
+        ] {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, contents).unwrap();
+        }
 
-        (engine, timing)
+        (engine, coreml, timing)
     }
 
     #[tokio::test]
@@ -441,12 +448,13 @@ mod tests {
 
         let split = fixture_listing(&[format!("{KYOTO}.onnx"), format!("{KYOTO}.onnx.data")]);
         install_from(&server, &split, &app_dir, &id, ModelTrust::Published).await.unwrap();
-        let (engine, _timing) = compiled(&app_dir, &id);
+        let (engine, coreml, _timing) = compiled(&app_dir, &id);
 
         // Republished as a single file, which is what makes this a replacement rather than a repeat.
         install_from(&server, &kyoto_listing(), &app_dir, &id, ModelTrust::Published).await.unwrap();
 
         assert!(!engine.exists(), "an engine compiled from the previous weights survived the replacement");
+        assert!(!coreml.exists(), "a CoreML model compiled from the previous weights survived the replacement");
     }
 
     #[tokio::test]
@@ -459,11 +467,12 @@ mod tests {
         let listing = kyoto_listing();
 
         install_from(&server, &listing, &app_dir, &id, ModelTrust::Published).await.unwrap();
-        let (engine, timing) = compiled(&app_dir, &id);
+        let (engine, coreml, timing) = compiled(&app_dir, &id);
 
         install_from(&server, &listing, &app_dir, &id, ModelTrust::Published).await.unwrap();
 
         assert!(engine.is_file(), "an install with nothing to do discarded a compiled engine");
+        assert!(coreml.is_file(), "an install with nothing to do discarded a compiled CoreML model");
         assert!(timing.is_file(), "an install with nothing to do discarded the shared timing cache");
     }
 
@@ -480,8 +489,8 @@ mod tests {
 
         let split = fixture_listing(&[format!("{KYOTO}.onnx"), format!("{KYOTO}.onnx.data")]);
         install_from(&server, &split, &app_dir, &id, ModelTrust::Published).await.unwrap();
-        let (engine, timing) = compiled(&app_dir, &id);
-        let (other_engine, _) = compiled(&app_dir, &other);
+        let (engine, _, timing) = compiled(&app_dir, &id);
+        let (other_engine, _, _) = compiled(&app_dir, &other);
 
         install_from(&server, &kyoto_listing(), &app_dir, &id, ModelTrust::Published).await.unwrap();
 

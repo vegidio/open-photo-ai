@@ -1,13 +1,17 @@
 //! Where what an execution provider compiles from a model is kept, and the two events that discard it.
 //!
-//! Slice 2 took the two directories as arguments and decided nothing about them; this is the slice that first
-//! compiles an engine, so it is where they are. Under the configuration directory, beside `models/` and `runtime/`:
+//! Under the configuration directory, beside `models/`:
 //!
 //! ```text
-//! <config>/engines/<artifact-id>/     what a provider compiled from that model
-//! <config>/engines/.timing/           the one TensorRT timing cache, shared by every model
-//! <config>/engines/.version           the runtime release those artifacts were compiled under
+//! <config>/engines/<artifact-id>/tensorrt/   the TensorRT engine compiled from that model
+//! <config>/engines/<artifact-id>/coreml/     the CoreML model compiled from it
+//! <config>/engines/.timing/                  the one TensorRT timing cache, shared by every model
+//! <config>/engines/.version                  the runtime release and the layout those were written under
 //! ```
+//!
+//! One folder per provider inside a model's own: each provider owns its directory, so one can be cleared or inspected
+//! without touching the other, and two providers' file names can never collide. `rust-sak` creates a provider's folder
+//! when a rung that attaches it is tried, so a model only ever run on the CPU leaves none behind.
 //!
 //! Not inside `models/<artifact-id>/`, which was the first idea and does not survive contact with the install
 //! pipeline: it finishes by recording **every file under the directory** as something it downloaded, and a
@@ -27,12 +31,13 @@
 
 use std::path::{Path, PathBuf};
 
+use rust_sak::ai::CachePaths;
+
 use crate::config;
 use crate::deps::manifest;
 use crate::deps::model::descriptor::{ENGINES_DIR, engine_dir};
 use crate::error::InitError;
 use crate::models::ArtifactId;
-use crate::providers::options::CachePaths;
 
 /// The installation-wide TensorRT timing cache, shared by every model.
 ///
@@ -40,27 +45,37 @@ use crate::providers::options::CachePaths;
 /// keeps it inside the tree, which is the half of its placement that matters.
 const TIMING_DIR: &str = "engines/.timing";
 
-/// The record of which ONNX Runtime release the tree was compiled under.
+/// The record of which ONNX Runtime release, and which layout, the tree was written under.
 ///
 /// A file rather than an inference from "the runtime was just replaced", because the latter is not durable: a process
 /// that died between replacing the runtime and discarding the engines would find a matching runtime on its next
 /// start, skip the reinstall, and never discard them.
 const VERSION_STAMP: &str = ".version";
 
-/// Resolves and creates the two directories the execution providers are pointed at for `id`.
+/// The layout this build writes the tree in, as the stamp records it after the runtime's version.
 ///
-/// Both are created on demand through [`config::sub_dir`], so the first session built for a model is what brings its
-/// directory into existence and a machine that has never run one carries nothing.
+/// `2` is a folder per provider inside each model's. A stamp naming no layout is the flat `engines/<artifact-id>/` of
+/// earlier releases, which nothing reads any more. A later layout change is a bump here.
+const LAYOUT: &str = "layout=2";
+
+/// The stamp a tree written under `runtime_version` in this build's layout carries.
+fn stamp_for(runtime_version: &str) -> String {
+    format!("{runtime_version};{LAYOUT}")
+}
+
+/// The folders the execution providers are pointed at for `id`: its TensorRT and CoreML folders inside its own, and
+/// the timing cache every model shares. Computes the paths only; see the module documentation for who creates them.
 ///
 /// # Errors
 ///
-/// Returns [`InitError::InvalidName`] if `name` cannot be a directory, [`InitError::Fs`] if either path could escape
-/// its parent, and [`InitError::Io`] if either could not be created.
+/// Returns [`InitError::InvalidName`] if `name` cannot be a directory, [`InitError::Fs`] if the tree could escape its
+/// parent, and [`InitError::Io`] if the tree itself could not be created.
 pub(crate) fn resolve(app_dir: &Path, name: &str, id: &ArtifactId) -> Result<CachePaths, InitError> {
-    Ok(CachePaths {
-        engine: config::sub_dir(app_dir, name, &engine_dir(id))?,
-        timing: config::sub_dir(app_dir, name, TIMING_DIR)?,
-    })
+    // The tree is validated and created through the one rule every configuration path goes through; what is inside it
+    // is named by an artifact id, which cannot escape it.
+    engines_root(app_dir, name)?;
+
+    Ok(CachePaths { timing: app_dir.join(TIMING_DIR), ..CachePaths::under(&app_dir.join(engine_dir(id))) })
 }
 
 /// The engines tree itself, resolved and created.
@@ -72,13 +87,15 @@ fn engines_root(app_dir: &Path, name: &str) -> Result<PathBuf, InitError> {
     config::sub_dir(app_dir, name, ENGINES_DIR)
 }
 
-/// Empties the engines tree where it was compiled under a runtime release other than `tag`, and records `tag`.
+/// Empties the engines tree where it was written under a runtime release other than `runtime_version`, or in a layout
+/// other than this build's, and records both.
 ///
 /// The wholesale invalidation of the two: what a provider compiles is valid only for the runtime that built it, and a
-/// stale artifact is at best a wasted rebuild and at worst loaded against a runtime that cannot use it. It belongs to
+/// stale artifact is at best a wasted rebuild and at worst loaded against a runtime that cannot use it. Artifacts in a
+/// layout nothing reads any more would never be reused and never removed by anything else. It belongs to
 /// initialization because that is where the runtime version in force is decided.
 ///
-/// A launch whose stamp already names `tag` discards nothing, which is the point — these artifacts cost minutes to
+/// A launch whose stamp already names both discards nothing, which is the point — these artifacts cost minutes to
 /// rebuild. A machine that has never compiled anything writes the stamp over an empty directory and completes. No
 /// model's weights are under this tree, so none is touched.
 ///
@@ -86,14 +103,15 @@ fn engines_root(app_dir: &Path, name: &str) -> Result<PathBuf, InitError> {
 ///
 /// Returns [`InitError::Io`] if the tree cannot be emptied or the stamp cannot be written, and otherwise as
 /// [`resolve`].
-pub(crate) fn invalidate_for_runtime(app_dir: &Path, name: &str, tag: &str) -> Result<(), InitError> {
+pub(crate) fn invalidate_for_runtime(app_dir: &Path, name: &str, runtime_version: &str) -> Result<(), InitError> {
     let engines = engines_root(app_dir, name)?;
     let stamp = engines.join(VERSION_STAMP);
+    let expected = stamp_for(runtime_version);
 
-    // Unreadable, absent and malformed all read the same way — as "compiled under something else" — which costs a
-    // rebuild rather than trusting a stamp nothing wrote.
+    // Unreadable, absent and malformed all read the same way — as "written under something else" — which costs a
+    // rebuild rather than trusting a stamp nothing wrote. A stamp naming no layout is an earlier release's.
     let recorded = std::fs::read_to_string(&stamp).ok();
-    if recorded.as_deref() == Some(tag) {
+    if recorded.as_deref() == Some(expected.as_str()) {
         return Ok(());
     }
 
@@ -105,21 +123,22 @@ pub(crate) fn invalidate_for_runtime(app_dir: &Path, name: &str, tag: &str) -> R
         .unwrap_or_default();
 
     // The stamp lives in the tree it describes, so it goes with everything else and is written back afterwards. That
-    // ordering is what makes an interruption in between read as "compiled under something else" on the next launch.
+    // ordering is what makes an interruption in between read as "written under something else" on the next launch.
     manifest::empty_dir(&engines).map_err(InitError::io(&engines))?;
 
     if discarded > 0 {
-        // `info`, naming the tag that replaced the one they were built under — which is the whole of the answer to
-        // "why did this launch spend four minutes compiling engines it had already compiled".
+        // `info`, naming what replaced what they were built under — which is the whole of the answer to "why did this
+        // launch spend four minutes compiling engines it had already compiled".
         tracing::info!(
             discarded,
-            tag,
+            stamp = %expected,
             previous = recorded.as_deref().unwrap_or("unrecorded"),
-            "discarded every compiled engine: the inference runtime they were built under has been replaced"
+            "discarded every compiled engine: the inference runtime they were built under, or the layout they were \
+             kept in, has changed"
         );
     }
 
-    std::fs::write(&stamp, tag).map_err(InitError::io(&stamp))
+    std::fs::write(&stamp, &expected).map_err(InitError::io(&stamp))
 }
 
 #[cfg(test)]
@@ -132,12 +151,47 @@ mod tests {
     /// The application name and directory every test here resolves against.
     const NAME: &str = "opai-test";
 
+    /// The runtime version every test here is stamped under.
+    const RUNTIME: &str = "1.30.0";
+
     /// An application directory to resolve beneath, and the temporary root keeping it alive.
     fn app() -> (TempDir, PathBuf) {
         let root = tempfile::tempdir().unwrap();
         let app_dir = root.path().join(NAME);
 
         (root, app_dir)
+    }
+
+    /// `paths` with something compiled into each provider's folder and into the shared timing cache, as a machine that
+    /// ran the model on both would have them. Returns the files written.
+    fn compile_into(paths: &CachePaths) -> [PathBuf; 3] {
+        let files = [
+            paths.tensorrt.join("engine.bin"),
+            paths.coreml.join("model.mlmodelc"),
+            paths.timing.join("t.cache"),
+        ];
+        for file in &files {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, b"compiled").unwrap();
+        }
+        files
+    }
+
+    /// What the stamp says now.
+    fn stamp(app_dir: &Path) -> String {
+        std::fs::read_to_string(app_dir.join(ENGINES_DIR).join(VERSION_STAMP)).unwrap()
+    }
+
+    #[test]
+    fn each_provider_compiles_into_a_folder_of_its_own_inside_the_models() {
+        let (_root, app_dir) = app();
+        let paths = resolve(&app_dir, NAME, &kyoto()).unwrap();
+        let model = app_dir.join(ENGINES_DIR).join(kyoto().as_str());
+
+        assert_eq!(paths.tensorrt, model.join("tensorrt"));
+        assert_eq!(paths.coreml, model.join("coreml"));
+        assert_ne!(paths.tensorrt, paths.coreml);
+        assert!(paths.tensorrt.starts_with(&model) && paths.coreml.starts_with(&model));
     }
 
     #[test]
@@ -149,13 +203,12 @@ mod tests {
         let first = resolve(&app_dir, NAME, &kyoto()).unwrap();
         let second = resolve(&app_dir, NAME, &tokyo()).unwrap();
 
-        assert_ne!(first.engine, second.engine);
-        assert_eq!(first.engine, app_dir.join(ENGINES_DIR).join(kyoto().as_str()));
-        assert!(first.engine.is_dir() && second.engine.is_dir(), "a resolved directory was not created");
+        assert_ne!(first.tensorrt, second.tensorrt);
+        assert_ne!(first.coreml, second.coreml);
     }
 
     #[test]
-    fn both_models_are_pointed_at_one_timing_cache_inside_the_engines_tree() {
+    fn both_models_are_pointed_at_one_timing_cache_inside_the_engines_tree_and_outside_either_model() {
         // Shared because measured kernel timings carry between graphs, and inside the tree because a runtime change
         // has to take it with everything else — a timing cache records tactics for one TensorRT version.
         let (_root, app_dir) = app();
@@ -164,167 +217,167 @@ mod tests {
         let second = resolve(&app_dir, NAME, &tokyo()).unwrap();
 
         assert_eq!(first.timing, second.timing);
+        assert_eq!(first.timing, app_dir.join(TIMING_DIR));
         assert!(
             first.timing.starts_with(app_dir.join(ENGINES_DIR)),
             "{} escaped the tree",
             first.timing.display()
         );
-        assert!(first.timing.is_dir(), "the timing directory was not created");
+        for model in [kyoto(), tokyo()] {
+            let own = app_dir.join(ENGINES_DIR).join(model.as_str());
+            assert!(!first.timing.starts_with(&own), "the timing cache is inside {}", own.display());
+        }
         assert!(TIMING_DIR.starts_with(&format!("{ENGINES_DIR}/")), "{TIMING_DIR} is not inside {ENGINES_DIR}");
     }
 
     #[test]
-    fn resolving_a_second_time_creates_nothing_and_disturbs_nothing() {
-        // The session builder resolves these on every build that misses the cache, so resolution has to be something
-        // an engine compiled minutes ago survives.
+    fn resolving_creates_no_provider_folder_and_disturbs_nothing_compiled() {
+        // The provider folders are `rust-sak`'s to create when a rung that compiles is tried, so a model only run on
+        // the CPU leaves nothing; and the session builder resolves on every build that misses the cache, so
+        // resolution has to be something an engine compiled minutes ago survives.
         let (_root, app_dir) = app();
-        let id = kyoto();
+        let paths = resolve(&app_dir, NAME, &kyoto()).unwrap();
+        assert!(!paths.tensorrt.exists() && !paths.coreml.exists() && !paths.timing.exists());
 
-        let paths = resolve(&app_dir, NAME, &id).unwrap();
-        let compiled = paths.engine.join("engine.bin");
-        std::fs::write(&compiled, b"what a provider compiled").unwrap();
-
-        let again = resolve(&app_dir, NAME, &id).unwrap();
-
-        assert_eq!(again, paths);
-        assert!(compiled.is_file(), "resolving a second time discarded what was compiled");
+        let compiled = compile_into(&paths);
+        assert_eq!(resolve(&app_dir, NAME, &kyoto()).unwrap(), paths);
+        assert!(
+            compiled.iter().all(|file| file.is_file()),
+            "resolving a second time discarded what was compiled"
+        );
     }
 
     #[test]
     fn a_bumped_runtime_release_empties_the_whole_tree() {
         let (_root, app_dir) = app();
+        invalidate_for_runtime(&app_dir, NAME, "1.26.0").unwrap();
         let paths = resolve(&app_dir, NAME, &kyoto()).unwrap();
-        let engine = paths.engine.join("engine.bin");
-        let timing = paths.timing.join("timings.bin");
-        std::fs::write(&engine, b"compiled under the old runtime").unwrap();
-        std::fs::write(&timing, b"measured under the old runtime").unwrap();
+        let compiled = compile_into(&paths);
 
-        invalidate_for_runtime(&app_dir, NAME, "runtime/1.26.0").unwrap();
-        invalidate_for_runtime(&app_dir, NAME, "runtime/1.27.0").unwrap();
+        invalidate_for_runtime(&app_dir, NAME, "1.27.0").unwrap();
 
-        assert!(!engine.exists(), "a compiled engine survived a runtime bump");
-        assert!(!timing.exists(), "the shared timing cache survived a runtime bump");
-        assert!(!paths.engine.exists(), "the model's directory was kept rather than discarded with the tree");
-        let stamp = app_dir.join(ENGINES_DIR).join(VERSION_STAMP);
-        assert_eq!(std::fs::read_to_string(stamp).unwrap(), "runtime/1.27.0");
+        assert!(compiled.iter().all(|file| !file.exists()), "something compiled survived a runtime bump");
+        assert!(!app_dir.join(engine_dir(&kyoto())).exists(), "the model's directory was kept");
+        assert_eq!(stamp(&app_dir), "1.27.0;layout=2");
     }
 
     #[test]
-    fn a_launch_under_the_recorded_release_discards_nothing() {
+    fn a_stamp_naming_no_layout_discards_the_flat_engines_once() {
+        // The stamp an earlier release wrote: the runtime's version alone, over engines kept flat in each model's
+        // folder. Same runtime, so only the layout differs.
+        let (_root, app_dir) = app();
+        let flat = app_dir.join(engine_dir(&kyoto())).join("engine.bin");
+        std::fs::create_dir_all(flat.parent().unwrap()).unwrap();
+        std::fs::write(&flat, b"compiled in the flat layout").unwrap();
+        let timing = app_dir.join(TIMING_DIR).join("t.cache");
+        std::fs::create_dir_all(timing.parent().unwrap()).unwrap();
+        std::fs::write(&timing, b"measured").unwrap();
+        std::fs::write(app_dir.join(ENGINES_DIR).join(VERSION_STAMP), RUNTIME).unwrap();
+
+        invalidate_for_runtime(&app_dir, NAME, RUNTIME).unwrap();
+        assert!(!flat.exists(), "an engine in the flat layout survived");
+        assert!(!timing.exists(), "the shared timing cache survived a layout change");
+        assert_eq!(stamp(&app_dir), "1.30.0;layout=2");
+
+        let compiled = compile_into(&resolve(&app_dir, NAME, &kyoto()).unwrap());
+        invalidate_for_runtime(&app_dir, NAME, RUNTIME).unwrap();
+        assert!(compiled.iter().all(|file| file.is_file()), "the second launch discarded again");
+    }
+
+    #[test]
+    fn a_stamp_naming_another_layout_empties_the_whole_tree() {
+        // Same runtime, a layout this build does not write: what a later layout bump, or a rollback, finds.
+        let (_root, app_dir) = app();
+        let compiled = compile_into(&resolve(&app_dir, NAME, &kyoto()).unwrap());
+        std::fs::write(app_dir.join(ENGINES_DIR).join(VERSION_STAMP), format!("{RUNTIME};layout=1")).unwrap();
+
+        invalidate_for_runtime(&app_dir, NAME, RUNTIME).unwrap();
+
+        assert!(compiled.iter().all(|file| !file.exists()), "something compiled survived a layout change");
+        assert_eq!(stamp(&app_dir), "1.30.0;layout=2");
+    }
+
+    #[test]
+    fn a_launch_under_the_recorded_release_and_layout_discards_nothing() {
         // The common case, and the one that must cost nothing: these artifacts take minutes to rebuild.
         let (_root, app_dir) = app();
+        invalidate_for_runtime(&app_dir, NAME, RUNTIME).unwrap();
+        let compiled = compile_into(&resolve(&app_dir, NAME, &kyoto()).unwrap());
 
-        // Stamped first, then compiled: the order a machine actually reaches this state in, since the launch that
-        // records the release precedes every session built under it.
-        invalidate_for_runtime(&app_dir, NAME, "runtime/1.26.0").unwrap();
-        let paths = resolve(&app_dir, NAME, &kyoto()).unwrap();
-        let engine = paths.engine.join("engine.bin");
-        std::fs::write(&engine, b"compiled under the recorded runtime").unwrap();
+        invalidate_for_runtime(&app_dir, NAME, RUNTIME).unwrap();
 
-        invalidate_for_runtime(&app_dir, NAME, "runtime/1.26.0").unwrap();
-
-        assert!(engine.is_file(), "a launch with the same runtime discarded a compiled engine");
+        assert!(compiled.iter().all(|file| file.is_file()), "a launch with nothing changed discarded something");
     }
 
     #[test]
-    fn moving_from_the_release_tag_to_the_runtime_folders_version_discards_the_engines_once() {
-        // Earlier releases keyed the stamp on the GitHub tag; this one keys it on the version folder's name. The first
-        // launch after the update sees a different string and discards once, which is right: the runtime itself was
-        // installed afresh into the shared root.
-        let (_root, app_dir) = app();
-        invalidate_for_runtime(&app_dir, NAME, "runtime/1.30.0").unwrap();
-        let paths = resolve(&app_dir, NAME, &kyoto()).unwrap();
-        let engine = paths.engine.join("engine.bin");
-        std::fs::write(&engine, b"compiled under the runtime the old release installed").unwrap();
-
-        let version = crate::deps::folders::runtime_version();
-        invalidate_for_runtime(&app_dir, NAME, &version).unwrap();
-        assert!(!engine.exists(), "the change of key did not discard the engines");
-
-        let paths = resolve(&app_dir, NAME, &kyoto()).unwrap();
-        let engine = paths.engine.join("engine.bin");
-        std::fs::write(&engine, b"compiled under the runtime in the shared root").unwrap();
-        invalidate_for_runtime(&app_dir, NAME, &version).unwrap();
-        assert!(engine.is_file(), "a second launch under the same folder discarded the engines again");
-    }
-
-    #[test]
-    fn a_machine_that_has_never_compiled_anything_records_the_release_and_completes() {
-        // A first run: there is no tree, no stamp and nothing to discard. Emptying a directory that is already empty
-        // is what "absent reads as compiled under something else" costs here.
+    fn a_machine_that_has_never_compiled_anything_records_the_release_and_layout_and_completes() {
         let (_root, app_dir) = app();
 
-        invalidate_for_runtime(&app_dir, NAME, "runtime/1.26.0").unwrap();
+        invalidate_for_runtime(&app_dir, NAME, RUNTIME).unwrap();
 
-        let stamp = app_dir.join(ENGINES_DIR).join(VERSION_STAMP);
-        assert_eq!(std::fs::read_to_string(stamp).unwrap(), "runtime/1.26.0");
+        assert_eq!(stamp(&app_dir), "1.30.0;layout=2");
     }
 
     #[test]
     fn discarding_the_compiled_artifacts_leaves_every_installed_model_in_place() {
-        // The weights are under `models/`, which is why they are a different tree: a runtime bump costs a rebuild,
-        // never a re-download.
+        // The weights are under `models/`, which is why they are a different tree: a runtime bump or a layout change
+        // costs a rebuild, never a re-download.
         let (_root, app_dir) = app();
         let models = config::sub_dir(&app_dir, NAME, "models/up_kyoto_4x_fp32").unwrap();
         let weights = models.join("up_kyoto_4x_fp32.onnx");
         std::fs::write(&weights, b"the published graph").unwrap();
-        resolve(&app_dir, NAME, &kyoto()).unwrap();
+        compile_into(&resolve(&app_dir, NAME, &kyoto()).unwrap());
 
-        invalidate_for_runtime(&app_dir, NAME, "runtime/1.27.0").unwrap();
+        std::fs::write(app_dir.join(ENGINES_DIR).join(VERSION_STAMP), RUNTIME).unwrap();
+        invalidate_for_runtime(&app_dir, NAME, RUNTIME).unwrap();
+        invalidate_for_runtime(&app_dir, NAME, "1.31.0").unwrap();
 
-        assert!(weights.is_file(), "a runtime bump removed an installed model");
+        assert!(weights.is_file(), "discarding the engines removed an installed model");
     }
 
     #[test]
-    fn a_bumped_runtime_release_says_what_it_discarded_and_what_replaced_it() {
+    fn a_discard_says_what_it_discarded_and_what_replaced_it() {
         // Alongside the filesystem effect, not instead of it: the record exists because a user pays minutes for the
         // rebuild it causes, and nothing on screen says why.
         let (_root, app_dir) = app();
-        let paths = resolve(&app_dir, NAME, &kyoto()).unwrap();
-        std::fs::write(paths.engine.join("engine.bin"), b"compiled under the old runtime").unwrap();
-        invalidate_for_runtime(&app_dir, NAME, "runtime/1.26.0").unwrap();
-        resolve(&app_dir, NAME, &kyoto()).unwrap();
-        std::fs::write(paths.engine.join("engine.bin"), b"compiled under the old runtime").unwrap();
+        compile_into(&resolve(&app_dir, NAME, &kyoto()).unwrap());
+        std::fs::write(app_dir.join(ENGINES_DIR).join(VERSION_STAMP), RUNTIME).unwrap();
 
         let (log, ()) = logging::records_of_blocking("info", || {
-            invalidate_for_runtime(&app_dir, NAME, "runtime/1.27.0").unwrap();
+            invalidate_for_runtime(&app_dir, NAME, RUNTIME).unwrap();
         });
 
         let discarded = log
             .lines()
-            .find(|line| line.contains("the inference runtime they were built under has been replaced"))
+            .find(|line| line.contains("discarded every compiled engine"))
             .unwrap_or_else(|| panic!("the discard was not recorded:\n{log}"));
 
         assert!(discarded.contains("level=INFO"), "{discarded}");
+        assert!(discarded.contains("or the layout they were kept in, has changed"), "{discarded}");
         assert!(
-            discarded.contains("tag=runtime/1.27.0"),
+            discarded.contains(r#"stamp="1.30.0;layout=2""#),
             "the record does not name what replaced it: {discarded}"
         );
-        assert!(discarded.contains("previous=runtime/1.26.0"), "{discarded}");
-        assert!(!paths.engine.exists(), "a compiled engine survived a runtime bump");
+        assert!(discarded.contains("previous=1.30.0"), "{discarded}");
     }
 
     #[test]
     fn a_launch_that_discarded_nothing_writes_no_record() {
         // Two ways to reach an empty tree, and neither is work about to be redone: a machine that has never compiled
-        // anything, and a launch under the release already recorded.
+        // anything, and a launch under the stamp already recorded.
         let (_root, first) = app();
         let (fresh, ()) = logging::records_of_blocking("info", || {
-            invalidate_for_runtime(&first, NAME, "runtime/1.26.0").unwrap();
+            invalidate_for_runtime(&first, NAME, RUNTIME).unwrap();
         });
-        assert!(
-            !fresh.contains("has been replaced"),
-            "a first launch claimed to have discarded engines:\n{fresh}"
-        );
+        assert!(!fresh.contains("discarded every compiled engine"), "a first launch claimed a discard:\n{fresh}");
 
         let (_root, second) = app();
-        invalidate_for_runtime(&second, NAME, "runtime/1.26.0").unwrap();
-        let paths = resolve(&second, NAME, &kyoto()).unwrap();
-        std::fs::write(paths.engine.join("engine.bin"), b"compiled under the recorded runtime").unwrap();
+        invalidate_for_runtime(&second, NAME, RUNTIME).unwrap();
+        compile_into(&resolve(&second, NAME, &kyoto()).unwrap());
 
         let (unchanged, ()) = logging::records_of_blocking("info", || {
-            invalidate_for_runtime(&second, NAME, "runtime/1.26.0").unwrap();
+            invalidate_for_runtime(&second, NAME, RUNTIME).unwrap();
         });
-        assert!(!unchanged.contains("has been replaced"), "{unchanged}");
+        assert!(!unchanged.contains("discarded every compiled engine"), "{unchanged}");
     }
 }

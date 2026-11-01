@@ -20,7 +20,7 @@ use crate::models::scale::Scale;
 use crate::models::upscale::conv::PassShape;
 use crate::models::upscale::resolve::Resolution;
 use crate::models::upscale::variant::{UpscaleModel, UpscaleVariant};
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 /// How the pipeline asks a diffusion variant for one of its graphs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -95,11 +95,11 @@ impl Graph {
     }
 
     /// The settings this graph is configured with, given the `variant`'s own declaration.
-    pub(crate) fn profile(self, variant: EpProfile) -> EpProfile {
+    pub(crate) fn profile(self, variant: Tuning) -> Tuning {
         // Beside `artifact` so that the two things a caller needs about a graph are answered from the one row that
         // declares them — see `ResolvedGraph` for why the settings travel with the graph.
         match self.cuda_prefer_nhwc {
-            Some(prefer_nhwc) => EpProfile { cuda_prefer_nhwc: prefer_nhwc, ..variant },
+            Some(prefer_nhwc) => Tuning { cuda_prefer_nhwc: prefer_nhwc, ..variant },
             None => variant,
         }
     }
@@ -132,7 +132,7 @@ pub(crate) struct DiffusionVariant {
     // A function of the precision for the reason `ConvVariant::profile` gives, and with no wrapper either.
     /// The execution-provider tuning measured for this model, at the precision an operation carries. See the model's
     /// own directory for the measurements and the prose recording how they were arrived at.
-    pub(crate) profile: fn(Precision) -> EpProfile,
+    pub(crate) profile: fn(Precision) -> Tuning,
 }
 
 // The three travel together rather than being three lookups a caller joins. The role and the artifact travel together
@@ -147,10 +147,10 @@ pub struct ResolvedGraph {
     pub role: GraphRole,
     /// The artifact serving it, at the precision this graph resolves at — which is not always the operation's.
     pub artifact: ArtifactId,
-    // Not public, because `EpProfile` is this crate's own vocabulary and no consumer configures a session.
+    // Not public, because `Tuning` is this crate's own vocabulary and no consumer configures a session.
     /// The execution-provider settings measured for **this graph**, which are the variant's unless the graph named a
     /// deviation from them.
-    pub(crate) profile: EpProfile,
+    pub(crate) profile: Tuning,
 }
 
 /// The graphs a diffusion variant loads for one pass, addressed by role.
@@ -238,7 +238,7 @@ impl UpscaleModel for DiffusionVariant {
         &SCALE_PARAMETER
     }
 
-    fn profile(&self, precision: Precision) -> EpProfile {
+    fn profile(&self, precision: Precision) -> Tuning {
         (self.profile)(precision)
     }
 
@@ -314,7 +314,7 @@ mod tests {
         let stage = |role, name| ResolvedGraph {
             role,
             artifact: ArtifactId::new(Family::Upscale, name, None, Precision::Fp16),
-            profile: EpProfile::default(),
+            profile: Tuning::default(),
         };
         let two_staged = GraphSet {
             variant: "nowhere",

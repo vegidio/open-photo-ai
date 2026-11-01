@@ -1,4 +1,4 @@
-//! Where ONNX Runtime's own records go: the `tracing` bridge `ort` would install, with three things it cannot do.
+//! Where ONNX Runtime's own records go: the `tracing` bridge `ort` would install, with two things it cannot do.
 //!
 //! The records keep exactly the shape `ort-2.0.0-rc.13/src/logging.rs` gives them — an event under the target
 //! `ort::logging` whose explicit parent is a TRACE span named `ort` carrying `id` and `location` — because the log's
@@ -12,27 +12,17 @@
 //!   line a dozen times in one microsecond. A `WARN` or `ERROR` record like one written in the last
 //!   [`REPEAT_WINDOW`] is held back and counted instead, whatever its level, and the count is written as one record
 //!   when the window closes or a session build ends. See [`Throttle`].
-//! - **An out-of-memory mark.** A failed build's own error says only that TensorRT *"failed to create engine"*; that
-//!   the device ran out of memory is in a record logged on the way there. Each one is counted on the thread that logged
-//!   it, which for TensorRT is the build's own thread, so [`out_of_memory_since`] can tell a build what happened in
-//!   it. Held-back records are counted too. See `sessions::build`.
+//!
+//! Telling a failed build that the device ran out of memory is `rust-sak`'s: the logger it starts the environment with
+//! counts those records on the building thread before handing each one to this one, held-back records included.
 
 use rust_sak::ai::ort;
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use ort::logging::{LogLevel, LoggerFunction};
 use tracing::Level;
-
-thread_local! {
-    /// How many out-of-memory records the runtime has logged on this thread.
-    ///
-    /// `const`-initialized and without a destructor, so reading it from the callback is sound even while the thread
-    /// is being torn down — a panic there would cross an `extern "system"` boundary and abort the process.
-    static OUT_OF_MEMORY: Cell<u64> = const { Cell::new(0) };
-}
 
 /// How long a record is held back for after one like it was written.
 ///
@@ -46,16 +36,6 @@ static THROTTLE: LazyLock<Mutex<Throttle>> = LazyLock::new(Mutex::default);
 /// The logger the environment is created with.
 pub(super) fn logger() -> LoggerFunction {
     std::sync::Arc::new(|severity, _category, id, location, message| record(severity, id, location, message))
-}
-
-/// How many out-of-memory records this thread has seen so far, to hand back to [`out_of_memory_since`].
-pub(crate) fn out_of_memory_mark() -> u64 {
-    OUT_OF_MEMORY.with(Cell::get)
-}
-
-/// Whether the runtime logged an out-of-memory record on this thread since `mark` was taken.
-pub(crate) fn out_of_memory_since(mark: u64) -> bool {
-    out_of_memory_mark() != mark
 }
 
 /// Writes how many records were held back since each was last written, and starts every window afresh.
@@ -73,10 +53,6 @@ fn record(severity: LogLevel, id: &str, location: &str, message: &str) {
 
 /// [`record`], against `throttle`.
 fn record_through(throttle: &Mutex<Throttle>, severity: LogLevel, id: &str, location: &str, message: &str) {
-    if is_out_of_memory(message) {
-        OUT_OF_MEMORY.with(|count| count.set(count.get().wrapping_add(1)));
-    }
-
     let level = match severity {
         LogLevel::Verbose => Level::TRACE,
         LogLevel::Info => Level::INFO,
@@ -242,12 +218,6 @@ impl Throttle {
         summaries.sort_by(|a, b| a.pattern.cmp(&b.pattern));
         summaries
     }
-}
-
-/// Whether `message` reports a device allocation that failed: TensorRT's `Error Code 2: OutOfMemory`, or the CUDA
-/// provider's `out of memory`.
-fn is_out_of_memory(message: &str) -> bool {
-    message.contains("OutOfMemory") || message.contains("out of memory")
 }
 
 /// Whether `message` is TensorRT failing to grow the scratch memory of a tactic it then skips — which the builder
@@ -467,44 +437,5 @@ mod tests {
 
         assert_eq!(log.matches("destroying event").count(), 2, "one record and one tally:\n{log}");
         assert!(log.contains("suppressed=2"), "{log}");
-    }
-
-    #[test]
-    fn an_out_of_memory_record_marks_the_thread_that_logged_it() {
-        let throttle = fresh();
-        let mark = out_of_memory_mark();
-        record_through(&throttle, LogLevel::Warning, "opai", "here", "Some nodes were not assigned");
-        assert!(!out_of_memory_since(mark), "a record about something else was counted");
-
-        record_through(&throttle, LogLevel::Error, "opai", "here", FAILED_BUILD);
-        assert!(out_of_memory_since(mark));
-
-        // Another thread's build is not this one's.
-        let elsewhere = std::thread::spawn(|| {
-            let mark = out_of_memory_mark();
-            out_of_memory_since(mark)
-        });
-        assert!(!elsewhere.join().unwrap());
-    }
-
-    #[test]
-    fn a_held_back_out_of_memory_record_still_marks_the_thread() {
-        let throttle = fresh();
-        record_through(&throttle, LogLevel::Error, "opai", "here", FAILED_BUILD);
-
-        let mark = out_of_memory_mark();
-        record_through(&throttle, LogLevel::Error, "opai", "here", FAILED_BUILD);
-
-        assert!(out_of_memory_since(mark), "a record the throttle held back was not counted");
-    }
-
-    #[test]
-    fn a_skipped_tactic_counts_as_running_out_of_memory() {
-        // Only read when a build then fails, where memory being short is exactly what it says.
-        let throttle = fresh();
-        let mark = out_of_memory_mark();
-        record_through(&throttle, LogLevel::Error, "opai", "here", SKIPPED_TACTIC);
-
-        assert!(out_of_memory_since(mark));
     }
 }

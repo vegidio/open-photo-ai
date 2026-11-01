@@ -34,7 +34,7 @@ use super::upscale::Upscale;
 use crate::error::InferenceError;
 use crate::pipeline::Backend;
 use crate::pipeline::{Shared, SharedData};
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 /// An operation of any family whose result is an image, and what [`Opai::process`](crate::Opai::process) takes.
 ///
@@ -173,7 +173,7 @@ impl Operation {
             reason = "the cross-family answer the suite holds all eight to; a run reaches a profile through Model::sessions"
         )
     )]
-    pub(crate) fn profile(&self) -> EpProfile {
+    pub(crate) fn profile(&self) -> Tuning {
         // Forwarded to the arm exactly as the questions above are, so a caller asks one type rather than matching
         // eight. `pub(crate)` rather than `pub` because what it returns is provider vocabulary this crate configures a
         // session with, not something a front end offers or stores.
@@ -315,7 +315,7 @@ impl Analysis {
             reason = "the cross-family answer the suite holds all eight to; a run reaches a profile through Model::sessions"
         )
     )]
-    pub(crate) fn profile(&self) -> EpProfile {
+    pub(crate) fn profile(&self) -> Tuning {
         // `pub(crate)` for the reason `Operation::profile` gives: what it returns is provider vocabulary this crate
         // configures a session with, not something a front end offers or stores.
         match self {
@@ -934,12 +934,7 @@ pub(crate) mod tests {
         // makes it a traversal of its own carrier rather than an arm in the one below. See `DetectionVariant::profile`
         // for why the layout is declared at FP32 as well as FP16.
         for analysis in every_analysis() {
-            assert_ne!(
-                analysis.profile(),
-                EpProfile::default(),
-                "{} lost its measured profile",
-                analysis.display_name()
-            );
+            assert_ne!(analysis.profile(), Tuning::default(), "{} lost its measured profile", analysis.display_name());
         }
 
         for operation in every_operation() {
@@ -1009,7 +1004,7 @@ pub(crate) mod tests {
             if measured_arm {
                 assert_ne!(
                     operation.profile(),
-                    EpProfile::default(),
+                    Tuning::default(),
                     "{} lost its measured profile",
                     operation.display_name()
                 );
@@ -1018,7 +1013,7 @@ pub(crate) mod tests {
 
             assert_eq!(
                 operation.profile(),
-                EpProfile::default(),
+                Tuning::default(),
                 "{} declared a profile nothing measured",
                 operation.display_name()
             );

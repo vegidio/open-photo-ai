@@ -9,7 +9,7 @@ use super::super::simple::SimpleVariant;
 
 use super::{moscow, novgorod, petersburg};
 
-use crate::providers::profile::EpProfile;
+use rust_sak::ai::Tuning;
 
 /// Moscow, the sharpener a front end offers first.
 pub(crate) const MOSCOW: SimpleVariant =
@@ -51,7 +51,7 @@ impl SharpenVariant {
 
     /// The execution-provider tuning measured for this variant: Moscow's is [`moscow::profile`], Petersburg's
     /// [`petersburg::profile`] and Novgorod's [`novgorod::profile`].
-    pub(crate) fn profile(self) -> EpProfile {
+    pub(crate) fn profile(self) -> Tuning {
         // A match reaching the model's own file, which is where `models`' tiers put a measured profile and the prose
         // behind it: the measurement is of a graph, and the graph is the model's. Moscow and Novgorod reach the same
         // answer as one another, measured separately; Petersburg is a different architecture and is measured on its
@@ -193,10 +193,10 @@ pub(crate) mod tests {
                     assert_eq!(variant.profile(), petersburg::profile(precision.into()), "{variant:?}");
                 }
                 SharpenVariant::Moscow(FloatPrecision::Fp16) | SharpenVariant::Novgorod(FloatPrecision::Fp16) => {
-                    assert_ne!(variant.profile(), EpProfile::default(), "{variant:?} lost its measured profile");
+                    assert_ne!(variant.profile(), Tuning::default(), "{variant:?} lost its measured profile");
                 }
                 SharpenVariant::Moscow(FloatPrecision::Fp32) | SharpenVariant::Novgorod(FloatPrecision::Fp32) => {
-                    assert_eq!(variant.profile(), EpProfile::default(), "{variant:?} declared a setting at FP32");
+                    assert_eq!(variant.profile(), Tuning::default(), "{variant:?} declared a setting at FP32");
                 }
             }
         }

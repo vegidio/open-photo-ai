@@ -1,66 +1,31 @@
-//! Turning a resolved plan and a model file into a live ONNX session.
+//! Turning one rung of a ladder and a model file into a live ONNX session.
 //!
-//! This is the first point in the project at which any of the provider option keys reaches the ONNX Runtime. Until
-//! here every one of them was a string nobody had validated.
-//!
-//! # Every option is applied through `with_arbitrary_config`
-//!
-//! `ort` writes `with_arbitrary_config` into the **same** options map every typed setter writes into, and each
-//! provider's `register` hands that map to the runtime verbatim — so a typed setter would mean parsing `"EXHAUSTIVE"`
-//! or `"CpuAndNeuralEngine"` back out of the string into an `ort` enum and re-emitting it, a round trip that can only
-//! lose. One loop over the map, for all three providers, and the option tables stay comparable line for line with the
-//! provider's documentation.
-//!
-//! Every dispatch is built with `error_on_failure()`. `ort` defaults to registering silently — logging and carrying
-//! on — which is precisely the failure mode the option tables warn about: ONNX Runtime rejects an options update
-//! wholesale, so a single mistyped key costs the entire provider and surfaces only as a run that is ten times
-//! slower. With `error_on_failure` it becomes a build failure, which the fallback then turns into a *reported*
-//! downgrade.
-//!
-//! # What a runner with no runtime can check
-//!
-//! `ort::session::Session::builder()` needs a live environment, so nothing here that touches one can be exercised on
-//! a CI runner. What is factored out to be checkable anyway is everything that decides *what* the runtime is asked
-//! for: [`attachment`] builds the three provider dispatches from the resolved maps, [`BuilderSettings`] is the typed
-//! translation of the session settings into the three calls that carry them, and [`serialized`] is the TensorRT
-//! ordering and the timing cache it drops. The one thing left is the sequence of calls itself, which the live tests
-//! in the test-only `super::live` are what cover — by hand, on real hardware.
+//! The build itself is `rust_sak::ai::build`: it attaches the rung's providers with their baseline and the model's
+//! tuning, every dispatch with `error_on_failure()` so a refused option fails the rung instead of silently costing the
+//! provider, serialises every TensorRT build against the shared timing cache and empties that cache when one fails,
+//! and says whether a failure was the device running out of memory. What is left here is what this crate decides
+//! around it: the span its records are read under, the model-file check that tells an install failure apart from a
+//! build failure, and the error the fallback reads.
 //!
 //! # The build runs inside a span, and that is what makes the runtime's own records readable
 //!
-//! [`build`] enters a span carrying the artifact and the resolved provider. ONNX Runtime's C++ diagnostics arrive as
-//! `tracing` events under the target `ort` with the runtime's own location and logger id and nothing that identifies
-//! the model — the C++ side does not know it — and the log's formatter renders an enclosing span's fields onto every
-//! record emitted inside it. So a *"Some nodes were not assigned"* now says which model was being built and what was
-//! being attached to it. It covers the build thread only; see the comment on [`build`] for what that excludes.
+//! [`build`] enters a span carrying the artifact and the provider being attached. ONNX Runtime's C++ diagnostics arrive
+//! as `tracing` events under the target `ort` with the runtime's own location and logger id and nothing that
+//! identifies the model — the C++ side does not know it — and the log's formatter renders an enclosing span's fields
+//! onto every record emitted inside it. `rust_sak::ai::build` runs on the calling thread as a documented contract, which
+//! is what makes this work. See the comment on [`build`] for what it excludes.
 
 use rust_sak::ai::ort;
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use ort::ep::{ArbitrarilyConfigurableExecutionProvider, ExecutionProviderDispatch};
 use ort::session::Session;
-use ort::session::builder::SessionBuilder;
+use rust_sak::ai::{CachePaths, RungError, SessionRequest, Tuning};
 
-use crate::deps::manifest;
 use crate::error::{InitError, OutOfDeviceMemory, SessionError};
 use crate::models::ArtifactId;
-use crate::providers::options::{CachePaths, ProviderOptions, SessionPlan, SessionSettings};
-use crate::providers::profile::{DISABLED_OPTIMIZER_SEPARATOR, ExecutionMode};
-use crate::providers::{Accelerator, ExecutionProvider};
+use crate::providers::{ExecutionProvider, SupportedProviders};
 use crate::runtime::diagnostics;
-
-/// Held across any session build whose attach list contains TensorRT.
-///
-/// The shared timing cache is one file that ONNX Runtime reads at the start of a build and rewrites at the end with
-/// no locking of its own, and the session cache single-flights per artifact rather than globally — so two models can
-/// legitimately build at once, and two builds that both attach TensorRT would interleave into it.
-///
-/// It costs nothing in the common case: the application builds one model at a time, and two concurrent engine builds
-/// do not finish sooner for sharing one GPU. The alternative — a timing cache per model — was measured by the
-/// reference implementation at up to 60% of a cold engine build.
-static TENSORRT_BUILD: Mutex<()> = Mutex::new(());
 
 /// Everything one session build is made from, owned rather than borrowed.
 ///
@@ -70,12 +35,30 @@ static TENSORRT_BUILD: Mutex<()> = Mutex::new(());
 pub(crate) struct BuildRequest {
     /// The artifact being opened, for whatever a failure has to name.
     pub(crate) artifact: ArtifactId,
-    /// What to attach, with what, and the settings the session itself is built with.
-    pub(crate) plan: SessionPlan,
-    /// The two directories the providers compile into. Only the timing one is read here, and only to drop it.
-    pub(crate) paths: CachePaths,
+    /// What the caller asked for, which the rung was taken from.
+    pub(crate) requested: ExecutionProvider,
+    /// What this machine offers.
+    pub(crate) supported: SupportedProviders,
+    /// The providers to attach, in order. Empty for the CPU.
+    pub(crate) rung: Vec<ExecutionProvider>,
+    /// The tuning measured for this artifact.
+    pub(crate) tuning: Tuning,
+    /// The folders the providers compile into: this model's own, and the timing cache every model shares.
+    pub(crate) cache: CachePaths,
     /// The graph file on disk.
     pub(crate) model: PathBuf,
+}
+
+impl BuildRequest {
+    /// The provider this build is on: the rung's first, or the CPU for an empty rung.
+    pub(crate) fn provider(&self) -> ExecutionProvider {
+        provider_of(&self.rung)
+    }
+}
+
+/// The provider a rung is on: its first, or the CPU when it attaches nothing.
+pub(crate) fn provider_of(rung: &[ExecutionProvider]) -> ExecutionProvider {
+    rung.first().copied().unwrap_or(ExecutionProvider::Cpu)
 }
 
 /// Opens `request`'s model and returns the session.
@@ -86,7 +69,8 @@ pub(crate) struct BuildRequest {
 /// not on disk, fails the same way on every provider, and is therefore never retried — and [`SessionError::Build`]
 /// where the file opens and the runtime will not build a session from it, naming the provider being attached.
 pub(crate) fn build(request: BuildRequest) -> Result<Session, SessionError> {
-    let BuildRequest { artifact, plan, paths, model } = request;
+    let provider = request.provider();
+    let BuildRequest { artifact, requested, supported, rung, tuning, cache, model } = request;
 
     // The one span in this crate, and it is spent here because of what it decorates: ONNX Runtime's own C++
     // diagnostics — *"Some nodes were not assigned…"*, a provider declining to attach, an engine being rebuilt —
@@ -98,21 +82,22 @@ pub(crate) fn build(request: BuildRequest) -> Result<Session, SessionError> {
     // The runtime emits the records that matter here — session construction, provider attachment, graph
     // partitioning — on the calling thread, so they are decorated. Anything it emits later from one of its own
     // worker threads, during inference rather than during the build, is not, and arrives with the runtime's fields
-    // alone exactly as it does today. That is a narrowing of what the reference reconstructed by hand, and what it
-    // buys back is the entire stderr-capture stack slice 1 deleted.
-    let span = tracing::info_span!("session_build", artifact = %artifact, provider = %plan.resolved());
+    // alone.
+    let span = tracing::info_span!("session_build", artifact = %artifact, provider = %provider);
     let _entered = span.enter();
 
     // Before the builder is touched, and the whole of the distinction the specs ask for. Everything after this point
     // is "on disk and would not open", which is the only failure a CPU retry could answer.
     drop(std::fs::File::open(&model).map_err(InitError::io(&model))?);
 
-    // Taken on this thread because that is where the runtime logs a build's own records — see the span above — and
-    // TensorRT builds are serialized, so what is counted between here and the failure is this build's.
-    let mark = diagnostics::out_of_memory_mark();
-
-    let session = serialized(attaches_tensorrt(&plan), &paths.timing, || open(&artifact, &plan, &model))
-        .map_err(|error| out_of_memory(error, diagnostics::out_of_memory_since(mark)));
+    let request = SessionRequest {
+        model: &model,
+        providers: std::slice::from_ref(&requested),
+        supported,
+        tuning: &tuning,
+        cache: &cache,
+    };
+    let session = rust_sak::ai::build(&request, &rung).map_err(|error| failed(&artifact, provider, error));
 
     // A build is where the runtime's bursts happen, so its end is where their tallies are written — inside the span
     // above, so they name the model too.
@@ -121,495 +106,30 @@ pub(crate) fn build(request: BuildRequest) -> Result<Session, SessionError> {
     session
 }
 
-/// `error`, marked as the device running out of memory where it was: a record saying so was logged during the build
-/// (`logged`), or the runtime's own message says so — which is how the CUDA provider reports it.
-fn out_of_memory(error: SessionError, logged: bool) -> SessionError {
-    match error {
-        SessionError::Build { artifact, provider, source }
-            if provider != ExecutionProvider::Cpu && (logged || says_out_of_memory(&source.to_string())) =>
-        {
-            SessionError::Build { artifact, provider, source: Arc::new(OutOfDeviceMemory { source }) }
-        }
-        other => other,
-    }
-}
+/// The error a rung's failure is reported as: marked as the device running out of memory where `rust-sak` says it
+/// was, which is the one failure releasing other sessions can cure.
+fn failed(artifact: &ArtifactId, provider: ExecutionProvider, error: RungError) -> SessionError {
+    let out_of_memory = error.out_of_memory;
+    let source: Arc<dyn std::error::Error + Send + Sync> = Arc::new(error);
+    let source = if out_of_memory { Arc::new(OutOfDeviceMemory { source }) } else { source };
 
-/// Whether a runtime error's message is a failed device allocation.
-fn says_out_of_memory(message: &str) -> bool {
-    let message = message.to_ascii_lowercase();
-
-    message.contains("out of memory") || message.contains("outofmemory") || message.contains("failed to allocate")
-}
-
-/// Builds the session itself: providers attached in the plan's order, the session settings applied, the graph
-/// committed from the file.
-///
-/// # Errors
-///
-/// Returns [`SessionError::Build`] for every step, each naming the artifact and the provider the plan resolved to.
-fn open(artifact: &ArtifactId, plan: &SessionPlan, model: &Path) -> Result<Session, SessionError> {
-    // `Copy`, because every captured value is a shared reference — so one constructor serves all four steps rather
-    // than four closures that could each name the failure differently.
-    let failed = |source: ort::Error| SessionError::Build {
-        artifact: artifact.as_str().to_string(),
-        provider: plan.resolved(),
-        source: Arc::new(source),
-    };
-
-    // In the plan's own order, so that one provider declining a node at session-build time leaves the next to run
-    // the graph. Empty for a CPU run, which attaches nothing.
-    //
-    // Built under the environment `rust-sak` started when the runtime loaded, which lives until the process exits.
-    let environment = rust_sak::ai::environment()
-        .ok_or_else(|| failed(ort::Error::new("the ONNX Runtime is not loaded in this process")))?;
-    let mut builder = Session::builder(&environment).map_err(failed)?;
-    for options in &plan.providers {
-        builder = match attachment(options) {
-            Attach::Named(dispatch) => {
-                builder.with_execution_providers([dispatch]).map_err(|err| failed(err.into()))?
-            }
-            Attach::PluginDevices(options) => attach_webgpu(&environment, builder, options).map_err(failed)?,
-        };
-    }
-
-    builder = BuilderSettings::of(&plan.settings).apply(builder).map_err(failed)?;
-
-    builder.commit_from_file(model).map_err(failed)
-}
-
-/// How one provider of a plan is attached to a session.
-enum Attach<'a> {
-    /// By name, through the dispatch its options describe.
-    Named(ExecutionProviderDispatch),
-    /// Through the devices a plugin registered with the environment, configured with these options — WebGPU, which
-    /// the runtime does not know by name; see [`attach_webgpu`].
-    PluginDevices(&'a BTreeMap<String, String>),
-}
-
-/// How `options` is attached: the dispatch it describes, or the plugin devices it configures.
-///
-/// One arm per [`Accelerator`], and none for the request or the CPU: the attach list cannot hold either — the first is
-/// a request rather than a provider, and the second takes no configuration and is what the runtime falls back to on
-/// its own once everything above it has declined.
-fn attachment(options: &ProviderOptions) -> Attach<'_> {
-    let dispatch = match options.provider {
-        Accelerator::TensorRt => configure(ort::ep::TensorRT::default(), &options.options).build(),
-        Accelerator::Cuda => configure(ort::ep::CUDA::default(), &options.options).build(),
-        Accelerator::CoreMl => configure(ort::ep::CoreML::default(), &options.options).build(),
-        Accelerator::WebGpu => return Attach::PluginDevices(&options.options),
-    };
-
-    Attach::Named(dispatch.error_on_failure())
-}
-
-/// Attaches the WebGPU plugin's devices to `builder`, configured with `options`.
-///
-/// Through `SessionOptionsAppendExecutionProvider_V2`, which is the only way a plugin registered with
-/// `RegisterExecutionProviderLibrary` (as `rust-sak` does when the runtime loads) can be attached. It takes its options prefixed
-/// with the provider's name, which is how one call can carry several providers' options apart.
-///
-/// # Errors
-///
-/// Fails where no WebGPU device is registered, or the runtime refuses the options.
-/// No device is an error rather than a silent CPU run so the fallback reports it, the same as a provider that declined.
-fn attach_webgpu(
-    environment: &ort::environment::Environment,
-    builder: SessionBuilder,
-    options: &BTreeMap<String, String>,
-) -> Result<SessionBuilder, ort::Error> {
-    // One device, the first the plugin offers. The plugin can report several (one per adapter, each from its own
-    // factory), and the runtime refuses a single append whose devices come from different factories — *"All
-    // OrtEpDevice values in ep_devices must have the same execution provider"*.
-    let device = rust_sak::ai::webgpu_devices(environment)
-        .next()
-        .ok_or_else(|| ort::Error::new("the WebGPU plugin offers no device"))?;
-
-    let options: Vec<(String, String)> = options
-        .iter()
-        .map(|(key, value)| (format!("{}.{key}", crate::runtime::WEBGPU_EP), value.clone()))
-        .collect();
-
-    builder.with_devices([device], Some(&options)).map_err(Into::into)
-}
-
-/// Applies every entry of `options` to `provider`.
-///
-/// One function for all three providers, which is the whole of what the provider-specific code amounts to: three
-/// constructors and this loop.
-fn configure<E: ArbitrarilyConfigurableExecutionProvider>(provider: E, options: &BTreeMap<String, String>) -> E {
-    options
-        .iter()
-        .fold(provider, |provider, (key, value)| provider.with_arbitrary_config(key, value))
-}
-
-/// Whether TensorRT is among the providers this plan attaches.
-fn attaches_tensorrt(plan: &SessionPlan) -> bool {
-    plan.providers.iter().any(|options| options.provider == Accelerator::TensorRt)
-}
-
-/// Runs `build`, serialized against every other TensorRT build in this process and dropping the shared timing cache
-/// if it fails.
-///
-/// A build with TensorRT absent runs straight through: it neither reads nor writes the shared cache, so there is
-/// nothing to order it against and nothing of its to discard.
-///
-/// Generic in what it builds so the ordering and the discard are exercisable without a runtime — which is the only
-/// way either can be checked at all, since a real TensorRT build needs an NVIDIA card.
-fn serialized<T, E>(tensorrt: bool, timing: &Path, build: impl FnOnce() -> Result<T, E>) -> Result<T, E> {
-    if !tensorrt {
-        return build();
-    }
-
-    // A poisoned lock means a previous build panicked. What this guards is an ordering rather than state, so the
-    // guard is taken rather than the panic propagated — the next build still has to be the only one.
-    let _serialized = crate::task::lock(&TENSORRT_BUILD);
-
-    build().inspect_err(|_| {
-        // A half-written timing cache makes TensorRT's `createTimingCache` return null, which ONNX Runtime turns into
-        // a failed session build — so every later model quietly runs somewhere slower, with a symptom that points
-        // nowhere near a cache file. Dropping it costs one slow rebuild if the failure was about something else,
-        // which is the cheaper way to be wrong.
-        //
-        // The removal failure is swallowed: this runs on a path that is already returning an error, and a cache file
-        // that could not be removed is not worth replacing that error with.
-        let _ = manifest::empty_dir(timing);
-
-        // `info`, and it is one of the two records in this slice that exist purely to account for minutes a user is
-        // about to spend with nothing on screen explaining them: the next TensorRT build has no measured timings to
-        // start from and recompiles from scratch.
-        tracing::info!(
-            path = %timing.display(),
-            "the shared TensorRT timing cache was discarded after a failed build; the next engine build will be slower"
-        );
-    })
-}
-
-/// The session settings as the three calls that carry them.
-///
-/// A translation step of its own rather than three expressions inlined into [`apply`](Self::apply), because the
-/// builder it applies to cannot exist without a live runtime: this is the half that says what the runtime will be
-/// asked for, and it is checkable on any runner.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct BuilderSettings {
-    /// What `with_parallel_execution` is given.
-    parallel: bool,
-    /// What `with_memory_pattern` is given.
-    mem_pattern: bool,
-    /// The disabled optimizers as the runtime's config entry takes them — the names joined by
-    /// [`DISABLED_OPTIMIZER_SEPARATOR`] — or `None` where the model disables none, in which case the entry is not
-    /// written at all.
-    disabled_optimizers: Option<String>,
-}
-
-impl BuilderSettings {
-    /// What `settings` asks the builder for.
-    fn of(settings: &SessionSettings) -> Self {
-        Self {
-            parallel: matches!(settings.execution_mode, ExecutionMode::Parallel),
-            mem_pattern: settings.mem_pattern,
-            // Joined here rather than by the model, so that a wrongly separated value is not something a
-            // declaration is able to write — see `DISABLED_OPTIMIZER_SEPARATOR` for why that matters and for how the
-            // separator was established. An empty name is dropped rather than written: the runtime would take `""`
-            // as a transformer name, match nothing with it, and say nothing — and a list of nothing but those is no
-            // entry at all rather than an empty one, since the entry itself is a question nobody asked.
-            disabled_optimizers: Some(
-                settings
-                    .disabled_optimizers
-                    .iter()
-                    .filter(|name| !name.is_empty())
-                    .map(String::as_str)
-                    .collect::<Vec<_>>()
-                    .join(DISABLED_OPTIMIZER_SEPARATOR),
-            )
-            .filter(|joined| !joined.is_empty()),
-        }
-    }
-
-    /// Applies these to `builder`.
-    ///
-    /// # Errors
-    ///
-    /// Returns whatever `ort` reports for any of the three, recovered into this crate's error by the caller.
-    fn apply(&self, builder: SessionBuilder) -> Result<SessionBuilder, ort::Error> {
-        let mut builder = builder.with_parallel_execution(self.parallel)?.with_memory_pattern(self.mem_pattern)?;
-
-        if let Some(disabled) = &self.disabled_optimizers {
-            builder = builder.with_disabled_optimizers(disabled)?;
-        }
-
-        Ok(builder)
-    }
+    SessionError::Build { artifact: artifact.as_str().to_string(), provider, source }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::logging;
-    use crate::providers::profile::EpProfile;
-    use std::cell::RefCell;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
-
-    /// A stand-in for a provider, recording every key and value it is configured with.
-    ///
-    /// `ort`'s own providers keep their options in a private map with no way to read it back, so what
-    /// [`configure`] did to one cannot be asserted through `ort` at all. The trait it is applied through is public,
-    /// which is what lets this type be configured by exactly the same code the three real providers are.
-    #[derive(Debug, Default)]
-    struct Recording {
-        applied: RefCell<Vec<(String, String)>>,
-        /// What `ort` rc.15's trait requires to exist, and which nothing here reads: `with_arbitrary_config` is
-        /// overridden to record instead.
-        options: ort::ep::ExecutionProviderOptions,
-    }
-
-    impl ArbitrarilyConfigurableExecutionProvider for Recording {
-        fn options_mut(&mut self) -> &mut ort::ep::ExecutionProviderOptions {
-            &mut self.options
-        }
-
-        fn with_arbitrary_config(self, key: impl ToString, value: impl ToString) -> Self {
-            self.applied.borrow_mut().push((key.to_string(), value.to_string()));
-            self
-        }
-    }
-
-    /// The options resolved for `provider` on a machine that supports it, for the Kyoto profile.
-    fn resolved(provider: ExecutionProvider) -> ProviderOptions {
-        let paths = CachePaths {
-            engine: PathBuf::from("/somewhere/opai/engines/up_kyoto_4x_fp16"),
-            timing: PathBuf::from("/somewhere/opai/engines/.timing"),
-        };
-        let supported = crate::providers::tests::machine_supporting(true, true, true);
-        let plan = crate::providers::options::resolve(provider, supported, &EpProfile::default(), &paths);
-
-        plan.providers.into_iter().next().expect("a supported provider resolves to one set of options")
-    }
-
-    /// A plan attaching exactly `providers`, with default settings.
-    fn plan_attaching(providers: Vec<Accelerator>) -> SessionPlan {
-        SessionPlan {
-            requested: providers.first().map_or(ExecutionProvider::Cpu, |&accelerator| accelerator.into()),
-            providers: providers.into_iter().map(resolved_for).collect(),
-            settings: SessionSettings {
-                execution_mode: ExecutionMode::Parallel,
-                mem_pattern: true,
-                disabled_optimizers: Vec::new(),
-            },
-        }
-    }
-
-    /// The options for one accelerator, without going through the whole resolution.
-    fn resolved_for(provider: Accelerator) -> ProviderOptions {
-        ProviderOptions { provider, options: BTreeMap::new() }
-    }
-
-    #[test]
-    fn every_resolved_option_is_applied_to_the_provider() {
-        // The one thing a mistyped or dropped key costs is the whole provider — ONNX Runtime rejects an options
-        // update wholesale — so what has to be checked is that the map arrives entire, not that it arrives at all.
-        for provider in [ExecutionProvider::TensorRt, ExecutionProvider::Cuda, ExecutionProvider::CoreMl] {
-            let options = resolved(provider);
-            assert!(!options.options.is_empty(), "{provider} resolved to no options at all");
-
-            let recording = configure(Recording::default(), &options.options);
-
-            let applied: BTreeMap<String, String> = recording.applied.into_inner().into_iter().collect();
-            assert_eq!(applied, options.options, "{provider} was not configured with its resolved map");
-        }
-    }
-
-    #[test]
-    fn each_of_the_three_providers_produces_a_dispatch_under_its_own_name() {
-        // `ort` registers silently by default, which is the failure mode this whole slice has to avoid: a single bad
-        // key costs the provider and shows up only as a run that is ten times slower.
-        let cases = [
-            (ExecutionProvider::TensorRt, "TensorrtExecutionProvider"),
-            (ExecutionProvider::Cuda, "CUDAExecutionProvider"),
-            (ExecutionProvider::CoreMl, "CoreMLExecutionProvider"),
-        ];
-
-        for (provider, name) in cases {
-            let Attach::Named(dispatch) = attachment(&resolved(provider)) else {
-                panic!("{provider} is attached through plugin devices rather than by name");
-            };
-
-            // The name decides which provider is attached. `ort` rc.15 has no way to read back `error_on_failure`, which
-            // `attachment` sets on every dispatch it builds; a rung that declines silently would show up instead as a
-            // session the downgrade tests see built on the wrong rung.
-            assert_eq!(dispatch.name(), name, "{provider}");
-        }
-    }
-
-    #[test]
-    fn neither_auto_nor_the_cpu_is_anything_the_builder_can_be_handed() {
-        // The resolution narrows a request to the accelerators it attaches, and the builder takes nothing wider: the
-        // two that are not one have no `Accelerator` to be, so there is no dispatch to refuse them with.
-        for provider in [ExecutionProvider::Auto, ExecutionProvider::Cpu] {
-            assert_eq!(provider.accelerator(), None, "{provider} named an accelerator");
-        }
-    }
-
-    #[test]
-    fn the_session_settings_become_the_three_calls_that_carry_them() {
-        let settings = |mode, mem_pattern, disabled: &[&str]| SessionSettings {
-            execution_mode: mode,
-            mem_pattern,
-            disabled_optimizers: disabled.iter().map(|name| (*name).to_string()).collect(),
-        };
-        let disabled =
-            |names: &[&str]| BuilderSettings::of(&settings(ExecutionMode::Parallel, true, names)).disabled_optimizers;
-
-        // What every model that has measured nothing runs with, which is what shipped before profiles existed.
-        assert_eq!(
-            BuilderSettings::of(&settings(ExecutionMode::Parallel, true, &[])),
-            BuilderSettings { parallel: true, mem_pattern: true, disabled_optimizers: None }
-        );
-
-        // A model that measured the inter-op pool as a loss, and one whose shapes vary.
-        assert_eq!(
-            BuilderSettings::of(&settings(ExecutionMode::Sequential, false, &[])),
-            BuilderSettings { parallel: false, mem_pattern: false, disabled_optimizers: None }
-        );
-
-        // One name reaches the config entry verbatim: nothing is separated, so nothing can be separated wrongly.
-        assert_eq!(disabled(&["ConstantFolding"]).as_deref(), Some("ConstantFolding"));
-
-        // And two are joined by the separator the runtime parses — the assertion this whole change exists for, and
-        // the one a comma would fail. Spelled out rather than composed from `DISABLED_OPTIMIZER_SEPARATOR`, so that
-        // changing that constant fails here instead of agreeing with itself.
-        assert_eq!(
-            disabled(&["ReshapeFusion", "SimplifiedLayerNormFusion"]).as_deref(),
-            Some("ReshapeFusion;SimplifiedLayerNormFusion")
-        );
-
-        // No space around it, which is not cosmetic: the runtime does not trim an entry, so a joined `"; "` would
-        // make the second name match no transformer and disable nothing — silently, and looking correct.
-        assert!(!disabled(&["ReshapeFusion", "SimplifiedLayerNormFusion"]).unwrap_or_default().contains(' '));
-
-        // An empty name is dropped rather than written, since the runtime would take `""` as a transformer name and
-        // match nothing with it.
-        assert_eq!(disabled(&["", "ConstantFolding"]).as_deref(), Some("ConstantFolding"));
-
-        // And a list with nothing left in it is no entry rather than an empty one, the same as naming none.
-        assert_eq!(disabled(&[""]), None);
-    }
-
-    #[test]
-    fn a_plan_attaching_tensorrt_is_recognised_wherever_tensorrt_sits_in_it() {
-        // The `Auto` chain attaches TensorRT first and CUDA behind it; an explicit CUDA request attaches neither
-        // ahead of nor behind TensorRT. Reading only the resolved provider would miss a chain that attaches it
-        // second, which no chain does today and which is exactly the kind of thing a later provider changes.
-        assert!(attaches_tensorrt(&plan_attaching(vec![Accelerator::TensorRt, Accelerator::Cuda])));
-        assert!(attaches_tensorrt(&plan_attaching(vec![Accelerator::Cuda, Accelerator::TensorRt])));
-        assert!(!attaches_tensorrt(&plan_attaching(vec![Accelerator::Cuda])));
-        assert!(!attaches_tensorrt(&plan_attaching(vec![Accelerator::CoreMl])));
-        assert!(!attaches_tensorrt(&plan_attaching(Vec::new())));
-    }
-
-    #[test]
-    fn two_builds_that_attach_tensorrt_run_one_after_the_other() {
-        // Not a throughput loss worth avoiding: the application builds one model at a time, and two concurrent
-        // engine builds do not finish sooner for sharing one GPU. What it buys is that the one timing-cache file the
-        // runtime rewrites at the end of every build is never being rewritten twice at once.
-        let timing = tempfile::tempdir().unwrap();
-        let inside = Arc::new(AtomicUsize::new(0));
-        let overlapped = Arc::new(AtomicUsize::new(0));
-
-        std::thread::scope(|scope| {
-            for _ in 0..2 {
-                let inside = Arc::clone(&inside);
-                let overlapped = Arc::clone(&overlapped);
-                let path = timing.path().to_path_buf();
-
-                scope.spawn(move || {
-                    let outcome: Result<(), ()> = serialized(true, &path, || {
-                        if inside.fetch_add(1, Ordering::SeqCst) != 0 {
-                            overlapped.fetch_add(1, Ordering::SeqCst);
-                        }
-                        // Long enough that a second build entering concurrently would be seen, and short enough to
-                        // cost the suite nothing.
-                        std::thread::sleep(Duration::from_millis(50));
-                        inside.fetch_sub(1, Ordering::SeqCst);
-                        Ok(())
-                    });
-                    outcome.unwrap();
-                });
-            }
-        });
-
-        assert_eq!(overlapped.load(Ordering::SeqCst), 0, "two TensorRT builds ran at the same time");
-    }
-
-    #[test]
-    fn a_failed_build_with_tensorrt_attached_drops_the_shared_timing_cache_and_still_reports_its_error() {
-        // A half-written timing cache fails every later TensorRT build with a symptom — every model running
-        // somewhere slower — that points nowhere near a cache file.
-        let timing = tempfile::tempdir().unwrap();
-        let cache = timing.path().join("timings.bin");
-        std::fs::write(&cache, b"half of a timing cache").unwrap();
-
-        let outcome: Result<(), &str> = serialized(true, timing.path(), || Err("the engine build failed"));
-
-        assert_eq!(outcome, Err("the engine build failed"), "the discard replaced the failure it was reporting");
-        assert!(!cache.exists(), "a failed TensorRT build left the shared timing cache in place");
-        assert!(timing.path().is_dir(), "the timing directory itself was removed rather than emptied");
-    }
-
-    #[test]
-    fn a_failed_build_with_tensorrt_absent_leaves_the_timing_cache_alone() {
-        // A build that neither read nor wrote the shared cache has nothing of its own in it, and the measurements
-        // every other model seeded are worth minutes.
-        let timing = tempfile::tempdir().unwrap();
-        let cache = timing.path().join("timings.bin");
-        std::fs::write(&cache, b"measured across every model").unwrap();
-
-        let outcome: Result<(), &str> = serialized(false, timing.path(), || Err("the model would not open"));
-
-        assert_eq!(outcome, Err("the model would not open"));
-        assert!(cache.is_file(), "a failure that never touched the timing cache discarded it");
-    }
-
-    #[test]
-    fn the_discarded_timing_cache_is_recorded_beside_the_files_it_removed() {
-        // The filesystem effect is what the test above checks. This is the half a user needs: the next TensorRT build
-        // recompiles from nothing, which is minutes with no visible cause.
-        let timing = tempfile::tempdir().unwrap();
-        let cache = timing.path().join("timings.bin");
-        std::fs::write(&cache, b"half of a timing cache").unwrap();
-
-        let (log, outcome) = logging::records_of_blocking("info", || {
-            let outcome: Result<(), &str> = serialized(true, timing.path(), || Err("the engine build failed"));
-            outcome
-        });
-
-        assert_eq!(outcome, Err("the engine build failed"));
-        assert!(!cache.exists());
-
-        let discarded = log
-            .lines()
-            .find(|line| line.contains("the shared TensorRT timing cache was discarded after a failed build"))
-            .unwrap_or_else(|| panic!("the discard was not recorded:\n{log}"));
-        assert!(discarded.contains("level=INFO"), "{discarded}");
-        assert!(discarded.contains("path="), "the record does not say which cache: {discarded}");
-
-        // A build that never touched the cache discards nothing and says nothing.
-        let (quiet, ()) = logging::records_of_blocking("info", || {
-            let _: Result<(), &str> = serialized(false, timing.path(), || Err("the model would not open"));
-        });
-        assert!(!quiet.contains("timing cache was discarded"), "{quiet}");
-    }
 
     #[test]
     fn the_runtime_s_own_diagnostics_are_told_which_model_they_are_about() {
-        // What D5 buys, checked at the seam it actually works through: the formatter renders an enclosing span's
+        // What the span buys, checked at the seam it actually works through: the formatter renders an enclosing span's
         // fields onto every record emitted inside it, including ones this crate did not emit. An `ort`-target event
         // stands in for a C++ diagnostic, which cannot be provoked without a live runtime and a real model.
         //
         // What this does *not* cover, and cannot: a record the runtime emits later from one of its own worker
         // threads. A span's fields reach an event only on the thread that entered the span, and the build thread is
-        // the one ORT constructs sessions and partitions graphs on. Inference-time diagnostics arrive with the
-        // runtime's fields alone, as they do today.
+        // the one ORT constructs sessions and partitions graphs on.
         let artifact = crate::models::test_support::kyoto();
 
         let (log, ()) = logging::records_of_blocking("info,ort=warn", || {
@@ -640,42 +160,46 @@ mod tests {
         assert!(diagnostic.contains("location=session_state.cc:1166"), "{diagnostic}");
     }
 
-    /// A build failure on `provider` whose runtime error says `message`.
-    fn failure(provider: ExecutionProvider, message: &str) -> SessionError {
-        SessionError::Build {
-            artifact: "up_osaka_vae_decoder_fp16".to_string(),
-            provider,
-            source: Arc::new(std::io::Error::other(message.to_string())),
-        }
+    /// A rung's failure on `providers`, as `rust-sak` reports it.
+    fn rung_error(providers: Vec<ExecutionProvider>, reason: &str, out_of_memory: bool) -> RungError {
+        RungError { providers, reason: reason.to_string(), out_of_memory }
     }
 
     /// The runtime's message for the TensorRT failure from the field, which does not mention memory.
     const NO_ENGINE: &str = "TensorRT EP failed to create engine from network for fused node: TRTKernel_graph_0";
 
     #[test]
-    fn a_tensorrt_failure_with_an_out_of_memory_record_is_marked_out_of_memory() {
-        assert!(out_of_memory(failure(ExecutionProvider::TensorRt, NO_ENGINE), true).is_out_of_memory());
-        assert!(!out_of_memory(failure(ExecutionProvider::TensorRt, NO_ENGINE), false).is_out_of_memory());
-    }
+    fn a_rung_rust_sak_marks_out_of_memory_is_an_out_of_memory_build_failure() {
+        let artifact = crate::models::test_support::kyoto();
+        let rung = vec![ExecutionProvider::TensorRt, ExecutionProvider::Cuda];
 
-    #[test]
-    fn a_cuda_failure_that_says_out_of_memory_is_marked_out_of_memory() {
-        let error = out_of_memory(failure(ExecutionProvider::Cuda, "CUDA failure 2: out of memory"), false);
-
+        let error = failed(&artifact, provider_of(&rung), rung_error(rung.clone(), NO_ENGINE, true));
         assert!(error.is_out_of_memory());
         assert!(error.to_string().contains("the device ran out of memory"), "{error}");
+        assert!(matches!(error, SessionError::Build { provider: ExecutionProvider::TensorRt, .. }));
+
+        let error = failed(&artifact, provider_of(&rung), rung_error(rung, NO_ENGINE, false));
+        assert!(!error.is_out_of_memory());
     }
 
     #[test]
-    fn a_cpu_failure_is_never_marked_out_of_memory() {
-        // Releasing GPU sessions does nothing for the CPU, and it is the ladder's last rung anyway.
-        assert!(!out_of_memory(failure(ExecutionProvider::Cpu, "Failed to allocate memory"), true).is_out_of_memory());
+    fn the_runtimes_reason_is_what_the_failure_says() {
+        let artifact = crate::models::test_support::kyoto();
+        let error =
+            failed(&artifact, ExecutionProvider::Cuda, rung_error(vec![ExecutionProvider::Cuda], NO_ENGINE, false));
+
+        let SessionError::Build { source, .. } = &error else { panic!("{error:?}") };
+        assert_eq!(source.to_string(), NO_ENGINE);
+    }
+
+    #[test]
+    fn an_empty_rung_is_the_cpu() {
+        assert_eq!(provider_of(&[]), ExecutionProvider::Cpu);
+        assert_eq!(provider_of(&[ExecutionProvider::CoreMl, ExecutionProvider::WebGpu]), ExecutionProvider::CoreMl);
     }
 
     #[test]
     fn an_install_failure_is_never_marked_out_of_memory() {
-        let error = SessionError::from(InitError::Stopped);
-
-        assert!(!out_of_memory(error, true).is_out_of_memory());
+        assert!(!SessionError::from(InitError::Stopped).is_out_of_memory());
     }
 }

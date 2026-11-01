@@ -8,9 +8,9 @@ use crate::error::InferenceError;
 use crate::models::{ArtifactId, Pass, Scale};
 use crate::pipeline::Backend;
 use crate::pipeline::{ImagePipeline, Model, reporter};
-use crate::providers::profile::EpProfile;
 use crate::sessions::SessionHandle;
 use imaging::{ChannelDepth, RunTile, TilingError, run_tiled};
+use rust_sak::ai::Tuning;
 
 /// What one convolutional upscale operation runs: its passes, the scale they may overshoot, and the one profile they
 /// share.
@@ -36,7 +36,7 @@ pub(crate) struct PassSequence {
     // contract rather than a shortcut: the passes genuinely share it, because Kyoto's declaration was measured across
     // both its 2x and 4x graphs and an 8x request carries it through each pass.
     /// The execution-provider tuning every session for this operation is built with.
-    profile: EpProfile,
+    profile: Tuning,
     /// The tile shape the model accepts and the range it was trained against, carried from its row.
     shape: PassShape,
 }
@@ -49,7 +49,7 @@ impl PassSequence {
         passes: Vec<Pass>,
         requested: Scale,
         required: Vec<ArtifactId>,
-        profile: EpProfile,
+        profile: Tuning,
         shape: PassShape,
     ) -> Self {
         Self { name, requested, required, passes, profile, shape }
@@ -62,7 +62,7 @@ impl<B: Backend> Model<B> for PassSequence {
     }
 
     /// Each pass's artifact against the operation's **one** profile.
-    fn sessions(&self) -> Vec<(&ArtifactId, &EpProfile)> {
+    fn sessions(&self) -> Vec<(&ArtifactId, &Tuning)> {
         self.passes.iter().map(|pass| (&pass.artifact, &self.profile)).collect()
     }
 }

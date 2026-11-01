@@ -117,7 +117,7 @@ async fn a_downgrade_is_recorded_as_a_pair_naming_what_was_asked_for_and_what_ra
 
     let (log, handle) = logging::records_of("info", || async {
         sessions
-            .session(&id, &EpProfile::default(), ExecutionProvider::Cuda, &Interest::default())
+            .session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
             .await
             .unwrap()
     })

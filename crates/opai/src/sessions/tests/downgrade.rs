@@ -1,7 +1,7 @@
 //! A provider that cannot open a model, and the CPU session built in its place.
 
 use super::*;
-use crate::providers::Accelerator;
+use crate::providers::tests::with_webgpu;
 
 #[tokio::test]
 async fn a_provider_that_cannot_open_the_model_is_downgraded_to_the_cpu() {
@@ -12,7 +12,7 @@ async fn a_provider_that_cannot_open_the_model_is_downgraded_to_the_cpu() {
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     let handle = sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cuda, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
         .await
         .unwrap();
 
@@ -31,11 +31,11 @@ async fn a_downgrade_is_served_the_cpu_session_an_explicit_cpu_request_filed() {
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     let honoured = sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cpu, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cpu, &Interest::default())
         .await
         .unwrap();
     let downgraded = sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cuda, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
         .await
         .unwrap();
 
@@ -65,11 +65,11 @@ async fn a_second_request_after_a_downgrade_is_served_the_cpu_session_already_fi
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     let first = sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cuda, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
         .await
         .unwrap();
     let second = sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cuda, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
         .await
         .unwrap();
 
@@ -103,11 +103,11 @@ async fn a_request_for_a_different_model_still_attempts_the_provider_it_asks_for
     );
 
     sessions
-        .session(&first, &EpProfile::default(), ExecutionProvider::Cuda, &Interest::default())
+        .session(&first, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
         .await
         .unwrap();
     sessions
-        .session(&second, &EpProfile::default(), ExecutionProvider::Cuda, &Interest::default())
+        .session(&second, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
         .await
         .unwrap();
 
@@ -129,7 +129,7 @@ async fn a_model_file_that_cannot_be_read_fails_without_a_cpu_attempt() {
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     let error = sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cuda, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
         .await
         .unwrap_err();
 
@@ -143,15 +143,12 @@ async fn a_model_file_that_cannot_be_read_fails_without_a_cpu_attempt() {
 
 /// A machine offering every NVIDIA provider and WebGPU, so `Auto` has a four-rung ladder.
 fn nvidia_with_webgpu() -> SupportedProviders {
-    machine_supporting(false, true, true).with_webgpu(true)
+    with_webgpu(machine_supporting(false, true, true))
 }
 
-/// The accelerators each build so far attached, in order.
-fn attached(bench: &Bench) -> Vec<Vec<Accelerator>> {
-    lock(&bench.builds)
-        .iter()
-        .map(|request| request.plan.providers.iter().map(|options| options.provider).collect())
-        .collect()
+/// The rung each build so far attached, in order.
+fn attached(bench: &Bench) -> Vec<Vec<ExecutionProvider>> {
+    lock(&bench.builds).iter().map(|request| request.rung.clone()).collect()
 }
 
 #[tokio::test]
@@ -164,12 +161,12 @@ async fn auto_walks_its_ladder_one_provider_at_a_time_keeping_the_rest_attached_
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, nvidia_with_webgpu());
 
     let handle = sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
         .await
         .unwrap();
 
     assert_eq!(handle.provider(), ExecutionProvider::WebGpu, "the ladder skipped a rung or fell to the CPU");
-    use Accelerator::{Cuda, TensorRt, WebGpu};
+    use ExecutionProvider::{Cuda, TensorRt, WebGpu};
     assert_eq!(attached(&bench), vec![vec![TensorRt, Cuda, WebGpu], vec![Cuda, WebGpu], vec![WebGpu]]);
 }
 
@@ -184,7 +181,7 @@ async fn auto_remembers_what_failed_for_a_model_until_the_sessions_are_released(
         let sessions = &sessions;
         async move {
             sessions
-                .session(&id, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+                .session(&id, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
                 .await
                 .unwrap()
                 .provider()
@@ -215,7 +212,7 @@ async fn a_provider_declined_at_run_time_is_let_go_of_and_skipped_by_the_next_re
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, nvidia_with_webgpu());
     let request = || async {
         sessions
-            .session(&id, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+            .session(&id, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
             .await
             .unwrap()
             .provider()
@@ -246,7 +243,7 @@ async fn an_explicit_request_is_not_widened_into_the_ladder_nor_remembered() {
 
     for _ in 0..2 {
         let handle = sessions
-            .session(&id, &EpProfile::default(), ExecutionProvider::TensorRt, &Interest::default())
+            .session(&id, &Tuning::default(), ExecutionProvider::TensorRt, &Interest::default())
             .await
             .unwrap();
         assert_eq!(handle.provider(), ExecutionProvider::Cpu, "an explicit TensorRT fell to CUDA");
@@ -271,15 +268,18 @@ async fn an_auto_rung_and_an_explicit_request_for_its_provider_are_two_sessions(
         &server,
         listing_for(&[&id]),
         &app_dir,
-        machine_supporting(false, true, false).with_webgpu(true),
+        with_webgpu(machine_supporting(false, true, false)),
     );
 
     for provider in [ExecutionProvider::Auto, ExecutionProvider::Cuda] {
-        let handle = sessions.session(&id, &EpProfile::default(), provider, &Interest::default()).await.unwrap();
+        let handle = sessions.session(&id, &Tuning::default(), provider, &Interest::default()).await.unwrap();
         assert_eq!(handle.provider(), ExecutionProvider::Cuda);
     }
 
-    assert_eq!(attached(&bench), vec![vec![Accelerator::Cuda, Accelerator::WebGpu], vec![Accelerator::Cuda]]);
+    assert_eq!(
+        attached(&bench),
+        vec![vec![ExecutionProvider::Cuda, ExecutionProvider::WebGpu], vec![ExecutionProvider::Cuda]]
+    );
 }
 
 /// A bench whose builds on `providers` run the device out of memory, once per entry.
@@ -298,14 +298,14 @@ async fn a_build_that_runs_out_of_memory_is_retried_after_releasing_what_nothing
     // Built before the shortage arrives, and let go of: what an earlier enhancement leaves resident.
     drop(
         sessions
-            .session(&earlier, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+            .session(&earlier, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
             .await,
     );
     lock(&bench.out_of_memory).push(ExecutionProvider::TensorRt);
 
     let (log, handle) = logging::records_of("info", || async {
         sessions
-            .session(&building, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+            .session(&building, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
             .await
     })
     .await;
@@ -330,14 +330,14 @@ async fn a_build_that_runs_out_of_memory_beside_sessions_in_use_falls_back_witho
     let sessions = sessions(&bench, &server, listing_for(&[&held, &building]), &app_dir, nvidia_with_webgpu());
 
     let holding = sessions
-        .session(&held, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+        .session(&held, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
         .await
         .unwrap();
     lock(&bench.out_of_memory).push(ExecutionProvider::TensorRt);
 
     let (log, handle) = logging::records_of("info", || async {
         sessions
-            .session(&building, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+            .session(&building, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
             .await
     })
     .await;
@@ -367,13 +367,13 @@ async fn a_retry_that_runs_out_of_memory_again_falls_back() {
 
     drop(
         sessions
-            .session(&earlier, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+            .session(&earlier, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
             .await,
     );
     lock(&bench.out_of_memory).extend([ExecutionProvider::TensorRt, ExecutionProvider::TensorRt]);
 
     let handle = sessions
-        .session(&building, &EpProfile::default(), ExecutionProvider::Auto, &Interest::default())
+        .session(&building, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
         .await
         .unwrap();
 

@@ -11,9 +11,9 @@ use super::variant::{UpscaleModel, UpscaleVariant};
 
 use crate::models::catalogue::{ParameterEntry, SCALE_PARAMETER};
 use crate::models::precision::{FloatPrecision, Precision};
-use crate::providers::profile::EpProfile;
 pub(crate) use imaging::TileGeometry;
 use imaging::tensor::Normalisation;
+use rust_sak::ai::Tuning;
 
 /// One entry of a convolutional variant's scale table: the largest request this entry covers, and the native passes
 /// that cover it.
@@ -86,7 +86,7 @@ pub(crate) struct ConvVariant {
     // measurement this is. **No wrapper is adopted here, and none should be added.**
     /// The execution-provider tuning measured for this model, at the precision an operation carries. See the model's
     /// own directory for the measurements and the prose recording how they were arrived at.
-    pub(crate) profile: fn(Precision) -> EpProfile,
+    pub(crate) profile: fn(Precision) -> Tuning,
     // A function per row, like `profile`: this type is the whole contract, so three models share it, and the arm is
     // the one fact that differs per model rather than per contract.
     /// Which arm of [`UpscaleVariant`] this row is, given the precision it carries. In practice every row passes the
@@ -119,7 +119,7 @@ impl UpscaleModel for ConvVariant {
         &SCALE_PARAMETER
     }
 
-    fn profile(&self, precision: Precision) -> EpProfile {
+    fn profile(&self, precision: Precision) -> Tuning {
         (self.profile)(precision)
     }
 

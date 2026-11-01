@@ -11,7 +11,7 @@ async fn a_session_for_an_artifact_that_is_not_on_disk_installs_it_first() {
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, false, false));
 
     let handle = sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cpu, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cpu, &Interest::default())
         .await
         .unwrap();
 
@@ -56,7 +56,7 @@ async fn a_request_cancelled_while_its_model_transfers_stops_the_transfer_and_re
         })
     };
 
-    let outcome = sessions.session(&id, &EpProfile::default(), ExecutionProvider::Cpu, &interest).await;
+    let outcome = sessions.session(&id, &Tuning::default(), ExecutionProvider::Cpu, &interest).await;
     stopping.await.unwrap();
 
     let Err(SessionError::Install(error)) = &outcome else {
@@ -81,7 +81,7 @@ async fn a_session_for_an_artifact_that_is_already_on_disk_transfers_nothing() {
     let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, false, false));
 
     sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cpu, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cpu, &Interest::default())
         .await
         .unwrap();
     let after_install = server.requests();
@@ -89,7 +89,7 @@ async fn a_session_for_an_artifact_that_is_already_on_disk_transfers_nothing() {
     // Released, so the next request really does reach the install rather than being served from memory.
     sessions.cache().clear();
     sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cpu, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cpu, &Interest::default())
         .await
         .unwrap();
 
@@ -119,7 +119,7 @@ async fn ten_concurrent_requests_for_an_uninstalled_model_install_it_once() {
 
             tokio::spawn(async move {
                 sessions
-                    .session(&id, &EpProfile::default(), ExecutionProvider::Cpu, &Interest::default())
+                    .session(&id, &Tuning::default(), ExecutionProvider::Cpu, &Interest::default())
                     .await
                     .map(|_| ())
             })
@@ -146,7 +146,7 @@ async fn an_artifact_that_cannot_be_installed_fails_as_an_install_failure_with_n
         sessions(&bench, &server, listing_for(&[&tokyo()]), &app_dir, machine_supporting(false, false, false));
 
     let error = sessions
-        .session(&id, &EpProfile::default(), ExecutionProvider::Cpu, &Interest::default())
+        .session(&id, &Tuning::default(), ExecutionProvider::Cpu, &Interest::default())
         .await
         .unwrap_err();
 
