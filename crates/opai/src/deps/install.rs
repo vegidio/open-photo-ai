@@ -1,10 +1,10 @@
-//! The install pipeline: fetch a dependency's archive, prove it is the published one, expand it, and record what it
-//! wrote.
+//! The install pipeline for a model's files: fetch each one, prove it is the published one, and record what was
+//! written. The ONNX Runtime and the NVIDIA libraries are `rust-sak`'s `ai` to install; see `setup`.
 
 // The ordering is the load-bearing part. The previous record is deleted *before* the first byte of a new install is
 // written and the new one is written *after* every file is in place, so an interruption anywhere in between leaves a
 // directory that is explicitly mid-install. That is also why there is no staging directory — it would double peak disk
-// for a multi-gigabyte archive to close a window this ordering already closes.
+// for a multi-gigabyte model to close a window this ordering already closes.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,13 +12,12 @@ use std::time::{Duration, Instant};
 
 use rust_sak::crypto::sha256_file;
 use rust_sak::fetch::{DigestAlgorithm, DownloadMode, Fetch, RequestOptions};
-use rust_sak::fs::{self, ExtractOptions, ExtractProgress};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::deps::ModelTrust;
 use crate::deps::manifest::{self, Manifest};
-use crate::deps::release::{Contents, Dependency, Source};
+use crate::deps::release::{Dependency, Source};
 use crate::error::InitError;
 use crate::progress::Reporter;
 use crate::task::spawn_blocking;
@@ -42,7 +41,7 @@ const READ_TIMEOUT: Duration = Duration::from_secs(60);
 /// What an install turned out to have to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Outcome {
-    /// The install ran: the files were transferred, expanded where the dependency is an archive, and recorded.
+    /// The install ran: the files were transferred and recorded.
     Installed,
     /// Nothing was done, because the recorded install was already the pinned one and every file it named was still
     /// there. Nothing was downloaded, nothing was extracted and nothing was re-hashed.
@@ -51,9 +50,8 @@ pub(crate) enum Outcome {
 
 /// Brings a dependency on disk up to date and records what it put there.
 ///
-/// `dir` is the dependency's own directory and must already exist. It is assumed to be exclusive: extraction produces
-/// a file list nobody declared, and "everything under the directory" is only a correct answer to "what did this
-/// install?" when nothing else writes there.
+/// `dir` is the dependency's own directory and must already exist. It is assumed to be exclusive: "everything under the
+/// directory" is only a correct answer to "what did this install?" when nothing else writes there.
 ///
 /// Returns which of the two it turned out to be — an install that ran, or one that was already current — which is
 /// the caller's to act on: see [`Outcome`].
@@ -65,8 +63,7 @@ pub(crate) enum Outcome {
 /// # Errors
 ///
 /// Returns [`InitError::Download`] if the transfer fails, [`InitError::HashMismatch`] if the bytes are not the
-/// published ones, [`InitError::Fs`] if the archive cannot be expanded — including an entry refused for trying to
-/// write outside `dir` — and [`InitError::Io`], naming the file it was against, for the bookkeeping around them.
+/// published ones, and [`InitError::Io`], naming the file it was against, for the bookkeeping around them.
 /// [`InitError::Cancelled`] if the asynchronous runtime shut down before the blocking half of any of that could run,
 /// and [`InitError::Stopped`] if `cancel` was cancelled while bytes were moving.
 pub(crate) async fn install(
@@ -104,7 +101,7 @@ pub(crate) async fn install_checked(
         Ok(_) => unit::ended(Unit::Install, &span, duration, unit::Outcome::Finished),
         // Inside the span, so the record is in the install's trace, and ended the way the record says it ended.
         Err(error) => span.in_scope(|| {
-            record_ended(dependency, duration, error);
+            record_ended(&dependency.name, &dependency.version, duration, error);
 
             let ending = match error.stop_reason() {
                 Some(_) => unit::Outcome::Stopped,
@@ -118,30 +115,18 @@ pub(crate) async fn install_checked(
 }
 
 /// Records how an install that did not finish ended: stopped, or failed.
-fn record_ended(dependency: &Dependency, duration: Duration, error: &InitError) {
+pub(crate) fn record_ended(dependency: &str, version: &str, duration: Duration, error: &InitError) {
     // A stop is not a failure and is recorded as what it is: nobody is left waiting, or the process is on its way
     // down, and a `warn` here would put an install failure in the file of every user who changed their mind. `info`,
     // because the install opened at `info` and a bracket closes at the level it opened.
     if let Some(reason) = error.stop_reason() {
-        tracing::info!(
-            dependency = dependency.name,
-            version = dependency.version,
-            reason,
-            ?duration,
-            "an install stopped"
-        );
+        tracing::info!(dependency, version, reason, ?duration, "an install stopped");
 
         return;
     }
 
     // `warn` naming the dependency, which is the fact a bug report about an install that never finishes is missing.
-    tracing::warn!(
-        dependency = dependency.name,
-        version = dependency.version,
-        ?duration,
-        %error,
-        "installing a dependency failed"
-    );
+    tracing::warn!(dependency, version, ?duration, %error, "installing a dependency failed");
 }
 
 /// What a dependency's directory holds, read before anything in it is changed: whether it is already current, and
@@ -312,17 +297,7 @@ async fn install_inner(
     // Nothing is transferred for a trusted model and no progress is reported for it: every file it needs is the file
     // already on disk, which is the whole of what the declaration asked for.
     for source in if trusted { &[][..] } else { &dependency.sources } {
-        let file = acquire(dir, source, &reporter, cancel).await?;
-
-        // The pipeline's one branch, and everything around it is shared: the fingerprint skip above, the resume and
-        // the single hash-mismatch retry inside `acquire`, and the bookkeeping below.
-        if dependency.contents == Contents::Archive {
-            expand(&file, dir, Arc::clone(&reporter)).await?;
-
-            // Before the tree is read back, so the record never names a file this install itself removes.
-            spawn_blocking::<_, InitError, _>(move || std::fs::remove_file(&file).map_err(InitError::io(&file)))
-                .await??;
-        }
+        acquire(dir, source, &reporter, cancel).await?;
     }
 
     // **A trusted install records no files, and that is what stops trust escaping this process.**
@@ -566,60 +541,6 @@ async fn transfer(
     }
 }
 
-/// Expands `archive` into `dir`, reporting the bytes it writes.
-///
-/// # Errors
-///
-/// Returns [`InitError::Fs`] if the archive cannot be read or an entry is refused — including one naming a path that
-/// would resolve outside `dir`, which `rust-sak` rejects rather than writes.
-async fn expand(archive: &Path, dir: &Path, reporter: Arc<Reporter>) -> Result<(), InitError> {
-    // Forced out before the expansion starts, so the phase switch is visible immediately rather than after the first
-    // coalesced tick — which on a large archive is a noticeable pause with the bar still reading "downloading".
-    reporter.extracting(0, None);
-
-    tracing::info!(archive = %archive.display(), path = %dir.display(), "extracting an archive");
-
-    // Whether any tick carried an uncompressed total. An archive whose format does not record one leaves the bar
-    // indeterminate for the length of the expansion, and that is worth being able to look up rather than guess at from
-    // a user's screenshot.
-    //
-    // Read back **out here** rather than recorded from inside the callback: the callback runs on the blocking thread,
-    // and it would otherwise fire once per tick.
-    let sized = Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-    let dir = dir.to_path_buf();
-
-    // `fs::extract` is synchronous and CPU-bound for a minute on a large archive, so it runs on a blocking thread: on
-    // the async runtime it would stall every other task in the process, which in the GUI is the whole event loop.
-    let outcome = {
-        let sized = Arc::clone(&sized);
-        let archive = archive.to_path_buf();
-        spawn_blocking::<_, InitError, _>(move || {
-            let options = ExtractOptions::new().on_progress(move |progress: &ExtractProgress| {
-                if progress.total_bytes.is_some() {
-                    sized.store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-                reporter.extracting(progress.bytes, progress.total_bytes);
-            });
-            fs::extract(&archive, &dir, &options)
-        })
-        .await?
-    };
-
-    if !sized.load(std::sync::atomic::Ordering::Relaxed) {
-        // `debug`: it costs an indeterminate progress bar and nothing else, and it is a property of the archive
-        // rather than of this machine.
-        tracing::debug!(
-            archive = %archive.display(),
-            "the archive reports no uncompressed size, so extraction progress is indeterminate"
-        );
-    }
-
-    outcome.map_err(InitError::Fs)?;
-
-    Ok(())
-}
-
 /// The mismatch error, carrying both hashes so a caller can see what it got as well as what it wanted.
 fn mismatch(source: &Source, actual: String) -> InitError {
     InitError::HashMismatch { url: source.url.clone(), expected: source.sha256.clone(), actual }
@@ -656,15 +577,15 @@ pub(crate) fn sidecar_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::deps::test_server::{self, EXTRACTED, FIXTURE, Reply, TestServer};
+    use crate::deps::test_server::{self, FIXTURE, Reply, TestServer};
     use crate::logging::{self, field, records};
-    use crate::progress::{self, Dependency as Which, Expansion, Phase, Progress};
+    use crate::progress::{self, Dependency as Which, Phase, Progress};
     use rust_sak::crypto::sha256_bytes;
     use std::sync::Mutex;
     use tempfile::TempDir;
 
     /// The file name the fixture is served and stored under.
-    const ARCHIVE: &str = "onnx_test.7z";
+    const FILE: &str = "dn_test_fp32.onnx";
 
     /// Stops `cancel` once the transfer has actually written something to `part`.
     fn stop_once_transferring(part: PathBuf, cancel: CancellationToken) -> tokio::task::JoinHandle<()> {
@@ -703,7 +624,7 @@ mod tests {
 
     /// A descriptor pointing at `server` and pinned to the fixture's real hash, unless `hash` overrides it.
     fn descriptor(server: &TestServer, version: &str, hash: Option<&str>) -> Dependency {
-        let mut source = test_server::fixture_source(server, version, ARCHIVE);
+        let mut source = test_server::fixture_source(server, version, FILE);
         if let Some(hash) = hash {
             source.sha256 = hash.to_string();
         }
@@ -713,14 +634,10 @@ mod tests {
             version: version.to_string(),
             dir: "runtime".to_string(),
             progress: Which::Runtime,
-            lib: test_server::fixture_lib(&Which::Runtime),
-            webgpu: None,
-            provides: None,
             // Empty, which is what proves the branch reading it changes nothing for the dependencies that derive
             // nothing.
             derived: Vec::new(),
             sources: vec![source],
-            contents: Contents::Archive,
             trust: ModelTrust::Published,
         }
     }
@@ -728,15 +645,12 @@ mod tests {
     /// A reporter collecting what it is told, returned with the reports.
     fn recording() -> (Arc<Reporter>, Arc<Mutex<Vec<Progress>>>) {
         let (on_progress, seen) = progress::recording();
-        (
-            Arc::new(Reporter::new(Which::Runtime, Some(on_progress), Some(FIXTURE.len() as u64), Expansion::Follows)),
-            seen,
-        )
+        (Arc::new(Reporter::new(Which::Runtime, Some(on_progress), Some(FIXTURE.len() as u64))), seen)
     }
 
     /// A reporter that discards its reports, for the tests that are not about progress.
     fn silent() -> Arc<Reporter> {
-        Arc::new(Reporter::new(Which::Runtime, None, Some(FIXTURE.len() as u64), Expansion::Follows))
+        Arc::new(Reporter::new(Which::Runtime, None, Some(FIXTURE.len() as u64)))
     }
 
     fn install_dir() -> TempDir {
@@ -749,9 +663,10 @@ mod tests {
         vec![Reply::Truncated(FIXTURE.len() / 3); TRANSFER_RETRIES as usize + 1]
     }
 
-    /// Asserts the fixture's three files are on disk, and that the archive that produced them is not.
-    fn assert_extracted(dir: &Path) {
-        test_server::assert_extracted(dir, ARCHIVE);
+    /// Asserts the fixture is on disk at its published size, and that no partial of it is.
+    fn assert_installed(dir: &Path) {
+        assert_eq!(std::fs::metadata(dir.join(FILE)).unwrap().len(), FIXTURE.len() as u64);
+        assert!(!part_path(&dir.join(FILE)).exists(), "a finished transfer left a partial");
     }
 
     #[tokio::test]
@@ -763,7 +678,7 @@ mod tests {
 
         install(dir.path(), &dependency, reporter).await.unwrap();
 
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
 
         let recorded = manifest::read(dir.path()).unwrap();
         assert_eq!(recorded.name, "onnx-runtime");
@@ -771,16 +686,12 @@ mod tests {
         assert_eq!(recorded.fingerprint, manifest::fingerprint(&dependency));
         assert_eq!(
             recorded.files.iter().map(|f| (f.path.as_str(), f.size)).collect::<Vec<_>>(),
-            EXTRACTED.to_vec(),
-            "the record must name every extracted file and nothing else"
+            vec![(FILE, FIXTURE.len() as u64)],
+            "the record must name every installed file and nothing else"
         );
 
         let reports = seen.lock().unwrap().clone();
         assert!(reports.iter().any(|r| r.phase == Phase::Downloading), "no report arrived during the transfer");
-        assert!(
-            reports.iter().any(|r| r.phase == Phase::Extracting),
-            "the expansion was reported as a pause rather than as work"
-        );
         assert_eq!(reports.last().unwrap().fraction, 1.0);
         assert!(reports.windows(2).all(|w| w[0].fraction <= w[1].fraction));
     }
@@ -799,7 +710,7 @@ mod tests {
 
         assert_eq!(server.requests(), after_first, "the second launch contacted the server");
         assert!(seen.lock().unwrap().is_empty(), "a skipped install reported work");
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
     }
 
     #[tokio::test]
@@ -810,12 +721,12 @@ mod tests {
 
         install(dir.path(), &dependency, silent()).await.unwrap();
         let after_first = server.requests();
-        std::fs::remove_file(dir.path().join("onnxruntime.1.26.0.dylib")).unwrap();
+        std::fs::remove_file(dir.path().join(FILE)).unwrap();
 
         install(dir.path(), &dependency, silent()).await.unwrap();
 
         assert!(server.requests() > after_first, "a missing file did not force a reinstall");
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
     }
 
     #[tokio::test]
@@ -836,14 +747,14 @@ mod tests {
         install(dir.path(), &descriptor(&server, "runtime/1.27.0", None), silent()).await.unwrap();
 
         assert!(!stale.exists(), "the previous version's file survived the bump");
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
 
         let after = manifest::read(dir.path()).unwrap();
         assert_eq!(after.version, "runtime/1.27.0");
         assert_eq!(
             after.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(),
-            EXTRACTED.iter().map(|(p, _)| *p).collect::<Vec<_>>(),
-            "the new record must list only what the new archive produced"
+            vec![FILE],
+            "the new record must list only what the new version installed"
         );
     }
 
@@ -858,7 +769,7 @@ mod tests {
 
         // Exactly what a process killed mid-extraction leaves: the files are there, the record is not.
         manifest::clear(dir.path()).unwrap();
-        assert!(dir.path().join("onnxruntime.1.26.0.dylib").exists());
+        assert!(dir.path().join(FILE).exists());
 
         install(dir.path(), &dependency, silent()).await.unwrap();
 
@@ -866,7 +777,7 @@ mod tests {
             server.requests() > after_first,
             "a directory with no record was mistaken for a finished install"
         );
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
         assert!(manifest::read(dir.path()).is_some());
     }
 
@@ -885,7 +796,7 @@ mod tests {
             !dir.path().join("onnxruntime.1.25.0.dylib").exists(),
             "an undescribed file survived the install"
         );
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
     }
 
     #[tokio::test]
@@ -898,7 +809,7 @@ mod tests {
 
         let interrupted = install(dir.path(), &dependency, silent()).await;
         assert!(interrupted.is_err(), "a truncated response was accepted as complete");
-        assert!(part_path(&dir.path().join(ARCHIVE)).exists(), "an interrupted transfer left nothing to resume");
+        assert!(part_path(&dir.path().join(FILE)).exists(), "an interrupted transfer left nothing to resume");
         let before = server.ranges().await.len();
         install(dir.path(), &dependency, silent()).await.unwrap();
 
@@ -907,7 +818,7 @@ mod tests {
             ranges.first().is_some_and(|range| range.starts_with("bytes=") && range != "bytes=0-"),
             "the next install restarted from zero instead of resuming, ranges: {ranges:?}"
         );
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
     }
 
     #[tokio::test]
@@ -921,7 +832,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // The server is holding the connection open, so the transfer cannot finish and the stop lands mid-flight.
-        let stopping = stop_once_transferring(part_path(&dir.path().join(ARCHIVE)), cancel.clone());
+        let stopping = stop_once_transferring(part_path(&dir.path().join(FILE)), cancel.clone());
 
         let (log, outcome) =
             logging::records_of("info", || async { super::install(dir.path(), &dependency, silent(), &cancel).await })
@@ -938,11 +849,11 @@ mod tests {
         assert!(field(stopped[0], "duration").is_some(), "{}", stopped[0]);
         assert!(!log.contains("level=WARN"), "a stopped install was recorded as a failure:\n{log}");
         assert!(
-            !dir.path().join("onnxruntime.1.26.0.dylib").exists(),
+            !dir.path().join(FILE).exists(),
             "an install that was stopped mid-transfer went on to expand the archive"
         );
         assert!(
-            part_path(&dir.path().join(ARCHIVE)).exists(),
+            part_path(&dir.path().join(FILE)).exists(),
             "a stopped transfer left nothing on disk for the next one to resume onto"
         );
     }
@@ -957,7 +868,7 @@ mod tests {
         let dependency = descriptor(&server, "runtime/1.26.0", None);
         let cancel = CancellationToken::new();
 
-        let stopping = stop_once_transferring(part_path(&dir.path().join(ARCHIVE)), cancel.clone());
+        let stopping = stop_once_transferring(part_path(&dir.path().join(FILE)), cancel.clone());
 
         let stopped = super::install(dir.path(), &dependency, silent(), &cancel).await;
         stopping.await.unwrap();
@@ -972,7 +883,7 @@ mod tests {
             ranges.first().is_some_and(|range| range.starts_with("bytes=") && range != "bytes=0-"),
             "the install after a stop started again from zero instead of resuming, ranges: {ranges:?}"
         );
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
     }
 
     #[tokio::test]
@@ -986,11 +897,11 @@ mod tests {
         let dependency = descriptor(&server, "runtime/1.26.0", None);
 
         let _ = install(dir.path(), &dependency, silent()).await;
-        assert!(part_path(&dir.path().join(ARCHIVE)).exists());
+        assert!(part_path(&dir.path().join(FILE)).exists());
 
         install(dir.path(), &dependency, silent()).await.unwrap();
 
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
         assert!(manifest::read(dir.path()).is_some());
     }
 
@@ -1010,13 +921,12 @@ mod tests {
             other => panic!("expected HashMismatch, got {other:?}"),
         }
 
-        assert!(!dir.path().join(ARCHIVE).exists(), "the bad bytes were left on disk");
+        assert!(!dir.path().join(FILE).exists(), "the bad bytes were left on disk");
         assert!(
-            !part_path(&dir.path().join(ARCHIVE)).exists(),
+            !part_path(&dir.path().join(FILE)).exists(),
             "the bad bytes were left where a later run could resume onto them"
         );
         assert!(manifest::read(dir.path()).is_none(), "a failed install left a record");
-        assert!(!dir.path().join("onnxruntime.1.26.0.dylib").exists(), "bad bytes were extracted");
     }
 
     #[tokio::test]
@@ -1041,12 +951,12 @@ mod tests {
         let server = TestServer::start(vec![]).await;
         let dir = install_dir();
         let dependency = descriptor(&server, "runtime/1.26.0", None);
-        std::fs::write(dir.path().join(ARCHIVE), FIXTURE).unwrap();
+        std::fs::write(dir.path().join(FILE), FIXTURE).unwrap();
 
         let archive = acquire(dir.path(), &dependency.sources[0], &silent(), &CancellationToken::new()).await.unwrap();
 
         assert_eq!(server.requests(), 0, "an archive already on disk was downloaded again");
-        assert_eq!(archive, dir.path().join(ARCHIVE));
+        assert_eq!(archive, dir.path().join(FILE));
     }
 
     #[tokio::test]
@@ -1054,14 +964,14 @@ mod tests {
         let server = TestServer::start(vec![]).await;
         let dir = install_dir();
         let dependency = descriptor(&server, "runtime/1.26.0", None);
-        std::fs::write(dir.path().join(ARCHIVE), b"not the published archive").unwrap();
+        std::fs::write(dir.path().join(FILE), b"not the published archive").unwrap();
 
         let error = acquire(dir.path(), &dependency.sources[0], &silent(), &CancellationToken::new())
             .await
             .unwrap_err();
 
         assert!(matches!(error, InitError::HashMismatch { .. }), "got {error:?}");
-        assert!(!dir.path().join(ARCHIVE).exists(), "the wrong bytes were left on disk");
+        assert!(!dir.path().join(FILE).exists(), "the wrong bytes were left on disk");
     }
 
     #[tokio::test]
@@ -1076,7 +986,7 @@ mod tests {
         // A real interrupted transfer at the old pin, leaving a partial and the sidecar naming it.
         let old = descriptor(&server, "runtime/1.26.0", None);
         assert!(install(dir.path(), &old, silent()).await.is_err());
-        assert!(part_path(&dir.path().join(ARCHIVE)).exists());
+        assert!(part_path(&dir.path().join(FILE)).exists());
         let before = server.ranges().await.len();
 
         install(dir.path(), &descriptor(&server, "runtime/1.27.0", None), silent()).await.unwrap();
@@ -1087,7 +997,7 @@ mod tests {
             Some(""),
             "the previous release's bytes were resumed onto, ranges: {ranges:?}"
         );
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
     }
 
     #[tokio::test]
@@ -1096,32 +1006,13 @@ mod tests {
         // sidecar exists to prevent, so they are dropped rather than resumed onto.
         let server = TestServer::start(vec![]).await;
         let dir = install_dir();
-        std::fs::write(part_path(&dir.path().join(ARCHIVE)), b"the previous release").unwrap();
+        std::fs::write(part_path(&dir.path().join(FILE)), b"the previous release").unwrap();
 
         install(dir.path(), &descriptor(&server, "runtime/1.26.0", None), silent()).await.unwrap();
 
         let ranges = server.ranges().await;
         assert_eq!(ranges, vec![""], "a partial with no sidecar was resumed onto, ranges: {ranges:?}");
-        assert_extracted(dir.path());
-    }
-
-    #[tokio::test]
-    async fn progress_advances_during_the_expansion_before_it_finishes() {
-        let server = TestServer::start(vec![]).await;
-        let dir = install_dir();
-        let (reporter, seen) = recording();
-
-        install(dir.path(), &descriptor(&server, "runtime/1.26.0", None), reporter).await.unwrap();
-
-        let reports = seen.lock().unwrap().clone();
-        let extracting: Vec<_> = reports.iter().filter(|r| r.phase == Phase::Extracting).collect();
-
-        assert!(extracting.len() > 1, "the expansion reported only its own end");
-        assert!(
-            extracting.iter().any(|r| r.fraction > 0.0 && r.fraction < 1.0),
-            "the expansion jumped straight from the start to the end"
-        );
-        assert!(extracting.iter().any(|r| r.bytes > 0), "no report carried bytes written by the expansion");
+        assert_installed(dir.path());
     }
 
     // The no-expansion branch. A model is a bare file, so nothing above or below the branch changes: the same
@@ -1144,12 +1035,8 @@ mod tests {
                 Some(4),
                 crate::models::Precision::Fp32,
             )),
-            lib: None,
-            webgpu: None,
-            provides: None,
             derived: Vec::new(),
             sources: vec![test_server::fixture_source(server, version, MODEL)],
-            contents: Contents::Bare,
             trust: ModelTrust::Published,
         }
     }
@@ -1164,15 +1051,12 @@ mod tests {
             crate::models::Precision::Fp32,
         ));
 
-        (
-            Arc::new(Reporter::new(dependency, Some(on_progress), Some(FIXTURE.len() as u64), Expansion::None)),
-            seen,
-        )
+        (Arc::new(Reporter::new(dependency, Some(on_progress), Some(FIXTURE.len() as u64))), seen)
     }
 
     /// A reporter for a bare install that discards its reports.
     fn silent_bare() -> Arc<Reporter> {
-        Arc::new(Reporter::new(Which::Cuda, None, Some(FIXTURE.len() as u64), Expansion::None))
+        Arc::new(Reporter::new(Which::Cuda, None, Some(FIXTURE.len() as u64)))
     }
 
     #[tokio::test]
@@ -1286,7 +1170,7 @@ mod tests {
 
         install(dir.path(), &descriptor(&server, "runtime/1.26.0", None), silent()).await.unwrap();
 
-        assert_extracted(dir.path());
+        assert_installed(dir.path());
         assert!(manifest::read(dir.path()).is_some());
     }
 
@@ -1307,16 +1191,12 @@ mod tests {
         assert_eq!(field(installing[0], "dependency"), Some("onnx-runtime"));
         assert_eq!(field(installing[0], "version"), Some("runtime/1.26.0"));
 
-        let extracting = records(&first, "extracting an archive");
-        assert_eq!(extracting.len(), 1, "{first}");
-        assert!(extracting[0].contains("level=INFO"), "{}", extracting[0]);
-
         let ready = records(&first, "the dependency is ready");
         assert_eq!(ready.len(), 1, "{first}");
         assert!(ready[0].contains("level=INFO"), "{}", ready[0]);
         assert!(field(ready[0], "duration").is_some(), "the record does not say how long it took: {}", ready[0]);
         let files: usize = field(ready[0], "files").unwrap().parse().unwrap();
-        assert_eq!(files, EXTRACTED.len(), "the record does not say what was put on disk: {}", ready[0]);
+        assert_eq!(files, 1, "the record does not say what was put on disk: {}", ready[0]);
 
         // A second install transfers nothing, and says so below the default level — it is what every dependency does
         // on every launch after the first.
@@ -1352,7 +1232,7 @@ mod tests {
         let dependency = descriptor(&server, "runtime/1.26.0", None);
 
         let _ = install(dir.path(), &dependency, silent()).await;
-        assert!(part_path(&dir.path().join(ARCHIVE)).exists());
+        assert!(part_path(&dir.path().join(FILE)).exists());
 
         let (log, ()) = logging::records_of("info", || async {
             install(dir.path(), &dependency, silent()).await.unwrap();
@@ -1365,7 +1245,7 @@ mod tests {
         );
         assert_eq!(repeated.len(), 1, "the repeat was recorded {} times:\n{log}", repeated.len());
         assert!(repeated[0].contains("level=WARN"), "a repeated transfer is not a warning: {}", repeated[0]);
-        assert_eq!(field(repeated[0], "artifact"), Some(ARCHIVE));
+        assert_eq!(field(repeated[0], "artifact"), Some(FILE));
         assert!(
             field(repeated[0], "expected").is_some() && field(repeated[0], "actual").is_some(),
             "{}",
@@ -1439,17 +1319,13 @@ mod tests {
             version: "runtime/1.26.0".to_string(),
             dir: "runtime".to_string(),
             progress: Which::Runtime,
-            lib: None,
-            webgpu: None,
-            provides: None,
             derived: Vec::new(),
             sources: Vec::new(),
-            contents: Contents::Archive,
             trust: ModelTrust::Published,
         };
 
         let (log, ()) = logging::records_of_blocking("info", || {
-            record_ended(&dependency, Duration::from_millis(250), &InitError::Cancelled);
+            record_ended(&dependency.name, &dependency.version, Duration::from_millis(250), &InitError::Cancelled);
         });
 
         let stopped = records(&log, "an install stopped");

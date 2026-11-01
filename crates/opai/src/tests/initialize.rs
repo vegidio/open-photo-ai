@@ -4,7 +4,7 @@ use super::*;
 
 #[tokio::test]
 async fn initialize_installs_the_runtime_and_hands_back_a_handle() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
     let (on_progress, seen) = recording();
@@ -20,10 +20,8 @@ async fn initialize_installs_the_runtime_and_hands_back_a_handle() {
     .await
     .unwrap();
 
-    let runtime = app_dir.join("runtime");
     assert_eq!(opai.config_dir(), app_dir);
-    test_server::assert_extracted(&runtime, "onnx-runtime_test.7z");
-    assert!(runtime.join(deps::manifest::MANIFEST_NAME).is_file());
+    assert_installed(&installed_dir(&server, &Dependency::Runtime));
 
     let reports = seen.lock().unwrap().clone();
     assert!(reports.iter().all(|r| r.dependency == Dependency::Runtime));
@@ -34,7 +32,7 @@ async fn initialize_installs_the_runtime_and_hands_back_a_handle() {
 
 #[tokio::test]
 async fn an_initialization_says_what_it_did_on_the_path_that_runs_at_every_launch() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-records-test");
 
@@ -101,7 +99,7 @@ async fn initialization_opens_with_a_record_naming_what_it_is_about() {
         tracing::info!(
             name = "opai-records-test",
             config_dir = "/tmp/opai-records-test",
-            onnx = ONNX_RUNTIME.tag,
+            onnx = %deps::folders::runtime_version(),
             os = std::env::consts::OS,
             arch = std::env::consts::ARCH,
             "initializing"
@@ -112,8 +110,8 @@ async fn initialization_opens_with_a_record_naming_what_it_is_about() {
     let opening = log.lines().find(|line| line.contains(r#"msg=initializing"#)).expect(&log);
     assert!(opening.contains("name=opai-records-test"), "{opening}");
     assert!(
-        opening.contains(&format!("onnx={}", ONNX_RUNTIME.tag)),
-        "the pinned runtime tag is missing: {opening}"
+        opening.contains(&format!("onnx={}", deps::folders::runtime_version())),
+        "the runtime's version is missing: {opening}"
     );
     assert!(opening.contains(&format!("os={}", std::env::consts::OS)), "{opening}");
     assert!(opening.contains(&format!("arch={}", std::env::consts::ARCH)), "{opening}");
@@ -126,7 +124,7 @@ async fn initialization_opens_with_a_record_naming_what_it_is_about() {
 
 #[tokio::test]
 async fn a_finished_initialization_says_how_long_it_took_and_what_the_machine_supports() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-records-test");
 
@@ -181,7 +179,7 @@ async fn a_failed_initialization_is_recorded_once_with_its_duration_and_reason()
 
 #[tokio::test]
 async fn a_refusal_because_another_process_holds_the_claim_is_not_a_failure() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
     std::fs::create_dir_all(&app_dir).unwrap();
@@ -236,7 +234,7 @@ async fn a_stopped_initialization_says_why_and_is_not_a_failure() {
 async fn initialization_reads_the_model_listing_on_no_path_of_its_own() {
     // The listing is read no earlier than the first install that needs it. Asserted on what's left behind:
     // a resolution creates the models directory and caches a copy, so neither existing means nothing read it.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
 
@@ -263,7 +261,7 @@ async fn initialization_reads_the_model_listing_on_no_path_of_its_own() {
 
 #[tokio::test]
 async fn initialization_opens_the_run_cache_on_disk_and_reports_it() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
 
@@ -285,7 +283,7 @@ async fn initialization_opens_the_run_cache_on_disk_and_reports_it() {
 #[tokio::test]
 async fn an_initialization_whose_cache_cannot_be_opened_still_succeeds_and_says_it_is_degraded() {
     // Losing the cache costs speed and nothing else, so a launch must not fail over it.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
 
@@ -306,14 +304,14 @@ async fn an_initialization_whose_cache_cannot_be_opened_still_succeeds_and_says_
 
     assert_eq!(opai.cache_mode(), CacheMode::Memory, "a locked cache directory was not reported as degraded");
     assert!(opai.providers().cpu);
-    assert!(app_dir.join("runtime").join(deps::manifest::MANIFEST_NAME).is_file());
+    assert_installed(&installed_dir(&server, &Dependency::Runtime));
 }
 
 #[tokio::test]
 async fn what_backs_the_cache_is_reported_and_is_the_same_for_every_clone_of_the_handle() {
     // No setter: the mode belongs to the shared state, not the handle, so two components sharing one
     // application can't disagree about it.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
 
@@ -336,7 +334,7 @@ async fn what_backs_the_cache_is_reported_and_is_the_same_for_every_clone_of_the
 
 #[tokio::test]
 async fn the_handle_is_shared_rather_than_copied() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
 
@@ -359,7 +357,7 @@ async fn the_handle_is_shared_rather_than_copied() {
 
 #[tokio::test]
 async fn a_sub_directory_is_resolved_under_the_application_directory() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
 
@@ -381,58 +379,22 @@ async fn a_sub_directory_is_resolved_under_the_application_directory() {
 
 #[tokio::test]
 async fn the_handle_reports_what_the_plan_it_installed_unlocks() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
     let plan = runtime_only(&server);
 
-    // Asserting the report is derived from the plan actually installed, not that two hand-maintained
-    // things agree.
-    let (opai, _) =
-        Opai::install("opai-test", app_dir.clone(), claimed(&app_dir), plan.clone(), ModelTrust::Published, None)
+    // Asserting the report is derived from what was actually installed, not that two hand-maintained things agree.
+    let (opai, installed) =
+        Opai::install("opai-test", app_dir.clone(), claimed(&app_dir), plan, ModelTrust::Published, None)
             .await
             .unwrap();
 
     let report = opai.providers();
-    assert_eq!(report, plan.providers(), "the handle reports something other than what its plan derives");
+    assert_eq!(report, installed.providers(), "the handle reports something other than what was installed");
     assert!(report.cpu, "the CPU is always available");
     assert_eq!(report.coreml, cfg!(target_os = "macos"));
     assert!(!report.cuda && !report.tensorrt);
-}
-
-#[tokio::test]
-async fn an_unpublished_gpu_platform_reports_the_provider_unsupported_and_still_initializes() {
-    let server = TestServer::start(vec![]).await;
-    let root = tempfile::tempdir().unwrap();
-    let app_dir = root.path().join("opai-test");
-    let adapters = [adapter("NVIDIA GeForce RTX 4090", "NVIDIA")];
-    let cuda = gpu::cuda_device("NVIDIA GeForce RTX 4090", (8, 9));
-    let plan = Opai::select_at("http://example.invalid", &adapters, Some(&cuda), "windows", "aarch64").unwrap();
-
-    assert!(plan.gpu.is_empty(), "something was selected for a platform nothing is published for");
-
-    let (on_progress, seen) = recording();
-    let (opai, _) = Opai::install(
-        "opai-test",
-        app_dir.clone(),
-        claimed(&app_dir),
-        runtime_only(&server),
-        ModelTrust::Published,
-        on_progress,
-    )
-    .await
-    .unwrap();
-
-    assert!(!opai.providers().cuda);
-    assert!(!opai.providers().tensorrt);
-    assert!(opai.providers().cpu);
-    assert!(
-        seen.lock().unwrap().iter().all(|report| report.dependency == Dependency::Runtime),
-        "an unoffered provider was downloaded anyway"
-    );
-    for dir in &all_dirs()[1..] {
-        assert!(!app_dir.join(dir).exists(), "{dir} was created for a provider that is not offered");
-    }
 }
 
 #[test]
@@ -460,7 +422,7 @@ fn init_options_set_one_field_without_naming_the_others() {
 
 #[tokio::test]
 async fn releasing_the_sessions_says_what_went() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-release-test");
 
@@ -489,7 +451,7 @@ async fn releasing_the_sessions_says_what_went() {
 
 #[tokio::test]
 async fn a_finished_initialization_is_one_span_holding_its_installs() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-spans-test");
 
@@ -519,7 +481,8 @@ async fn a_finished_initialization_is_one_span_holding_its_installs() {
 
     let install = observed.only("install");
     assert_eq!(install.parent, Some(initialize.index), "the install is not the initialization's child");
-    assert_eq!(install.field("dependency"), Some("onnx-runtime"));
+    assert_eq!(install.field("dependency"), Some("ONNX Runtime"));
+    assert_eq!(install.field("version"), Some("onnx/1.30.0"));
     assert_eq!(install.field("outcome"), Some("finished"));
 
     // The closing record is in the initialization's trace.
@@ -544,7 +507,7 @@ async fn a_failed_initialization_marks_its_span_failed() {
 async fn a_refused_initialization_says_it_did_not_happen_under_its_own_kind() {
     use crate::telemetry::metrics::FAILURES;
 
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
     std::fs::create_dir_all(&app_dir).unwrap();

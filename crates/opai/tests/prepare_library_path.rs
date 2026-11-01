@@ -23,18 +23,22 @@ fn the_directories_are_created_and_the_restart_guard_short_circuits() {
     // SAFETY: as above — no other thread exists in this process.
     let dirs = unsafe { opai::prepare_library_path(APP) }.unwrap();
 
-    let app_dir = dirs[0].parent().unwrap().to_path_buf();
-    let expected: Vec<PathBuf> = ["runtime", "libs/cuda", "libs/cudnn", "libs/tensorrt"]
+    // The four version folders of the shared dependency root, in install order, whatever the application's name.
+    let root = dirs[0].ancestors().nth(2).unwrap().to_path_buf();
+    assert!(root.ends_with("io.vinicius.ai"), "{}", root.display());
+    let expected: Vec<PathBuf> = ["onnx/1.30.0", "cuda/13.3.0", "cudnn/9.23.1", "tensorrt/10.14.1"]
         .iter()
-        .map(|sub| sub.split('/').fold(app_dir.clone(), |path, part| path.join(part)))
+        .map(|sub| sub.split('/').fold(root.clone(), |path, part| path.join(part)))
         .collect();
 
-    assert_eq!(dirs, expected, "the library directories were not the four in search-path order");
+    assert_eq!(dirs, expected, "the library folders were not the four in search-path order");
 
-    // Created on every platform, whether or not anything has been installed into them: a loader that finds a
-    // search-path entry missing at startup skips it for the rest of the process's life.
-    for dir in &dirs {
-        assert!(dir.is_dir(), "{} was not created", dir.display());
+    // Created where a loader reads them, whether or not anything has been installed into them yet: a loader that
+    // finds a search-path entry missing at startup skips it for the rest of the process's life.
+    if cfg!(any(target_os = "linux", target_os = "windows")) {
+        for dir in &dirs {
+            assert!(dir.is_dir(), "{} was not created", dir.display());
+        }
     }
 
     #[cfg(target_os = "windows")]
@@ -45,6 +49,4 @@ fn the_directories_are_created_and_the_restart_guard_short_circuits() {
         let entries: Vec<PathBuf> = std::env::split_paths(&path).collect();
         assert_eq!(&entries[..dirs.len()], &dirs[..], "the library directories are not ahead of the inherited PATH");
     }
-
-    let _ = std::fs::remove_dir_all(&app_dir);
 }

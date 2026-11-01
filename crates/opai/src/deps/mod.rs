@@ -1,16 +1,18 @@
 //! Installing the files the application downloads at runtime, and recording what each one put on disk.
 //!
-//! Two kinds of thing are installed through the one pipeline. A **release archive** — the ONNX Runtime and the NVIDIA
-//! libraries — is pinned in this repository, fetched from a GitHub release and expanded. A **model** is a bare
-//! `.onnx` with nothing to expand, and its hash is published rather than pinned; [`model`] is where that difference
-//! lives.
+//! Two kinds of thing are installed. The **ONNX Runtime and the NVIDIA libraries** are archives in Hugging Face
+//! folders, installed, verified and loaded by `rust-sak`'s `ai` into a root shared with other applications; [`folders`]
+//! names them. A **model** is a bare `.onnx` with nothing to expand, installed through [`install`]'s pipeline, its hash
+//! published rather than pinned; [`model`] is where that lives.
 
-pub(crate) mod artifact;
+pub(crate) mod folders;
 pub(crate) mod install;
 pub(crate) mod manifest;
 pub(crate) mod model;
 pub(crate) mod release;
 
+#[cfg(test)]
+pub(crate) mod hf_server;
 #[cfg(test)]
 pub(crate) mod test_server;
 

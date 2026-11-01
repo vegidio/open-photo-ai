@@ -9,7 +9,7 @@ use std::path::Path;
 
 use crate::deps::ModelTrust;
 use crate::deps::model::manifest::Listing;
-use crate::deps::release::{Contents, Dependency, Source};
+use crate::deps::release::{Dependency, Source};
 use crate::models::ArtifactId;
 use crate::progress::Dependency as Which;
 
@@ -73,11 +73,6 @@ pub(crate) fn descriptor_at(
             .map_or_else(|| files[0].sha256.clone(), |graph| graph.sha256.clone()),
         dir: model_dir(id),
         progress: Which::Model(id.clone()),
-        // A model is not a library the loader is pointed at, and it unlocks no execution provider of its own — it is
-        // what the providers already installed are asked to run.
-        lib: None,
-        webgpu: None,
-        provides: None,
         // What a provider compiled from these weights, which a replacement of them must discard: new weights beside
         // an engine built from the old ones produce a wrong image with nothing reporting it.
         //
@@ -86,9 +81,6 @@ pub(crate) fn descriptor_at(
         // and silently wrong, and the install reads an empty list as "nothing to discard".
         derived: vec![app_dir.join(engine_dir(id))],
         sources,
-        // A bare `.onnx` and, where the model is split, a bare weights blob. There is nothing to expand, which is the
-        // branch the pipeline has for this.
-        contents: Contents::Bare,
         // The one place in this crate where anything but `Published` is ever written; see the comment on
         // `Dependency::trust`.
         trust,
@@ -183,9 +175,6 @@ mod tests {
         assert_eq!(dependency.sources[0].file_name(), "up_kyoto_4x_fp32.onnx");
         assert_eq!(dependency.sources[0].sha256.len(), 64);
         assert!(dependency.sources[0].size > 0);
-        // Neither a library the loader is opened against nor a provider of its own.
-        assert_eq!(dependency.lib, None);
-        assert_eq!(dependency.provides, None);
         assert_eq!(dependency.progress, Which::Model(id));
     }
 

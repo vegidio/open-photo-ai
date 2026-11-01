@@ -34,6 +34,7 @@
 //! record emitted inside it. So a *"Some nodes were not assigned"* now says which model was being built and what was
 //! being attached to it. It covers the build thread only; see the comment on [`build`] for what that excludes.
 
+use rust_sak::ai::ort;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -157,13 +158,17 @@ fn open(artifact: &ArtifactId, plan: &SessionPlan, model: &Path) -> Result<Sessi
 
     // In the plan's own order, so that one provider declining a node at session-build time leaves the next to run
     // the graph. Empty for a CPU run, which attaches nothing.
-    let mut builder = Session::builder().map_err(failed)?;
+    //
+    // Built under the environment `rust-sak` started when the runtime loaded, which lives until the process exits.
+    let environment = rust_sak::ai::environment()
+        .ok_or_else(|| failed(ort::Error::new("the ONNX Runtime is not loaded in this process")))?;
+    let mut builder = Session::builder(&environment).map_err(failed)?;
     for options in &plan.providers {
         builder = match attachment(options) {
             Attach::Named(dispatch) => {
                 builder.with_execution_providers([dispatch]).map_err(|err| failed(err.into()))?
             }
-            Attach::PluginDevices(options) => attach_webgpu(builder, options).map_err(failed)?,
+            Attach::PluginDevices(options) => attach_webgpu(&environment, builder, options).map_err(failed)?,
         };
     }
 
@@ -173,7 +178,6 @@ fn open(artifact: &ArtifactId, plan: &SessionPlan, model: &Path) -> Result<Sessi
 }
 
 /// How one provider of a plan is attached to a session.
-#[derive(Debug)]
 enum Attach<'a> {
     /// By name, through the dispatch its options describe.
     Named(ExecutionProviderDispatch),
@@ -201,20 +205,22 @@ fn attachment(options: &ProviderOptions) -> Attach<'_> {
 /// Attaches the WebGPU plugin's devices to `builder`, configured with `options`.
 ///
 /// Through `SessionOptionsAppendExecutionProvider_V2`, which is the only way a plugin registered with
-/// `RegisterExecutionProviderLibrary` (see `runtime::register_webgpu`) can be attached. It takes its options prefixed
+/// `RegisterExecutionProviderLibrary` (as `rust-sak` does when the runtime loads) can be attached. It takes its options prefixed
 /// with the provider's name, which is how one call can carry several providers' options apart.
 ///
 /// # Errors
 ///
-/// Fails where the environment cannot be reached, no WebGPU device is registered, or the runtime refuses the options.
+/// Fails where no WebGPU device is registered, or the runtime refuses the options.
 /// No device is an error rather than a silent CPU run so the fallback reports it, the same as a provider that declined.
-fn attach_webgpu(builder: SessionBuilder, options: &BTreeMap<String, String>) -> Result<SessionBuilder, ort::Error> {
-    let environment = ort::environment::Environment::current()?;
-
+fn attach_webgpu(
+    environment: &ort::environment::Environment,
+    builder: SessionBuilder,
+    options: &BTreeMap<String, String>,
+) -> Result<SessionBuilder, ort::Error> {
     // One device, the first the plugin offers. The plugin can report several (one per adapter, each from its own
     // factory), and the runtime refuses a single append whose devices come from different factories — *"All
     // OrtEpDevice values in ep_devices must have the same execution provider"*.
-    let device = crate::runtime::webgpu_devices(&environment)
+    let device = rust_sak::ai::webgpu_devices(environment)
         .next()
         .ok_or_else(|| ort::Error::new("the WebGPU plugin offers no device"))?;
 
@@ -352,9 +358,16 @@ mod tests {
     #[derive(Debug, Default)]
     struct Recording {
         applied: RefCell<Vec<(String, String)>>,
+        /// What `ort` rc.15's trait requires to exist, and which nothing here reads: `with_arbitrary_config` is
+        /// overridden to record instead.
+        options: ort::ep::ExecutionProviderOptions,
     }
 
     impl ArbitrarilyConfigurableExecutionProvider for Recording {
+        fn options_mut(&mut self) -> &mut ort::ep::ExecutionProviderOptions {
+            &mut self.options
+        }
+
         fn with_arbitrary_config(self, key: impl ToString, value: impl ToString) -> Self {
             self.applied.borrow_mut().push((key.to_string(), value.to_string()));
             self
@@ -407,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn each_of_the_three_providers_produces_a_dispatch_that_fails_rather_than_declining_silently() {
+    fn each_of_the_three_providers_produces_a_dispatch_under_its_own_name() {
         // `ort` registers silently by default, which is the failure mode this whole slice has to avoid: a single bad
         // key costs the provider and shows up only as a run that is ten times slower.
         let cases = [
@@ -421,11 +434,10 @@ mod tests {
                 panic!("{provider} is attached through plugin devices rather than by name");
             };
 
-            // `ort` exposes neither the provider's name nor the flag as accessors; its `Debug` prints both, and they
-            // are the two facts that decide which provider is attached and what happens when it will not.
-            let rendered = format!("{dispatch:?}");
-            assert!(rendered.starts_with(name), "{provider} produced {rendered}");
-            assert!(rendered.contains("error_on_failure: true"), "{provider} would decline silently: {rendered}");
+            // The name decides which provider is attached. `ort` rc.15 has no way to read back `error_on_failure`, which
+            // `attachment` sets on every dispatch it builds; a rung that declines silently would show up instead as a
+            // session the downgrade tests see built on the wrong rung.
+            assert_eq!(dispatch.name(), name, "{provider}");
         }
     }
 

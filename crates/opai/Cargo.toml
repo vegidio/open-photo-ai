@@ -45,7 +45,8 @@ workspace = true
 # the session id and the export thread are all `o11y`'s. `tracing` and `tracing-subscriber` are named below, and the
 # exporter's `reqwest` is the one `fetch` already builds; the one crate it adds is `machine-uid`, which `o11y` hashes
 # into the machine id it reports.
-rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.10.1", features = [
+rust-sak = { git = "https://github.com/vegidio/rust-sak", tag = "26.11.0", features = [
+    "ai",
     "crypto",
     "fetch",
     "fs",
@@ -71,40 +72,11 @@ image = { version = "0.25.10", default-features = false }
 # of their own, so that none of them can reach back into models, sessions or orchestration. See its `lib.rs`.
 imaging = { path = "../imaging" }
 
-# The ONNX Runtime binding. `load-dynamic` is what lets the runtime be the library this project downloads, opened at a
-# path decided at run time, instead of one linked at build time; turning the defaults off is what stops
-# `download-binaries` from having a build script fetch a second copy of the 175 MB artifact this project installs
-# itself, and drops `ureq` and its TLS stack and `ndarray` with it.
-#
-# `tracing` is turned back **on**, explicitly, and it is the whole of this crate's capture of the runtime's C++
-# diagnostics. With it, `ort` creates the environment through `CreateEnvWithCustomLogger` and forwards every record
-# the runtime produces into `tracing` with its severity, its code location and its logger id intact; without it the
-# runtime writes them to the process's stderr, which a double-clicked `.app` bundle does not have. `src/logging` is the
-# subscriber that receives them. The one feature line stands in for the reference implementation's entire
-# stderr-capture stack: a 380-line descriptor tailer, a second `native.log`, 100 lines of regex over ORT's text format
-# and the replay of an unread tail on the next launch.
-#
-# `api-28` is not cosmetic: `ort` refuses to load a runtime whose minor version is lower than the one its enabled
-# `api-NN` feature names. The feature therefore tracks the runtime tag pinned in `src/deps/artifact.rs`
-# (`ONNX_RUNTIME`) and MUST be kept at or below it — the failure if they drift is a startup error on every machine,
-# phrased in `ort`'s words rather than ours. `api-28` is the highest `2.0.0-rc.13` offers, which is why it sits below
-# the pinned 1.30.0 rather than matching it.
-#
-# Pinned exactly because `2.0.0-rc.13` is a pre-release: three behaviours this crate depends on — the minor-version
-# refusal, the one `CreateEnv` per process, and the lazy `commit()` — are undocumented and already differ in `ort`'s
-# development tree, so a bump has to be a deliberate act that re-checks all three.
-#
-# `coreml`, `cuda` and `tensorrt` are marker features — `ort-sys` defines all three as `[]`, so they compile no code
-# and link nothing. What they gate is the three provider types whose option maps this crate configures; without them
-# `ort::ep::CoreML` and its two siblings simply do not exist, and the resolved options would have nowhere to go.
-ort = { version = "=2.0.0-rc.13", default-features = false, features = [
-    "load-dynamic",
-    "api-28",
-    "coreml",
-    "cuda",
-    "tensorrt",
-    "tracing",
-] }
+# The ONNX Runtime binding is `rust-sak`'s: its `ai` feature builds `ort =2.0.0-rc.15` with `load-dynamic`, `api-30`,
+# `tracing` and the `coreml`/`cuda`/`tensorrt` marker features, and re-exports it as `rust_sak::ai::ort`. It is not
+# named here, because two `ort-sys` versions cannot link into one binary and a second requirement on `ort` would only
+# have to agree with that one. `ai` is also what installs, locates and loads the runtime and the NVIDIA libraries this
+# crate runs on.
 
 # Daily rotation, gzip on rotate and a bounded history, against a **fixed live filename**. That last property is the
 # whole selection: `opai.log` is the name a user is asked to attach to a bug report, so rotation may move the old
@@ -204,38 +176,14 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
     "chrono",
 ] }
 
-# The CoreML check is `[[NSProcessInfo processInfo] operatingSystemVersion].majorVersion >= 12`, the same call the Go
-# cgo shim makes. `objc2-foundation` is close to free here: `rust-sak`'s `sysinfo` feature already pulls
-# `objc2-core-foundation` and `objc2-io-kit` into the macOS tree, so the `objc2` runtime is compiled either way.
-# Gated to `NSProcessInfo` so the rest of Foundation is not.
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSProcessInfo"] }
-
-# Under WSL2, `libpath` loads the CUDA driver stub at runtime to ask which Windows driver directory is the active one.
-# Loaded rather than linked, because a machine without an NVIDIA driver has no `libcuda.so.1`. Already in the tree
-# through `rust-sak`'s `sysinfo` feature, at the same version.
-[target.'cfg(target_os = "linux")'.dependencies]
-libloading = "0.9"
-
 # Only to find the roaming `%APPDATA%` directory older releases installed into, so it can be removed. Already in the
 # tree through `rust-sak`'s `fs` feature, at the same version.
 [target.'cfg(target_os = "windows")'.dependencies]
 dirs = "7.0"
 
 [dev-dependencies]
-# The same pin as the dependency above, so it resolves to the one crate. Declared again because an integration test
-# does not inherit the library's dependencies, and `tests/ort_load_semantics.rs` pins `ort`'s own load-global
-# behaviour rather than anything this crate wraps around it.
-ort = { version = "=2.0.0-rc.13", default-features = false, features = [
-    "load-dynamic",
-    "api-28",
-    "coreml",
-    "cuda",
-    "tensorrt",
-    "tracing",
-] }
-
-# Declared again for the same reason, and it proves something on its own: `DynamicImage` is in this crate's public
+# Declared again because an integration test does not inherit the library's dependencies, and it proves something
+# on its own: `DynamicImage` is in this crate's public
 # API, so a consumer has to depend on the `image` crate to call `image::save`. `tests/public_api.rs` is a consumer,
 # and building its fixture the way a front end would is the check that the surface is actually usable from outside.
 image = { version = "0.25.10", default-features = false }

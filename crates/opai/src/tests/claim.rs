@@ -45,7 +45,7 @@ fn snapshot(dir: &Path) -> Vec<(PathBuf, FileState)> {
 
 #[tokio::test]
 async fn a_refused_initialization_transfers_nothing_and_leaves_the_directory_untouched() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
     std::fs::create_dir_all(&app_dir).unwrap();
@@ -68,7 +68,7 @@ async fn a_refused_initialization_transfers_nothing_and_leaves_the_directory_unt
 
 #[tokio::test]
 async fn a_refused_initialization_reports_no_plan_because_nothing_was_probed() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
     std::fs::create_dir_all(&app_dir).unwrap();
@@ -76,13 +76,22 @@ async fn a_refused_initialization_reports_no_plan_because_nothing_was_probed() {
     let mut held = child_holding(&app_dir);
     let (on_plan, seen) = recording_plan();
 
-    // The claim is taken before the hardware is probed, so a refusal here has nothing to report.
-    let refused = (|| -> Result<Plan, InitError> {
-        let _claim = instance::claim(&app_dir, GUI)?;
-        let plan = Opai::select_at(&server.base_url, gpu::adapters(), gpu::cuda(), "linux", "x86_64")?;
-        Opai::report_plan(&plan, on_plan.as_ref());
-        Ok(plan)
-    })();
+    // The claim is taken before the hardware is probed and before the plan is made, so a refusal here has nothing
+    // to report.
+    let refused = async {
+        let claim = instance::claim(&app_dir, GUI)?;
+        Opai::install_reporting(
+            "opai-test",
+            app_dir.clone(),
+            claim,
+            runtime_only(&server),
+            ModelTrust::Published,
+            None,
+            on_plan,
+        )
+        .await
+    }
+    .await;
 
     let error = refused.unwrap_err();
     assert!(matches!(error, InitError::AlreadyRunning { .. }), "got {error:?}");
@@ -95,7 +104,7 @@ async fn a_refused_initialization_reports_no_plan_because_nothing_was_probed() {
 
 #[tokio::test]
 async fn the_claim_is_given_up_only_when_the_last_handle_is() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
 
@@ -142,7 +151,7 @@ fn what_reads_no_shared_state_is_not_subject_to_the_claim() {
 async fn two_initializations_in_one_process_under_one_name_both_succeed() {
     // A front end restarting its application layer after an error, not a second instance — the first
     // claim must not refuse the second.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
 
@@ -183,7 +192,7 @@ async fn two_initializations_in_one_process_under_one_name_both_succeed() {
 #[tokio::test]
 async fn two_application_names_in_one_process_both_initialize() {
     // Two names, two directories, no shared cache/models/log — neither contends with the other.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let (one, two) = (root.path().join("opai-test-one"), root.path().join("opai-test-two"));
 

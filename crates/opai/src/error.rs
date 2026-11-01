@@ -123,6 +123,17 @@ pub enum InitError {
         source: DownloadError,
     },
 
+    /// The ONNX Runtime or an NVIDIA library could not be listed, downloaded or verified: the network or the server
+    /// failed after the retries, or the download did not match the hash the Hugging Face API published for it (and
+    /// was deleted).
+    #[error("could not install {dependency}: {reason}")]
+    Transfer {
+        /// The dependency's name, as in `NVIDIA cuDNN`.
+        dependency: &'static str,
+        /// What went wrong, as `rust-sak` describes it.
+        reason: String,
+    },
+
     /// The installed ONNX Runtime could not be loaded: the file is missing or unreadable, it exports no
     /// `OrtGetApiBase`, or it is an older runtime than this build was compiled against.
     ///
@@ -133,9 +144,10 @@ pub enum InitError {
         // download error.
         /// The library this was attempted against.
         path: PathBuf,
-        /// What `ort` reported. [`ort::LoadDynamicError::BadVersion`] carries the version string it found.
+        /// What `rust-sak` reported, naming the path and the loader's reason, which for a runtime too old carries the
+        /// version found.
         #[source]
-        source: ort::LoadDynamicError,
+        source: rust_sak::ai::LoadError,
     },
 
     /// The runtime library loaded but refused to create an inference environment.
@@ -146,9 +158,9 @@ pub enum InitError {
     RuntimeStart {
         /// The library the environment was started against.
         path: PathBuf,
-        /// What `ort` reported.
+        /// What `rust-sak` reported, with the runtime's reason.
         #[source]
-        source: ort::Error,
+        source: rust_sak::ai::LoadError,
     },
 
     // Why a retry cannot succeed in this process: see `runtime::FAILED_LOAD`.
@@ -159,8 +171,6 @@ pub enum InitError {
     RuntimeUnavailable {
         /// The library the first attempt was made against.
         path: PathBuf,
-        // A message rather than the error, a deliberate exception: `ort::LoadDynamicError` is neither `Clone` nor
-        // reconstructible.
         /// What that attempt reported.
         reason: String,
     },
@@ -253,7 +263,7 @@ pub(crate) enum SessionError {
         // runtime's `CreateStatus`, so one cannot be built at all without a loaded runtime — and the fallback this
         // variant drives is required to be exercisable on a runner that has none. The one downcast is to
         // `OutOfDeviceMemory`, which the build wraps a failure in where the device ran out of memory during it.
-        /// What the builder reported, which in production is an [`ort::Error`], possibly inside an
+        /// What the builder reported, which in production is an [`ort::Error`](rust_sak::ai::ort::Error), possibly inside an
         /// [`OutOfDeviceMemory`].
         #[source]
         source: Arc<dyn std::error::Error + Send + Sync>,
@@ -369,7 +379,7 @@ pub enum InferenceError {
         artifact: String,
         /// The execution provider the session was being built on.
         provider: ExecutionProvider,
-        /// What the builder reported, which in production is always an [`ort::Error`].
+        /// What the builder reported, which in production is always an [`ort::Error`](rust_sak::ai::ort::Error).
         #[source]
         source: Arc<dyn std::error::Error + Send + Sync>,
     },
@@ -387,7 +397,7 @@ pub enum InferenceError {
         // Erased rather than typed as one for the reason `SessionError::Build` erases its source: an `ort::Error`
         // cannot be constructed without a loaded runtime, and the whole of the arithmetic above this is required to be
         // exercisable on a runner that has none. Nothing downcasts it; the message and the chain both survive.
-        /// What the run reported, which in production is always an [`ort::Error`].
+        /// What the run reported, which in production is always an [`ort::Error`](rust_sak::ai::ort::Error).
         #[source]
         source: Arc<dyn std::error::Error + Send + Sync>,
     },
@@ -551,6 +561,7 @@ impl InitError {
             Self::UnknownProvider { .. } => "unknown_provider",
             Self::HashMismatch { .. } => "checksum",
             Self::Download { .. } => "download",
+            Self::Transfer { .. } => "transfer",
             Self::RuntimeLoad { .. } => "runtime_load",
             Self::RuntimeStart { .. } => "runtime_start",
             Self::RuntimeUnavailable { .. } => "runtime_unavailable",
@@ -616,15 +627,11 @@ mod tests {
     }
 
     /// The library path every runtime error below is built against.
-    const LIBRARY: &str = "/somewhere/opai/runtime/onnxruntime.1.26.0.dylib";
+    const LIBRARY: &str = "/somewhere/io.vinicius.ai/onnx/1.30.0/libonnxruntime.1.30.0.dylib";
 
-    /// An [`ort::LoadDynamicError`] built directly rather than by asking `ort` to load something.
-    ///
-    /// `ort`'s load global is process-wide and a process gets one first attempt at it, so no unit test may touch
-    /// `ort::init_from`. The variants are public with public fields, which is what makes a real error of the right
-    /// type constructible here without loading anything.
-    fn load_error() -> ort::LoadDynamicError {
-        ort::LoadDynamicError::MissingApi { path: PathBuf::from(LIBRARY) }
+    /// A load error built directly rather than by asking the runtime to load something: a process loads one runtime.
+    fn load_error() -> rust_sak::ai::LoadError {
+        rust_sak::ai::LoadError::Open { path: PathBuf::from(LIBRARY), reason: "not a library".to_string() }
     }
 
     #[test]
@@ -632,15 +639,12 @@ mod tests {
         let error = InitError::RuntimeLoad { path: PathBuf::from(LIBRARY), source: load_error() };
 
         assert!(error.to_string().contains(LIBRARY), "the message did not name the library: {error}");
-        // The chain reaches `ort`, so a front end that walks it sees what the runtime actually said — which for
-        // `BadVersion` is the version string found on disk.
-        assert!(error.source().is_some(), "the underlying ort error is not reachable from the chain");
+        // The chain reaches the loader's reason, so a front end that walks it sees what the runtime actually said.
+        assert!(error.source().is_some(), "the underlying load error is not reachable from the chain");
     }
 
     #[test]
     fn a_retry_after_a_failed_load_names_the_path_and_what_the_first_attempt_reported() {
-        // `RuntimeStart`'s own `Display` is asserted in the live test instead: every `ort::Error` constructor goes
-        // through `CreateStatus`, so one cannot be built in a process with no runtime loaded.
         let error = InitError::RuntimeUnavailable { path: PathBuf::from(LIBRARY), reason: "dlopen failed".to_string() };
 
         let message = error.to_string();
@@ -860,15 +864,16 @@ mod tests {
                 "checksum",
             ),
             (InitError::Download { url: "u".to_string(), source: DownloadError::Cancelled }, "download"),
+            (InitError::Transfer { dependency: "NVIDIA cuDNN", reason: "r".to_string() }, "transfer"),
             (InitError::RuntimeLoad { path: path(), source: load_error() }, "runtime_load"),
+            (InitError::RuntimeStart { path: path(), source: load_error() }, "runtime_start"),
             (InitError::RuntimeUnavailable { path: path(), reason: "r".to_string() }, "runtime_unavailable"),
             (InitError::Fs(FsError::NoConfigDir), "fs"),
             (InitError::Io { path: path(), source: std::io::Error::other("disk") }, "io"),
             (InitError::Cancelled, "cancelled"),
             (InitError::Stopped, "stopped"),
         ];
-        // `RuntimeStart` is left out only because an `ort::Error` cannot be built without a runtime. The match in
-        // `kind` names it `runtime_start`, and is exhaustive, so no variant goes without a name.
+        // The match in `kind` is exhaustive, so no variant goes without a name.
         for (error, kind) in named {
             assert_eq!(error.kind(), kind, "{error:?}");
         }

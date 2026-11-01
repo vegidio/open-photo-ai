@@ -32,6 +32,7 @@
 use crate::live_support::live_application;
 use crate::models::{Bias, FloatPrecision, LightAdjustment, LightAdjustmentVariant, Operation};
 use crate::providers::ExecutionProvider;
+use rust_sak::ai::ort;
 
 /// The application name these install under, which is also the configuration directory they create.
 const NAME: &str = "opai-live-session-test";
