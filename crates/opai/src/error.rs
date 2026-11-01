@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
-use rust_sak::fetch::DownloadError;
 use rust_sak::fs::FsError;
 
 use crate::app::Holder;
@@ -80,11 +79,18 @@ pub enum InitError {
     // timeout reaches it: the whole session then downloads models with nothing checking them, and says nothing.
     /// No published hash could be obtained for a model artifact, so there is nothing to verify it against.
     ///
-    /// Reached only when the published listing cannot be read, no cached copy of it exists, **and** the artifact is
-    /// absent from the manifest compiled into this binary — or when it is simply not published, which is the same
-    /// answer to the same question. Nothing is transferred: an artifact no listing names has no URL worth requesting.
+    /// The published listing was read and names no file for the artifact. Nothing is transferred: an artifact no
+    /// listing names has no URL worth requesting.
     #[error("no published hash is known for the model {artifact}, so it cannot be installed")]
     UnpublishedModel {
+        /// The artifact that could not be placed, so a caller can say which model it was.
+        artifact: String,
+    },
+
+    /// The published model listing could not be read, and the model is not installed, so nothing could verify a
+    /// download of it. Nothing is transferred. A later attempt with the network back installs it.
+    #[error("the published model listing could not be read, and the model {artifact} is not installed")]
+    UnlistedModel {
         /// The artifact that could not be placed, so a caller can say which model it was.
         artifact: String,
     },
@@ -102,7 +108,7 @@ pub enum InitError {
         name: String,
     },
 
-    /// The downloaded archive does not hash to the value pinned for it, after the one clean retry.
+    /// A downloaded model file does not hash to the value published for it, after the one clean retry of a resume.
     #[error("{url} hashed to {actual} but {expected} was expected")]
     HashMismatch {
         /// Where the bytes came from.
@@ -113,14 +119,14 @@ pub enum InitError {
         actual: String,
     },
 
-    /// The transfer itself failed — an HTTP status, a transport error, or a disk write.
+    /// A model's listing or transfer failed — an HTTP status or a transport error, after the retries.
     #[error("downloading {url} failed: {source}")]
     Download {
-        /// The artifact being fetched, which the underlying error does not carry.
+        /// The published folder the model was being fetched from, which the underlying error does not carry.
         url: String,
         /// The failure `rust-sak` reported.
         #[source]
-        source: DownloadError,
+        source: rust_sak::ai::Failure,
     },
 
     /// The ONNX Runtime or an NVIDIA library could not be listed, downloaded or verified: the network or the server
@@ -565,6 +571,7 @@ impl InitError {
             Self::AlreadyRunning { .. } => "already_running",
             Self::UnsupportedPlatform { .. } => "unsupported_platform",
             Self::UnpublishedModel { .. } => "unpublished_model",
+            Self::UnlistedModel { .. } => "unlisted_model",
             Self::UnknownProvider { .. } => "unknown_provider",
             Self::HashMismatch { .. } => "checksum",
             Self::Download { .. } => "download",
@@ -865,12 +872,13 @@ mod tests {
                 "unsupported_platform",
             ),
             (InitError::UnpublishedModel { artifact: "a".to_string() }, "unpublished_model"),
+            (InitError::UnlistedModel { artifact: "a".to_string() }, "unlisted_model"),
             (InitError::UnknownProvider { name: "gpu".to_string() }, "unknown_provider"),
             (
                 InitError::HashMismatch { url: "u".to_string(), expected: "a".to_string(), actual: "b".to_string() },
                 "checksum",
             ),
-            (InitError::Download { url: "u".to_string(), source: DownloadError::Cancelled }, "download"),
+            (InitError::Download { url: "u".to_string(), source: rust_sak::ai::Failure::Network }, "download"),
             (InitError::Transfer { dependency: "NVIDIA cuDNN", reason: "r".to_string() }, "transfer"),
             (InitError::RuntimeLoad { path: path(), source: load_error() }, "runtime_load"),
             (InitError::RuntimeStart { path: path(), source: load_error() }, "runtime_start"),

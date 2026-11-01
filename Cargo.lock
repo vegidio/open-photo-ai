@@ -4132,7 +4132,7 @@ checksum = "6aa2c4e539b869820a2b82e1aef6ff40aa85e65decdd5185e83fb4b1249cd00f"
 [[package]]
 name = "o11y-macros"
 version = "26.11.0"
-source = "git+https://github.com/vegidio/rust-sak?tag=26.11.0#516b014b0e0771830ca3b25de588028bd0f945cd"
+source = "git+https://github.com/vegidio/rust-sak?tag=26.11.0#a976111198574e97f808eb2f098c4ddadd49e052"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5606,7 +5606,7 @@ checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 [[package]]
 name = "rust-sak"
 version = "26.11.0"
-source = "git+https://github.com/vegidio/rust-sak?tag=26.11.0#516b014b0e0771830ca3b25de588028bd0f945cd"
+source = "git+https://github.com/vegidio/rust-sak?tag=26.11.0#a976111198574e97f808eb2f098c4ddadd49e052"
 dependencies = [
  "avif-rs",
  "cap-std",

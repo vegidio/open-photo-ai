@@ -47,6 +47,30 @@ pub(crate) fn remove_roaming_dir(name: &str, app_dir: &Path) {
     }
 }
 
+/// The copy of the published model listing earlier releases cached between runs, relative to the application's
+/// directory. Nothing reads it any more: a model's hashes come from the live listing alone.
+// TODO: remove once users have upgraded past this release
+const OLD_LISTING: &str = "models/.listing.json";
+
+/// Deletes `<app_dir>/models/.listing.json`, the listing earlier releases cached. The model folders beside it, and the
+/// engines compiled from them, are not touched.
+///
+/// Best effort: a file that is absent is the ordinary case, and one that cannot be removed is recorded and otherwise
+/// ignored, since nothing reads it.
+// TODO: remove once users have upgraded past this release
+pub(crate) fn remove_old_listing(app_dir: &Path) {
+    let old = app_dir.join(OLD_LISTING);
+    match std::fs::remove_file(&old) {
+        Ok(()) => tracing::info!(path = %old.display(), "removed the model listing earlier releases cached"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => tracing::warn!(
+            path = %old.display(),
+            %error,
+            "the model listing earlier releases cached could not be removed"
+        ),
+    }
+}
+
 /// The folders releases before the shared dependency root installed the runtime and the NVIDIA libraries into, inside
 /// the application's directory.
 // TODO: remove once users have upgraded past this release
@@ -218,6 +242,41 @@ mod tests {
         // A second launch finds nothing to remove, and says nothing.
         let (log, ()) = crate::logging::records_of_blocking("info", || remove_old_install_dirs(app));
         assert!(!log.contains("install folder"), "{log}");
+    }
+
+    #[test]
+    fn the_cached_listing_is_removed_and_the_models_and_engines_are_not() {
+        let root = tempfile::tempdir().unwrap();
+        let app = root.path();
+        std::fs::create_dir_all(app.join("models/up_kyoto_4x_fp32")).unwrap();
+        std::fs::write(app.join("models/up_kyoto_4x_fp32/up_kyoto_4x_fp32.onnx"), b"weights").unwrap();
+        std::fs::create_dir_all(app.join("engines/up_kyoto_4x_fp32/coreml")).unwrap();
+        std::fs::write(app.join("models/.listing.json"), b"{\"files\":[]}").unwrap();
+
+        let (log, ()) = crate::logging::records_of_blocking("info", || remove_old_listing(app));
+
+        assert!(!app.join("models/.listing.json").exists());
+        assert!(app.join("models/up_kyoto_4x_fp32/up_kyoto_4x_fp32.onnx").is_file());
+        assert!(app.join("engines/up_kyoto_4x_fp32/coreml").is_dir());
+        assert_eq!(crate::logging::records(&log, "removed the model listing earlier releases cached").len(), 1);
+
+        // A second launch finds nothing to remove, and says nothing.
+        let (log, ()) = crate::logging::records_of_blocking("info", || remove_old_listing(app));
+        assert!(!log.contains("model listing"), "{log}");
+    }
+
+    #[test]
+    fn a_cached_listing_that_cannot_be_removed_is_recorded_and_initialization_goes_on() {
+        // A folder where the file would be is a removal that fails on every platform.
+        let root = tempfile::tempdir().unwrap();
+        let app = root.path();
+        std::fs::create_dir_all(app.join("models/.listing.json")).unwrap();
+
+        let (log, ()) = crate::logging::records_of_blocking("info", || remove_old_listing(app));
+
+        let failed = crate::logging::records(&log, "the model listing earlier releases cached could not be removed");
+        assert_eq!(failed.len(), 1, "{log}");
+        assert!(failed[0].contains("level=WARN"), "{}", failed[0]);
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! What a run sends to the collector: its span, a span per computed step, and the sessions each step needed.
 
 use super::*;
-use crate::deps::test_server::{TestServer, fixture_listing};
+use crate::deps::hf_server::{HfServer, MODEL};
 use crate::logging::observed::{Observed, SeenSpan};
 use crate::providers::tests::machine_supporting;
 use crate::sessions::Sessions;
@@ -18,10 +18,12 @@ struct Through {
 
 impl Through {
     /// Installing from `server`, and opening every artifact as a fake session that runs the way [`Fake`]'s do.
-    fn new(server: &TestServer, app_dir: &std::path::Path, artifacts: &[&str]) -> Self {
+    fn new(server: &HfServer, app_dir: &std::path::Path, artifacts: &[&str]) -> Self {
         let fake = Fake::new();
         let (log, freed) = (Arc::clone(&fake.log), Arc::clone(&fake.freed));
-        let listing = fixture_listing(&artifacts.iter().map(|id| format!("{id}.onnx")).collect::<Vec<_>>());
+        for id in artifacts {
+            server.put_model(&format!("{id}.onnx"), MODEL);
+        }
 
         let build = Arc::new(move |request: BuildRequest| {
             Ok(FakeSession {
@@ -35,9 +37,7 @@ impl Through {
         });
         let supported = machine_supporting(false, false, false);
 
-        Self {
-            sessions: Sessions::serving(app_dir.to_path_buf(), supported, server.base_url.clone(), listing, build),
-        }
+        Self { sessions: Sessions::serving(app_dir.to_path_buf(), supported, server.models(), build) }
     }
 }
 
@@ -75,7 +75,7 @@ fn child<'a>(observed: &'a Observed, parent: &SeenSpan, name: &str) -> &'a SeenS
 
 #[tokio::test]
 async fn an_enhancement_that_installs_and_builds_is_one_trace_of_its_steps_and_their_sessions() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let backend = Through::new(&server, &root.path().join("opai-test"), &["up_kyoto_2x_fp16", "up_kyoto_4x_fp16"]);
 

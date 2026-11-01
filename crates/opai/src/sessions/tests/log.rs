@@ -109,11 +109,11 @@ async fn releasing_sessions_says_how_many_went_and_why() {
 
 #[tokio::test]
 async fn a_downgrade_is_recorded_as_a_pair_naming_what_was_asked_for_and_what_ran() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::Cuda], ..Bench::default() });
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     let (log, handle) = logging::records_of("info", || async {
         sessions

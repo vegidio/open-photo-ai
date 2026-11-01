@@ -34,8 +34,7 @@ use std::path::{Path, PathBuf};
 use rust_sak::ai::CachePaths;
 
 use crate::config;
-use crate::deps::manifest;
-use crate::deps::model::descriptor::{ENGINES_DIR, engine_dir};
+use crate::deps::model::paths::{ENGINES_DIR, engine_dir};
 use crate::error::InitError;
 use crate::models::ArtifactId;
 
@@ -124,7 +123,7 @@ pub(crate) fn invalidate_for_runtime(app_dir: &Path, name: &str, runtime_version
 
     // The stamp lives in the tree it describes, so it goes with everything else and is written back afterwards. That
     // ordering is what makes an interruption in between read as "written under something else" on the next launch.
-    manifest::empty_dir(&engines).map_err(InitError::io(&engines))?;
+    empty_dir(&engines).map_err(InitError::io(&engines))?;
 
     if discarded > 0 {
         // `info`, naming what replaced what they were built under — which is the whole of the answer to "why did this
@@ -139,6 +138,21 @@ pub(crate) fn invalidate_for_runtime(app_dir: &Path, name: &str, runtime_version
     }
 
     std::fs::write(&stamp, &expected).map_err(InitError::io(&stamp))
+}
+
+/// Deletes everything in `dir`, keeping `dir` itself. `file_type` comes from the entry and does not follow links, so a
+/// link to a directory is unlinked rather than having its target's contents removed.
+fn empty_dir(dir: &Path) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            std::fs::remove_dir_all(entry.path())?;
+        } else {
+            std::fs::remove_file(entry.path())?;
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

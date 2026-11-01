@@ -232,8 +232,8 @@ async fn a_stopped_initialization_says_why_and_is_not_a_failure() {
 
 #[tokio::test]
 async fn initialization_reads_the_model_listing_on_no_path_of_its_own() {
-    // The listing is read no earlier than the first install that needs it. Asserted on what's left behind:
-    // a resolution creates the models directory and caches a copy, so neither existing means nothing read it.
+    // The listing is read no earlier than the first install that needs it. Asserted on what's left behind: an
+    // install creates the models directory before it reads the listing, so its absence means nothing read it.
     let server = HfServer::start();
     let root = tempfile::tempdir().unwrap();
     let app_dir = root.path().join("opai-test");
@@ -250,11 +250,7 @@ async fn initialization_reads_the_model_listing_on_no_path_of_its_own() {
     .unwrap();
 
     let models = app_dir.join("models");
-    assert!(!models.exists(), "initialization created the models directory, so something resolved a listing");
-    assert!(
-        !models.join(deps::model::manifest::CACHE_NAME).exists(),
-        "initialization cached a model listing"
-    );
+    assert!(!models.exists(), "initialization created the models directory, so something read a listing");
 
     assert!(opai.providers().cpu);
 }
