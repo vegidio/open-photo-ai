@@ -1,20 +1,17 @@
 //! Installing the files the application downloads at runtime, and recording what each one put on disk.
 //!
-//! Two kinds of thing are installed. The **ONNX Runtime and the NVIDIA libraries** are archives in Hugging Face
-//! folders, installed, verified and loaded by `rust-sak`'s `ai` into a root shared with other applications; [`folders`]
-//! names them. A **model** is a bare `.onnx` with nothing to expand, installed through [`install`]'s pipeline, its hash
-//! published rather than pinned; [`model`] is where that lives.
+//! Two kinds of thing are installed, both by `rust-sak`'s `ai`. The **ONNX Runtime and the NVIDIA libraries** are
+//! archives in Hugging Face folders, installed, verified and loaded into a root shared with other applications;
+//! [`folders`] names them. A **model** is bare files in the project's published `models` folder, installed into this
+//! application's own directory against the live listing; [`model`] is where that lives. What an install records in the
+//! log is [`records`]'.
 
 pub(crate) mod folders;
-pub(crate) mod install;
-pub(crate) mod manifest;
 pub(crate) mod model;
-pub(crate) mod release;
+pub(crate) mod records;
 
 #[cfg(test)]
 pub(crate) mod hf_server;
-#[cfg(test)]
-pub(crate) mod test_server;
 
 // The two travel together because they are one question asked from both ends — a caller that wants to hear about a
 // transfer is a caller that wants it to happen — and because both of them have to reach the same four layers down to
@@ -72,7 +69,8 @@ pub enum ModelTrust {
     ///
     /// - A model with any file missing is installed from the published sources and verified, whole.
     /// - A file the application itself downloaded is verified in every process.
-    /// - The ONNX Runtime and the GPU libraries, which stay pinned, hashed and verified whatever this says.
+    /// - The ONNX Runtime and the GPU libraries, which are verified against the hash published for them whatever
+    ///   this says.
     /// - The next process. A process that did not declare this reinstalls the model from the published sources and
     ///   verifies it — one debugging session cannot silently poison a machine.
     ///

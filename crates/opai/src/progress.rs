@@ -121,7 +121,7 @@ pub struct Progress {
 /// every model a run installs, from whichever task is doing the work, so it is `Fn + Send + Sync + 'static`.
 pub type OnProgress = Arc<dyn Fn(&Progress) + Send + Sync>;
 
-/// Turns one model's transfer into a 0-100% report.
+/// Turns one model's install into a 0-100% report.
 ///
 /// Throttling is inherited rather than repeated: `rust-sak` already coalesces the download hook to roughly 256 KiB or
 /// 100 ms. What this adds is the monotonic clamp and the terminal report that lands on exactly `1.0` — so a throttled
@@ -151,30 +151,18 @@ impl Reporter {
         Self { dependency, on_progress, state: Mutex::new(state) }
     }
 
-    /// Starts a report for `descriptor`, reading every fact but the callback off it: its own progress name and the
-    /// summed source sizes, so a caller cannot pair a descriptor with the wrong total.
-    ///
-    /// [`new`](Self::new) stays for the tests, which need a reporter over a shape no descriptor produces.
-    pub(crate) fn for_dependency(
-        descriptor: &crate::deps::release::Dependency,
-        on_progress: Option<OnProgress>,
-    ) -> Self {
-        Self::new(descriptor.progress.clone(), on_progress, Some(descriptor.published_size()))
+    /// Starts a report for `dependency`, whose files total `total` bytes where the listing says so.
+    pub(crate) fn for_dependency(dependency: Dependency, total: Option<u64>, on_progress: Option<OnProgress>) -> Self {
+        Self::new(dependency, on_progress, total)
     }
 
-    /// Records the transfer's absolute position, adopting a total the response discovered.
-    ///
-    /// Absolute rather than incremental because that is what makes a resume and a restart both correct without the
-    /// reporter knowing which happened: a transfer that continues a partial starts at ninety percent and one that had
-    /// to start over goes back to zero, and the monotonic clamp decides what a front end actually sees.
-    pub(crate) fn downloading(&self, bytes: u64, total: Option<u64>) {
+    /// Records the install's position as `rust-sak` reports it: `bytes` of `total` on disk, and the fraction it
+    /// computed, which stays below `1.0` until the install's record is written. The clamp still holds.
+    pub(crate) fn installing(&self, bytes: u64, total: u64, fraction: f64) {
         let mut state = self.lock();
         state.downloaded = bytes;
-        // Only ever fills a gap the listing left. A resumed response's `Content-Length` describes the remaining tail,
-        // and adopting that as the whole would put the bar past 100% for every resumed download.
-        if state.download_total.is_none() {
-            state.download_total = total;
-        }
+        state.download_total = Some(total);
+        state.high = state.high.max(fraction.min(1.0));
         self.emit(state);
     }
 
@@ -193,12 +181,11 @@ impl Reporter {
 
     /// Emits the current position, clamped so it never decreases. Takes the guard by value so the lock is released
     /// before the callback runs — a front end that re-enters would otherwise deadlock.
-    fn emit(&self, mut state: std::sync::MutexGuard<'_, State>) {
+    fn emit(&self, state: std::sync::MutexGuard<'_, State>) {
         let Some(on_progress) = self.on_progress.as_ref() else {
             return;
         };
 
-        state.high = state.high.max(ratio(state.downloaded, state.download_total).unwrap_or(0.0));
         let progress = Progress {
             dependency: self.dependency.clone(),
             phase: Phase::Downloading,
@@ -210,11 +197,6 @@ impl Reporter {
 
         on_progress(&progress);
     }
-}
-
-/// `done / total`, clamped to `0.0..=1.0`. `None` when the total is unknown; a total of zero counts as complete.
-fn ratio(done: u64, total: Option<u64>) -> Option<f64> {
-    total.map(|total| if total == 0 { 1.0 } else { (done as f64 / total as f64).min(1.0) })
 }
 
 /// A callback that collects every report it is handed, returned with the collection.
@@ -262,10 +244,11 @@ mod tests {
     fn the_fraction_never_decreases() {
         let (reporter, seen) = recording_reporter(Some(100));
 
-        // A transfer that resumed at ninety percent, then had to start over from zero.
-        reporter.downloading(90, None);
-        reporter.downloading(0, None);
-        reporter.downloading(10, None);
+        // A transfer that resumed at ninety percent, then had to start over from zero: `rust-sak` holds its own
+        // fraction, and this holds it again.
+        reporter.installing(90, 100, 0.9);
+        reporter.installing(0, 100, 0.0);
+        reporter.installing(10, 100, 0.1);
 
         assert_fractions(&seen, &[0.9, 0.9, 0.9]);
     }
@@ -274,8 +257,9 @@ mod tests {
     fn finish_lands_on_exactly_one() {
         let (reporter, seen) = recording_reporter(Some(100));
 
-        // A throttled tick left the bar short of the end, which is the normal case.
-        reporter.downloading(99, None);
+        // Every byte is on disk, but the record is not written yet, so `rust-sak` reports just short of the end.
+        reporter.installing(100, 100, 1.0_f64.next_down());
+        assert!(fractions(&seen)[0] < 1.0);
         reporter.finish();
 
         let last = seen.lock().unwrap().last().unwrap().clone();
@@ -284,36 +268,10 @@ mod tests {
     }
 
     #[test]
-    fn a_total_the_pin_declared_is_not_replaced_by_a_resumed_response() {
-        // A resumed `206` reports only the remaining tail as its length; adopting it would put the bar past 100%.
-        let (reporter, seen) = recording_reporter(Some(100));
-
-        reporter.downloading(90, Some(10));
-
-        let last = seen.lock().unwrap().last().unwrap().clone();
-        assert_eq!(last.total, Some(100));
-        assert!((last.fraction - 0.9).abs() < 1e-9, "got {}", last.fraction);
-    }
-
-    #[test]
-    fn a_total_the_pin_did_not_declare_is_adopted_from_the_response() {
+    fn reports_carry_the_dependency_and_the_bytes_moved() {
         let (reporter, seen) = recording_reporter(None);
 
-        reporter.downloading(0, None);
-        reporter.downloading(50, Some(100));
-
-        let reports = seen.lock().unwrap().clone();
-        assert_eq!(reports[0].total, None);
-        assert_eq!(reports[0].fraction, 0.0);
-        assert_eq!(reports[1].total, Some(100));
-        assert!((reports[1].fraction - 0.5).abs() < 1e-9, "got {}", reports[1].fraction);
-    }
-
-    #[test]
-    fn reports_carry_the_dependency_and_the_bytes_moved() {
-        let (reporter, seen) = recording_reporter(Some(100));
-
-        reporter.downloading(40, None);
+        reporter.installing(40, 100, 0.4);
 
         let reports = seen.lock().unwrap().clone();
         assert_eq!(reports[0].dependency, Dependency::Runtime);
@@ -331,68 +289,23 @@ mod tests {
     }
 
     #[test]
-    fn a_model_install_spreads_the_whole_range_over_the_transfer() {
-        // A model is a bare file: there is nothing after the transfer, so a transfer at 50% is an install at 50% and a
-        // finished transfer is a finished install.
-        let (on_progress, seen) = recording();
-        let reporter = Reporter::new(model(), Some(on_progress), Some(100));
-
-        reporter.downloading(50, None);
-        reporter.downloading(100, None);
-        reporter.finish();
-
-        assert_fractions(&seen, &[0.5, 1.0, 1.0]);
-        assert_eq!(seen.lock().unwrap().last().unwrap().fraction, 1.0);
-    }
-
-    #[test]
-    fn a_transfer_that_reaches_its_total_is_already_complete() {
-        // There is nothing after the transfer, so it alone lands on 1.0 without waiting for `finish`.
-        let (on_progress, seen) = recording();
-        let reporter = Reporter::new(model(), Some(on_progress), Some(100));
-
-        reporter.downloading(100, None);
-
-        let last = seen.lock().unwrap().last().unwrap().clone();
-        assert_eq!(last.phase, Phase::Downloading);
-        assert_eq!(last.fraction, 1.0);
-    }
-
-    #[test]
     fn a_model_reports_under_its_own_published_name() {
         let dependency = model();
 
         assert_eq!(dependency.as_str(), "up_kyoto_4x_fp32");
 
         let (on_progress, seen) = recording();
-        Reporter::new(dependency.clone(), Some(on_progress), Some(10)).downloading(1, None);
+        Reporter::for_dependency(dependency.clone(), Some(10), Some(on_progress)).installing(1, 10, 0.1);
 
         assert_eq!(seen.lock().unwrap()[0].dependency, dependency, "the report did not name the model");
     }
 
     #[test]
     fn a_model_install_with_no_callback_reports_nothing_and_does_not_panic() {
-        let reporter = Reporter::new(model(), None, Some(100));
+        let reporter = Reporter::for_dependency(model(), Some(100), None);
 
-        reporter.downloading(50, None);
+        reporter.installing(50, 100, 0.5);
         reporter.finish();
-    }
-
-    #[test]
-    fn a_model_fraction_never_decreases_when_a_transfer_restarts() {
-        // A resumed transfer that has to start over reports its absolute position, which goes backwards. What a front
-        // end sees must not.
-        let (on_progress, seen) = recording();
-        let reporter = Reporter::new(model(), Some(on_progress), Some(100));
-
-        reporter.downloading(90, None);
-        reporter.downloading(0, None);
-        reporter.downloading(40, None);
-        reporter.finish();
-
-        let fractions: Vec<f64> = fractions(&seen);
-        assert!(fractions.windows(2).all(|w| w[0] <= w[1]), "the fraction went backwards: {fractions:?}");
-        assert_eq!(fractions.last(), Some(&1.0));
     }
 
     #[test]

@@ -32,8 +32,9 @@
 //! # Putting a model on disk
 //!
 //! An artifact's files are installed on first use, into a directory of their own under `models/`, and every
-//! file is verified against its published SHA-256 (resolved from the live listing, a cached copy, or a
-//! compiled-in fallback, in that order). An artifact none of the three name is refused, nothing transferred.
+//! file is verified against the SHA-256 the live published listing reports for it. An artifact the listing does not
+//! name is refused, nothing transferred. Where the listing cannot be read, an installed model is used as it is, and
+//! one that is not installed is refused.
 //!
 //! The listing is read lazily — never during [`Opai::initialize`] — so a process that never runs inference
 //! never contacts the model host.
@@ -521,7 +522,7 @@ impl Opai {
 
     /// Runs `initialization` and records how it ended — once, whichever way that was — with how long it took.
     ///
-    /// The shape of `deps::install`: the body returns through every `?` it likes, and this is the one place that sees
+    /// The shape of `deps::model::install`: the body returns through every `?` it likes, and this is the one place that sees
     /// the outcome. Separate from [`Self::initialize_inner`] so the suite can drive each arm against a directory of
     /// its own; `initialize` itself resolves the platform's directory and loads a real runtime.
     pub(crate) async fn recorded(
@@ -607,6 +608,8 @@ impl Opai {
         // runtime it loaded. Beside `remove_roaming_dir` in spirit: both delete what an earlier release left behind.
         // TODO: remove once users have upgraded past this release
         config::remove_old_install_dirs(&app_dir);
+        // TODO: remove once users have upgraded past this release
+        config::remove_old_listing(&app_dir);
 
         let plan = setup::Plan::for_machine(setup::dependency_root()?, gpu::adapters(), gpu::cuda());
 
@@ -700,7 +703,8 @@ impl Opai {
     /// # Errors
     ///
     /// Returns [`SessionError::Install`](error::SessionError::Install) where the files could not be put on disk or
-    /// read back — including [`InitError::UnpublishedModel`] for an artifact no source publishes a hash for — and
+    /// read back — including [`InitError::UnpublishedModel`] for an artifact the listing does not name, and
+    /// [`InitError::UnlistedModel`] for one that is not installed when the listing cannot be read — and
     /// [`SessionError::Build`](error::SessionError::Build) where the model is on disk and neither the resolved
     /// providers nor the CPU could open it.
     pub(crate) async fn session(

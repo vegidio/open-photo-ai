@@ -37,6 +37,15 @@ impl Plan {
         let dependencies = select(adapters, cuda).into_iter().map(|which| (which.clone(), folders::dependency(&which)));
         Self { root, dependencies: dependencies.collect() }
     }
+
+    /// The name of this plan's dependency `rust-sak` reported as `name`, as the `&'static str` it was given: every
+    /// event and error names one of them. A name it does not hold reads as "a dependency".
+    fn name_of(&self, name: &str) -> &'static str {
+        self.dependencies
+            .iter()
+            .find(|(_, dependency)| dependency.name == name)
+            .map_or("a dependency", |(_, dependency)| dependency.name)
+    }
 }
 
 /// Which dependencies a machine with `adapters`, whose NVIDIA driver reported `cuda`, can run, in install order.
@@ -231,6 +240,7 @@ async fn install_dependencies(
 /// What `rust-sak`'s `error` means for this initialization.
 fn failed(plan: &Plan, error: InstallError) -> InitError {
     let InstallError { dependency, failure } = error;
+    let dependency = plan.name_of(&dependency);
     let dir = || {
         plan.dependencies
             .iter()
@@ -243,7 +253,7 @@ fn failed(plan: &Plan, error: InstallError) -> InitError {
             InitError::Io { path: dir(), source: std::io::Error::from(std::io::ErrorKind::StorageFull) }
         }
         Failure::Io(reason) => InitError::Io { path: dir(), source: std::io::Error::other(reason) },
-        failure @ (Failure::Network | Failure::Http(_) | Failure::Damaged | Failure::Malformed(_)) => {
+        failure @ (Failure::Network | Failure::Http(_) | Failure::Damaged { .. } | Failure::Malformed(_)) => {
             InitError::Transfer { dependency, reason: failure.to_string() }
         }
         // `Failure` is `rust-sak`'s and may grow; an unknown one is a transfer that did not complete.
@@ -278,20 +288,21 @@ impl<'a> Records<'a> {
     }
 
     fn event(&mut self, event: &Event) {
-        let (name, progress) = match *event {
+        let (name, progress) = match event {
             Event::Progress { dependency, phase, bytes, total, fraction } => {
                 let phase = match phase {
                     ai::Phase::Download => Phase::Downloading,
                     ai::Phase::Extract => Phase::Extracting,
                 };
-                (dependency, Some((phase, bytes, (total > 0).then_some(total), fraction)))
+                (dependency.as_ref(), Some((phase, *bytes, (*total > 0).then_some(*total), *fraction)))
             }
             Event::Current { dependency } => {
                 let size = self.size(dependency);
-                (dependency, Some((Phase::AlreadyInstalled, 0, Some(size), 1.0)))
+                (dependency.as_ref(), Some((Phase::AlreadyInstalled, 0, Some(size), 1.0)))
             }
-            Event::Verifying { dependency } => (dependency, None),
+            Event::Verifying { dependency } => (dependency.as_ref(), None),
         };
+        let name = self.plan.name_of(name);
         self.open(name);
 
         let (Some(on_progress), Some(which), Some((phase, bytes, total, fraction))) =
@@ -352,7 +363,7 @@ impl<'a> Records<'a> {
         let Some(open) = self.open.take() else { return };
         open.span.in_scope(|| {
             let duration: Duration = open.started.elapsed();
-            deps::install::record_ended(open.name, &open.version, duration, error);
+            deps::records::record_ended(open.name, &open.version, duration, error);
             let ending = match error.stop_reason() {
                 Some(_) => unit::Outcome::Stopped,
                 None => unit::Outcome::Failed { kind: error.kind(), error },

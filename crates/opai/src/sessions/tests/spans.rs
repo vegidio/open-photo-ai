@@ -6,11 +6,11 @@ use rust_sak::o11y::metric;
 
 #[tokio::test]
 async fn two_requests_waiting_on_one_build_share_one_build_span_and_the_second_links_to_it() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench::default());
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, false, false));
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, machine_supporting(false, false, false));
 
     let (profile, interest) = (Tuning::default(), Interest::default());
 
@@ -50,11 +50,11 @@ async fn two_requests_waiting_on_one_build_share_one_build_span_and_the_second_l
 
 #[tokio::test]
 async fn a_request_served_from_memory_says_so_and_opens_no_build() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench::default());
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, false, false));
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, machine_supporting(false, false, false));
     let (profile, interest) = (Tuning::default(), Interest::default());
     let request = || sessions.session(&id, &profile, ExecutionProvider::Cpu, &interest);
     drop(request().await.unwrap());
@@ -68,11 +68,11 @@ async fn a_request_served_from_memory_says_so_and_opens_no_build() {
 
 #[tokio::test]
 async fn a_failed_gpu_build_marks_its_span_failed_and_counts_a_fallback() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::Cuda], ..Bench::default() });
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     // `>`, not an exact change: the downgrade tests beside this one fall back from CUDA too, without the recording
     // lock this holds.

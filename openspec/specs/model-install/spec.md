@@ -32,11 +32,10 @@ every file backing that artifact is in place at its published size.
 
 ### Requirement: A model is never installed without a published hash
 
-The application SHALL verify every downloaded model file against the SHA-256 published for it, and
-SHALL refuse to install a file for which no published hash can be obtained. There SHALL be no path -
-including an unreachable manifest, an empty manifest, an entry that carries no hash, or a declaration
-of trust in the files already on disk - by which a model file the application itself obtained is
-placed on disk without having been checked.
+The application SHALL verify every downloaded model file against the hash the published listing reports for it, and
+SHALL refuse to install a file for which the listing reports no hash. There SHALL be no path - including an
+unreachable listing, an empty listing, an entry that carries no hash, or a declaration of trust in the files already
+on disk - by which a model file the application itself obtained is placed on disk without having been checked.
 
 This is a deliberate divergence from the reference implementation, which downloads an unknown model
 unverified and logs a warning. It is also a divergence from the reference's debug override, which
@@ -46,7 +45,8 @@ override reaches only the second, and the requirement below is its whole contrac
 The one path by which an unchecked model file may be **loaded** is a file the operator placed on disk
 themselves, in a process that declared at initialization that it trusts such files. That is a
 property of what was already there rather than of anything the application fetched, and nothing about
-it relaxes the paragraph above.
+it relaxes the paragraph above. A model installed and verified by an earlier run, used as it is because the listing
+cannot be read, is not unchecked: it was checked when it was installed.
 
 #### Scenario: A file whose bytes do not match the published hash
 
@@ -63,8 +63,7 @@ it relaxes the paragraph above.
 
 #### Scenario: No hash can be obtained for the artifact
 
-- **WHEN** the published listing cannot be reached, no cached copy is available, and the artifact is
-  absent from the manifest built into the application
+- **WHEN** the published listing is read and names no file for the artifact
 - **THEN** the install fails with an error naming the artifact and saying no published hash is known
 - **AND** no transfer is attempted
 
@@ -72,36 +71,34 @@ it relaxes the paragraph above.
 
 - **WHEN** the published listing names a file but publishes no hash for it
 - **THEN** that entry is treated as though the file were absent from the listing
-- **AND** resolution continues to the remaining sources rather than installing unverified
+- **AND** nothing is installed unverified
 
-### Requirement: The hash is resolved from the first available of four sources
+### Requirement: A model's hash comes from the live published listing
 
-The application SHALL obtain a model's published size and hash from, in order: the project's live
-published listing, the copy cached from the last successful read of it, and a manifest built into the
-application. Where none of the three names the artifact, the install SHALL be refused.
+The application SHALL obtain a model's published files, sizes and hashes from the project's live published listing,
+and from nothing else. It SHALL NOT keep a copy of the listing between runs, and SHALL NOT carry a listing inside the
+application.
 
-The manifest built into the application SHALL cover every model published at the time the application
-was built, so that a machine which cannot reach the listing can still install and verify those
-models.
+A model that is not installed SHALL be installed only when the listing can be read and names it. Where the listing
+cannot be read, a model that is installed and intact SHALL be used as it is (see "An install that is already current
+is not repeated"), and a model that is not SHALL fail with an error that names the artifact and says the published
+listing could not be read, with nothing transferred.
 
 #### Scenario: The live listing is reachable
 
-- **WHEN** an install runs and the published listing can be read
-- **THEN** the sizes and hashes from that listing are the ones used
-- **AND** the listing is cached so a later run can use it when the listing cannot be read
+- **WHEN** a model install runs and the published listing can be read
+- **THEN** the files, sizes and hashes in that listing are the ones the model is installed and verified against
 
-#### Scenario: The live listing cannot be read but was read before
+#### Scenario: A model that is not installed, with no network
 
-- **WHEN** an install runs, the published listing cannot be read, and a cached copy exists
-- **THEN** the cached copy's sizes and hashes are used
-- **AND** the install proceeds and reports success
+- **WHEN** a model install runs for an artifact that is not installed, and the published listing cannot be read
+- **THEN** the install fails with an error naming the artifact and saying the listing could not be read
+- **AND** no transfer is attempted
 
-#### Scenario: A first run with no network at all
+#### Scenario: Nothing of the listing survives the run
 
-- **WHEN** an install runs for a model published at build time, the listing cannot be read, and no
-  cached copy exists
-- **THEN** the hash built into the application is used
-- **AND** the install proceeds and is verified against it
+- **WHEN** a run has read the published listing and ended
+- **THEN** no copy of the listing is left on disk for a later run to use
 
 ### Requirement: The whole published listing is read
 
@@ -167,13 +164,22 @@ merging two versions' files together.
 
 ### Requirement: An install that is already current is not repeated
 
-Where a model's recorded install matches what is published and every recorded file is still present
-at its recorded size, the application SHALL treat the model as installed: nothing is transferred and
-nothing is reported.
+Where a model's recorded install names exactly the files the published listing names for it, every recorded hash
+equals the listing's, and every recorded file is still present at its recorded size, the application SHALL treat the
+model as installed: nothing is transferred, nothing is hashed and nothing is reported.
+
+A model is republished under the same name when it changes. Where a recorded hash differs from the listing's, or the
+listing names a different set of files, the model SHALL be replaced as stated in "Installing or replacing one model
+leaves other models untouched".
+
+Where the listing cannot be read, a model whose recorded files are all present at their recorded sizes SHALL be used
+as it is, with nothing transferred and nothing reported, so that a machine with no network can run every model it has
+already installed.
 
 #### Scenario: A model that is already installed and intact
 
-- **WHEN** an install runs for a model whose recorded files are all present at their recorded sizes
+- **WHEN** an install runs for a model whose recorded files are all present at their recorded sizes, and whose
+  recorded hashes are the published ones
 - **THEN** no transfer is attempted and no progress is reported
 - **AND** the install reports success
 
@@ -181,6 +187,47 @@ nothing is reported.
 
 - **WHEN** an install runs for a model whose recorded files are missing or the wrong size
 - **THEN** the model is installed again
+
+#### Scenario: A model republished under the same name
+
+- **WHEN** an install runs for an installed model whose published hash has changed since it was installed
+- **THEN** the model is replaced with the published files and verified
+- **AND** what an execution provider compiled from the previous weights is removed
+
+#### Scenario: An installed model with no network
+
+- **WHEN** an install runs for a model whose recorded files are all present at their recorded sizes, and the
+  published listing cannot be read
+- **THEN** the installed files are used as they are
+- **AND** no transfer is attempted and the install reports success
+
+### Requirement: An install from an earlier release is adopted without downloading it again
+
+Where a model's files are already on disk at their published sizes but no install record this release recognises
+names them, the application SHALL hash each of them against the published listing. It SHALL keep every file that
+matches, SHALL download only those that do not, and SHALL then record the install as current. A file that does not
+match SHALL NOT be kept.
+
+A model in the folder of an earlier release is gigabytes that are already verified. Discarding them because the
+format of the record beside them changed would cost every user a full re-download for nothing.
+
+#### Scenario: A model installed by an earlier release
+
+- **WHEN** a model is acquired whose files an earlier release installed and whose published hashes have not changed
+- **THEN** each file is hashed and kept
+- **AND** nothing is transferred
+- **AND** the install is recorded, so the next acquisition hashes nothing
+
+#### Scenario: A file from an earlier release that no longer matches
+
+- **WHEN** a model is acquired whose file from an earlier release does not match the published hash
+- **THEN** that file is downloaded again and verified
+- **AND** what an execution provider compiled from the previous weights is removed
+
+#### Scenario: A model from an earlier release, with no network
+
+- **WHEN** a model installed by an earlier release is acquired and the published listing cannot be read
+- **THEN** the acquisition fails as for a model that is not installed, since nothing can verify those files
 
 ### Requirement: An interrupted model install is never mistaken for a finished one
 
@@ -252,6 +299,9 @@ The application SHALL NOT read the published model listing as part of initializa
 SHALL be read no earlier than the first model install that needs it, and once read SHALL serve every
 later install in the same run without being read again.
 
+Where that read fails, later installs in the same run SHALL NOT wait on the listing again for a model that is already
+installed and intact. A model that is not installed MAY try the listing again, since nothing else can install it.
+
 Initialization's behaviour, including which failures it reports, SHALL be unchanged by the presence
 of this capability.
 
@@ -265,6 +315,12 @@ of this capability.
 - **WHEN** more than one model is installed in a single run
 - **THEN** the published listing is read at most once
 - **AND** every install after the first uses what was already read
+
+#### Scenario: Several installed models in a run with no network
+
+- **WHEN** the listing could not be read for one installed model, and a second installed model is acquired later in
+  the same run
+- **THEN** the second model is used as it is without another attempt to read the listing
 
 ### Requirement: Replacing a model's weights invalidates what was compiled from them
 
@@ -317,7 +373,7 @@ cannot arrive at it later, and a caller reading a run's options cannot be misled
 in force.
 
 The declaration SHALL apply to model files only. The ONNX Runtime and the GPU libraries SHALL be
-verified against their pinned hashes in every process regardless of it: those are downloaded
+verified against the hash published for them in every process regardless of it: those are downloaded
 archives of native code, and no debugging workflow requires hand-placing one.
 
 #### Scenario: A process that declares ordinary handling
@@ -334,7 +390,7 @@ archives of native code, and no debugging workflow requires hand-placing one.
 
 - **WHEN** an application that declared trust in local model files installs the runtime or a GPU
   library
-- **THEN** the archive is verified against its pinned hash and size as it is in any other process
+- **THEN** the archive is verified against the hash published for it, as it is in any other process
 
 ### Requirement: Trusted local files are used only when the model is complete on disk
 

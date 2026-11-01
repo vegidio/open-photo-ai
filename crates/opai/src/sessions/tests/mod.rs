@@ -9,7 +9,7 @@ mod spans;
 
 use super::flight::Flight;
 use super::*;
-use crate::deps::test_server::{Reply, TestServer, fixture_listing};
+use crate::deps::hf_server::{HfServer, MODEL};
 use crate::logging::{self, field, records};
 use crate::models::catalogue;
 use crate::models::test_support::{kyoto, tokyo};
@@ -170,38 +170,41 @@ fn app() -> (TempDir, PathBuf) {
     (root, app_dir)
 }
 
-/// A listing publishing each artifact's graph, pinned to the served fixture.
-fn listing_for(artifacts: &[&ArtifactId]) -> Listing {
-    fixture_listing(&artifacts.iter().map(|id| format!("{id}.onnx")).collect::<Vec<_>>())
+/// The graph file each artifact is published as.
+fn models_for(artifacts: &[&ArtifactId]) -> Vec<String> {
+    artifacts.iter().map(|id| format!("{id}.onnx")).collect()
 }
 
-/// Sessions installing from `server` against `listing`, building through `bench`, on a machine reporting
+/// Sessions installing `models`, published on `server`, building through `bench`, on a machine reporting
 /// `supported`.
 fn sessions(
     bench: &Arc<Bench>,
-    server: &TestServer,
-    listing: Listing,
+    server: &HfServer,
+    models: Vec<String>,
     app_dir: &Path,
     supported: SupportedProviders,
 ) -> Sessions<Fake> {
-    trusting(bench, server, listing, app_dir, supported, ModelTrust::Published)
+    trusting(bench, server, models, app_dir, supported, ModelTrust::Published)
 }
 
 /// [`sessions`] under an explicit declaration about the model files on disk.
 fn trusting(
     bench: &Arc<Bench>,
-    server: &TestServer,
-    listing: Listing,
+    server: &HfServer,
+    models: Vec<String>,
     app_dir: &Path,
     supported: SupportedProviders,
     trust: ModelTrust,
 ) -> Sessions<Fake> {
+    for model in &models {
+        server.put_model(model, MODEL);
+    }
     Sessions::with(
         app_dir.to_path_buf(),
         NAME.to_string(),
         supported,
         trust,
-        ModelSource::At { base_url: server.base_url.clone(), listing },
+        ModelSource::At { folder: ModelFolder::at(server.models()) },
         builder(bench),
     )
 }

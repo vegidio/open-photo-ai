@@ -5,11 +5,11 @@ use crate::providers::tests::with_webgpu;
 
 #[tokio::test]
 async fn a_provider_that_cannot_open_the_model_is_downgraded_to_the_cpu() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::Cuda], ..Bench::default() });
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     let handle = sessions
         .session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
@@ -24,11 +24,11 @@ async fn a_provider_that_cannot_open_the_model_is_downgraded_to_the_cpu() {
 async fn a_downgrade_is_served_the_cpu_session_an_explicit_cpu_request_filed() {
     // The fallback re-enters the cache rather than building beside it, so a CPU session that happened to be resident
     // is the one a downgrade is handed.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::Cuda], ..Bench::default() });
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     let honoured = sessions
         .session(&id, &Tuning::default(), ExecutionProvider::Cpu, &Interest::default())
@@ -58,11 +58,11 @@ async fn a_downgrade_is_served_the_cpu_session_an_explicit_cpu_request_filed() {
 #[tokio::test]
 async fn a_second_request_after_a_downgrade_is_served_the_cpu_session_already_filed() {
     // What makes carrying no latch affordable: the second request pays one failed provider attach, not a rebuild.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::Cuda], ..Bench::default() });
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     let first = sessions
         .session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
@@ -90,14 +90,14 @@ async fn a_second_request_after_a_downgrade_is_served_the_cpu_session_already_fi
 async fn a_request_for_a_different_model_still_attempts_the_provider_it_asks_for() {
     // The reference implementation latches the first such failure for the rest of the process and clears it only
     // when the user changes processor, which this application has no way to do.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::Cuda], ..Bench::default() });
     let (first, second) = (kyoto(), tokyo());
     let sessions = sessions(
         &bench,
         &server,
-        listing_for(&[&first, &second]),
+        models_for(&[&first, &second]),
         &app_dir,
         machine_supporting(false, true, false),
     );
@@ -122,11 +122,11 @@ async fn a_request_for_a_different_model_still_attempts_the_provider_it_asks_for
 async fn a_model_file_that_cannot_be_read_fails_without_a_cpu_attempt() {
     // It would fail there in the same way, and retrying it doubles the wait before reporting what was already
     // known.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { unreadable: true, ..Bench::default() });
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, machine_supporting(false, true, false));
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, machine_supporting(false, true, false));
 
     let error = sessions
         .session(&id, &Tuning::default(), ExecutionProvider::Cuda, &Interest::default())
@@ -153,12 +153,12 @@ fn attached(bench: &Bench) -> Vec<Vec<ExecutionProvider>> {
 
 #[tokio::test]
 async fn auto_walks_its_ladder_one_provider_at_a_time_keeping_the_rest_attached_behind() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench =
         Arc::new(Bench { fails_on: vec![ExecutionProvider::TensorRt, ExecutionProvider::Cuda], ..Bench::default() });
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, nvidia_with_webgpu());
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, nvidia_with_webgpu());
 
     let handle = sessions
         .session(&id, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
@@ -172,11 +172,11 @@ async fn auto_walks_its_ladder_one_provider_at_a_time_keeping_the_rest_attached_
 
 #[tokio::test]
 async fn auto_remembers_what_failed_for_a_model_until_the_sessions_are_released() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::TensorRt], ..Bench::default() });
     let (first, second) = (kyoto(), tokyo());
-    let sessions = sessions(&bench, &server, listing_for(&[&first, &second]), &app_dir, nvidia_with_webgpu());
+    let sessions = sessions(&bench, &server, models_for(&[&first, &second]), &app_dir, nvidia_with_webgpu());
     let request = |id: ArtifactId| {
         let sessions = &sessions;
         async move {
@@ -205,11 +205,11 @@ async fn auto_remembers_what_failed_for_a_model_until_the_sessions_are_released(
 
 #[tokio::test]
 async fn a_provider_declined_at_run_time_is_let_go_of_and_skipped_by_the_next_request() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench::default());
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, nvidia_with_webgpu());
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, nvidia_with_webgpu());
     let request = || async {
         sessions
             .session(&id, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
@@ -235,11 +235,11 @@ async fn a_provider_declined_at_run_time_is_let_go_of_and_skipped_by_the_next_re
 
 #[tokio::test]
 async fn an_explicit_request_is_not_widened_into_the_ladder_nor_remembered() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench { fails_on: vec![ExecutionProvider::TensorRt], ..Bench::default() });
     let id = kyoto();
-    let sessions = sessions(&bench, &server, listing_for(&[&id]), &app_dir, nvidia_with_webgpu());
+    let sessions = sessions(&bench, &server, models_for(&[&id]), &app_dir, nvidia_with_webgpu());
 
     for _ in 0..2 {
         let handle = sessions
@@ -259,14 +259,14 @@ async fn an_explicit_request_is_not_widened_into_the_ladder_nor_remembered() {
 #[tokio::test]
 async fn an_auto_rung_and_an_explicit_request_for_its_provider_are_two_sessions() {
     // `Auto`'s CUDA rung keeps WebGPU attached behind it, and an explicit CUDA request does not.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = Arc::new(Bench::default());
     let id = kyoto();
     let sessions = sessions(
         &bench,
         &server,
-        listing_for(&[&id]),
+        models_for(&[&id]),
         &app_dir,
         with_webgpu(machine_supporting(false, true, false)),
     );
@@ -289,11 +289,11 @@ fn running_out_of_memory(providers: &[ExecutionProvider]) -> Arc<Bench> {
 
 #[tokio::test]
 async fn a_build_that_runs_out_of_memory_is_retried_after_releasing_what_nothing_is_using() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = running_out_of_memory(&[]);
     let (earlier, building) = (tokyo(), kyoto());
-    let sessions = sessions(&bench, &server, listing_for(&[&earlier, &building]), &app_dir, nvidia_with_webgpu());
+    let sessions = sessions(&bench, &server, models_for(&[&earlier, &building]), &app_dir, nvidia_with_webgpu());
 
     // Built before the shortage arrives, and let go of: what an earlier enhancement leaves resident.
     drop(
@@ -323,11 +323,11 @@ async fn a_build_that_runs_out_of_memory_is_retried_after_releasing_what_nothing
 #[tokio::test]
 async fn a_build_that_runs_out_of_memory_beside_sessions_in_use_falls_back_without_a_retry() {
     // The diffusion upscaler's case: the decoder is built while the run still holds the encoder and the denoiser.
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = running_out_of_memory(&[]);
     let (held, building) = (tokyo(), kyoto());
-    let sessions = sessions(&bench, &server, listing_for(&[&held, &building]), &app_dir, nvidia_with_webgpu());
+    let sessions = sessions(&bench, &server, models_for(&[&held, &building]), &app_dir, nvidia_with_webgpu());
 
     let holding = sessions
         .session(&held, &Tuning::default(), ExecutionProvider::Auto, &Interest::default())
@@ -359,11 +359,11 @@ async fn a_build_that_runs_out_of_memory_beside_sessions_in_use_falls_back_witho
 
 #[tokio::test]
 async fn a_retry_that_runs_out_of_memory_again_falls_back() {
-    let server = TestServer::start(vec![]).await;
+    let server = HfServer::start();
     let (_root, app_dir) = app();
     let bench = running_out_of_memory(&[]);
     let (earlier, building) = (tokyo(), kyoto());
-    let sessions = sessions(&bench, &server, listing_for(&[&earlier, &building]), &app_dir, nvidia_with_webgpu());
+    let sessions = sessions(&bench, &server, models_for(&[&earlier, &building]), &app_dir, nvidia_with_webgpu());
 
     drop(
         sessions

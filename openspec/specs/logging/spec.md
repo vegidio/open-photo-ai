@@ -471,25 +471,21 @@ because the application was shutting down, SHALL NOT be recorded as a failure.
 - **WHEN** the application shuts down while an installation is under way
 - **THEN** no record at warning severity or above says the installation failed
 
-### Requirement: A run working from a fallback source says so
+### Requirement: A run using installed models without the published listing says so
 
-Where the application resolves something from more than one source in preference order — a live
-listing of what is published, a copy kept from a previous run, or what was compiled into the build —
-the source it ended up using SHALL be recorded whenever it was not the first choice.
+Where the application cannot read the live listing of published models and uses an installed model as it is, that
+SHALL be recorded.
 
-A run working from a listing compiled in months ago behaves almost identically to one working from
-the current listing, right up to the point where it cannot find a model that exists. The log is where
-that is distinguishable.
+A run using an installed model without the listing behaves identically to one with it, right up to the point where
+the model was republished and this machine is still running the previous one. The log is where that is
+distinguishable.
 
 #### Scenario: The live source is unreachable
 
-- **WHEN** the live listing cannot be read and a copy kept from a previous run is used
-- **THEN** a record at warning severity says the live listing failed and that the kept copy is in use
-
-#### Scenario: Nothing but the build's own copy is available
-
-- **WHEN** neither the live listing nor a kept copy can be used
-- **THEN** a record at warning severity says the listing compiled into the build is in use
+- **WHEN** the live listing cannot be read and an installed model is used as it is
+- **THEN** a record at warning severity says the live listing failed and that the installed files are used without
+  checking for a newer version
+- **AND** that record is written once per run, not once per model
 
 #### Scenario: The live source is used
 

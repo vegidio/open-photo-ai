@@ -106,9 +106,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::deps::ModelTrust;
-use crate::deps::model;
-#[cfg(test)]
-use crate::deps::model::manifest::Listing;
+use crate::deps::model::{self, ModelFolder};
 use crate::error::{InitError, SessionError};
 use crate::models::ArtifactId;
 use crate::providers::{ExecutionProvider, SupportedProviders};
@@ -121,15 +119,14 @@ use tracing::Instrument as _;
 
 /// Where a model's files and the hashes they are verified against come from.
 ///
-/// The one thing a test has to redirect in order to drive a real install: the published listing is resolved at most
-/// once per *process*, so a suite that let it be resolved here would hand every test whatever the first one
-/// resolved.
+/// The one thing a test has to redirect in order to drive a real install: the published listing is read at most once
+/// per *process*, so a suite that let it be read here would hand every test whatever the first one read.
 enum ModelSource {
-    /// The project's published models, with the listing resolved lazily and once per process.
+    /// The project's published models, with the listing read lazily and once per process.
     Published,
-    /// An explicit base URL and listing, which is what points a real install at a local server.
+    /// A models folder of its own, with its own listing, which is what points a real install at a local server.
     #[cfg(test)]
-    At { base_url: String, listing: Listing },
+    At { folder: ModelFolder },
 }
 
 /// How a rung and a model file become a session.
@@ -217,17 +214,16 @@ impl<S: Send + 'static> Sessions<S> {
         self.supported
     }
 
-    /// Sessions installing from `base_url` against `listing` and building through `build`, for a suite above this
+    /// Sessions installing from the models folder at `folder` and building through `build`, for a suite above this
     /// layer that needs the real request, flight and install around a fake session.
     #[cfg(test)]
     pub(crate) fn serving(
         app_dir: PathBuf,
         supported: SupportedProviders,
-        base_url: String,
-        listing: Listing,
+        folder: rust_sak::ai::Folder,
         build: Builder<S>,
     ) -> Self {
-        let models = ModelSource::At { base_url, listing };
+        let models = ModelSource::At { folder: ModelFolder::at(folder) };
 
         Self::with(app_dir, "opai-test".to_string(), supported, ModelTrust::Published, models, build)
     }
@@ -480,16 +476,12 @@ impl<S: Send + 'static> Sessions<S> {
         loop {
             let installing = install.attempt();
 
-            let outcome = match &self.models {
-                ModelSource::Published => {
-                    model::install(&self.app_dir, &self.name, artifact, self.trust, &installing).await
-                }
+            let folder = match &self.models {
+                ModelSource::Published => ModelFolder::published(),
                 #[cfg(test)]
-                ModelSource::At { base_url, listing } => {
-                    model::install_from(base_url, listing, &self.app_dir, &self.name, artifact, self.trust, &installing)
-                        .await
-                }
+                ModelSource::At { folder } => folder,
             };
+            let outcome = model::install(folder, &self.app_dir, &self.name, artifact, self.trust, &installing).await;
 
             return match outcome {
                 Err(InitError::Stopped) if install.wanted() => {

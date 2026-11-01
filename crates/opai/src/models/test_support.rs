@@ -2,12 +2,11 @@
 //!
 //! A file directly under `models/` because it is cross-family: every family's tests hash an operation to prove the
 //! identity they hand a registry is the one they meant, and a hasher that differed between them would make those
-//! results incomparable. The crate already keeps a shared test-only module this way in `deps/test_server.rs`.
+//! results incomparable. The crate already keeps a shared test-only module this way in `deps/hf_server.rs`.
 //!
 //! [`every_operation`] is here for the same reason: what it is used to check cannot be seen from inside one family —
 //! a cache-tag collision needs two families to see it, and the set of names the catalogue can produce is the union
-//! across all eight. `deps/model` reads it too, to prove the manifest compiled into the binary names nothing this
-//! build cannot ask for.
+//! across all eight.
 
 use super::{
     Analysis, Bias, ColorBalance, Colorization, Denoise, Detection, FaceRecovery, Faces, Fidelity, LightAdjustment,
@@ -183,10 +182,7 @@ pub(crate) fn every_cache_tag() -> Vec<String> {
 
 /// Every artifact name the catalogue can produce, across all eight families.
 ///
-/// The set the manifest compiled into the binary is checked against: an entry naming an artifact absent from this is
-/// one no build can ask for, which is either a stale checked-in file or a variant renamed out from under it. The
-/// converse is deliberately not checked — a nameable artifact need not be published, and refusing those is the whole
-/// point of the resolution's last step.
+/// A nameable artifact need not be published: one the listing does not name is refused when it is installed.
 pub(crate) fn every_artifact_name() -> std::collections::BTreeSet<String> {
     every_operation()
         .iter()

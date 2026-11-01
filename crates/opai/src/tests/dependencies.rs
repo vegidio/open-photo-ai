@@ -251,7 +251,7 @@ async fn a_damaged_gpu_download_fails_initialization_naming_that_dependency() {
     match error {
         InitError::Transfer { dependency, reason } => {
             assert_eq!(dependency, "NVIDIA TensorRT");
-            assert!(reason.contains("damaged"), "{reason}");
+            assert!(reason.contains("hashed to") && reason.contains("has been deleted"), "{reason}");
         }
         other => panic!("expected Transfer, got {other:?}"),
     }

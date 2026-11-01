@@ -432,7 +432,7 @@ pub(crate) async fn suggest<B: Backend>(
     families: Option<&[Family]>,
     options: Option<ExecuteOptions>,
 ) -> Result<Suggestions, InferenceError> {
-    // Wrapped, as `Opai::initialize` and `deps::install` are, so every outcome is recorded once, here, with how long
+    // Wrapped, as `Opai::initialize` and `deps::model::install` are, so every outcome is recorded once, here, with how long
     // the analysis took — including the early return for an image with no area, and a withdrawal, which on its own
     // would leave nothing behind.
     let scope = Scope::of(families);
