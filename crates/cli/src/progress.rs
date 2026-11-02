@@ -33,7 +33,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
-use opai::{CancellationToken, InferenceProgress, OnInference, OnProgress, Phase, Progress, Stage};
+use opai::{CancellationToken, Family, InferenceProgress, OnInference, OnProgress, Phase, Progress, Stage};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
@@ -102,6 +102,11 @@ struct ImageProgress {
     /// How far its run has got, never decreasing.
     fraction: f64,
     state: RowState,
+    /// The families whose operation the run cache served, each once. A face detection is not one of them: autopilot's
+    /// analysis warms it even on a first run.
+    cached: Vec<Family>,
+    /// The enhancements it received, in words, once it is written under `--verbose`.
+    applied: Option<String>,
 }
 
 impl ImageProgress {
@@ -111,6 +116,8 @@ impl ImageProgress {
             path: path.display().to_string(),
             fraction: 0.0,
             state: RowState::Working(Activity::Preparing),
+            cached: Vec::new(),
+            applied: None,
         }
     }
 
@@ -123,6 +130,9 @@ impl ImageProgress {
 
         self.fraction = self.fraction.max(report.chain_fraction);
         let family = report.subject.family();
+        if report.stage == Stage::Cached && family != Family::Detection && !self.cached.contains(&family) {
+            self.cached.push(family);
+        }
         match report.stage {
             Stage::Installing(_) => self.state = RowState::Working(Activity::Downloading(family)),
             Stage::Running | Stage::Cached => self.state = RowState::Working(Activity::Applying(family)),
@@ -141,7 +151,20 @@ impl ImageProgress {
     }
 
     fn row(&self, color: bool) -> Line<'static> {
-        look::row(self.percent(), &self.path, self.state, color)
+        look::with_applied(look::row(self.percent(), &self.path, self.state, color), self.applied.as_deref())
+    }
+}
+
+/// What ends an image's list of enhancements when `cached` of its `ran` were served from the run cache: ` (cached)`
+/// for all of them, ` (<k> of <n> cached)` for some, and nothing for none.
+pub fn cache_marker(cached: usize, ran: usize) -> String {
+    let cached = cached.min(ran);
+    if cached == 0 {
+        String::new()
+    } else if cached == ran {
+        " (cached)".to_owned()
+    } else {
+        format!(" ({cached} of {ran} cached)")
     }
 }
 
@@ -491,6 +514,14 @@ impl View {
         }
     }
 
+    /// How many of the current image's enhancements the run cache served so far, if it is the image at `index`.
+    pub fn cached(&self, index: usize) -> usize {
+        lock(&self.inner.image)
+            .as_ref()
+            .filter(|image| image.index == index)
+            .map_or(0, |image| image.cached.len())
+    }
+
     /// Settles the row of the image at `index` as `end` says, or, where no view is drawn, prints its plain line.
     pub fn end_image(&self, index: usize, path: &Path, end: &ImageEnd) {
         if let Some(line) = self.end_line(index, path, end) {
@@ -509,6 +540,9 @@ impl View {
             .filter(|image| image.index == index)
             .unwrap_or_else(|| ImageProgress::new(index, path));
         image.state = end.state();
+        if let ImageEnd::Enhanced(applied) = end {
+            image.applied.clone_from(applied);
+        }
 
         let stopped = matches!(end, ImageEnd::Stopped);
         let mut batch = lock(&self.inner.batch);
@@ -686,7 +720,7 @@ pub(crate) mod tests {
 
         view.start_image(1, a);
         on_inference(&inference(upscale(), Stage::Running, 1.0));
-        let first = view.end_line(1, a, &ImageEnd::Enhanced);
+        let first = view.end_line(1, a, &ImageEnd::Enhanced(None));
 
         view.start_image(2, b);
         on_inference(&inference(upscale(), Stage::Running, 0.42));
@@ -694,7 +728,7 @@ pub(crate) mod tests {
 
         // An empty chain reports nothing and goes straight to written.
         view.start_image(3, c);
-        let third = view.end_line(3, c, &ImageEnd::Enhanced);
+        let third = view.end_line(3, c, &ImageEnd::Enhanced(None));
 
         assert!(!view.finish_batch());
         assert_eq!(first.as_deref(), Some("🖼️ [100%] Enhancements applied to       photos/a.jpg"));
@@ -745,7 +779,7 @@ pub(crate) mod tests {
         view.start_image(1, Path::new("a.jpg"));
         view.choosing(1);
 
-        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced);
+        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced(None));
 
         assert_eq!(line.as_deref(), Some("🖼️ [100%] Enhancements applied to       a.jpg"));
     }
@@ -760,7 +794,7 @@ pub(crate) mod tests {
         assert_eq!(current(&view).map(|image| image.state), Some(RowState::Working(Activity::Preparing)));
 
         // Autopilot suggested nothing: an empty chain reports nothing and goes straight to written.
-        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced);
+        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced(None));
 
         assert_eq!(line.as_deref(), Some("🖼️ [100%] Enhancements applied to       a.jpg"));
     }
@@ -788,9 +822,9 @@ pub(crate) mod tests {
         }
 
         view.start_image(1, Path::new("a.jpg"));
-        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced);
+        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced(None));
 
-        assert_eq!(line, Some(look::plain_row(100, "a.jpg", &ImageEnd::Enhanced, true)));
+        assert_eq!(line, Some(look::plain_row(100, "a.jpg", &ImageEnd::Enhanced(None), true)));
         assert!(!view.finish_batch());
     }
 
@@ -818,7 +852,11 @@ pub(crate) mod tests {
     }
 
     fn ended(index: usize) -> ImageProgress {
-        ImageProgress { index, path: format!("{index}.jpg"), fraction: 1.0, state: RowState::Applied }
+        ImageProgress {
+            state: RowState::Applied,
+            fraction: 1.0,
+            ..ImageProgress::new(index, Path::new(&format!("{index}.jpg")))
+        }
     }
 
     #[test]
@@ -885,6 +923,78 @@ pub(crate) mod tests {
         let drawn = draw(&mut line, 4);
         assert!(drawn[2].ends_with(" [100%] Enhancements applied to       1.jpg"), "{drawn:?}");
         assert!(drawn[3].ends_with(" [ 42%] Failed to enhance             b.jpg"), "{drawn:?}");
+    }
+
+    #[test]
+    fn a_cached_enhancement_is_counted_once_and_a_cached_detection_not_at_all() {
+        let denoise =
+            Subject::Enhancement(opai::Denoise::stockholm(FloatPrecision::Fp32, opai::Strength::clamped(1.0)));
+        let detection = Subject::Analysis(Detection::for_face_recovery());
+        let mut image = ImageProgress::new(1, Path::new("a.jpg"));
+
+        image.report(&inference(detection, Stage::Cached, 0.1));
+        image.report(&inference(denoise, Stage::Running, 0.4));
+        image.report(&inference(upscale(), Stage::Cached, 0.9));
+        image.report(&inference(upscale(), Stage::Cached, 1.0));
+
+        assert_eq!(image.cached, [Family::Upscale]);
+        assert_eq!(image.row(false).to_string(), "🖼️ [ 99%] Applying Upscale to           a.jpg", "words unchanged");
+    }
+
+    #[test]
+    fn the_view_answers_the_current_images_cached_count_only() {
+        let view = View::new(plain(), CancellationToken::new());
+        let on_inference = view.on_inference();
+        view.start_image(1, Path::new("a.jpg"));
+        on_inference(&inference(upscale(), Stage::Cached, 1.0));
+
+        assert_eq!(view.cached(1), 1);
+        assert_eq!(view.cached(2), 0, "another image");
+    }
+
+    #[test]
+    fn the_cache_marker_reads_all_some_or_nothing() {
+        assert_eq!(cache_marker(0, 3), "");
+        assert_eq!(cache_marker(2, 3), " (2 of 3 cached)");
+        assert_eq!(cache_marker(3, 3), " (cached)");
+        assert_eq!(cache_marker(0, 0), "");
+        assert_eq!(cache_marker(4, 3), " (cached)", "never more than ran");
+    }
+
+    #[test]
+    fn a_written_rows_applied_text_is_drawn_after_its_path_and_cut_at_the_edge() {
+        let mut line = BatchLine::new(2, false);
+        let mut short = ImageProgress::new(1, Path::new("a.jpg"));
+        let mut long = ImageProgress::new(2, Path::new("b.jpg"));
+        line.push(short.clone());
+        line.push(long.clone());
+
+        short.state = RowState::Applied;
+        short.applied = Some("Upscale Tokyo 2x (cached)".to_owned());
+        line.set(&short);
+        long.state = RowState::Applied;
+        long.applied = Some("Denoise Stockholm strength 100, Light Adjust Paris bias 50, Upscale Tokyo 2x".to_owned());
+        line.set(&long);
+
+        // The test terminal is 80 columns wide: the long row is cut there, and the view keeps its height.
+        let drawn = draw(&mut line, 4);
+        assert_eq!(drawn.len(), 4, "{drawn:?}");
+        assert!(
+            drawn[2].ends_with(" [100%] Enhancements applied to       a.jpg: Upscale Tokyo 2x (cached)"),
+            "{drawn:?}"
+        );
+        assert!(drawn[3].contains("b.jpg: Denoise Stockholm strength 100, "), "{drawn:?}");
+        assert!(!drawn[3].contains("Upscale Tokyo"), "{drawn:?}");
+    }
+
+    #[test]
+    fn end_line_keeps_the_text_for_the_live_row_and_none_leaves_todays_line() {
+        let view = View::new(plain(), CancellationToken::new());
+        view.start_image(1, Path::new("a.jpg"));
+
+        let line = view.end_line(1, Path::new("a.jpg"), &ImageEnd::Enhanced(None)).expect("a plain line");
+
+        assert_eq!(line, "🖼️ [100%] Enhancements applied to       a.jpg");
     }
 
     #[test]

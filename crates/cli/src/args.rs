@@ -18,10 +18,11 @@ use crate::autopilot::AutopilotModels;
 ///
 /// The output is a file when its extension names a format opai writes and it is not an existing directory; it then
 /// takes exactly one input photograph. Any other output is a directory, created if missing, that mirrors each
-/// directory input. An existing file is never overwritten unless `--overwrite` is given: the result is numbered
-/// `_1`, `_2`, … instead.
+/// directory input. Without an output, each result is written beside its source, with the suffix `_opai` unless
+/// `--prefix` or `--suffix` is given. An existing file is never overwritten unless `--overwrite` is given: the result
+/// is numbered `_1`, `_2`, … instead.
 #[derive(Debug, Parser)]
-#[command(name = "opai", display_name = "Open Photo AI - CLI", version = opai::version(), disable_version_flag = true, override_usage = "opai <INPUT>... [OPTIONS] --output <OUTPUT>")]
+#[command(name = "opai", display_name = "Open Photo AI - CLI", version = opai::version(), disable_version_flag = true, override_usage = "opai <INPUT>... [OPTIONS] [--output <OUTPUT>]")]
 pub struct Args {
     // Positional and first, so a bare enhancement flag is never handed an input as its model name. A user who writes
     // `opai --up photo.jpg` is told `photo.jpg` is not a model, which is clear and costs nothing.
@@ -55,16 +56,17 @@ pub struct Args {
     #[arg(long, short = 'r')]
     pub recursive: bool,
 
-    /// The format every result is written in under an output directory: `preserve` (each source's own, TIFF for camera
-    /// RAW; the default), avif, bmp, gif, heic, jpeg, png, tiff or webp.
+    /// The format every result is written in, unless the output is a file: `preserve` (each source's own, TIFF for
+    /// camera RAW; the default), avif, bmp, gif, heic, jpeg, png, tiff or webp.
     #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
     pub format: Option<FormatChoice>,
 
-    /// Written before each source's name under an output directory.
+    /// Written before each source's name, unless the output is a file.
     #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
     pub prefix: Option<String>,
 
-    /// Written after each source's name, before the extension, under an output directory.
+    /// Written after each source's name, before the extension, unless the output is a file. Without an output it
+    /// defaults to `_opai`, unless `--prefix` is given; `--suffix ""` turns it off.
     #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
     pub suffix: Option<String>,
 
@@ -72,9 +74,15 @@ pub struct Args {
     #[arg(long)]
     pub overwrite: bool,
 
-    /// The file or directory to write to.
+    /// The file or directory to write to. Without it, each result is written beside its source, named with the suffix
+    /// `_opai` unless `--prefix` or `--suffix` is given.
     #[arg(long, short = 'o', value_name = "OUTPUT")]
-    pub output: PathBuf,
+    pub output: Option<PathBuf>,
+
+    /// Name, on each written image's line, the enhancements it received: each model, its strength, bias or upscale
+    /// factor, and whether the run cache served them. Without it the line names only the path.
+    #[arg(long)]
+    pub verbose: bool,
 
     /// Send no usage or diagnostic data to the project for this run. Setting OPAI_ANALYTICS to 0, off, false or no
     /// does the same.
@@ -476,7 +484,7 @@ mod tests {
         assert_eq!(args.selection.face_recovery, Some(FaceModel::Athens));
         assert_eq!(args.quality, Quality::Hd);
         assert_eq!(args.selection.scale, None);
-        assert_eq!(args.output, PathBuf::from("out.png"));
+        assert_eq!(args.output, Some(PathBuf::from("out.png")));
     }
 
     #[test]
@@ -717,7 +725,7 @@ mod tests {
 
         let args = parse("opai photo.jpg --la --la-bias -20 -o out.png").expect("parses");
         assert_eq!(args.selection.light_bias, Some(-20));
-        assert_eq!(args.output, PathBuf::from("out.png"));
+        assert_eq!(args.output, Some(PathBuf::from("out.png")));
 
         let args = parse("opai photo.jpg --cb --cb-bias -100 --la --la-bias 100 -o out.png").expect("parses");
         assert_eq!(args.selection.balance_bias, Some(-100));
@@ -823,10 +831,20 @@ mod tests {
     }
 
     #[test]
-    fn the_output_is_required() {
-        let error = parse("opai photo.jpg --up").expect_err("no -o");
+    fn the_output_is_optional() {
+        let args = parse("opai photo.jpg --ap").expect("no -o parses");
 
-        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+        assert_eq!(args.output, None);
+        assert_eq!(args.suffix, None);
+    }
+
+    #[test]
+    fn an_empty_suffix_is_read_as_given() {
+        // Not through `parse`, which splits on whitespace and so cannot pass an empty argument.
+        let args = parse_from(["opai", "photo.jpg", "--dn", "--suffix", "", "--overwrite"]).expect("parses");
+
+        assert_eq!(args.suffix.as_deref(), Some(""));
+        assert_eq!(args.output, None);
     }
 
     #[test]
@@ -835,7 +853,7 @@ mod tests {
 
         assert_eq!(args.inputs, [PathBuf::from("photo.jpg")]);
         assert_eq!(args.selection.upscale, Some(UpscaleModel::Tokyo));
-        assert_eq!(args.output, PathBuf::from("x"));
+        assert_eq!(args.output, Some(PathBuf::from("x")));
     }
 
     #[test]
@@ -1048,6 +1066,15 @@ mod tests {
                 panic!("`{command}` does not parse: {error}");
             }
         }
+    }
+
+    #[test]
+    fn verbose_is_off_unless_asked_for_and_works_with_autopilot() {
+        assert!(!parse("opai photo.jpg --up").expect("parses").verbose);
+        assert!(parse("opai photo.jpg --up --verbose").expect("parses").verbose);
+
+        let args = parse("opai photo.jpg --ap --verbose").expect("parses");
+        assert!(args.autopilot && args.verbose);
     }
 
     #[test]

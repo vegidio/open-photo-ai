@@ -18,15 +18,17 @@
 //!   find faces, process        --> the row's percentage and words, and the bar, move with each report over detection
 //!                                  and chain, planned for the image's own size; a failed detection is logged and
 //!                                  the image goes on
-//!   claim, save, commit        --> the source's depth, the library's recommended settings
-//!   end its row                --> Enhancements applied, Failed or Stopped, and the bar's [n/N] counts it;
-//!                                  off a terminal, its one plain line
-//! finish the view, summarize   --> ✨ naming the file for one image or the output for more, then each failure's 🧨
-//!                                  line where the view hid it
+//!   claim, save, commit        --> the source's depth, the library's recommended settings; the log's `wrote` record
+//!                                  names what was applied and what the run cache served
+//!   end its row                --> Enhancements applied, Failed or Stopped, and the bar's [n/N] counts it; under
+//!                                  --verbose a written one adds `: <applied>`; off a terminal, its one plain line
+//! finish the view, summarize   --> ✨ naming the file for one image, or for more the output or "beside their
+//!                                  sources" without one, then each failure's 🧨 line where the view hid it
 //! ```
 //!
 //! A Ctrl-C stops the whole batch, keeping what was already written. The notes, the face report, what each image
-//! executed on and every path written go to the log, not to the terminal.
+//! executed on and every path written go to the log, not to the terminal; what each image received goes to both
+//! under `--verbose`.
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -49,7 +51,7 @@ use crate::events;
 use crate::inputs::{self, Source};
 use crate::look::{self, ImageEnd, Look};
 use crate::output::{self, Target};
-use crate::progress::View;
+use crate::progress::{self, View};
 use crate::update;
 
 /// Runs what `args` asks for over every image it names, drawing as `look` says, and writes their results.
@@ -70,13 +72,15 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     let launched = tokio::time::Instant::now();
     let update = update::start();
 
-    let target = output::target(&args)?;
+    let mut target = output::target(&args)?;
     let skip = match &target {
         // A directory that does not exist yet holds no earlier results to skip.
         Target::Directory { path, .. } => std::fs::canonicalize(path).ok(),
-        Target::File { .. } => None,
+        // Beside its source, a result is in no directory of its own to skip.
+        Target::File { .. } | Target::Beside { .. } => None,
     };
     let sources = inputs::expand(&args.inputs, args.recursive, skip.as_deref())?;
+    output::keep_inputs(&mut target, sources.iter().map(|source| source.path.as_path()));
     events::files_added(&sources.iter().map(|source| source.path.as_path()).collect::<Vec<_>>());
 
     // Before the dependency line, the first thing that can draw. A refusal above prints its failure line alone.
@@ -166,8 +170,8 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
         drop(span);
 
         match result {
-            Ok(path) => {
-                view.end_image(index, &source.path, &ImageEnd::Enhanced);
+            Ok((path, applied)) => {
+                view.end_image(index, &source.path, &ImageEnd::Enhanced(args.verbose.then_some(applied)));
                 written.push(path);
             }
             Err(CliError::Cancelled) => {
@@ -185,7 +189,7 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     let live = view.finish_batch();
     events::export_finished(sources.len(), written.len(), !stopped, began.elapsed().as_millis());
 
-    for line in summary(&written, &args.output, &failures, live, sources.len(), look.color) {
+    for line in summary(&written, args.output.as_deref(), &failures, live, sources.len(), look.color) {
         eprintln!("{line}");
     }
 
@@ -200,7 +204,7 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
 /// is the closing line.
 fn summary(
     written: &[PathBuf],
-    output: &Path,
+    output: Option<&Path>,
     failures: &[CliError],
     live: bool,
     total: usize,
@@ -250,10 +254,10 @@ fn check_processor(requested: Processor, supported: bool, available: &[Execution
     )))
 }
 
-/// The format the run writes, as `export_started` names it: the directory's choice, or the format of the one file.
+/// The format the run writes, as `export_started` names it: the naming's choice, or the format of the one file.
 fn format_name(target: &Target) -> String {
     match target {
-        Target::Directory { naming, .. } => events::format_name(naming.format),
+        Target::Directory { naming, .. } | Target::Beside { naming, .. } => events::format_name(naming.format),
         Target::File { format, .. } => events::export_format_of(*format)
             .map_or_else(|| format.name().to_string(), |format| format.name().to_string()),
     }
@@ -268,7 +272,7 @@ enum Planner<'a> {
 }
 
 /// Enhances `source`, the image at `index`, with the chain `planner` gives for its own size, on the processor `args`
-/// names, and writes it, answering the path written.
+/// names, and writes it, answering the path written and what it received, in words.
 #[allow(
     clippy::too_many_arguments,
     reason = "one run's state, threaded through rather than bundled for one caller"
@@ -282,7 +286,7 @@ async fn enhance_one(
     planner: Planner<'_>,
     view: &View,
     cancel: &CancellationToken,
-) -> Result<PathBuf, CliError> {
+) -> Result<(PathBuf, String), CliError> {
     // A file whose header read cleanly but whose pixels do not decode fails this image, not the batch. The library's
     // message names the path.
     let picture = image::load(&source.path).await.map_err(|error| CliError::Load(Box::new(error)))?;
@@ -308,17 +312,32 @@ async fn enhance_one(
     }
 
     let (destination, format) = output::destination(target, source);
-    let written = output::write(target, &enhanced.picture, &destination, format, args.overwrite).await?;
+    let overwrite = args.overwrite && output::may_overwrite(target, &source.path, &destination);
+    if args.overwrite && !overwrite {
+        tracing::warn!("{} is another input, so it is kept and the result numbered", destination.display());
+    }
+    let written = output::write(target, &enhanced.picture, &destination, format, overwrite).await?;
 
     let (width, height) = enhanced.picture.dimensions();
+    let verdict = enhanced.providers.verdict();
+    let applied = applied(&plan, view.cached(index), &verdict);
     tracing::info!(
-        "wrote {} ({width}x{height}, {}); {}",
+        "wrote {} ({width}x{height}, {}); {}; applied {applied}",
         written.display(),
         format.name(),
-        provenance(plan.operations.is_empty(), &enhanced.providers.verdict())
+        provenance(plan.operations.is_empty(), &verdict)
     );
 
-    Ok(written)
+    Ok((written, applied))
+}
+
+/// What `plan` applied, in words, ending with how many of its steps the run cache served: `cached` as the progress
+/// reports counted them, or every one where the verdict says nothing executed, so a missed report cannot hide it.
+fn applied(plan: &Plan, cached: usize, verdict: &ProviderVerdict) -> String {
+    let ran = plan.operations.len();
+    let cached = if ran > 0 && matches!(verdict, ProviderVerdict::NothingExecuted) { ran } else { cached };
+
+    format!("{}{}", chain::describe(&plan.applied), progress::cache_marker(cached, ran))
 }
 
 /// Analyses `picture`, the image at `index` read from `path`, for the families `models` leaves on, and plans the chain
@@ -562,18 +581,18 @@ mod tests {
         view.start_batch(3);
         view.start_image(1, a);
         on_inference(&inference(upscale(), Stage::Running, 1.0));
-        lines.extend(view.end_line(1, a, &ImageEnd::Enhanced));
+        lines.extend(view.end_line(1, a, &ImageEnd::Enhanced(None)));
         view.start_image(2, b);
         on_inference(&inference(upscale(), Stage::Running, 0.42));
         lines.extend(view.end_line(2, b, &ImageEnd::Failed("disk full".into())));
         view.start_image(3, c);
         on_inference(&inference(upscale(), Stage::Running, 1.0));
-        lines.extend(view.end_line(3, c, &ImageEnd::Enhanced));
+        lines.extend(view.end_line(3, c, &ImageEnd::Enhanced(None)));
         let live = view.finish_batch();
 
         let written = [PathBuf::from("out/a.jpg"), PathBuf::from("out/c.jpg")];
         let failures = vec![failed("photos/b.jpg")];
-        lines.extend(summary(&written, Path::new("out"), &failures, live, 3, false));
+        lines.extend(summary(&written, Some(Path::new("out")), &failures, live, 3, false));
         let closing = closing(false, failures, 3).expect_err("an image failed");
         lines.push(look::failure(closing, false));
 
@@ -594,7 +613,7 @@ mod tests {
     #[test]
     fn a_live_view_of_several_images_lists_each_failure_under_the_summary() {
         let failures = [failed("a.jpg"), failed("c.jpg")];
-        let lines = summary(&["out/b.jpg".into()], Path::new("out"), &failures, true, 3, false);
+        let lines = summary(&["out/b.jpg".into()], Some(Path::new("out")), &failures, true, 3, false);
 
         assert_eq!(lines.len(), 3, "{lines:?}");
         assert_eq!(lines[0], "✨ Image enhanced successfully; file saved at out/b.jpg");
@@ -606,8 +625,9 @@ mod tests {
     fn a_single_image_or_plain_output_does_not_list_failures() {
         let failures = [failed("a.jpg")];
 
-        assert!(summary(&[], Path::new("out.png"), &failures, true, 1, false).is_empty());
-        assert!(summary(&[], Path::new("out"), &failures, false, 3, false).is_empty());
+        assert!(summary(&[], Some(Path::new("out.png")), &failures, true, 1, false).is_empty());
+        assert!(summary(&[], Some(Path::new("out")), &failures, false, 3, false).is_empty());
+        assert!(summary(&[], None, &failures, false, 3, false).is_empty());
     }
 
     fn failed(path: &str) -> CliError {
@@ -705,6 +725,56 @@ mod tests {
             error.to_string(),
             "the processor tensorrt is not available on this machine; use auto, cpu, cuda or webgpu"
         );
+    }
+
+    fn fixed(line: &str) -> Plan {
+        let args = crate::args::parse_from(line.split_whitespace()).expect("parses");
+        chain::plan(&args.selection, args.quality, 1000, 800)
+    }
+
+    #[test]
+    fn the_applied_text_names_the_chain_and_what_the_cache_served() {
+        let plan = fixed("opai photo.jpg --dn --la --sh -o out.png");
+        let ran = ProviderVerdict::Resolved(vec![ExecutionProvider::Cpu]);
+        let base = "Denoise Stockholm strength 100, Light Adjust Paris bias 50, Sharpen Moscow strength 100";
+
+        assert_eq!(applied(&plan, 0, &ran), base);
+        assert_eq!(applied(&plan, 2, &ran), format!("{base} (2 of 3 cached)"));
+        assert_eq!(applied(&plan, 3, &ran), format!("{base} (cached)"));
+    }
+
+    #[test]
+    fn a_run_nothing_executed_for_is_cached_whatever_the_reports_counted() {
+        let plan = fixed("opai photo.jpg --dn --up --scale 2 -o out.png");
+
+        assert_eq!(
+            applied(&plan, 0, &ProviderVerdict::NothingExecuted),
+            "Denoise Stockholm strength 100, Upscale Tokyo 2x (cached)"
+        );
+    }
+
+    #[test]
+    fn an_empty_chain_needs_no_enhancement_and_is_not_cached() {
+        let args = crate::args::parse_from("opai large.jpg --up -o out.png".split_whitespace()).expect("parses");
+        let plan = chain::plan(&args.selection, args.quality, 4000, 3000);
+
+        assert_eq!(applied(&plan, 0, &ProviderVerdict::NothingExecuted), "no enhancement needed");
+    }
+
+    #[test]
+    fn a_verbose_plain_line_carries_the_text_and_a_failure_only_its_reason() {
+        let view = View::new(Look { interactive: false, color: false }, CancellationToken::new());
+        let [a, b] = ["photos/a.jpg", "photos/b.jpg"].map(Path::new);
+
+        view.start_batch(2);
+        view.start_image(1, a);
+        let written = ImageEnd::Enhanced(Some("Upscale Tokyo 2x".to_owned()));
+        let first = view.end_line(1, a, &written).expect("a plain line");
+        view.start_image(2, b);
+        let second = view.end_line(2, b, &ImageEnd::Failed("disk full".into())).expect("a plain line");
+
+        assert_eq!(first, "🖼️ [100%] Enhancements applied to       photos/a.jpg: Upscale Tokyo 2x");
+        assert_eq!(second, "🧨 [  0%] Failed to enhance             photos/b.jpg: disk full");
     }
 
     #[test]

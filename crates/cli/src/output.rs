@@ -1,12 +1,15 @@
-//! Where the results go: `-o` read as a file or a directory before anything is installed, each image's destination
-//! under it, and the write through the library's export claim.
+//! Where the results go: `-o` read as a file or a directory before anything is installed, or its absence as "beside
+//! each source", each image's destination, and the write through the library's export claim.
 //!
 //! ```text
+//! no -o                       --> Beside (suffix _opai unless --prefix or --suffix is given; nothing created; another
+//!                                 input is never overwritten)
 //! existing directory          --> Directory
 //! extension opai writes       --> File (one input file; no --format, --prefix or --suffix)
 //! anything else               --> Directory, refused if a non-directory is there; created on the first write
 //! ```
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use opai::export::{self, FormatChoice, Naming, WriteOptions};
@@ -16,7 +19,11 @@ use crate::args::Args;
 use crate::error::CliError;
 use crate::inputs::Source;
 
-/// What `-o` names.
+/// The suffix a result written beside its source takes when neither `--prefix` nor `--suffix` is given, so that its
+/// name, the only thing telling it from its source, does.
+pub const BESIDE_SUFFIX: &str = "_opai";
+
+/// What `-o` names, or where the results go without it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
     /// One file, written in the format its extension names.
@@ -33,9 +40,17 @@ pub enum Target {
         /// The format choice and the affixes, defaulting to Preserve and nothing.
         naming: Naming,
     },
+    /// No `-o`: each result is written in the directory that holds its source, named by the library's export rule.
+    Beside {
+        /// The format choice and the affixes, defaulting to Preserve and the suffix [`BESIDE_SUFFIX`].
+        naming: Naming,
+        /// Every input of the run, canonicalised by [`keep_inputs`], none of which a result may replace but its own.
+        inputs: HashSet<PathBuf>,
+    },
 }
 
-/// What `args.output` names, checked against the inputs and the naming flags. Nothing is created.
+/// What `args.output` names, checked against the inputs and the naming flags, or [`Target::Beside`] without one.
+/// Nothing is created.
 ///
 /// # Errors
 ///
@@ -43,7 +58,20 @@ pub enum Target {
 /// input is a directory, or `--format`, `--prefix` or `--suffix` is given; and where the output is a directory but a
 /// file that is not one already exists there.
 pub fn target(args: &Args) -> Result<Target, CliError> {
-    let path = &args.output;
+    let Some(path) = &args.output else {
+        // Beside its source, a result with no affix would take its source's own name. Either flag given, an empty one
+        // included, is the user's choice of name, the other affix staying empty.
+        let suffix = match (&args.prefix, &args.suffix) {
+            (None, None) => BESIDE_SUFFIX.to_owned(),
+            (_, suffix) => suffix.clone().unwrap_or_default(),
+        };
+        let naming = Naming {
+            prefix: args.prefix.clone().unwrap_or_default(),
+            suffix,
+            format: args.format.unwrap_or(FormatChoice::Preserve),
+        };
+        return Ok(Target::Beside { naming, inputs: HashSet::new() });
+    };
 
     // An existing directory wins whatever its name, so `-o shots.png` can still mean the directory the user made.
     if !path.is_dir()
@@ -93,10 +121,15 @@ pub fn target(args: &Args) -> Result<Target, CliError> {
 ///
 /// A file target is its own path. Under a directory, an image found in a directory input keeps its path relative to
 /// that input, and a named file goes directly inside; the name is the library's export rule's. With `-o` the input
-/// directory itself, that is the source's own directory.
+/// directory itself, that is the source's own directory. Beside its source, it is in the directory that holds the
+/// source, whether the source was named or found.
 pub fn destination(target: &Target, source: &Source) -> (PathBuf, ImageFormat) {
     match target {
         Target::File { path, format } => (path.clone(), *format),
+        Target::Beside { naming, .. } => {
+            let (destination, named) = export::destination_for(&source.path, naming, None);
+            (destination, named.format.into())
+        }
         Target::Directory { path, naming } => {
             let relative = source
                 .root
@@ -112,10 +145,37 @@ pub fn destination(target: &Target, source: &Source) -> (PathBuf, ImageFormat) {
     }
 }
 
+/// Records `sources` as the inputs a result written beside its source must never replace. Only a [`Target::Beside`]
+/// keeps them: under `-o` the inputs are the user's to place the output over, as upstream has always let them.
+///
+/// Canonicalised, so a source reached through another spelling or a link is still recognised; one that cannot be is
+/// kept as given.
+pub fn keep_inputs<'a>(target: &mut Target, sources: impl IntoIterator<Item = &'a Path>) {
+    if let Target::Beside { inputs, .. } = target {
+        inputs.extend(sources.into_iter().map(|path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned())));
+    }
+}
+
+/// Whether `--overwrite` may replace what is at `destination`, the result of `source`: never where that is another
+/// input of a run beside its sources, which would destroy a photograph the user gave, or one not yet read. Its own
+/// source may be replaced, which takes both `--suffix ""` (or affixes naming it) and `--overwrite`.
+pub fn may_overwrite(target: &Target, source: &Path, destination: &Path) -> bool {
+    let Target::Beside { inputs, .. } = target else {
+        return true;
+    };
+    // A destination that does not exist yet replaces nothing, and so is no input.
+    let Ok(destination) = std::fs::canonicalize(destination) else {
+        return true;
+    };
+
+    !inputs.contains(&destination) || std::fs::canonicalize(source).is_ok_and(|source| source == destination)
+}
+
 /// Writes `picture` to `destination` as `format`, at the library's recommended settings for it, and answers the path
 /// written.
 ///
-/// Under a directory target, the destination's directory is created first. Without `overwrite` a file already there is
+/// Under a directory target, the destination's directory is created first; beside its source, it exists already.
+/// Without `overwrite` a file already there is
 /// kept and the result takes the first free `_1` … `_999` name beside it; with it, the file is replaced once the new
 /// one is complete. A write that does not finish leaves nothing behind.
 ///
@@ -290,6 +350,83 @@ mod tests {
         );
     }
 
+    fn beside(prefix: &str, suffix: &str, format: FormatChoice) -> Target {
+        Target::Beside {
+            naming: Naming { prefix: prefix.into(), suffix: suffix.into(), format },
+            inputs: HashSet::new(),
+        }
+    }
+
+    #[test]
+    fn no_output_is_beside_each_source_with_the_suffix_opai() {
+        let target = target(&args("opai photo.jpg --ap")).expect("no -o");
+
+        assert_eq!(target, beside("", "_opai", FormatChoice::Preserve));
+    }
+
+    #[test]
+    fn a_prefix_or_a_suffix_replaces_the_default_suffix() {
+        assert_eq!(
+            target(&args("opai photo.jpg --up --suffix -big")).expect("ok"),
+            beside("", "-big", FormatChoice::Preserve)
+        );
+        assert_eq!(
+            target(&args("opai photo.jpg --up --prefix new-")).expect("ok"),
+            beside("new-", "", FormatChoice::Preserve)
+        );
+
+        let empty = parse_from(["opai", "photo.jpg", "--dn", "--suffix", ""]).expect("parses");
+        assert_eq!(target(&empty).expect("ok"), beside("", "", FormatChoice::Preserve));
+    }
+
+    #[test]
+    fn a_format_is_accepted_without_an_output() {
+        let target = target(&args("opai shot.nef --dn --format webp")).expect("ok");
+
+        assert_eq!(target, beside("", "_opai", ExportFormat::Webp.into()));
+        assert_eq!(destination(&target, &named("shot.nef")), (PathBuf::from("shot_opai.webp"), ImageFormat::WebP));
+    }
+
+    #[test]
+    fn beside_writes_into_each_sources_own_directory() {
+        let target = beside("", "_opai", FormatChoice::Preserve);
+
+        assert_eq!(destination(&target, &named("photo.jpg")), (PathBuf::from("photo_opai.jpg"), ImageFormat::Jpeg));
+        assert_eq!(destination(&target, &named("pictures/beach.jpg")).0, Path::new("pictures/beach_opai.jpg"));
+        assert_eq!(destination(&target, &found("photos", "photos/a.jpg")).0, Path::new("photos/a_opai.jpg"));
+        assert_eq!(
+            destination(&target, &found("photos", "photos/2024/b.jpg")).0,
+            Path::new("photos/2024/b_opai.jpg")
+        );
+        assert_eq!(destination(&target, &named("/abs/c.nef")).0, Path::new("/abs/c_opai.tiff"));
+    }
+
+    #[test]
+    fn the_default_suffix_never_names_the_source_itself() {
+        let target = beside("", "_opai", FormatChoice::Preserve);
+
+        for path in ["photo.jpg", "photo_opai.jpg", "a.b.jpg", ".hidden.jpg", "noext", "dir/PHOTO.JPG"] {
+            let (destination, _) = destination(&target, &named(path));
+
+            assert_ne!(destination.to_string_lossy().to_lowercase(), path.to_lowercase(), "{path}");
+            assert_eq!(destination.parent(), Path::new(path).parent(), "{path}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_source_whose_name_is_not_utf8_is_named_beside_it() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let path = Path::new("photos").join(OsStr::from_bytes(b"caf\xe9.jpg"));
+        let source = Source { path, root: None, width: 1, height: 1 };
+
+        let (destination, _) = destination(&beside("", "_opai", FormatChoice::Preserve), &source);
+
+        assert_eq!(destination, Path::new("photos").join(OsStr::from_bytes(b"caf\xe9_opai.jpg")));
+    }
+
     /// The repository's test photograph, loaded.
     fn picture() -> Picture {
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/test.dat");
@@ -348,6 +485,109 @@ mod tests {
 
         assert_eq!(written, destination);
         assert!(image::probe_blocking(&written).is_ok());
+    }
+
+    #[tokio::test]
+    async fn beside_keeps_an_earlier_result_and_numbers_the_new_one() {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let source = dir.path().join("photo.jpg");
+        let earlier = dir.path().join("photo_opai.jpg");
+        std::fs::write(&source, "source").expect("written");
+        std::fs::write(&earlier, "earlier").expect("written");
+        let target = beside("", "_opai", FormatChoice::Preserve);
+        let (destination, format) = destination(&target, &named(&source.display().to_string()));
+
+        let written = write(&target, &picture(), &destination, format, false).await.expect("written");
+
+        assert_eq!(written, dir.path().join("photo_opai_1.jpg"));
+        assert_eq!(std::fs::read(&earlier).expect("kept"), b"earlier");
+        assert_eq!(std::fs::read(&source).expect("kept"), b"source");
+        assert!(image::probe_blocking(&written).is_ok(), "the numbered file is an image");
+    }
+
+    #[tokio::test]
+    async fn beside_with_overwrite_replaces_the_earlier_result_and_not_the_source() {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let source = dir.path().join("photo.jpg");
+        let earlier = dir.path().join("photo_opai.jpg");
+        std::fs::write(&source, "source").expect("written");
+        std::fs::write(&earlier, "earlier").expect("written");
+        let target = beside("", "_opai", FormatChoice::Preserve);
+        let (destination, format) = destination(&target, &named(&source.display().to_string()));
+
+        let written = write(&target, &picture(), &destination, format, true).await.expect("written");
+
+        assert_eq!(written, earlier);
+        assert!(image::probe_blocking(&earlier).is_ok(), "the earlier result was replaced by an image");
+        assert_eq!(std::fs::read(&source).expect("kept"), b"source");
+        assert_eq!(names(dir.path()), ["photo.jpg", "photo_opai.jpg"]);
+    }
+
+    /// A directory holding `names`, each a small file, and the beside target that keeps them all as inputs.
+    fn inputs_in(names: &[&str]) -> (tempfile::TempDir, Target) {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        for name in names {
+            let path = dir.path().join(name);
+            std::fs::create_dir_all(path.parent().expect("a parent")).expect("created");
+            std::fs::write(path, *name).expect("written");
+        }
+        let mut target = beside("", "_opai", FormatChoice::Preserve);
+        let paths: Vec<PathBuf> = names.iter().map(|name| dir.path().join(name)).collect();
+        keep_inputs(&mut target, paths.iter().map(PathBuf::as_path));
+        (dir, target)
+    }
+
+    #[test]
+    fn overwrite_never_replaces_another_input_in_either_order() {
+        let (dir, target) = inputs_in(&["a.jpg", "a_opai.jpg"]);
+        let (a, a_opai) = (dir.path().join("a.jpg"), dir.path().join("a_opai.jpg"));
+
+        // `a.jpg`'s result is named `a_opai.jpg`, which is an input, whichever of the two is given first.
+        assert!(!may_overwrite(&target, &a, &a_opai));
+        // `a_opai.jpg`'s own result, `a_opai_opai.jpg`, is no input.
+        assert!(may_overwrite(&target, &a_opai, &dir.path().join("a_opai_opai.jpg")));
+    }
+
+    #[test]
+    fn a_rerun_over_a_tree_does_not_replace_the_earlier_results_it_takes_as_inputs() {
+        let (dir, target) = inputs_in(&["a.jpg", "a_opai.jpg", "2024/b.jpg", "2024/b_opai.jpg"]);
+
+        assert!(!may_overwrite(&target, &dir.path().join("a.jpg"), &dir.path().join("a_opai.jpg")));
+        assert!(!may_overwrite(&target, &dir.path().join("2024/b.jpg"), &dir.path().join("2024/b_opai.jpg")));
+    }
+
+    #[test]
+    fn overwrite_may_replace_a_result_that_is_no_input_or_the_images_own_source() {
+        let (dir, target) = inputs_in(&["a.jpg"]);
+        let a = dir.path().join("a.jpg");
+        std::fs::write(dir.path().join("a_opai.jpg"), "earlier").expect("written");
+
+        assert!(may_overwrite(&target, &a, &dir.path().join("a_opai.jpg")), "an earlier result that is no input");
+        assert!(may_overwrite(&target, &a, &dir.path().join("missing.jpg")), "nothing there");
+        assert!(may_overwrite(&target, &a, &a), "in place, asked for with --suffix \"\"");
+    }
+
+    #[test]
+    fn an_output_directory_keeps_no_inputs() {
+        let mut target = directory("out", unaffixed(FormatChoice::Preserve));
+        keep_inputs(&mut target, [Path::new("a.jpg")]);
+
+        assert_eq!(target, directory("out", unaffixed(FormatChoice::Preserve)));
+        assert!(may_overwrite(&target, Path::new("b.jpg"), Path::new("a.jpg")));
+    }
+
+    #[tokio::test]
+    async fn beside_creates_no_directory() {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let destination = dir.path().join("gone/photo_opai.png");
+        let target = beside("", "_opai", FormatChoice::Preserve);
+
+        let error = write(&target, &picture(), &destination, ImageFormat::Png, false)
+            .await
+            .expect_err("no directory");
+
+        assert_eq!(error.exit_code(), 1);
+        assert!(!dir.path().join("gone").exists());
     }
 
     #[tokio::test]

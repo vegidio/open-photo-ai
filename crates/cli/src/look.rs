@@ -84,8 +84,8 @@ pub enum RowState {
 /// How an image ended, with a failure's reason for its plain line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageEnd {
-    /// Its result is written.
-    Enhanced,
+    /// Its result is written, with the enhancements it received in words under `--verbose`, and `None` without.
+    Enhanced(Option<String>),
     /// It failed, for this reason. The reason need not name the image: the line already does.
     Failed(String),
     /// The run was stopped while working on it.
@@ -96,7 +96,7 @@ impl ImageEnd {
     /// The row this end leaves.
     pub const fn state(&self) -> RowState {
         match self {
-            Self::Enhanced => RowState::Applied,
+            Self::Enhanced(_) => RowState::Applied,
             Self::Failed(_) => RowState::Failed,
             Self::Stopped => RowState::Stopped,
         }
@@ -153,13 +153,27 @@ pub fn row(percent: u8, path: &str, state: RowState, color: bool) -> Line<'stati
     Line::from(spans)
 }
 
+/// `line`, a written image's row, followed by `: <applied>` in the terminal's default colour where there is a text,
+/// so the path stays the row's most visible part. A row too wide for the terminal is cut at its edge when drawn.
+pub fn with_applied(mut line: Line<'static>, applied: Option<&str>) -> Line<'static> {
+    if let Some(applied) = applied {
+        line.spans.push(Span::raw(format!(": {applied}")));
+    }
+    line
+}
+
 /// The line an image prints when it ends and no live view is drawn: the words of its final [`row`] at `percent`, then
-/// `: <reason>` after a failure, coloured as the row is only when `color` is set.
+/// `: <reason>` after a failure or `: <applied>` after a written image under `--verbose`, coloured as the row is only
+/// when `color` is set.
 pub fn plain_row(percent: u8, path: &str, end: &ImageEnd, color: bool) -> String {
     let mut line = row(percent, path, end.state(), color);
-    if let ImageEnd::Failed(reason) = end {
-        let style = line.spans.first().map_or_else(Style::new, |span| span.style);
-        line.spans.push(Span::styled(format!(": {reason}"), style));
+    match end {
+        ImageEnd::Failed(reason) => {
+            let style = line.spans.first().map_or_else(Style::new, |span| span.style);
+            line.spans.push(Span::styled(format!(": {reason}"), style));
+        }
+        ImageEnd::Enhanced(applied) => line = with_applied(line, applied.as_deref()),
+        ImageEnd::Stopped => {}
     }
 
     line.spans.iter().map(|span| ansi(&span.content, span.style)).collect()
@@ -199,16 +213,19 @@ pub fn update_line(color: bool) -> String {
 }
 
 /// The summary's success line, uncoloured, or `None` when nothing was written: the file itself for one image, so a
-/// numbered name stays visible, and `output` as given for more.
-pub fn summary(written: &[PathBuf], output: &Path) -> Option<String> {
-    match written {
-        [] => None,
-        [file] => Some(format!("✨ Image enhanced successfully; file saved at {}", file.display())),
-        _ => Some(format!(
+/// numbered name stays visible, and for more `output` as given, or, without one, that each was saved beside its source.
+pub fn summary(written: &[PathBuf], output: Option<&Path>) -> Option<String> {
+    match (written, output) {
+        ([], _) => None,
+        ([file], _) => Some(format!("✨ Image enhanced successfully; file saved at {}", file.display())),
+        (_, Some(output)) => Some(format!(
             "✨ {} images enhanced successfully; files saved under {}",
             written.len(),
             output.display()
         )),
+        (_, None) => {
+            Some(format!("✨ {} images enhanced successfully; files saved beside their sources", written.len()))
+        }
     }
 }
 
@@ -263,7 +280,7 @@ pub fn whole_percent(fraction: f64) -> u8 {
 
 /// The GUI's English chip label for `family`. Total, so a family added to the library fails to compile here until it
 /// is given one. A face detection reads as the face recovery it serves, as it does in the GUI.
-const fn family_label(family: Family) -> &'static str {
+pub(crate) const fn family_label(family: Family) -> &'static str {
     match family {
         Family::Detection | Family::FaceRecovery => "Face Recovery",
         Family::Denoise => "Denoise",
@@ -493,7 +510,7 @@ mod tests {
 
     #[test]
     fn a_plain_row_is_the_final_rows_text_with_a_failures_reason() {
-        for end in [ImageEnd::Enhanced, ImageEnd::Failed("corrupt".into()), ImageEnd::Stopped] {
+        for end in [ImageEnd::Enhanced(None), ImageEnd::Failed("corrupt".into()), ImageEnd::Stopped] {
             let line = plain(&row(42, "c.jpg", end.state(), true));
             let reason = match &end {
                 ImageEnd::Failed(reason) => format!(": {reason}"),
@@ -508,8 +525,55 @@ mod tests {
             "🧨 [ 42%] Failed to enhance             c.jpg: corrupt"
         );
         assert_eq!(
-            plain_row(100, "c.jpg", &ImageEnd::Enhanced, false),
+            plain_row(100, "c.jpg", &ImageEnd::Enhanced(None), false),
             "🖼️ [100%] Enhancements applied to       c.jpg"
+        );
+    }
+
+    fn written(applied: &str) -> ImageEnd {
+        ImageEnd::Enhanced(Some(applied.to_owned()))
+    }
+
+    #[test]
+    fn a_written_images_plain_row_under_verbose_ends_with_what_it_received() {
+        assert_eq!(
+            plain_row(100, "photo.jpg", &written("Face Recovery Athens, Upscale Tokyo 2x"), false),
+            "🖼️ [100%] Enhancements applied to       photo.jpg: Face Recovery Athens, Upscale Tokyo 2x"
+        );
+        assert_eq!(
+            plain_row(100, "large.jpg", &written("no enhancement needed"), false),
+            "🖼️ [100%] Enhancements applied to       large.jpg: no enhancement needed"
+        );
+        assert_eq!(
+            plain_row(100, "a.jpg", &written("Denoise Stockholm strength 100 (cached)"), false),
+            "🖼️ [100%] Enhancements applied to       a.jpg: Denoise Stockholm strength 100 (cached)"
+        );
+    }
+
+    #[test]
+    fn the_applied_text_is_drawn_in_the_default_colour_after_the_coloured_path() {
+        let (r, g, b) = CYAN;
+        let line = plain_row(100, "c.jpg", &written("Sharpen Moscow strength 80"), true);
+
+        let path = "c.jpg".with(TermColor::Rgb { r, g, b }).underlined().to_string();
+        assert!(line.ends_with(&format!("{path}: Sharpen Moscow strength 80")), "{line:?}");
+
+        let row = with_applied(row(100, "c.jpg", RowState::Applied, true), Some("Sharpen Moscow strength 80"));
+        let last = row.spans.last().expect("a span");
+        assert_eq!((last.content.as_ref(), last.style), (": Sharpen Moscow strength 80", Style::new()));
+    }
+
+    #[test]
+    fn the_applied_text_leaves_every_path_in_its_column() {
+        let applied = plain(&with_applied(row(100, "x.jpg", RowState::Applied, false), Some("Upscale Tokyo 2x")));
+        let words = applied.split("] ").nth(1).and_then(|rest| rest.split_once("x.jpg")).expect("words").0;
+
+        // The same columns every other row's words take, as the alignment test above pins them.
+        assert_eq!(words.len(), WORDS_WIDTH + 1, "{applied:?}");
+        assert!(applied.ends_with("x.jpg: Upscale Tokyo 2x"), "{applied:?}");
+        assert_eq!(
+            with_applied(row(100, "x.jpg", RowState::Applied, false), None),
+            row(100, "x.jpg", RowState::Applied, false)
         );
     }
 
@@ -520,27 +584,41 @@ mod tests {
         assert!(failed.ends_with(&": corrupt".with(TermColor::Rgb { r, g, b }).to_string()), "{failed:?}");
 
         let (r, g, b) = CYAN;
-        let enhanced = plain_row(100, "c.jpg", &ImageEnd::Enhanced, true);
+        let enhanced = plain_row(100, "c.jpg", &ImageEnd::Enhanced(None), true);
         assert!(
             enhanced.ends_with(&"c.jpg".with(TermColor::Rgb { r, g, b }).underlined().to_string()),
             "{enhanced:?}"
         );
 
-        assert!(!plain_row(100, "c.jpg", &ImageEnd::Enhanced, false).contains('\x1b'));
+        assert!(!plain_row(100, "c.jpg", &ImageEnd::Enhanced(None), false).contains('\x1b'));
+        assert!(!plain_row(100, "c.jpg", &written("Colorize Delhi"), false).contains('\x1b'));
     }
 
     #[test]
     fn the_summary_names_the_file_for_one_image_and_the_output_for_more() {
-        let output = Path::new("out");
+        let output = Some(Path::new("out"));
 
         assert_eq!(summary(&[], output), None);
         assert_eq!(
-            summary(&["out_1.png".into()], Path::new("out.png")).as_deref(),
+            summary(&["out_1.png".into()], Some(Path::new("out.png"))).as_deref(),
             Some("✨ Image enhanced successfully; file saved at out_1.png")
         );
         assert_eq!(
             summary(&["out/a.png".into(), "out/b.png".into(), "out/c.png".into()], output).as_deref(),
             Some("✨ 3 images enhanced successfully; files saved under out")
+        );
+    }
+
+    #[test]
+    fn without_an_output_the_summary_names_the_file_for_one_image_and_says_beside_for_more() {
+        assert_eq!(summary(&[], None), None);
+        assert_eq!(
+            summary(&["photo_opai.jpg".into()], None).as_deref(),
+            Some("✨ Image enhanced successfully; file saved at photo_opai.jpg")
+        );
+        assert_eq!(
+            summary(&["photos/a_opai.jpg".into(), "photos/2024/b_opai.jpg".into()], None).as_deref(),
+            Some("✨ 2 images enhanced successfully; files saved beside their sources")
         );
     }
 
