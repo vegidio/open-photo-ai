@@ -41,6 +41,19 @@ tauri = { version = "2", features = [] }
 # and the same log - which is exactly the situation the single-instance claim exists to prevent.
 tauri-plugin-single-instance = { version = "2", features = [] }
 
+# The window reopens at the size, position and maximised state it was closed with. Pinned like the single-instance
+# plugin above, from the same release train.
+#
+# A plugin rather than a module of this crate's own: on restore it applies a saved position only when a connected
+# monitor still shows part of the saved frame, and it keeps the frame from before a maximise so un-maximising returns
+# to the user's size. Both are the parts a local copy would most likely get wrong.
+#
+# Only its RUST API is used, registered in `run()` with an explicit flag set that leaves out `VISIBLE`: the window
+# ships hidden and `src/window.rs` shows it once React has something to paint, and a restored visibility would show it
+# before that. NO FEATURES, NO npm package, and NO permission granted in capabilities/default.json - the frontend never
+# invokes the plugin.
+tauri-plugin-window-state = { version = "2", features = [] }
+
 # Which platform the process is running on, read by the frontend before first paint. The plugin is here rather than
 # a `#[tauri::command]` of our own for one reason: `init()` builds a `js_init_script` from `std::env::consts`, so
 # `platform()` is a synchronous property read on the frontend instead of a promise. The macOS navbar inset depends on
