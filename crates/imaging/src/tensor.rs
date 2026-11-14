@@ -210,11 +210,9 @@ fn decode_row<S: Copy, const C: usize>(
 pub struct TensorShape {
     /// How many floats the shape requires: three planes of `width * height`.
     pub expected: usize,
-    /// How many the caller supplied.
     pub actual: usize,
     /// The width the conversion was asked for — a tile's shape, or a whole padded extent.
     pub width: u32,
-    /// The height the conversion was asked for.
     pub height: u32,
 }
 
@@ -239,10 +237,8 @@ pub fn image_to_chw(
 
 /// Writes the whole of an image, extended to `extent`, into `dest` as planar CHW `f32`.
 ///
-/// The non-square, whole-image sibling of [`image_to_chw`]. `source` is the image's own dimensions and `extent` is
-/// the padded extent to produce; past the source's dimensions on either axis the source's own edge pixels are
-/// mirrored outwards through the same [`pad::source_offset`] the tile conversion uses. Only the right and bottom edges
-/// are ever extended, which is what a padded extent means here.
+/// The non-square, whole-image sibling of [`image_to_chw`]. Past `source`'s dimensions the edge pixels are mirrored
+/// outwards via [`pad::source_offset`]; only the right and bottom edges are ever extended.
 ///
 /// # Errors
 ///
@@ -348,9 +344,7 @@ where
     // half a level, and — because the seam blend reads a channel back out and writes it again — it turns a pixel
     // blended against an identical neighbour into one a level darker, which is a visible stripe down every seam rather
     // than a rounding detail.
-    /// The channel value for a `[0, 1]` fraction, clamping anything outside that range to the nearest end of it.
-    ///
-    /// Rounded to the nearest value rather than truncated towards zero.
+    /// The channel value for a `[0, 1]` fraction, clamped to that range and rounded to nearest (not truncated).
     fn from_unit(value: f32) -> Self;
 
     /// The channel value as a `[0, 1]` fraction. Exactly inverse to [`from_unit`](Self::from_unit) for every value
@@ -478,15 +472,8 @@ where
     decode_chw(dest, output, dest.dimensions(), norm)
 }
 
-/// Writes the **top-left** of a model's planar CHW output into `dest`, reversing the normalisation it was produced
-/// under, where the tensor is a padded `extent` and `dest` is the region inside it that is real picture.
-///
-/// [`chw_to_image`]'s cropped sibling, and the decode side of [`padded_to_chw`]: that one writes an image into the
-/// padded square a fixed-shape graph accepts, and this one reads the image back out of the square the graph
-/// returned.
-///
-/// Only the right and bottom are ever extended, which is what a padded extent means here and why the region wanted
-/// is contiguous from the origin.
+/// Writes the **top-left** `dest`-sized region of a model's planar CHW output, a padded `extent`, into `dest`,
+/// reversing the normalisation it was produced under. The decode side of [`padded_to_chw`].
 ///
 /// # Errors
 ///

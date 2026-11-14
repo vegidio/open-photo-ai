@@ -158,7 +158,6 @@ mod tests {
         (0..dest.width()).map(|x| dest.get_pixel(x, y).0[0].to_unit()).collect()
     }
 
-    /// The largest jump between adjacent columns of `levels` over `range`.
     fn largest_step(levels: &[f32], range: std::ops::Range<usize>) -> f32 {
         levels[range].windows(2).map(|pair| (pair[1] - pair[0]).abs()).fold(0.0, f32::max)
     }

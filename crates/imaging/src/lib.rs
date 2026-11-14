@@ -1,22 +1,13 @@
-//! The pixel primitives every model is built from, and the loop that runs a fixed-size tile over an image of any
-//! size.
+//! Pixel primitives shared by every model, and the driver that runs a fixed-size tile over an image of any size.
 //!
-//! Every tiled model Open Photo AI ships takes one shape — `1x3x256x256` `f32`, planar, channel-major, RGB,
-//! normalised — every whole-image model takes a fixed square of its own, and no photograph has either. What crosses
-//! that gap in both directions lives here: where the tiles are, how a region of pixels becomes the numbers a model
-//! reads, how the numbers it returns become pixels again and at what depth, and how overlapping results are combined
-//! into one picture with no visible seam.
+//! Tiled models take `1x3x256x256` planar RGB `f32`; whole-image models take a fixed square of their own. This crate
+//! bridges photographs to and from those shapes: the tile grid ([`grid`]), padding ([`pad`]), tensor conversions
+//! ([`tensor`]), write-over blending for deterministic models ([`blend`]), averaged blending for stochastic ones
+//! ([`canvas`]), fixed-square presentation ([`present`]), control blending ([`mix`]), align-centres bilinear read-back
+//! ([`bilinear`]), row-banded CPU passes ([`rows`]), and the tiling driver [`run_tiled`].
 //!
-//! That is the tile grid ([`grid`]), the padding rule ([`pad`]), the tensor conversions ([`tensor`]), both blending
-//! strategies — write-over for a deterministic model ([`blend`]), average-every-contribution for a stochastic one
-//! ([`canvas`]) — the fixed-canvas plan and presentation a whole-image run reaches its graph through ([`present`]), the
-//! per-run control blend that moves a photograph towards a finished result ([`mix`]), the align-centres bilinear read
-//! of a graph's square plane back onto the photograph ([`bilinear`]), the row-banded split of a full-resolution CPU
-//! pass across cores ([`rows`]), and the tiling driver [`run_tiled`].
-//!
-//! **This crate knows nothing of `opai`**: no model, session, execution provider or orchestration. It depends on
-//! `image` and `thiserror` alone, so that independence is a compile error to break rather than a convention to keep.
-//! Its items are `pub` because that is how `opai` reaches them; it is not published.
+//! **This crate knows nothing of `opai`** and depends only on `image` and `thiserror`, so that independence is a
+//! compile error to break. Items are `pub` only so `opai` can reach them; it is not published.
 
 // A crate rather than a module of `opai` for exactly that reason. Everything here is a leaf — it imports only `image`,
 // `std` and its own siblings — while the pipeline contract models implement names sessions, providers and artifacts,
@@ -90,12 +81,9 @@ impl Default for TileGeometry {
 /// be written into.
 pub type RunTile<'a, E> = dyn FnMut(&[f32], &mut [f32]) -> Result<(), E> + 'a;
 
-/// How many bits per channel a result carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChannelDepth {
-    /// Eight bits per channel.
     Eight,
-    /// Sixteen bits per channel.
     Sixteen,
 }
 
@@ -121,19 +109,12 @@ pub enum TilingError<E> {
     // from a finished enhancement, and would show it to a user as one.
     /// The image has no area, so there is no partitioning of it and nothing to run.
     #[error("cannot tile a {width}x{height} image")]
-    Untileable {
-        /// The width that was asked for.
-        width: u32,
-        /// The height that was asked for.
-        height: u32,
-    },
+    Untileable { width: u32, height: u32 },
 
     /// The caller asked the run to stop, and it stopped between tiles.
     ///
-    /// **Deliberately not the core library's `task::Cancelled`**, which means the async runtime shut down before
-    /// blocking work could run. One is a user closing a dialog and the other is a process on its way down; they are
-    /// reported to a user differently, and a caller that conflated them would tell someone their enhancement failed
-    /// when they had just cancelled it themselves.
+    /// **Deliberately not the core library's `task::Cancelled`**, which means the async runtime shut down. A user
+    /// cancelling must not be reported to them as a failed enhancement.
     #[error("the run was cancelled before it finished")]
     Cancelled,
 
@@ -144,7 +125,6 @@ pub enum TilingError<E> {
         // reports: one is a model that cannot run at all, the other is something about that region.
         /// Which tile it was, counting from zero in the row-major order [`grid::Layout::tiles`] produces.
         index: usize,
-        /// What the per-tile function reported.
         #[source]
         source: E,
     },
@@ -188,7 +168,6 @@ pub fn run_tiled<E>(
     }
 }
 
-/// [`run_tiled`]'s body, once, at whichever channel the caller asked for.
 fn tiled<T: Channel, E>(
     source: &DynamicImage,
     geometry: TileGeometry,

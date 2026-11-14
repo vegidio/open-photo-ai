@@ -31,13 +31,9 @@ use crate::grid::{Tile, TileGrid};
 /// full weight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Shared {
-    /// With the region to the left.
     pub left: u32,
-    /// With the region to the right.
     pub right: u32,
-    /// With the region above.
     pub top: u32,
-    /// With the region below.
     pub bottom: u32,
 }
 
@@ -75,9 +71,7 @@ pub fn placements(grid: TileGrid) -> Vec<(Tile, Shared)> {
 
 /// A planar float sum over the whole image, plus the weight plane that turns it into an average.
 pub struct Canvas {
-    /// The width of the extent being covered.
     width: u32,
-    /// The height of the extent being covered.
     height: u32,
     /// Three planes of `width * height`: every contribution, each already multiplied by its weight.
     sum: Vec<f32>,
@@ -88,7 +82,6 @@ pub struct Canvas {
 }
 
 impl Canvas {
-    /// An empty accumulator over a `width` x `height` extent.
     pub fn new(width: u32, height: u32) -> Self {
         let plane = (width as usize) * (height as usize);
 
@@ -97,8 +90,8 @@ impl Canvas {
 
     /// Accumulates one region's planar output at `at`, ramped over the widths it shares with its neighbours.
     ///
-    /// `region` is three planes of `at.width` x `at.height`, in the same planar CHW order every conversion in this
-    /// crate uses. A region that runs past the canvas is accumulated only as far as the canvas goes.
+    /// `region` is planar CHW of `at.width` x `at.height`. A region that runs past the canvas is accumulated only as
+    /// far as the canvas goes.
     ///
     /// # Panics
     ///
@@ -138,11 +131,9 @@ impl Canvas {
         }
     }
 
-    /// Divides the accumulated sums by their weights and hands back the planar result.
+    /// Divides the accumulated sums by their weights, in place, and hands back the planar result.
     ///
-    /// **In place**: the accumulator *is* the result, and the weight plane is dropped with the rest of `self`.
-    ///
-    /// A pixel no region covered is left at its accumulated zero rather than divided by it.
+    /// A pixel no region covered is left at zero rather than divided by it.
     pub fn resolve(mut self) -> Vec<f32> {
         // In place because a second buffer would double the peak float held — around 2.3 GB on a 4x pass over a
         // 12-megapixel photograph — on a machine already holding a 7 GB model. Dropping the weight plane with `self`

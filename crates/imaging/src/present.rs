@@ -165,7 +165,6 @@ mod tests {
     // no range of its own — a test that read light adjustment's constant would be asserting that family's choice from
     // a file that does not make it. Which range these use is arbitrary; that the function writes whichever it is given
     // is the separate test below.
-    /// The range the presentation tests below hand the function.
     const UNIT: Normalisation = Normalisation::Unit;
 
     /// `newyork::input::fit`, transcribed rather than imported.

@@ -1,9 +1,7 @@
-//! The align-centres bilinear read of a square plane back onto a photograph: the per-axis tables that map each of the
-//! photograph's columns and rows onto the plane, and the read of one plane through them.
+//! The align-centres bilinear read of a square plane back onto a photograph, via per-axis tables resolved once.
 //!
-//! Two callers from two families, which is why it is here rather than in either: São Paulo reads its weight map back
-//! over the photograph (`models::color_balance::saopaulo::process`), and colorization reads its predicted chroma back
-//! onto the photograph's own lightness (`models::colorization::compose`).
+//! Shared by São Paulo's weight map (`models::color_balance::saopaulo::process`) and colorization's chroma
+//! (`models::colorization::compose`).
 
 // Hand-rolled rather than `image`'s `Triangle`, because they are not the same filter. `Triangle` is a support-based
 // resampler with its own normalisation and its own edge handling, which is a different answer at every pixel — and it
@@ -36,7 +34,6 @@ pub struct Tap {
 /// One axis's bilinear table: a [`Tap`] per destination position, resolved once for the whole photograph.
 #[derive(Debug)]
 pub struct Axis {
-    /// One entry per destination index, in order.
     taps: Vec<Tap>,
 }
 
@@ -91,11 +88,6 @@ impl Axis {
         Self { taps }
     }
 
-    /// The tap for destination position `index`.
-    ///
-    /// # Panics
-    ///
-    /// Panics where `index` is outside the axis this was built for.
     #[inline]
     pub fn tap(&self, index: usize) -> Tap {
         self.taps[index]
@@ -104,11 +96,8 @@ impl Axis {
 
 /// One `side`-square `plane` read at `row` and `column`, bilinearly.
 ///
-/// `plane` is one square plane rather than the whole tensor, so a caller slicing the wrong plane out of a
-/// many-channel output is a slice index rather than an offset buried in this arithmetic.
-///
-/// The read is a convex combination of four samples, so it commutes with the sum over the planes: a weight vector
-/// that is a partition of unity at each of the four taps is still one after interpolation.
+/// The read is a convex combination of four samples, so a weight vector that is a partition of unity at each tap is
+/// still one after interpolation.
 ///
 /// # Panics
 ///

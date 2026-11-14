@@ -8,9 +8,7 @@
 /// The rectangle one tile covers, in source pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Tile {
-    /// The left edge, in source pixels.
     pub x: u32,
-    /// The top edge, in source pixels.
     pub y: u32,
     /// How wide the tile is. Equal to [`TileGrid::size`] except on an axis shorter than one tile.
     pub width: u32,
@@ -34,20 +32,16 @@ pub struct TileGrid {
     /// How far each tile is asked to overlap the one before it. What it *actually* overlaps is
     /// [`overlaps_x`](Layout::overlaps_x).
     pub overlap: u32,
-    /// The width of the image being covered.
     pub width: u32,
-    /// The height of the image being covered.
     pub height: u32,
 }
 
 impl TileGrid {
     /// The partitioning this geometry produces over this image, computed once.
     ///
-    /// An invalid *geometry* — a zero size, an overlap that leaves no forward progress, a tile at least as big as what
-    /// it covers — yields a single tile covering the whole image, so no geometry can produce an empty partitioning. A
-    /// zero *dimension* is different: no rectangle covers a zero-width image, so the layout is empty. A caller must
-    /// treat that as a failure rather than iterating zero tiles, or it hands back an untouched buffer as though the
-    /// work had succeeded — which is exactly what [`run_tiled`](crate::run_tiled) refuses to do.
+    /// An invalid *geometry* (zero size, overlap >= size, tile at least as big as the image) yields a single tile
+    /// covering the whole image. A zero *dimension* yields an empty layout, which a caller must treat as a failure
+    /// rather than iterate, as [`run_tiled`](crate::run_tiled) does.
     pub fn layout(&self) -> Layout {
         // The one way in. Every question a caller asks about a grid — where the tiles are, how many are in a row, how
         // far each actually overlaps its neighbour — is answered from the same two offset lists, so they are built
@@ -149,8 +143,6 @@ impl Layout {
     }
 
     /// How many tiles [`tiles`](Self::tiles) puts in each row.
-    ///
-    /// The driver needs it to turn a tile's index into its column and row, and so into which overlap applies to it.
     pub fn columns(&self) -> usize {
         self.xs.len()
     }
@@ -158,11 +150,9 @@ impl Layout {
     /// Per column, how many pixels that tile actually overlaps the one to its left. The first entry is 0 — nothing
     /// precedes it.
     ///
-    /// **This is not [`TileGrid::overlap`]**, and assuming it is has a name: it is the hard edge down the last column
-    /// of the picture. `TileGrid::offsets` moves the last tile back so it ends flush with the image rather than
-    /// shrinking it, so the final column can overlap its predecessor by far more than was configured. At size 256 and
-    /// overlap 16 over a 600-pixel side the offsets are `[0, 240, 344]` and the last tile overlaps by **152**. Ramping
-    /// that seam over 16 pixels leaves the other 136 written at full strength, which is the edge.
+    /// **This is not [`TileGrid::overlap`].** The last tile is moved back to end flush with the image, so it can
+    /// overlap its predecessor by far more than configured: at size 256 and overlap 16 over a 600-pixel side the
+    /// offsets are `[0, 240, 344]` and the last overlap is **152**. Ramping that seam over 16 pixels leaves a hard edge.
     pub fn overlaps_x(&self) -> Vec<u32> {
         Self::overlaps(&self.xs, self.extent_x)
     }

@@ -8,15 +8,10 @@ use std::sync::LazyLock;
 
 /// Runs `row` over each of `dst`'s `height` rows of `row_len` elements, in parallel across the available cores.
 ///
-/// `row` is handed the row's index and that row's slice of `dst`, and nothing else of it. A caller whose rows write
-/// only their own slice and read everything else immutably therefore gets the serial result exactly: each row runs the
-/// same arithmetic in the same order as it would alone, which is what keeps the output bit-identical to the serial form
-/// rather than merely close to it.
+/// `row` gets the row's index and only that row's slice of `dst`, so the output is bit-identical to a serial pass.
 ///
-/// Parallel only in CPU passes that are not ONNX — the runtime already threads its own graphs, so a second pool
-/// competing with it would be a loss rather than a gain. Plain `std::thread::scope` rather than a work-stealing pool:
-/// the rows are uniform, so a static split is what the shape of the work actually wants, and this crate keeps its
-/// direct dependency list small.
+/// For non-ONNX CPU passes only: the runtime already threads its own graphs, and a second pool would compete with it.
+/// A static split over `std::thread::scope` rather than a work-stealing pool, because the rows are uniform.
 pub fn for_each_row<T, F>(dst: &mut [T], row_len: usize, height: usize, row: F)
 where
     T: Send,
