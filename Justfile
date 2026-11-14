@@ -1,4 +1,5 @@
-set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+[windows]
+set shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 
 # Host architecture, as spelled in the release asset names.
 host_arch := if arch() == "aarch64" { "arm64" } else if arch() == "x86_64" { "x64" } else { error("unsupported host architecture: " + arch()) }
