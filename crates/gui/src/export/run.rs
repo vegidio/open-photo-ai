@@ -240,6 +240,7 @@ mod tests {
             picture: Picture::new(source.path(), pixels, identity),
             providers: no_providers(),
             faces: opai::ChainFaces::NotAsked,
+            guards: Vec::new(),
         }
     }
 

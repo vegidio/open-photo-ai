@@ -23,6 +23,7 @@
 use std::sync::Arc;
 
 use image::DynamicImage;
+use serde::{Deserialize, Serialize};
 
 use crate::error::InferenceError;
 use crate::models::ArtifactId;
@@ -146,17 +147,34 @@ impl Rescue {
     }
 }
 
-// Test-only, and read by each family's live check to report whether its guard fired on a real photograph. A static
-// rather than a field because a live check goes through `Opai::process`, which builds its pipeline where the test
-// cannot reach it. Shared by every family that runs this file, and the fake-backend suite below trips the guard too,
-// which is why each live check is `#[ignore]`d, run alone, and counts only what its own runs added.
-/// How many tiles the guard has kept since the process started.
-#[cfg(test)]
-pub(crate) static GUARDED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// What one guarded filter run's guard did to its tiles: how many it judged, kept and rescued.
+///
+/// Carried out of the run beside the picture, and handed to the caller as part of a
+/// [`GuardReport`](crate::GuardReport), so a front end can say that a photograph came back partly or wholly
+/// unprocessed rather than leave a user comparing two identical images.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GuardTally {
+    // Counts of tiles rather than of pixels, because the tile is what the guard decides over, and a share of them is
+    // close enough to the share of the photograph for anything a user is told: every tile is the same size, and only
+    // the last row and column are moved back to overlap their neighbours.
+    //
+    // A value per run rather than process-wide counters: two runs in flight at once — a slider dragged while an export
+    // runs — each need their own answer, and a run served from the store has to say what the run that computed it
+    // said, which a counter that only ever goes up cannot.
+    /// Every tile of the photograph the guard judged.
+    pub tiles: usize,
+    /// The tiles whose output was discarded, keeping the photograph's own pixels there.
+    pub kept: usize,
+    /// The tiles that diverged and were then saved by the model's rescue: processed, but on the second try.
+    pub rescued: usize,
+}
 
-/// How many diverged tiles a rescue has saved since the process started; see [`GUARDED`].
-#[cfg(test)]
-pub(crate) static RESCUED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+impl GuardTally {
+    /// The share of the photograph's tiles kept unprocessed, `0.0..=1.0`: `0.0` for a run with no tiles at all.
+    pub fn kept_share(&self) -> f64 {
+        if self.tiles == 0 { 0.0 } else { self.kept as f64 / self.tiles as f64 }
+    }
+}
 
 /// The pipeline running one filter operation, as a family's contract seam hands it back.
 pub(crate) fn pipeline<B: Backend>(
@@ -224,6 +242,22 @@ impl<B: Backend> ImagePipeline<B> for Filter {
         progress: Option<&dyn Fn(f64)>,
         cancelled: &dyn Fn() -> bool,
     ) -> Result<DynamicImage, InferenceError> {
+        ImagePipeline::<B>::run_tallied(self, input, sessions, depth, progress, cancelled).map(|(image, _)| image)
+    }
+
+    fn guarded(&self) -> bool {
+        self.guard.is_some()
+    }
+
+    /// The run, and what the guard did to its tiles where the model has one.
+    fn run_tallied(
+        &self,
+        input: &DynamicImage,
+        sessions: &[SessionHandle<B::Session>],
+        depth: ChannelDepth,
+        progress: Option<&dyn Fn(f64)>,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<(DynamicImage, Option<GuardTally>), InferenceError> {
         let report = reporter(progress);
 
         // The driver's to leave to its caller, so that a multi-pass run does not return to the start at each pass.
@@ -245,9 +279,14 @@ impl<B: Backend> ImagePipeline<B> for Filter {
         // dark, heavily noisy tiles it was never trained on — a night sky — and the same noise lifted to an exposure
         // it has seen denoises cleanly. A tile the model handles the first time is never retried, so a rescue changes
         // nothing about a photograph the guard never fired on.
+        //
+        // Counted as it goes, in a value owned by this call: a tile is counted once it has been judged, so a run that
+        // fails or is cancelled partway hands back no tally at all, as it hands back no picture.
         let mut lifted = Vec::new();
+        let mut tally = GuardTally::default();
         let mut tile = |input: &[f32], output: &mut [f32]| -> Result<(), B::Error> {
             B::run_tile(session, input, output)?;
+            tally.tiles += 1;
 
             let Some(guard) = guard else { return Ok(()) };
 
@@ -264,17 +303,14 @@ impl<B: Backend> ImagePipeline<B> for Filter {
                 output.iter_mut().for_each(|value| *value /= gain);
 
                 if guard.accepts(input, output) {
-                    #[cfg(test)]
-                    RESCUED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    tally.rescued += 1;
 
                     return Ok(());
                 }
             }
 
             output.copy_from_slice(input);
-
-            #[cfg(test)]
-            GUARDED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            tally.kept += 1;
 
             Ok(())
         };
@@ -309,7 +345,9 @@ impl<B: Backend> ImagePipeline<B> for Filter {
 
         report(1.0);
 
-        Ok(result)
+        // `None` for an unguarded model rather than a tally of nothing kept: nothing judged its tiles, and a front end
+        // must not be able to read that as a guard that looked and found every tile sound.
+        Ok((result, self.guard.map(|_| tally)))
     }
 }
 
@@ -716,6 +754,65 @@ mod tests {
         run(&rescued(LOOSE), &source, &handle, ChannelDepth::Eight);
 
         assert_eq!(handle.session().runs.load(Ordering::Relaxed), 2, "a tile that passed was retried");
+    }
+
+    /// Runs `pipeline` over `source` as the chain does, and hands back only what the guard decided.
+    fn tallied(
+        pipeline: &Shared<Fake>,
+        source: &DynamicImage,
+        handle: &SessionHandle<FakeSession>,
+    ) -> Option<GuardTally> {
+        pipeline
+            .run_tallied(source, std::slice::from_ref(handle), ChannelDepth::Eight, None, &|| false)
+            .expect("a filter over a photograph")
+            .1
+    }
+
+    #[test]
+    fn the_tally_counts_every_tile_and_the_one_the_guard_kept() {
+        let tally = tallied(&guarded(1.0), &photograph(PAIR.0, PAIR.1), &session(Some((0, 4.0))));
+
+        assert_eq!(tally, Some(GuardTally { tiles: 2, kept: 1, rescued: 0 }));
+        assert_eq!(tally.expect("a guarded run is tallied").kept_share(), 0.5);
+    }
+
+    #[test]
+    fn the_tally_tells_a_rescued_tile_from_a_kept_one() {
+        // The retry is what makes the tile the model's, so it is counted as rescued and not as kept.
+        let saved = tallied(&rescued(LOOSE), &night(), &session(Some((0, 4.0))));
+        assert_eq!(saved, Some(GuardTally { tiles: 2, kept: 0, rescued: 1 }));
+
+        // Every run drifts, so both tiles are retried and then kept: the photograph comes back whole.
+        let kept = tallied(&rescued(TIGHT), &night(), &session(None));
+        assert_eq!(kept, Some(GuardTally { tiles: 2, kept: 2, rescued: 0 }));
+        assert_eq!(kept.expect("a guarded run is tallied").kept_share(), 1.0);
+    }
+
+    #[test]
+    fn an_unguarded_model_answers_no_tally_rather_than_one_of_nothing_kept() {
+        let pipeline = filtering(1.0, None);
+
+        assert!(!ImagePipeline::<Fake>::guarded(pipeline.as_ref()));
+        assert_eq!(tallied(&pipeline, &photograph(PAIR.0, PAIR.1), &session(Some((0, 4.0)))), None);
+        assert!(ImagePipeline::<Fake>::guarded(guarded(1.0).as_ref()));
+    }
+
+    #[test]
+    fn two_runs_of_one_pipeline_each_count_only_their_own_tiles() {
+        // The property the process-wide counters this replaces did not have: the second run starts from nothing.
+        let pipeline = guarded(1.0);
+        let source = photograph(PAIR.0, PAIR.1);
+
+        let first = tallied(&pipeline, &source, &session(Some((0, 4.0))));
+        let second = tallied(&pipeline, &source, &session(None));
+
+        assert_eq!(first, Some(GuardTally { tiles: 2, kept: 1, rescued: 0 }));
+        assert_eq!(second, Some(GuardTally { tiles: 2, kept: 0, rescued: 0 }));
+    }
+
+    #[test]
+    fn a_tally_of_no_tiles_has_kept_none_of_the_photograph() {
+        assert_eq!(GuardTally::default().kept_share(), 0.0);
     }
 
     #[test]

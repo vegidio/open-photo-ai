@@ -1388,7 +1388,8 @@ fn a_consumer_can_read_what_a_run_ran_on_and_release_every_session() {
         std::sync::Arc::new(image::DynamicImage::ImageRgb8(image::RgbImage::new(64, 48))),
         "cafebabecafebabe",
     );
-    let enhanced = Enhanced { picture, providers: downgraded.clone(), faces: opai::ChainFaces::NotAsked };
+    let enhanced =
+        Enhanced { picture, providers: downgraded.clone(), faces: opai::ChainFaces::NotAsked, guards: Vec::new() };
 
     assert_eq!(enhanced.providers, downgraded);
     assert_eq!(enhanced.picture.dimensions(), (64, 48));

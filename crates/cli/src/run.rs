@@ -21,8 +21,9 @@
 //!   claim, save, commit        --> the source's depth, the library's recommended settings
 //!   end its row                --> Enhancements applied, Failed or Stopped, and the bar's [n/N] counts it;
 //!                                  off a terminal, its one plain line
-//! finish the view, summarize   --> ✨ naming the file for one image or the output for more, then each failure's 🧨
-//!                                  line where the view hid it
+//! finish the view, summarize   --> ✨ naming the file for one image or the output for more, then a ⚠️ line for
+//!                                  each image a guarded model left partly or wholly unprocessed, then each
+//!                                  failure's 🧨 line where the view hid it
 //! ```
 //!
 //! A Ctrl-C stops the whole batch, keeping what was already written. The notes, the face report, what each image
@@ -123,6 +124,7 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     stop_on_ctrl_c(&cancel);
 
     let mut written = Vec::new();
+    let mut warnings = Vec::new();
     let mut failures = Vec::new();
     // Set only where the stop left an image unwritten or unstarted: a Ctrl-C landing after the last image was written
     // stopped nothing.
@@ -166,9 +168,10 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
         drop(span);
 
         match result {
-            Ok(path) => {
+            Ok((path, notes)) => {
                 view.end_image(index, &source.path, &ImageEnd::Enhanced);
                 written.push(path);
+                warnings.extend(notes);
             }
             Err(CliError::Cancelled) => {
                 view.end_image(index, &source.path, &ImageEnd::Stopped);
@@ -185,7 +188,7 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
     let live = view.finish_batch();
     events::export_finished(sources.len(), written.len(), !stopped, began.elapsed().as_millis());
 
-    for line in summary(&written, &args.output, &failures, live, sources.len(), look.color) {
+    for line in summary(&written, &args.output, &warnings, &failures, live, sources.len(), look.color) {
         eprintln!("{line}");
     }
 
@@ -195,21 +198,30 @@ pub async fn run(args: Args, look: Look) -> Result<(), CliError> {
 }
 
 /// The lines printed once the batch's view is finished, before the closing line: the success line when anything was
-/// written, then each failure's line. Those are listed only under a live view of more than one image: a failure can
-/// have scrolled out of the view; off it, each image's own line already gave its reason; and a single image's failure
-/// is the closing line.
+/// written, then each of `warnings` about what was written, then each failure's line. The failures are listed only
+/// under a live view of more than one image: a failure can have scrolled out of the view; off it, each image's own line
+/// already gave its reason; and a single image's failure is the closing line.
+///
+/// The warnings are listed in every mode, because nothing else on the terminal says them: they are about images that
+/// were written, whose rows read as applied.
 fn summary(
     written: &[PathBuf],
     output: &Path,
+    warnings: &[String],
     failures: &[CliError],
     live: bool,
     total: usize,
     color: bool,
 ) -> Vec<String> {
     let success = look::summary(written, output).map(|line| look::success(line, color));
+    let warned = warnings.iter().map(|warning| look::warning(warning, color));
     let listed = if live && total > 1 { failures } else { &[] };
 
-    success.into_iter().chain(listed.iter().map(|failure| look::failure(failure, color))).collect()
+    success
+        .into_iter()
+        .chain(warned)
+        .chain(listed.iter().map(|failure| look::failure(failure, color)))
+        .collect()
 }
 
 /// How a run of `total` images ends: a stop over anything that failed before it, then the only image's own failure,
@@ -268,7 +280,7 @@ enum Planner<'a> {
 }
 
 /// Enhances `source`, the image at `index`, with the chain `planner` gives for its own size, on the processor `args`
-/// names, and writes it, answering the path written.
+/// names, and writes it, answering the path written and the warning lines to print about it.
 #[allow(
     clippy::too_many_arguments,
     reason = "one run's state, threaded through rather than bundled for one caller"
@@ -282,7 +294,7 @@ async fn enhance_one(
     planner: Planner<'_>,
     view: &View,
     cancel: &CancellationToken,
-) -> Result<PathBuf, CliError> {
+) -> Result<(PathBuf, Vec<String>), CliError> {
     // A file whose header read cleanly but whose pixels do not decode fails this image, not the batch. The library's
     // message names the path.
     let picture = image::load(&source.path).await.map_err(|error| CliError::Load(Box::new(error)))?;
@@ -318,7 +330,11 @@ async fn enhance_one(
         provenance(plan.operations.is_empty(), &enhanced.providers.verdict())
     );
 
-    Ok(written)
+    // Kept for the summary rather than printed here, where the batch's view still holds the terminal. The library has
+    // already written its own record of the same run to the log.
+    let notes = enhanced.guards.iter().filter_map(|report| look::guard_note(&source.path, report)).collect();
+
+    Ok((written, notes))
 }
 
 /// Analyses `picture`, the image at `index` read from `path`, for the families `models` leaves on, and plans the chain
@@ -573,7 +589,8 @@ mod tests {
 
         let written = [PathBuf::from("out/a.jpg"), PathBuf::from("out/c.jpg")];
         let failures = vec![failed("photos/b.jpg")];
-        lines.extend(summary(&written, Path::new("out"), &failures, live, 3, false));
+        let warnings: Vec<String> = look::guard_note(a, &stockholm_keeping_all(425)).into_iter().collect();
+        lines.extend(summary(&written, Path::new("out"), &warnings, &failures, live, 3, false));
         let closing = closing(false, failures, 3).expect_err("an image failed");
         lines.push(look::failure(closing, false));
 
@@ -586,6 +603,8 @@ mod tests {
                 "🧨 [ 42%] Failed to enhance             photos/b.jpg: disk full",
                 "🖼️ [100%] Enhancements applied to       photos/c.jpg",
                 "✨ 2 images enhanced successfully; files saved under out",
+                "⚠️ photos/a.jpg: Denoise Stockholm (FP32) left 100% of the photograph unchanged (too noisy or too \
+                 dark for it); try another denoise model",
                 "🧨 1 of 3 images failed",
             ]
         );
@@ -594,7 +613,7 @@ mod tests {
     #[test]
     fn a_live_view_of_several_images_lists_each_failure_under_the_summary() {
         let failures = [failed("a.jpg"), failed("c.jpg")];
-        let lines = summary(&["out/b.jpg".into()], Path::new("out"), &failures, true, 3, false);
+        let lines = summary(&["out/b.jpg".into()], Path::new("out"), &[], &failures, true, 3, false);
 
         assert_eq!(lines.len(), 3, "{lines:?}");
         assert_eq!(lines[0], "✨ Image enhanced successfully; file saved at out/b.jpg");
@@ -606,8 +625,35 @@ mod tests {
     fn a_single_image_or_plain_output_does_not_list_failures() {
         let failures = [failed("a.jpg")];
 
-        assert!(summary(&[], Path::new("out.png"), &failures, true, 1, false).is_empty());
-        assert!(summary(&[], Path::new("out"), &failures, false, 3, false).is_empty());
+        assert!(summary(&[], Path::new("out.png"), &[], &failures, true, 1, false).is_empty());
+        assert!(summary(&[], Path::new("out"), &[], &failures, false, 3, false).is_empty());
+    }
+
+    #[test]
+    fn a_warning_is_listed_between_the_success_line_and_the_failures_in_every_mode() {
+        let failures = [failed("a.jpg"), failed("c.jpg")];
+        let warnings = ["b.jpg: kept".to_string()];
+
+        let live = summary(&["out/b.jpg".into()], Path::new("out"), &warnings, &failures, true, 3, false);
+        assert_eq!(live.len(), 4, "{live:?}");
+        assert_eq!(live[1], "⚠️ b.jpg: kept");
+        assert!(live[2].starts_with("🧨 "), "{live:?}");
+
+        // A single image and plain output list no failures, but still the warning: nothing else says it.
+        let single = summary(&["out/b.jpg".into()], Path::new("out/b.jpg"), &warnings, &[], true, 1, false);
+        assert_eq!(single[1..], ["⚠️ b.jpg: kept"]);
+        let plain = summary(&["out/b.jpg".into()], Path::new("out"), &warnings, &failures, false, 3, false);
+        assert_eq!(plain[1..], ["⚠️ b.jpg: kept"]);
+    }
+
+    /// A Stockholm run whose guard kept every one of `tiles` tiles.
+    fn stockholm_keeping_all(tiles: usize) -> opai::GuardReport {
+        let strength = opai::Strength::new(1.0).expect("in range");
+
+        opai::GuardReport {
+            operation: opai::Denoise::stockholm(opai::FloatPrecision::Fp32, strength),
+            tally: opai::GuardTally { tiles, kept: tiles, rescued: 0 },
+        }
     }
 
     fn failed(path: &str) -> CliError {

@@ -42,6 +42,7 @@ use session::GraphShape;
 
 use crate::error::InferenceError;
 use crate::models::ArtifactId;
+use crate::models::filter::GuardTally;
 use crate::sessions::SessionHandle;
 use rust_sak::ai::Tuning;
 
@@ -119,6 +120,44 @@ pub(crate) trait ImagePipeline<B: Backend>: Model<B> {
         progress: Option<&dyn Fn(f64)>,
         cancelled: &dyn Fn() -> bool,
     ) -> Result<DynamicImage, InferenceError>;
+
+    // The two methods below are the guard's way out of a run, and they are provided rather than required so that the
+    // one contract with a guard is the one that says anything about it. The alternatives were each worse:
+    //
+    // - **A second value from `run` itself** would have every pipeline — the pass sequences, the graph sets, the
+    //   whole-image ones and the blanket impl over `DepthGeneric` — hand back a `None` it has no reason to know about,
+    //   to carry one contract's answer.
+    // - **A field the pipeline fills in and the driver reads afterwards** would be state that outlives the call. A
+    //   step that throws on an `Auto` accelerator is run again on the next provider, so the first attempt's count
+    //   would still be there for the second to add to; a return value cannot leak from one attempt into the next.
+    //
+    // The chain driver calls `run_tallied`, never `run`, so a pipeline overriding one has to override the other to
+    // be consistent — which is why the filter's `run` is written as `run_tallied` with the tally dropped.
+
+    /// Whether this pipeline's model is guarded, so that [`run_tallied`](Self::run_tallied) answers a tally.
+    ///
+    /// Asked **before** the run as well as answered by it: a step served from the store has to be served with the
+    /// tally the run that computed it produced, and the driver needs to know there is one to look for.
+    fn guarded(&self) -> bool {
+        false
+    }
+
+    /// [`run`](Self::run), and what the model's guard did to the photograph's tiles: `None` exactly where
+    /// [`guarded`](Self::guarded) is `false`.
+    ///
+    /// # Errors
+    ///
+    /// As [`run`](Self::run), and with no tally either.
+    fn run_tallied(
+        &self,
+        input: &DynamicImage,
+        sessions: &[SessionHandle<B::Session>],
+        depth: ChannelDepth,
+        progress: Option<&dyn Fn(f64)>,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<(DynamicImage, Option<GuardTally>), InferenceError> {
+        self.run(input, sessions, depth, progress, cancelled).map(|image| (image, None))
+    }
 }
 
 /// One planned operation whose result is **not** a picture, as the execute driver sees it.

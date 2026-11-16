@@ -41,7 +41,7 @@ use super::progress::{ChainProgress, OnInference};
 use crate::cache::RunCache;
 use crate::error::InferenceError;
 use crate::image::Picture;
-use crate::models::{Detection, Faces, Operation};
+use crate::models::{Detection, Faces, GuardTally, Operation};
 use crate::pipeline::{Backend, Shared};
 use crate::providers::ExecutionProvider;
 use crate::sessions::SessionHandle;
@@ -56,10 +56,10 @@ mod options;
 mod plan;
 mod report;
 
-pub(crate) use identity::{identity_after, identity_of_data};
+pub(crate) use identity::{identity_after, identity_of_data, identity_of_guard};
 pub use options::ProcessOptions;
 pub(crate) use plan::{Planned, plan};
-pub use report::{Enhanced, ProviderReport, ProviderVerdict};
+pub use report::{Enhanced, GuardReport, ProviderReport, ProviderVerdict};
 
 /// `operations` in [`Family::APPLY_ORDER`](crate::models::Family::APPLY_ORDER): borrowed where they already are, and
 /// otherwise a stably sorted copy, so two operations of one family keep the order they were given in.
@@ -253,7 +253,7 @@ where
         },
     });
 
-    let (pixels, providers) = outcome.map_err(|failure| failure.error)?;
+    let (pixels, providers, guards) = outcome.map_err(|failure| failure.error)?;
 
     // The path is the source's: it says where the pixels came from, never where they are going, so a result carries
     // the photograph it was made from and writing it is still a destination the caller names.
@@ -264,7 +264,7 @@ where
     // sometimes busy, for no correctness gain at all.
     let picture = Picture::new(source.path(), pixels, identity_after(source.identity(), operations, depth));
 
-    Ok(Enhanced { picture, providers, faces })
+    Ok(Enhanced { picture, providers, faces, guards })
 }
 
 /// The operations of a run as one field value, comma-separated: two steps of one chain read as `<tag>,<tag>`.
@@ -308,6 +308,10 @@ impl From<InferenceError> for RunFailure {
 /// whose result is stored reports [`Stage::Cached`](super::progress::Stage::Cached) and acquires no session at all.
 /// A cancelled or failed operation writes nothing.
 ///
+/// Every guarded step's [`GuardReport`] comes back beside the pixels, in chain order — from its run, or from the store
+/// beside the picture it served. A stored picture whose tally is missing is a miss, so a served step can never report
+/// less than its run did.
+///
 /// An empty chain returns `source` unchanged, identity included: applying nothing derives nothing.
 ///
 /// # Errors
@@ -329,11 +333,11 @@ pub(crate) async fn run<B: Backend>(
     on_progress: Option<OnInference>,
     cancel: &CancellationToken,
     cache: Option<&RunCache>,
-) -> Result<(Arc<DynamicImage>, ProviderReport), RunFailure> {
+) -> Result<(Arc<DynamicImage>, ProviderReport, Vec<GuardReport>), RunFailure> {
     if planned.is_empty() {
         // No session, so nothing to report having run on — which is a different answer from "it ran on what was
         // asked for", and is exactly the distinction `ProviderReport::actual` exists to keep.
-        return Ok((source, ProviderReport::new(provider, [])));
+        return Ok((source, ProviderReport::new(provider, []), Vec::new()));
     }
 
     let progress = ChainProgress::new(on_progress, planned.len());
@@ -355,6 +359,10 @@ pub(crate) async fn run<B: Backend>(
 
     // Cache reads are suppressed below this index. Only a prefix that would not decode raises it; see the rewind.
     let mut distrust_before = 0_usize;
+
+    // What each guarded step's guard decided, by index, whether the step was computed or served. By index rather than
+    // pushed as the walk goes, because the rewind below walks a span again and the second answer replaces the first.
+    let mut tallies: Vec<Option<GuardTally>> = vec![None; planned.len()];
 
     // The run cache sits in this loop, which is what makes dragging a slider cheap: a step whose result is already
     // there skips the model *and* the session acquisition, since acquiring would install a model for an operation that
@@ -385,10 +393,24 @@ pub(crate) async fn run<B: Backend>(
         {
             let reading = cache.clone();
             let wanted = key.clone();
-            let stored = spawn_blocking::<_, InferenceError, _>(move || reading.get_bytes(&wanted)).await?;
+            let guarded = operation.pipeline.guarded();
+
+            // A guarded step is served only together with its tally, and a picture whose tally is missing is a miss:
+            // an entry written before tallies were kept, or one whose tally the store declined. Serving the picture
+            // alone would be the one way a second run could say less than the first — the photograph came back
+            // unchanged, and nothing said so — and running the step again is always a correct answer, so no version
+            // tag is needed to retire the entries that have none.
+            let stored = spawn_blocking::<_, InferenceError, _>(move || {
+                let bytes = reading.get_bytes(&wanted)?;
+                let tally =
+                    if guarded { Some(reading.get_value::<GuardTally>(&identity_of_guard(&wanted))?) } else { None };
+
+                Some((bytes, tally))
+            })
+            .await?;
             metrics::cache_lookup(metrics::STEP, stored.is_some());
 
-            if let Some(bytes) = stored {
+            if let Some((bytes, tally)) = stored {
                 // `debug`, because it repeats once per operation and a user dragging a slider would otherwise fill
                 // their file with it. See this module's header for the rule.
                 tracing::debug!(operation = %operation.operation().cache_tag(), index, key, "step served from the store");
@@ -401,6 +423,8 @@ pub(crate) async fn run<B: Backend>(
                 // Its full share of the bar, through the same path every other report goes through — so a chain whose
                 // every operation was stored still ends on exactly 1 rather than never reporting at all.
                 progress.operation(index, operation.operation().clone()).cached();
+
+                tallies[index] = tally;
 
                 if pending.is_none() {
                     skipped_from = index;
@@ -499,7 +523,9 @@ pub(crate) async fn run<B: Backend>(
 
                     // One call, whatever the model is. Shared from here on, so the store's writer and the rest of the
                     // chain hold one buffer rather than two.
-                    let produced = pipeline.run(&input, &sessions, depth, report, &stopped).map(Arc::new);
+                    let produced = pipeline
+                        .run_tallied(&input, &sessions, depth, report, &stopped)
+                        .map(|(image, tally)| (Arc::new(image), tally));
 
                     // Only what actually succeeded — a cancelled or failed operation arrives as an `Err`, so nothing
                     // needs to check the token a second time — and the result is handed back either way: a write that
@@ -511,7 +537,14 @@ pub(crate) async fn run<B: Backend>(
                     // milliseconds to seconds, and nothing in this run needs it done: the next step and the caller have
                     // the pixels. A later read of this key waits for the write rather than missing it — see
                     // `RunCache::put_later`.
-                    if let (Ok(image), Some((cache, key))) = (&produced, &writing) {
+                    //
+                    // The tally is written here and at once rather than queued: it is a few dozen bytes of JSON, and a
+                    // picture already in the store without it would be read as a miss until it landed.
+                    if let (Ok((image, tally)), Some((cache, key))) = (&produced, &writing) {
+                        if let Some(tally) = tally {
+                            cache.put_value(&identity_of_guard(key), tally);
+                        }
+
                         cache.put_later(key, Arc::clone(image));
                     }
 
@@ -537,7 +570,8 @@ pub(crate) async fn run<B: Backend>(
         // Not recorded here: `process`'s closing record names the step, and a second record would be a second account
         // of one failure. Not the operations that had already succeeded either: a caller given a partial result has
         // no way to tell it from a finished enhancement and would show it to a user as one.
-        let (produced, ran) = produced.map_err(in_step)?;
+        let ((produced, tally), ran) = produced.map_err(in_step)?;
+        tallies[index] = tally;
 
         // The counterpart of the hit above, at the same level and with the same fields, so one `grep` over an
         // operation's id returns every step of every run that touched it and says which way each went.
@@ -560,7 +594,38 @@ pub(crate) async fn run<B: Backend>(
     // not only the first one whose provider differed from what was asked for.
     let report = ProviderReport::new(provider, held.iter().map(SessionHandle::provider));
 
-    Ok((current, report))
+    Ok((current, report, guard_reports(planned, &tallies)))
+}
+
+/// Every guarded step's report, in chain order, from the tallies the walk collected by index — with a `warn` for each
+/// one whose guard kept part of the photograph unprocessed.
+fn guard_reports<B: Backend>(planned: &[Planned<B>], tallies: &[Option<GuardTally>]) -> Vec<GuardReport> {
+    planned
+        .iter()
+        .zip(tallies)
+        .enumerate()
+        .filter_map(|(index, (step, tally))| {
+            let tally = (*tally)?;
+
+            // `warn`, and the one per-step record above `debug`, because it is the one a user is otherwise never told:
+            // the run succeeded and the result is, in that much of it, the photograph they started from. Written for
+            // a served step as for a computed one, since it is a property of the result being handed back, and a
+            // reader of `opai.log` after the second run must find it as after the first. A tile rescued but not kept
+            // was processed, so a tally with only rescues is not worth a warning.
+            if tally.kept > 0 {
+                tracing::warn!(
+                    operation = %step.operation().cache_tag(),
+                    index,
+                    kept = tally.kept,
+                    rescued = tally.rescued,
+                    tiles = tally.tiles,
+                    "a guarded model kept part of the photograph unprocessed"
+                );
+            }
+
+            Some(GuardReport { operation: step.operation().clone(), tally })
+        })
+        .collect()
 }
 
 /// The provider a step's sessions ran on, as its duration is tagged: one provider, or `mixed` where its graphs were

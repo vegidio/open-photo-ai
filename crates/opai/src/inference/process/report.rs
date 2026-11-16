@@ -1,7 +1,8 @@
-//! What a run returns: the picture, and what it was actually executed on.
+//! What a run returns: the picture, what it was actually executed on, and how much of it a guarded model left alone.
 
 use crate::image::Picture;
 use crate::inference::faces::ChainFaces;
+use crate::models::{GuardTally, Operation};
 use crate::providers::ExecutionProvider;
 
 #[cfg(doc)]
@@ -119,6 +120,27 @@ impl ProviderReport {
     }
 }
 
+/// What a guarded operation of a chain did to the photograph: the operation, and what its guard decided over its
+/// tiles.
+///
+/// A guarded model is one whose output is judged tile by tile — Stockholm's and Petersburg's — and where a tile's
+/// output has diverged, the tile keeps the photograph's own pixels. On a photograph unlike anything the model was
+/// trained on, that can be every tile: the run succeeds, the result is the photograph unchanged, and nothing else
+/// about it says so.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuardReport {
+    // Part of what a run **returns**, for the reason `ProviderReport` is: a front end that registered no progress
+    // callback is exactly the one that would otherwise show a user an unchanged photograph as an enhanced one.
+    //
+    // The operation beside its tally rather than an index into the chain: the chain a run executed is sorted into
+    // `Family::APPLY_ORDER` first, so an index would point into a list the caller never saw.
+    /// The guarded operation, as the chain ran it.
+    pub operation: Operation,
+
+    /// What its guard decided: how many tiles it judged, kept and rescued.
+    pub tally: GuardTally,
+}
+
 /// What a run produced: the enhanced picture, and what it was executed on.
 ///
 /// [`Opai::process`](crate::Opai::process)'s return value, mirroring [`ProcessOptions`] on the way in.
@@ -145,4 +167,11 @@ pub struct Enhanced {
     /// What finding the faces for the chain's face recoveries came to: [`ChainFaces::NotAsked`] unless
     /// [`ProcessOptions::faces`] asked for a detection and the chain carries a face recovery.
     pub faces: ChainFaces,
+
+    // Every guarded operation rather than only those that kept something, so "the guard ran and kept nothing" and
+    // "nothing was guarded" stay two answers; what is worth telling a user is the caller's to decide, with
+    // `GuardTally::kept_share` to decide it by.
+    /// Every guarded operation of the chain, in the order it ran, with what its guard decided — the same whether the
+    /// step was computed or served from the store. Empty where the chain runs no guarded model.
+    pub guards: Vec<GuardReport>,
 }

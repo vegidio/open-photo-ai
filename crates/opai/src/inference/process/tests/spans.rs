@@ -30,6 +30,7 @@ impl Through {
                 artifact: request.artifact.as_str().to_string(),
                 log: Arc::clone(&log),
                 fails: false,
+                explodes: false,
                 cancels: None,
                 reports: None,
                 native: Arc::new(FakeNative { open: 1, freed: Arc::clone(&freed) }),
