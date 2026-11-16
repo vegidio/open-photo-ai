@@ -275,6 +275,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}} dejó sin cambios el {{share}} de esta foto: tiene demasiado ruido o es demasiado oscura para este modelo. Prueba otro modelo.",
         "unsupportedFiles_one": "El archivo \"{{names}}\" no es compatible.",
         "unsupportedFiles_other": "{{count}} archivos no son compatibles: {{names}}"
     },

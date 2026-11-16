@@ -275,6 +275,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}} hat {{share}} dieses Fotos unverändert gelassen: Es ist für dieses Modell zu verrauscht oder zu dunkel. Versuchen Sie ein anderes Modell.",
         "unsupportedFiles_one": "Die Datei „{{names}}“ wird nicht unterstützt.",
         "unsupportedFiles_other": "{{count}} Dateien werden nicht unterstützt: {{names}}"
     },

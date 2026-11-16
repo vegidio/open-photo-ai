@@ -275,6 +275,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}} lämnade {{share}} av det här fotot oförändrat: det är för brusigt eller för mörkt för den här modellen. Prova en annan modell.",
         "unsupportedFiles_one": "Filen \"{{names}}\" stöds inte.",
         "unsupportedFiles_other": "{{count}} filer stöds inte: {{names}}"
     },

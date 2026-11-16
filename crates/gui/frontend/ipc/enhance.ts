@@ -71,6 +71,21 @@ export type RunProgress = {
 };
 
 /**
+ * An enhancement whose model left part of the photograph unprocessed, per Rust's `GuardNotice`: its
+ * guard judged the model's output on `kept` of the `tiles` the photograph was run as to have gone wrong,
+ * and kept the photograph's own pixels there.
+ */
+export type GuardNotice = {
+    /** Human-readable operation name (English, untranslated diagnostic), e.g. "Stockholm (FP32)". */
+    operation: string;
+    /** Enhancement family the operation belongs to, which is what the notice names. */
+    family: Family;
+    /** Tiles left unprocessed; never zero. */
+    kept: number;
+    tiles: number;
+};
+
+/**
  * Outcome of a run: either enhanced or stopped (never a rejection for a user-initiated stop).
  * Carries a result *description*, not pixels — those are fetched separately via `identity`.
  */
@@ -85,6 +100,8 @@ export type Enhancement =
           faces?: Face[];
           /** Detection failure message (untranslated); recovery then restored nothing but the chain continued. */
           facesError?: string;
+          /** Enhancements that left part of the photograph unprocessed. Absent if none did. */
+          guarded?: GuardNotice[];
       }
     /** Stopped via {@link cancelEnhance} or superseded by a later run — including one that finished but was discarded. */
     | { outcome: "stopped" };

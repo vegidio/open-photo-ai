@@ -13,7 +13,7 @@ import { useFacesStore } from "@/stores/faces";
 import { useFileStore } from "@/stores/files";
 import { useSettingsStore } from "@/stores/settings";
 import { FRAMING, HOLIDAY, openFiles, render, resetFileStore, SUNSET } from "@/test/support";
-import { type EnhancementRun, useEnhancementRun } from "./useEnhancementRun";
+import { type EnhancementRun, keptShare, useEnhancementRun } from "./useEnhancementRun";
 
 // The seams themselves are pinned by `ipc/enhance.test.ts` and `ipc/faces.test.ts` against the wire;
 // here they are mocked so this file is about what the hook asks for and what it does with the answers.
@@ -398,6 +398,54 @@ describe("a run that does not finish", () => {
         // enhancement broke when they had merely changed their mind.
         await waitFor(() => expect(answer.enhanced).toBeUndefined());
         expect(toast()).toBeNull();
+    });
+});
+
+describe("a run whose model left part of the photograph unprocessed", () => {
+    const toast = () => document.querySelector("[data-sonner-toast]");
+
+    const stockholm = (kept: number, tiles: number) => ({
+        operation: "Stockholm (FP32)",
+        family: "denoise" as const,
+        kept,
+        tiles,
+    });
+
+    it("draws the result and warns that the enhancement left the photograph unchanged", async () => {
+        stack(HOLIDAY.path, upscale(2));
+        mount();
+
+        pending[0]?.settle({
+            outcome: "enhanced",
+            identity: "abcdef0123456789",
+            width: 6000,
+            height: 4000,
+            guarded: [stockholm(425, 425)],
+        });
+
+        await waitFor(() =>
+            expect(toast()).toHaveTextContent(
+                "Denoise left 100% of this photo unchanged: it's too noisy or too dark for this model. Try another model.",
+            ),
+        );
+        expect(answer.enhanced).toEqual({ identity: "abcdef0123456789", width: 6000, height: 4000 });
+    });
+
+    it("says nothing for a run that answered no guard", async () => {
+        stack(HOLIDAY.path, upscale(2));
+        mount();
+
+        pending[0]?.settle({ outcome: "enhanced", identity: "abcdef0123456789", width: 6000, height: 4000 });
+
+        await waitFor(() => expect(answer.enhanced).toBeDefined());
+        expect(toast()).toBeNull();
+    });
+
+    it("never rounds a kept tile away, nor all but one up to the whole", () => {
+        expect(keptShare(stockholm(1, 425))).toBe("<1%");
+        expect(keptShare(stockholm(212, 425))).toBe("49%");
+        expect(keptShare(stockholm(424, 425))).toBe("99%");
+        expect(keptShare(stockholm(425, 425))).toBe("100%");
     });
 });
 

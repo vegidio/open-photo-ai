@@ -268,6 +268,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}} membiarkan {{share}} foto ini tidak berubah: foto terlalu banyak noise atau terlalu gelap untuk model ini. Coba model lain.",
         "unsupportedFiles_other": "{{count}} file tidak didukung: {{names}}"
     },
     "enhancements": {

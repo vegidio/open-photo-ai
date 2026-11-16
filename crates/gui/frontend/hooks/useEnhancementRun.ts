@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { type CropInfo, sameCrop } from "@/ipc/crop";
-import { cancelEnhance, enhance, onEnhanceProgress, type RunProgress } from "@/ipc/enhance";
+import { cancelEnhance, enhance, type GuardNotice, onEnhanceProgress, type RunProgress } from "@/ipc/enhance";
 import type { Face } from "@/ipc/faces";
 import type { ImageRecord } from "@/ipc/images";
+import { ENHANCEMENTS } from "@/lib/enhancements";
 import { withChoice } from "@/lib/faces";
 import { report } from "@/lib/report";
 import { useFileEnhancements } from "@/stores/enhancements";
@@ -54,6 +55,7 @@ export type EnhancementRun = {
  *       |                                                                |
  *       +-- done -> { outcome: "enhanced", identity, w, h, faces? } -----+--> enhanced pane, faces store
  *       |           { outcome: "stopped" }  -> nothing
+ *       |   guarded? -> warning notice (toasts.guardKept), one per enhancement
  *       +-- rejects -> notice (errors.enhanceFailed)
  *       |
  *       +-- onEnhanceProgress -> report.run === mine ? keep : discard --> bar
@@ -264,6 +266,19 @@ export const useEnhancementRun = (file: ImageRecord | undefined, crop?: CropInfo
                     toast.error(notice.current("errors.faceDetectFailed"));
                     record([]);
                 }
+
+                /*
+                 * A warning rather than an error: the run succeeded and its result is drawn. What it does
+                 * not show is that, in that much of it, the result is the photograph it started from -
+                 * which on a photograph the model could not handle at all is the whole of it, and looks
+                 * exactly like an enhancement that did nothing.
+                 */
+                for (const guarded of outcome.guarded ?? []) {
+                    const entry = ENHANCEMENTS.find(({ family }) => family === guarded.family);
+                    const enhancement = entry ? notice.current(entry.nameKey) : guarded.operation;
+
+                    toast.warning(notice.current("toasts.guardKept", { enhancement, share: keptShare(guarded) }));
+                }
             },
             (error: unknown) => {
                 ended();
@@ -300,4 +315,16 @@ export const useEnhancementRun = (file: ImageRecord | undefined, crop?: CropInfo
         ...(enhanced && { enhanced }),
         ...(indicator && { report: indicator }),
     };
+};
+
+/**
+ * How much of the photograph `guarded` left unprocessed, as the notice says it: a whole percentage,
+ * floored, never `0%` for a tile kept and never `100%` short of every tile - the CLI's rule.
+ */
+export const keptShare = ({ kept, tiles }: GuardNotice): string => {
+    if (kept >= tiles) return "100%";
+
+    const percent = Math.min(99, Math.floor((kept / tiles) * 100));
+
+    return percent === 0 ? "<1%" : `${percent}%`;
 };

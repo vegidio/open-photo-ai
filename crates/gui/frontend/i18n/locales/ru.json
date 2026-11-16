@@ -289,6 +289,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}}: {{share}} этого фото осталось без изменений — для этой модели оно слишком шумное или слишком тёмное. Попробуйте другую модель.",
         "unsupportedFiles_one": "Файл «{{names}}» не поддерживается.",
         "unsupportedFiles_few": "{{count}} файла не поддерживаются: {{names}}",
         "unsupportedFiles_many": "{{count}} файлов не поддерживаются: {{names}}",
