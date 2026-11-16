@@ -282,6 +282,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}} ha lasciato invariato il {{share}} di questa foto: è troppo rumorosa o troppo scura per questo modello. Prova un altro modello.",
         "unsupportedFiles_one": "Il file \"{{names}}\" non è supportato.",
         "unsupportedFiles_many": "{{count}} file non sono supportati: {{names}}",
         "unsupportedFiles_other": "{{count}} file non sono supportati: {{names}}"

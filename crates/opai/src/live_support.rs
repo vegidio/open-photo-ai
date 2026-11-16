@@ -7,13 +7,11 @@
 // of it that has drifted.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
 
 use rust_sak::image::ImageFormat;
 use tempfile::TempDir;
 
 use crate::deps::folders;
-use crate::models::filter::{GUARDED, RESCUED};
 use crate::models::precision::FloatPrecision;
 use crate::models::{Operation, Strength};
 use crate::progress::Dependency as Which;
@@ -165,15 +163,16 @@ impl StrengthFamily {
 
     /// `provider` against both precisions of all three variants, and the three against one another at each precision.
     pub(crate) async fn everywhere(&self, provider: ExecutionProvider) {
-        // A delta rather than a reset, as each run's own count is, so the total below is this check's own even in a
-        // process that ran something else guarded before it.
-        let guarded_before = GUARDED.load(Ordering::Relaxed);
+        // Summed from each run's own report, so the total below is this check's own whatever else the process ran.
+        let mut kept_in_all = 0;
 
         for precision in FloatPrecision::ALL {
             let mut results = Vec::with_capacity(self.variants.len());
 
             for codename in self.variants {
-                results.push(self.on(codename, precision, provider).await);
+                let (result, kept) = self.on(codename, precision, provider).await;
+                results.push(result);
+                kept_in_all += kept;
             }
 
             // Three sets of weights at one strength: two identical results would mean a seam handed two variants one
@@ -188,16 +187,17 @@ impl StrengthFamily {
             }
         }
 
-        println!(
-            "\n{provider}: {} tile(s) kept by {}'s guard across both precisions",
-            GUARDED.load(Ordering::Relaxed) - guarded_before,
-            self.guarded
-        );
+        println!("\n{provider}: {kept_in_all} tile(s) kept by {}'s guard across both precisions", self.guarded);
     }
 
     /// Puts the committed photograph through `codename` at `precision` on `provider`, at a strength of 0 and of 1,
-    /// states the properties, and hands back the result at 1.
-    async fn on(&self, codename: &str, precision: FloatPrecision, provider: ExecutionProvider) -> crate::Picture {
+    /// states the properties, and hands back the result at 1 beside how many tiles the guard kept across the two.
+    async fn on(
+        &self,
+        codename: &str,
+        precision: FloatPrecision,
+        provider: ExecutionProvider,
+    ) -> (crate::Picture, usize) {
         // A fresh application per call, so no result is served from another provider's run of the same operation.
         let (_root, opai) = live_application(self.name).await;
         let source = photograph().await;
@@ -206,6 +206,7 @@ impl StrengthFamily {
         println!("\n{codename} at {precision:?} on {provider}: source {width}x{height}");
 
         let mut kept = None;
+        let mut kept_tiles = 0;
 
         for strength in [1.0, 0.0] {
             let operation = (self.operation)(
@@ -214,7 +215,6 @@ impl StrengthFamily {
                 Strength::new(strength).expect("a live check supplies a strength in range"),
             );
             let options = ProcessOptions { provider, ..Default::default() };
-            let (guarded_before, rescued_before) = (GUARDED.load(Ordering::Relaxed), RESCUED.load(Ordering::Relaxed));
             let started = std::time::Instant::now();
 
             let enhanced = opai
@@ -222,8 +222,9 @@ impl StrengthFamily {
                 .await
                 .unwrap_or_else(|err| panic!("{codename} at {precision:?} on {provider}, strength {strength}: {err}"));
 
-            let guarded = GUARDED.load(Ordering::Relaxed) - guarded_before;
-            let rescued = RESCUED.load(Ordering::Relaxed) - rescued_before;
+            let guarded: usize = enhanced.guards.iter().map(|report| report.tally.kept).sum();
+            let rescued: usize = enhanced.guards.iter().map(|report| report.tally.rescued).sum();
+            kept_tiles += guarded;
             let produced = enhanced.picture;
 
             println!(
@@ -238,9 +239,10 @@ impl StrengthFamily {
                 "{codename} at strength {strength} did not return the photograph's own dimensions"
             );
 
+            // Stronger than the counts it replaces: an unguarded model reports no guard at all, rather than one that
+            // kept nothing.
             if codename != self.guarded {
-                assert_eq!(guarded, 0, "{codename} is not guarded, yet a tile was kept");
-                assert_eq!(rescued, 0, "{codename} is not guarded, yet a tile was rescued");
+                assert!(enhanced.guards.is_empty(), "{codename} is not guarded, yet reported a guard");
             }
 
             if strength == 0.0 {
@@ -269,6 +271,6 @@ impl StrengthFamily {
             }
         }
 
-        kept.expect("the run at a strength of 1 keeps its result")
+        (kept.expect("the run at a strength of 1 keeps its result"), kept_tiles)
     }
 }

@@ -282,6 +282,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}} a laissé {{share}} de cette photo inchangé : elle est trop bruitée ou trop sombre pour ce modèle. Essayez un autre modèle.",
         "unsupportedFiles_one": "Le fichier « {{names}} » n'est pas pris en charge.",
         "unsupportedFiles_many": "{{count}} fichiers ne sont pas pris en charge : {{names}}",
         "unsupportedFiles_other": "{{count}} fichiers ne sont pas pris en charge : {{names}}"

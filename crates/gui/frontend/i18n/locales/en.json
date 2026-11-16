@@ -275,6 +275,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}} left {{share}} of this photo unchanged: it's too noisy or too dark for this model. Try another model.",
         "unsupportedFiles_one": "The file \"{{names}}\" is not supported.",
         "unsupportedFiles_other": "{{count}} files are not supported: {{names}}"
     },

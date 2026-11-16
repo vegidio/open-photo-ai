@@ -3,6 +3,7 @@
 mod cache;
 mod entry;
 mod faces;
+mod guard;
 mod identity;
 mod log;
 mod plan;
@@ -102,6 +103,9 @@ struct FakeSession {
     log: Arc<Mutex<Log>>,
     /// Whether running a tile against this session fails, standing in for a model that broke partway through.
     fails: bool,
+    /// Whether every tile this session runs blows up, standing in for a guarded model shown a photograph unlike
+    /// anything it was trained on.
+    explodes: bool,
     /// Cancelled when the first tile against this session is reached, which is how a run is stopped from *inside*
     /// a model rather than between operations.
     cancels: Option<CancellationToken>,
@@ -124,6 +128,8 @@ struct Fake {
     fails_to_open: Option<String>,
     /// The artifact whose tile runs fail.
     fails_to_run: Option<String>,
+    /// The artifact whose every tile blows up, retry included, so its guard keeps the whole photograph.
+    explodes: Option<String>,
     /// The artifact whose first tile cancels the run, with the token the caller holds.
     cancels: Option<(String, CancellationToken)>,
     /// What each named artifact's session is built on, standing in for a provider that could open that model.
@@ -170,6 +176,7 @@ impl Fake {
             stops_installing: None,
             fails_to_open: None,
             fails_to_run: None,
+            explodes: None,
             cancels: None,
             built_on: HashMap::new(),
             builds_on: ExecutionProvider::Cpu,
@@ -292,6 +299,7 @@ impl Backend for Fake {
         Ok(SessionHandle::held(
             FakeSession {
                 fails: self.fails_to_run.as_deref() == Some(artifact.as_str()) || fails_here,
+                explodes: self.explodes.as_deref() == Some(artifact.as_str()),
                 artifact,
                 log: Arc::clone(&self.log),
                 cancels,
@@ -333,6 +341,11 @@ impl Backend for Fake {
         }
 
         nearest_neighbour(input, output);
+
+        // Far past any guard's magnitude, everywhere: a retry brightened or not explodes as the first run did.
+        if session.explodes {
+            output.fill(1000.0);
+        }
 
         Ok(())
     }
@@ -443,6 +456,7 @@ async fn run_chain(
 
     run(backend, source, &planned, provider, depth, on_progress, cancel, cache)
         .await
+        .map(|(pixels, report, _)| (pixels, report))
         .map_err(|failure| failure.error)
 }
 

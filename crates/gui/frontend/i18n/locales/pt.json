@@ -275,6 +275,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}} deixou {{share}} desta foto inalterado: ela tem ruído demais ou está escura demais para este modelo. Experimente outro modelo.",
         "unsupportedFiles_one": "O arquivo \"{{names}}\" não é compatível.",
         "unsupportedFiles_other": "{{count}} arquivos não são compatíveis: {{names}}"
     },

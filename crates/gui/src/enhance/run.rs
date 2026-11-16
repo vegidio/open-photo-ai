@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use opai::{
-    ChainFaces, Enhanced, ExecutionProvider, FaceSelection, InferenceError, Opai, OutputDepth, Picture, ProcessOptions,
+    ChainFaces, Enhanced, ExecutionProvider, FaceSelection, Family, GuardReport, InferenceError, Opai, OutputDepth,
+    Picture, ProcessOptions,
 };
 use serde::{Deserialize, Serialize};
 
@@ -75,9 +76,43 @@ pub(crate) enum Enhancement {
         /// then restored none and the rest of the chain ran — see [`opai::ProcessOptions::faces`].
         #[serde(skip_serializing_if = "Option::is_none")]
         faces_error: Option<String>,
+        /// Every enhancement of the chain whose model left part of the photograph unprocessed — what the window warns
+        /// about, since the result otherwise looks like one the enhancement was applied to. Absent where none did.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        guarded: Vec<GuardNotice>,
     },
     /// The run was stopped, by the window or by a later run displacing it. No image at all.
     Stopped,
+}
+
+/// An enhancement whose guarded model kept some of the photograph's tiles unprocessed, as the window reads it.
+///
+/// Its own wire shape rather than `opai`'s [`GuardReport`], for the reason [`RunProgress`](super::progress::RunProgress)
+/// is: the window names the enhancement by its family and counts a share, and needs nothing else of the operation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GuardNotice {
+    /// The operation, as a user would see it named: `Stockholm (FP32)`. A diagnostic; the window names the
+    /// enhancement by [`family`](Self::family).
+    operation: String,
+    /// Which enhancement the operation belongs to.
+    family: Family,
+    /// How many tiles the guard kept unprocessed: never zero, since a guard that kept none is not worth a notice.
+    kept: usize,
+    /// How many tiles the photograph was run as.
+    tiles: usize,
+}
+
+impl GuardNotice {
+    /// The notice `report` is worth, or `None` where its guard kept no tile — a tile rescued was still processed.
+    fn of(report: &GuardReport) -> Option<Self> {
+        (report.tally.kept > 0).then(|| Self {
+            operation: report.operation.display_name(),
+            family: report.operation.family(),
+            kept: report.tally.kept,
+            tiles: report.tally.tiles,
+        })
+    }
 }
 
 impl Answer for Enhancement {
@@ -364,7 +399,7 @@ pub(crate) async fn enhance_with<E: Enhancer>(
     }
 
     match outcome {
-        Ok(Enhanced { picture, faces, .. }) => {
+        Ok(Enhanced { picture, faces, guards, .. }) => {
             let (width, height) = picture.dimensions();
             let identity = picture.identity().to_string();
 
@@ -383,7 +418,9 @@ pub(crate) async fn enhance_with<E: Enhancer>(
                 ChainFaces::Failed(error) => (None, Some(error.to_string())),
             };
 
-            Ok(Enhancement::Enhanced { identity, width, height, faces, faces_error })
+            let guarded = guards.iter().filter_map(GuardNotice::of).collect();
+
+            Ok(Enhancement::Enhanced { identity, width, height, faces, faces_error, guarded })
         }
         // Not a failure — a user who changed their mind and a run displaced on their behalf both arrive here.
         Err(InferenceError::Cancelled) => {
@@ -970,7 +1007,14 @@ mod tests {
             assert_eq!(CommandError::ended(&error).cell(), cell, "{error:?}");
         }
 
-        let answer = Enhancement::Enhanced { identity: s(), width: 1, height: 1, faces: None, faces_error: None };
+        let answer = Enhancement::Enhanced {
+            identity: s(),
+            width: 1,
+            height: 1,
+            faces: None,
+            faces_error: None,
+            guarded: Vec::new(),
+        };
         assert_eq!(Answer::ended(&answer).cell(), "finished");
         assert_eq!(Answer::ended(&Enhancement::Stopped).cell(), "stopped");
     }
@@ -984,6 +1028,7 @@ mod tests {
             height: 400,
             faces: None,
             faces_error: None,
+            guarded: Vec::new(),
         };
 
         assert_eq!(
@@ -1059,6 +1104,72 @@ mod tests {
             .expect("the chain runs");
 
         assert!(matches!(answer, Enhancement::Enhanced { faces: None, faces_error: None, .. }), "{answer:?}");
+    }
+
+    /// An enhancer whose run reports `guards`, as a chain over a guarded model does.
+    struct Guarding {
+        guards: Vec<GuardReport>,
+    }
+
+    impl Enhancer for Guarding {
+        async fn process(
+            &self,
+            source: &Picture,
+            _operations: &[opai::Operation],
+            _options: ProcessOptions,
+        ) -> Result<Enhanced, InferenceError> {
+            Ok(Enhanced { guards: self.guards.clone(), ..enhanced(source, 8, 6, "cafebabecafebabe") })
+        }
+    }
+
+    /// Stockholm's report of a run whose guard kept `kept` of `tiles` tiles.
+    fn stockholm_keeping(kept: usize, tiles: usize) -> GuardReport {
+        let strength = opai::Strength::new(1.0).expect("in range");
+
+        GuardReport {
+            operation: opai::Denoise::stockholm(opai::FloatPrecision::Fp32, strength),
+            tally: opai::GuardTally { tiles, kept, rescued: 2 },
+        }
+    }
+
+    #[test]
+    fn a_guard_that_kept_tiles_is_answered_and_one_that_kept_none_is_not() {
+        let (_dir, opened, runs, identity) = fixture();
+        let enhancer = Guarding { guards: vec![stockholm_keeping(6, 6), stockholm_keeping(0, 6)] };
+
+        let answer =
+            run_now(&enhancer, &opened, &runs, request("run-1", &identity, vec![kyoto()])).expect("the chain runs");
+
+        let Enhancement::Enhanced { guarded, .. } = answer else {
+            panic!("the run was not answered as enhanced: {answer:?}");
+        };
+        assert_eq!(
+            guarded,
+            [GuardNotice { operation: "Stockholm (FP32)".to_string(), family: Family::Denoise, kept: 6, tiles: 6 }]
+        );
+    }
+
+    #[test]
+    fn a_guard_notice_is_on_the_wire_beside_the_result() {
+        let answer = Enhancement::Enhanced {
+            identity: "cafebabecafebabe".to_string(),
+            width: 600,
+            height: 400,
+            faces: None,
+            faces_error: None,
+            guarded: GuardNotice::of(&stockholm_keeping(1, 425)).into_iter().collect(),
+        };
+
+        assert_eq!(
+            serde_json::to_value(answer).expect("an answer serializes"),
+            serde_json::json!({
+                "outcome": "enhanced",
+                "identity": "cafebabecafebabe",
+                "width": 600,
+                "height": 400,
+                "guarded": [{ "operation": "Stockholm (FP32)", "family": "denoise", "kept": 1, "tiles": 425 }],
+            })
+        );
     }
 
     #[test]

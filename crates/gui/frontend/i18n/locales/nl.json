@@ -275,6 +275,7 @@
         }
     },
     "toasts": {
+        "guardKept": "{{enhancement}} heeft {{share}} van deze foto ongewijzigd gelaten: de foto heeft te veel ruis of is te donker voor dit model. Probeer een ander model.",
         "unsupportedFiles_one": "Het bestand \"{{names}}\" wordt niet ondersteund.",
         "unsupportedFiles_other": "{{count}} bestanden worden niet ondersteund: {{names}}"
     },

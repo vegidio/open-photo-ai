@@ -218,7 +218,7 @@ pub use inference::execute::{ExecuteOptions, Executed};
 pub use inference::faces::{
     ChainFaces, FaceSelection, FacedChain, SelectFaces, default_face_selection, fill_chain_faces,
 };
-pub use inference::process::{Enhanced, ProcessOptions, ProviderReport, ProviderVerdict};
+pub use inference::process::{Enhanced, GuardReport, ProcessOptions, ProviderReport, ProviderVerdict};
 pub use inference::progress::{InferenceProgress, OnInference, Stage};
 pub use libpath::prepare_library_path;
 pub use logging::LogError;
@@ -226,10 +226,10 @@ pub use models::{
     Analysis, ArtifactId, Bias, BuildError, ColorBalance, ColorBalanceParams, ColorBalanceVariant, Colorization,
     ColorizationVariant, Confidence, DataOperation, Denoise, DenoiseParams, DenoiseVariant, Detection, DetectionOutput,
     DetectionVariant, Face, FaceRecovery, FaceRecoveryParams, FaceRecoveryVariant, Faces, Family, FamilyEntry,
-    Fidelity, FloatPrecision, GraphRole, GraphSet, LightAdjustment, LightAdjustmentParams, LightAdjustmentVariant,
-    Operation, OsakaPrecision, ParameterEntry, ParameterKind, ParameterValues, Pass, Point, Precision, RangeError,
-    Rect, Resolution, Scale, Sharpen, SharpenParams, SharpenVariant, Strength, Subject, UnknownRole, Upscale,
-    UpscaleParams, UpscaleVariant, VariantEntry, catalogue,
+    Fidelity, FloatPrecision, GraphRole, GraphSet, GuardTally, LightAdjustment, LightAdjustmentParams,
+    LightAdjustmentVariant, Operation, OsakaPrecision, ParameterEntry, ParameterKind, ParameterValues, Pass, Point,
+    Precision, RangeError, Rect, Resolution, Scale, Sharpen, SharpenParams, SharpenVariant, Strength, Subject,
+    UnknownRole, Upscale, UpscaleParams, UpscaleVariant, VariantEntry, catalogue,
 };
 pub use progress::{Dependency, OnPlan, OnProgress, Phase, PlannedDependency, Progress};
 pub use providers::{ExecutionProvider, SupportedProviders};
