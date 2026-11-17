@@ -55,8 +55,11 @@ impl From<Processor> for ExecutionProvider {
 ///
 /// The enhanced arm carries only a description, not the pixels — those are served over the `opai://` scheme,
 /// addressed by `identity`. See design.md D4.
+///
+/// `rename_all` names the variants and `rename_all_fields` their fields: without the second, `faces_error` would
+/// reach the window as `faces_error` while it reads `facesError`, and a failed detection would go unreported.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "outcome", rename_all = "camelCase")]
+#[serde(tag = "outcome", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub(crate) enum Enhancement {
     /// The chain ran and its result is being held.
     Enhanced {
@@ -993,6 +996,29 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Enhancement::Stopped).expect("an answer serializes"),
             serde_json::json!({ "outcome": "stopped" })
+        );
+    }
+
+    #[test]
+    fn a_failed_detection_reaches_the_window_under_the_name_it_reads() {
+        let answer = Enhancement::Enhanced {
+            identity: "cafebabecafebabe".to_string(),
+            width: 600,
+            height: 400,
+            faces: None,
+            faces_error: Some("no execution provider could be built".to_string()),
+        };
+
+        // `facesError`, as `ipc/enhance.ts` declares it and `useEnhancementRun` reads it.
+        assert_eq!(
+            serde_json::to_value(answer).expect("an answer serializes"),
+            serde_json::json!({
+                "outcome": "enhanced",
+                "identity": "cafebabecafebabe",
+                "width": 600,
+                "height": 400,
+                "facesError": "no execution provider could be built",
+            })
         );
     }
 
