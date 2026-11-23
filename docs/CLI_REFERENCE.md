@@ -116,6 +116,10 @@ Text added before and after each image's name, before the extension: `--prefix n
 
 Replaces a file that already exists at a destination instead of [numbering](#numbering-and---overwrite) the result.
 
+### `--verbose`
+
+Names, on each written image's line, the enhancements it received: each model, its strength, bias or upscale factor, and whether the [run cache](#run-cache) served them, as in `🖼️ [100%] Enhancements applied to photo.jpg: Denoise Stockholm strength 100, Upscale Tokyo 2x`. Without it, the line ends with the path. It has no short form: `-v` prints the version. See [Terminal output](#terminal-output).
+
 ### `--autopilot`, `--ap`
 
 Analyses each image and applies the enhancements it calls for, instead of the ones you name. It can't be combined with the enhancement flags or their options. See [Autopilot](#autopilot).
@@ -354,7 +358,13 @@ opai photos --ap -o enhanced
 - **Each enhancement uses its default strength or bias**: strength `100` for denoise and sharpen, bias `50` for light adjustment and color balance. An upscale runs at the factor the image's size calls for (see [Upscale](#upscale---upscale-model---up-model)); an image above 4 MP is not upscaled.
 - **An image that needs nothing is still written**, unchanged, in the format asked for. Its row ends with `Enhancements applied to` as any other.
 - **If face detection can't run** (for example, its model can't be downloaded), the image still gets the other enhancements, without face recovery, and the [log file](#log-file) records a warning.
-- **What was chosen for each image** is recorded in the [log file](#log-file). The terminal shows each enhancement in the image's row while it runs.
+- **What was chosen for each image** is recorded in the [log file](#log-file). The terminal shows each enhancement in the image's row while it runs, and with [`--verbose`](#--verbose) the image's line names them once it is written, with their models and parameters:
+
+  ```bash
+  opai photos --ap -o enhanced --verbose
+  # 🖼️ [100%] Enhancements applied to       photos/a.jpg: Denoise Stockholm strength 100, Upscale Tokyo 4x
+  # 🖼️ [100%] Enhancements applied to       photos/b.jpg: Color Balance Rio bias 50
+  ```
 
 ### Choosing the models
 
@@ -478,7 +488,7 @@ By default (`-p auto`), the CLI uses the fastest hardware available, trying in t
 
 ### Run cache
 
-Every step's result is cached on disk for **24 hours**. If you run the same enhancements on the same image again within that time, the cached results are reused and the run finishes almost immediately. Changing anything (a model, strength, bias, scale or quality) creates a new cache entry from that step onwards.
+Every step's result is cached on disk for **24 hours**. If you run the same enhancements on the same image again within that time, the cached results are reused and the run finishes almost immediately. Changing anything (a model, strength, bias, scale or quality) creates a new cache entry from that step onwards. With [`--verbose`](#--verbose), a re-run's line ends `(cached)` when every step was reused, or `(2 of 3 cached)` when only some were.
 
 ### One instance at a time
 
@@ -519,18 +529,19 @@ And once the run ends, the view stays as it was last drawn, with the summary und
   - `🖼️ [  0%] Choosing enhancements for <path>` with [`--autopilot`](#autopilot), while the image is analysed. On the first run, this includes downloading the face detection model, so it can stay at `0%` for a while;
   - `🖼️ [ 12%] Downloading <enhancement> for <path>` while a model is downloaded;
   - `🖼️ [ 42%] Applying <enhancement> to <path>` while an enhancement runs or is served from the [run cache](#run-cache);
-  - `🖼️ [100%] Enhancements applied to <path>` once its result is written;
+  - `🖼️ [100%] Enhancements applied to <path>` once its result is written, followed under [`--verbose`](#--verbose) by `: <applied>` (see below);
   - `🧨 [ 42%] Failed to enhance <path>` once it has failed;
   - `🧨 [ 42%] Stopped enhancing <path>` when you [stopped the run](#stopping-a-run) while it was being worked on.
 
   `<enhancement>` is the enhancement's name as the GUI shows it: `Denoise`, `Face Recovery`, `Colorize`, `Light Adjust`, `Color Balance`, `Sharpen` or `Upscale`.
+- **With `--verbose`**, a written image's row ends with `: <applied>`, what it received, in the order it ran: each enhancement's name, its model as the GUI names it (`Malmö`, `São Paulo`), and its parameter, `strength <n>` for denoise and sharpen, `bias <n>` for light adjustment and color balance, `<factor>x` for an upscale (`2x`, `1.5x`), none for face recovery and colorization. A face recovery that restored nobody reads `Face Recovery Athens (no faces)`, or `(face detection failed)`, and isn't counted as cached. It ends with ` (cached)` when the [run cache](#run-cache) served every step, or ` (<k> of <n> cached)` when it served some. An image that needed nothing reads `no enhancement needed`. The text is drawn in the terminal's default color, and in the live view a row wider than the terminal is cut at its edge; the plain lines and the [log file](#log-file) carry it whole. Failed and stopped rows carry none. For example, `opai photo.jpg --dn --la --up --scale 2 -o out.png --verbose` ends with `🖼️ [100%] Enhancements applied to       photo.jpg: Denoise Stockholm strength 100, Light Adjust Paris bias 50, Upscale Tokyo 2x`.
 - **The summary** starts with a success line when at least one image was written. For exactly one image it names the file written, so a numbered name is visible: `✨ Image enhanced successfully; file saved at out_1.png`. For more, it names the output directory: `✨ 7 images enhanced successfully; files saved under out`. Then a `🧨` line gives the reason for each image that failed, in the order they ran, since a failure can have scrolled out of the list. Last comes the run's closing `🧨` line, if it didn't succeed (see [Exit codes](#exit-codes)).
 
 In color, the dependency's name and its percentage are bold white, the spinner magenta and the `✓` green. In the processor line, the processor is green and the quality yellow. The bar is drawn in a color gradient. In a `🖼️` row, the percentage (with its `%`) is blue, the enhancement's name (or the word `Enhancements`) magenta and the path cyan and underlined; a `🧨` row is red throughout. The success line is bold yellow.
 
 With a single image, the view is three rows tall: the bar, a blank row and the image's row.
 
-When stderr is **not** a terminal (for example, when redirected to a file or run in CI), there's no dependency line, no view and no progress bar. The processor line comes first, followed by a blank line. Then each image prints one line, without colors, when it ends, with the words its row ends with, its percentage included; a failed image's line adds the reason. Then come the summary's success line and the closing line:
+When stderr is **not** a terminal (for example, when redirected to a file or run in CI), there's no dependency line, no view and no progress bar. The processor line comes first, followed by a blank line. Then each image prints one line, without colors, when it ends, with the words its row ends with, its percentage included; a failed image's line adds the reason, and under `--verbose` a written image's line adds what it received. Then come the summary's success line and the closing line:
 
 ```
 🧠 Running inference using the processor Auto; quality HD
@@ -590,7 +601,7 @@ What's in it that the terminal doesn't show:
 - With [`--autopilot`](#autopilot), the enhancements chosen for each image, and a warning when part of the analysis (such as face detection) couldn't run.
 - A file found in a directory that was skipped because it couldn't be read, and why.
 - Face detection results, e.g. `found 3 faces, restoring 2`, or `no faces were found; none will be restored`.
-- Each file written, with its size and format, and the hardware it ran on, e.g. `ran on CoreML, CPU` or `served from cache`.
+- Each file written, with its size and format, the hardware it ran on, e.g. `ran on CoreML, CPU` or `served from cache`, and the enhancements it received, e.g. `applied Denoise Stockholm strength 100 (cached)`, with or without `--verbose`.
 - The full error behind any `🧨` line.
 
 **Please attach this file when [reporting a bug](https://github.com/vegidio/open-photo-ai/issues).**
