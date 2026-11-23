@@ -34,7 +34,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use opai::{
-    APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, FaceSelection,
+    APP_NAME, CLI, CancellationToken, ChainFaces, Enhanced, ExecuteOptions, ExecutionProvider, FaceSelection, Family,
     InitOptions, OnInference, Opai, OutputDepth, Picture, ProcessOptions, ProviderVerdict, Suggestions,
     default_face_selection, image,
 };
@@ -314,7 +314,7 @@ async fn enhance_one(
 
     let (width, height) = enhanced.picture.dimensions();
     let verdict = enhanced.providers.verdict();
-    let applied = applied(&plan, view.cached(index), &verdict);
+    let applied = applied(&plan, &enhanced.faces, view.cached(index), &verdict);
     tracing::info!(
         "wrote {} ({width}x{height}, {}); {}; applied {applied}",
         written.display(),
@@ -327,11 +327,33 @@ async fn enhance_one(
 
 /// What `plan` applied, in words, ending with how many of its steps the run cache served: `cached` as the progress
 /// reports counted them, or every one where the verdict says nothing executed, so a missed report cannot hide it.
-fn applied(plan: &Plan, cached: usize, verdict: &ProviderVerdict) -> String {
-    let ran = plan.operations.len();
+///
+/// A face recovery that restored nobody, because `faces` holds none the selection keeps or the detection failed, is
+/// marked so, and is not counted among the steps the cache could have served.
+fn applied(plan: &Plan, faces: &ChainFaces, cached: usize, verdict: &ProviderVerdict) -> String {
+    let mut applied = plan.applied.clone();
+    let mut ran = plan.operations.len();
+    if let Some(why) = restored_nobody(faces)
+        && let Some(recovery) = applied.iter_mut().find(|applied| applied.family == Family::FaceRecovery)
+    {
+        recovery.detail = Some(format!("({why})"));
+        ran -= 1;
+    }
     let cached = if ran > 0 && matches!(verdict, ProviderVerdict::NothingExecuted) { ran } else { cached };
 
-    format!("{}{}", chain::describe(&plan.applied), progress::cache_marker(cached, ran))
+    format!("{}{}", chain::describe(&applied), progress::cache_marker(cached, ran))
+}
+
+/// Why a face recovery handed `faces` restores nobody, or `None` where it restores someone or none was asked for.
+fn restored_nobody(faces: &ChainFaces) -> Option<&'static str> {
+    match faces {
+        ChainFaces::NotAsked => None,
+        ChainFaces::Found(found) => {
+            let kept = found.iter().enumerate().any(|(index, face)| default_face_selection(index, face));
+            (!kept).then_some("no faces")
+        }
+        ChainFaces::Failed(_) => Some("face detection failed"),
+    }
 }
 
 /// Analyses `picture`, the image at `index` read from `path`, for the families `models` leaves on, and plans the chain
@@ -731,9 +753,9 @@ mod tests {
         let ran = ProviderVerdict::Resolved(vec![ExecutionProvider::Cpu]);
         let base = "Denoise Stockholm strength 100, Light Adjust Paris bias 50, Sharpen Moscow strength 100";
 
-        assert_eq!(applied(&plan, 0, &ran), base);
-        assert_eq!(applied(&plan, 2, &ran), format!("{base} (2 of 3 cached)"));
-        assert_eq!(applied(&plan, 3, &ran), format!("{base} (cached)"));
+        assert_eq!(applied(&plan, &ChainFaces::NotAsked, 0, &ran), base);
+        assert_eq!(applied(&plan, &ChainFaces::NotAsked, 2, &ran), format!("{base} (2 of 3 cached)"));
+        assert_eq!(applied(&plan, &ChainFaces::NotAsked, 3, &ran), format!("{base} (cached)"));
     }
 
     #[test]
@@ -741,8 +763,39 @@ mod tests {
         let plan = fixed("opai photo.jpg --dn --up --scale 2 -o out.png");
 
         assert_eq!(
-            applied(&plan, 0, &ProviderVerdict::NothingExecuted),
+            applied(&plan, &ChainFaces::NotAsked, 0, &ProviderVerdict::NothingExecuted),
             "Denoise Stockholm strength 100, Upscale Tokyo 2x (cached)"
+        );
+    }
+
+    #[test]
+    fn a_face_recovery_that_restored_nobody_is_marked_and_never_cached() {
+        let plan = fixed("opai photo.jpg --fr -o out.png");
+        let nothing = ProviderVerdict::NothingExecuted;
+
+        let none = ChainFaces::Found(Faces::empty());
+        assert_eq!(applied(&plan, &none, 0, &nothing), "Face Recovery Athens (no faces)");
+        let too_large = ChainFaces::Found(Faces::new([face(1000.0)]));
+        assert_eq!(applied(&plan, &too_large, 0, &nothing), "Face Recovery Athens (no faces)");
+        let failed = ChainFaces::Failed(InferenceError::Shutdown);
+        assert_eq!(applied(&plan, &failed, 0, &nothing), "Face Recovery Athens (face detection failed)");
+        let found = ChainFaces::Found(Faces::new([face(100.0)]));
+        assert_eq!(applied(&plan, &found, 0, &nothing), "Face Recovery Athens (cached)");
+    }
+
+    #[test]
+    fn a_face_recovery_that_restored_nobody_leaves_the_other_steps_counted() {
+        let plan = fixed("opai photo.jpg --dn --fr -o out.png");
+        let ran = ProviderVerdict::Resolved(vec![ExecutionProvider::Cpu]);
+        let none = ChainFaces::Found(Faces::empty());
+
+        assert_eq!(
+            applied(&plan, &none, 1, &ran),
+            "Denoise Stockholm strength 100, Face Recovery Athens (no faces) (cached)"
+        );
+        assert_eq!(
+            applied(&plan, &none, 0, &ProviderVerdict::NothingExecuted),
+            "Denoise Stockholm strength 100, Face Recovery Athens (no faces) (cached)"
         );
     }
 
@@ -751,7 +804,10 @@ mod tests {
         let args = crate::args::parse_from("opai large.jpg --up -o out.png".split_whitespace()).expect("parses");
         let plan = chain::plan(&args.selection, args.quality, 4000, 3000);
 
-        assert_eq!(applied(&plan, 0, &ProviderVerdict::NothingExecuted), "no enhancement needed");
+        assert_eq!(
+            applied(&plan, &ChainFaces::NotAsked, 0, &ProviderVerdict::NothingExecuted),
+            "no enhancement needed"
+        );
     }
 
     #[test]
