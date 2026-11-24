@@ -25,11 +25,12 @@
 // that throws at module scope, a dev server that is not up, a render that never finishes - all end with no call and
 // a window that would otherwise never appear. A user cannot report a bug in a process that draws nothing.
 //
-// Windows does not honour the hidden state at all when the window is also `maximized: true`: `tao` applies the
-// maximised flag by calling `ShowWindow(SW_MAXIMIZE)`, which makes the window visible, and the `set_visible(false)`
-// that follows is a no-op because it diffs against a flag set that never had `VISIBLE` in it. So on Windows the
-// empty window is still on screen, in the colour `backgroundColor` gives it, and `reveal` simply arrives at a window
-// that is already up. macOS and Linux hide as asked.
+// That is why the window is not declared `maximized: true`: Windows does not honour the hidden state of a maximised
+// window. `tao` maximises by calling `ShowWindow(SW_MAXIMIZE)`, which makes the window visible, and the
+// `set_visible(false)` that follows is a no-op because it diffs against a flag set that never had `VISIBLE` in it.
+// The same applies when the window-state plugin (registered in `run()`) restores a window the user closed maximised:
+// on Windows that launch shows the empty window early, in the colour `backgroundColor` gives it, and `reveal` simply
+// arrives at a window that is already up. Every other launch, and every launch on macOS and Linux, hides as asked.
 
 use std::time::Duration;
 
